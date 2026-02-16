@@ -44,6 +44,15 @@ export const roleThemes = {
         gradient: 'from-[#16a34a] to-[#15803d]',
         text: 'Employee',
         badge: 'bg-green-100 text-green-700'
+    },
+    PERSONNEL: {
+        primary: 'hsl(0, 0%, 45%)', // Professional Grey/Silver
+        secondary: 'hsl(0, 0%, 60%)',
+        light: 'hsl(0, 0%, 96%)',
+        dark: 'hsl(0, 0%, 30%)',
+        gradient: 'from-[#64748b] to-[#475569]',
+        text: 'Personnel',
+        badge: 'bg-slate-100 text-slate-700'
     }
 };
 

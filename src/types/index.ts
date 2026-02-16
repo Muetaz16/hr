@@ -3,7 +3,8 @@ export type UserRole =
     | 'HEAD_DIRECTOR'
     | 'HEAD_DEPARTMENT'
     | 'HR_MANAGER'
-    | 'EMPLOYEE';
+    | 'EMPLOYEE'
+    | 'PERSONNEL';
 
 export interface User {
     id: string;
@@ -28,12 +29,13 @@ export interface Department {
 export interface Employee {
     id: string;
     fullName: string;
-    email: string; // Added for linking with Auth
+    email?: string; // Added for linking with Auth (Optional now)
     role: UserRole;
     departmentId: string;
     groupId: string;
     baseSalary: number;
     joinDate: string;
+    staffId?: string; // Manual Employee ID (e.g. EMP-001)
 }
 
 export interface TimeRecord {
@@ -53,17 +55,25 @@ export interface HREvaluation {
     id: string;
     employeeId: string;
     month: string; // YYYY-MM
-    
-    // Presence criteria from HR evaluation
-    absenceWithoutPermission: number; // days (max 7)
-    delayAndEarlyDeparture: number; // minutes (max 180)
-    emergencyLeaves: number; // days (max 3)
-    unpaidLeave: number; // days (max 14)
-    annualPaidLeave: number; // days (max 14)
-    
-    // Calculated presence score (0-10)
+
+    // Presence Metrics (Counts/Minutes - for record)
+    absenceWithoutPermission: number;
+    delayAndEarlyDeparture: number;
+    emergencyLeaves: number;
+    unpaidLeave: number;
+    annualPaidLeave: number;
+
+    // Presence Scores (0-100 Manual Grading)
+    // Weights: Absence(7), Delay(7), Emergency(2), Unpaid(2), Violation(2)
+    absenceScoreValue?: number;
+    delayScoreValue?: number;
+    emergencyScoreValue?: number;
+    unpaidScoreValue?: number;
+    violationScoreValue?: number;
+
+    // Calculated presence score
     presenceScore: number;
-    
+
     // Metadata
     submittedAt: string;
     submittedBy: string; // HR Manager user ID
@@ -71,32 +81,51 @@ export interface HREvaluation {
     comments?: string;
 }
 
-export interface DepartmentEvaluation {
+export interface EvaluationMetrics {
+    // Administrative Behavior (25%)
+    relationshipWithColleagues: number; // 5%
+    teamworkParticipation: number; // 5%
+    workOrganization: number; // 5%
+    communicationSkills: number; // 5%
+    regulatoryCompliance: number; // 5%
+
+    // Executive Performance (40%)
+    taskQuality: number; // 7%
+    timeCommitment: number; // 7%
+    organizationalCompliance: number; // 7%
+    problemSolving: number; // 6%
+    pressureHandling: number; // 7%
+    continuousDevelopment: number; // 6%
+
+    // Care and Discipline (35%)
+    regulationsAdherence: number; // 7%
+    safetyAdherence: number; // 7%
+    appearanceCommitment: number; // 7%
+    resourcePreservation: number; // 7%
+    dataPrivacy: number; // 7%
+}
+
+export interface DepartmentEvaluation extends EvaluationMetrics {
     id: string;
     employeeId: string;
     month: string;
-    performance: number; // 0-10 or similar scale
-    discipline: number;
-    teamwork: number;
-    productivity: number;
     comments: string;
     submittedAt: string;
     submittedBy: string;
-    hrEvaluationId: string; // Reference to HR evaluation
+    totalScore: number; // Calculated sum
+    hrEvaluationId?: string;
 }
 
-export interface DirectorEvaluation {
+export interface DirectorEvaluation extends EvaluationMetrics {
     id: string;
     employeeId: string;
     month: string;
-    leadership: number;
-    impact: number;
-    finalScore: number;
+    finalScore: number; // Calculated sum
     approvedAt?: string;
     lockedAt?: string;
     submittedBy: string;
     locked: boolean;
-    departmentEvaluationId: string; // Reference to department evaluation
+    departmentEvaluationId?: string;
 }
 
 export interface PayrollResult {
@@ -110,8 +139,52 @@ export interface PayrollResult {
     directorScore: number;
     finalScore: number;
     finalSalary: number;
+
+    // Category Scores (matches user request for detailed breakdown)
+    hrPresenceScore?: number; // /100 (Scaled to 20% in Final)
+    hrAbsenceDays?: number;   // Detail
+    hrDelayMinutes?: number;  // Detail
+
+    adminScore?: number;      // /25
+    executiveScore?: number;  // /40
+    careScore?: number;       // /15
+    // personnelScore removed from here to avoid duplicate with Personnel Metrics section below
+
+    // Legacy/Aggregate
+    deptPerformance?: number;
+    deptDiscipline?: number;
+    directorLeadership?: number;
+    directorImpact?: number;
+
+    // Personnel Metrics
+    personnelScore?: number; // Kept here
+    personnelDeductionDays?: number;
+    personnelBonusDays?: number;
+    trainingSummary?: string; // New field for CSV/Display
+
     csvGenerated: boolean;
     generatedAt: string;
+}
+
+export interface PersonnelEvaluation {
+    id: string;
+    employeeId: string;
+    month: string;
+
+    // Activity & Discipline
+    warningMessages: number;      // Max 3
+    disciplinaryDeduction: number; // Max 14 days
+    appreciationMessages: number; // Max 3
+    exceptionalAssignments: number; // Max 30 days
+
+    // Training & Development (Boolean)
+    specializedTraining: boolean;
+    supportingTraining: boolean;
+    languageTraining: boolean;
+    softwareTraining: boolean;
+
+    submittedAt: string;
+    submittedBy: string;
 }
 
 export interface EvaluationPeriod {

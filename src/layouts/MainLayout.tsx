@@ -17,7 +17,6 @@ import {
     Bell,
     User,
     Menu,
-    X,
     ChevronRight,
     Search
 } from 'lucide-react';
@@ -43,7 +42,7 @@ const MainLayout: React.FC = () => {
         { label: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HR_MANAGER', 'EMPLOYEE'] },
         { label: 'Employees', path: '/employees', icon: Users, roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT'] },
         { label: 'Time Tracking', path: '/time-tracking', icon: Clock, roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT'] },
-        { label: 'Evaluations', path: '/evaluations', icon: FileText, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT'] },
+        { label: 'Evaluations', path: '/evaluations', icon: FileText, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'PERSONNEL'] },
         { label: 'HR Evaluations', path: '/hr-evaluations', icon: Settings, roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
         { label: 'Evaluation Control', path: '/evaluation-control', icon: Settings, roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
         { label: 'Departments', path: '/departments', icon: Building2, roles: ['SUPER_ADMIN'] },
@@ -63,18 +62,17 @@ const MainLayout: React.FC = () => {
         <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-inter">
             {/* Desktop Sidebar */}
             <aside
-                className={`flex flex-col bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 shadow-sm
+                className={`flex flex-col bg-white/70 backdrop-blur-xl border-r border-white/40 transition-all duration-300 ease-in-out z-30 shadow-lg shadow-slate-200/20
                     ${isSidebarOpen ? 'w-72' : 'w-20'}`}
             >
                 {/* Logo Section */}
-                <div className="h-20 flex items-center px-6 border-b border-slate-100">
-                    <div className={`p-2 rounded-xl bg-gradient-to-br ${theme.gradient} shadow-lg shadow-purple-500/20 mr-3 shrink-0 uppercase`}>
-                        <Shield className="w-6 h-6 text-white" />
-                    </div>
-                    {isSidebarOpen && (
-                        <span className="font-outfit font-bold text-xl tracking-tight text-slate-800">
-                            IPH <span className="text-slate-400">HR</span>
-                        </span>
+                <div className="h-20 flex items-center px-6 border-b border-white/40 justify-center">
+                    {isSidebarOpen ? (
+                        <img src="/src/assets/logo IPH Full.png" alt="IPH Logo" className="h-12 object-contain transition-all duration-300" />
+                    ) : (
+                        <div className={`p-2 rounded-xl bg-gradient-to-br ${theme.gradient} shadow-lg shadow-purple-500/20 shrink-0 uppercase`}>
+                            <Shield className="w-6 h-6 text-white" />
+                        </div>
                     )}
                 </div>
 
@@ -88,11 +86,11 @@ const MainLayout: React.FC = () => {
                                 to={item.path}
                                 className={`group flex items-center px-3 py-3 rounded-xl transition-all duration-200 relative
                                     ${isActive
-                                        ? 'bg-slate-50 text-slate-900 shadow-sm'
-                                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                        ? 'bg-white/80 text-slate-900 shadow-md shadow-slate-200/50 backdrop-blur-sm'
+                                        : 'text-slate-500 hover:bg-white/50 hover:text-slate-700'}`}
                             >
                                 <div className={`relative z-10 p-2 rounded-lg transition-colors
-                                    ${isActive ? `bg-white text-[${theme.primary}] shadow-sm` : 'bg-transparent group-hover:bg-white'}`}>
+                                    ${isActive ? `bg-white text-[${theme.primary}] shadow-sm` : 'bg-transparent group-hover:bg-white/80'}`}>
                                     <item.icon className={`w-5 h-5 transition-transform duration-300 group-hover:scale-110
                                         ${isActive ? '' : 'stroke-[1.5]'}`}
                                         style={isActive ? { color: theme.primary } : {}}
@@ -106,11 +104,7 @@ const MainLayout: React.FC = () => {
                                 )}
 
                                 {isActive && (
-                                    <div className="absolute left-0 w-1 h-6 rounded-r-full" style={{ backgroundColor: theme.primary }} />
-                                )}
-
-                                {!isSidebarOpen && isActive && (
-                                    <div className="absolute -right-3 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
+                                    <div className="absolute left-0 w-1 h-6 rounded-r-full shadow-[0_0_10px_rgba(0,0,0,0.1)]" style={{ backgroundColor: theme.primary, boxShadow: `0 0 15px ${theme.primary}` }} />
                                 )}
                             </Link>
                         );
@@ -118,17 +112,17 @@ const MainLayout: React.FC = () => {
                 </nav>
 
                 {/* Bottom section (Toggle/Logout) */}
-                <div className="p-4 border-t border-slate-100 space-y-2">
+                <div className="p-4 border-t border-white/40 space-y-2">
                     <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className="w-full h-12 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors"
+                        className="w-full h-12 flex items-center justify-center rounded-xl bg-white/50 hover:bg-white/80 text-slate-400 hover:text-slate-600 transition-colors backdrop-blur-sm"
                     >
                         {isSidebarOpen ? <Menu className="w-5 h-5rotate-180" /> : <ChevronRight className="w-5 h-5" />}
                     </button>
 
                     <button
                         onClick={handleLogout}
-                        className="w-full h-12 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                        className="w-full h-12 flex items-center justify-center rounded-xl bg-red-50/50 hover:bg-red-100/80 text-red-500 transition-colors backdrop-blur-sm"
                     >
                         <LogOut className="w-5 h-5" />
                         {isSidebarOpen && <span className="ml-3 font-semibold">Logout</span>}
@@ -139,7 +133,7 @@ const MainLayout: React.FC = () => {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 {/* Top Header */}
-                <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 z-20 px-8 flex items-center justify-between sticky top-0">
+                <header className="h-20 bg-white/60 backdrop-blur-xl border-b border-white/40 z-20 px-8 flex items-center justify-between sticky top-0 shadow-sm shadow-slate-200/20">
                     <div className="flex items-center">
                         <div className="hidden lg:flex items-center text-sm font-medium text-slate-400 space-x-2">
                             <span>Main</span>
@@ -160,7 +154,10 @@ const MainLayout: React.FC = () => {
                         </div>
 
                         {/* Notifications */}
-                        <button className="relative p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-500">
+                        <button
+                            onClick={() => navigate('/tasks')}
+                            className="relative p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-500"
+                        >
                             <Bell className="w-5 h-5" />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
                         </button>

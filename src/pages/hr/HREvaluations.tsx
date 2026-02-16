@@ -1,37 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { employeeService } from '../../services/employeeService';
-import { 
-    createOrUpdateHREvaluation, 
-    getHREvaluation, 
-    submitHREvaluation,
+import { departmentService } from '../../services/departmentService';
+import {
+    createOrUpdateHREvaluation,
     getHREvaluationsByMonth,
     getPresenceLimits,
-    validateHREvaluation
+    calculatePresenceScore,
+    submitAllHREvaluationsForMonth
 } from '../../services/hrEvaluationService';
-import { isEvaluationEnabled } from '../../services/evaluationPeriodService';
-import type { Employee, HREvaluation } from '../../types';
-import { 
-    AlertCircle, 
-    CheckCircle2, 
+import type { Employee, HREvaluation, Department } from '../../types';
+import {
+    CheckCircle2,
     Save,
     Send,
-    Eye,
-    Edit
+    Search,
+    Download
 } from 'lucide-react';
 
 const HREvaluations: React.FC = () => {
     const { currentUser } = useAuth();
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [evaluations, setEvaluations] = useState<HREvaluation[]>([]);
+    const [departments, setDepartments] = useState<Record<string, string>>({});
+    const [evaluations, setEvaluations] = useState<Record<string, Partial<HREvaluation>>>({});
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-    const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-    const [currentEvaluation, setCurrentEvaluation] = useState<Partial<HREvaluation> | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [errors, setErrors] = useState<string[]>([]);
-    const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
-    const [evaluationEnabled, setEvaluationEnabled] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const presenceLimits = getPresenceLimits();
 
@@ -42,15 +38,45 @@ const HREvaluations: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [emps, evals, enabled] = await Promise.all([
+            const [emps, evalsList, depts] = await Promise.all([
                 employeeService.getAllEmployees(),
                 getHREvaluationsByMonth(selectedMonth),
-                isEvaluationEnabled(selectedMonth)
+                departmentService.getAllDepartments()
             ]);
-            
+
             setEmployees(emps);
-            setEvaluations(evals);
-            setEvaluationEnabled(enabled);
+
+            // Map department IDs to names
+            const deptMap: Record<string, string> = {};
+            depts.forEach((d: Department) => {
+                deptMap[d.id] = d.name;
+            });
+            setDepartments(deptMap);
+
+            // Convert list to map for easier access
+            const evalsMap: Record<string, Partial<HREvaluation>> = {};
+
+            // Initialize all employees with default or existing data
+            emps.forEach(emp => {
+                const existing = evalsList.find(e => e.employeeId === emp.id);
+                if (existing) {
+                    evalsMap[emp.id] = existing;
+                } else {
+                    evalsMap[emp.id] = {
+                        employeeId: emp.id,
+                        month: selectedMonth,
+                        absenceWithoutPermission: 0,
+                        delayAndEarlyDeparture: 0,
+                        emergencyLeaves: 0,
+                        unpaidLeave: 0,
+                        annualPaidLeave: 0,
+                        presenceScore: 100,
+                        status: 'draft'
+                    };
+                }
+            });
+            setEvaluations(evalsMap);
+
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -58,412 +84,332 @@ const HREvaluations: React.FC = () => {
         }
     };
 
-    const handleSelectEmployee = async (employee: Employee) => {
-        setSelectedEmployee(employee);
-        const existingEvaluation = await getHREvaluation(employee.id, selectedMonth);
-        
-        if (existingEvaluation) {
-            setCurrentEvaluation(existingEvaluation);
-        } else {
-            setCurrentEvaluation({
-                employeeId: employee.id,
-                month: selectedMonth,
-                absenceWithoutPermission: 0,
-                delayAndEarlyDeparture: 0,
-                emergencyLeaves: 0,
-                unpaidLeave: 0,
-                annualPaidLeave: 0,
-                presenceScore: 10,
-                status: 'draft'
+    const handleInputChange = (employeeId: string, field: keyof HREvaluation, value: number) => {
+        setEvaluations(prev => {
+            const currentEval = { ...prev[employeeId] };
+
+            // Update field
+            // @ts-ignore - dynamic key assignment
+            currentEval[field] = value;
+
+            // Recalculate score
+            // We need to cast to strictly Omit<HREvaluation, ...> for the calculator
+            // but for partial updates, we can just pass the partial object as any to the helper
+            // providing we ensure the fields exist.
+            // Recalculate score
+            const score = calculatePresenceScore(currentEval);
+            currentEval.presenceScore = score;
+
+            return {
+                ...prev,
+                [employeeId]: currentEval
+            };
+        });
+    };
+
+    const handleSaveAll = async () => {
+        if (!currentUser) return;
+        setSaving(true);
+        try {
+            const promises = Object.values(evaluations).map(evalData => {
+                // Only save if it has changed from default? 
+                // For now, save all to ensure consistency.
+                if (!evalData.employeeId) return Promise.resolve();
+
+                return createOrUpdateHREvaluation(
+                    evalData.employeeId!,
+                    selectedMonth,
+                    evalData as Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
+                    currentUser.id || 'unknown'
+                );
             });
-        }
-        setErrors([]);
-        setViewMode('edit');
-    };
 
-    const handleInputChange = (field: keyof HREvaluation, value: number) => {
-        if (!currentEvaluation) return;
-        
-        const updated = { ...currentEvaluation, [field]: value };
-        setCurrentEvaluation(updated);
-        
-        // Validate on change
-        const validation = validateHREvaluation(updated);
-        setErrors(validation.errors);
-    };
-
-    const handleSave = async () => {
-        if (!currentEvaluation || !selectedEmployee || !currentUser) return;
-
-        const validation = validateHREvaluation(currentEvaluation);
-        if (!validation.isValid) {
-            setErrors(validation.errors);
-            return;
-        }
-
-        setSaving(true);
-        try {
-            await createOrUpdateHREvaluation(
-                selectedEmployee.id,
-                selectedMonth,
-                currentEvaluation as Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
-                currentUser.id
-            );
-            
-            await fetchData();
-            setViewMode('list');
-            setSelectedEmployee(null);
-            setCurrentEvaluation(null);
+            await Promise.all(promises);
+            alert('All changes saved successfully');
+            await fetchData(); // Refresh to get IDs etc
         } catch (error) {
-            console.error('Error saving evaluation:', error);
-            setErrors(['Failed to save evaluation']);
+            console.error('Error saving evaluations:', error);
+            alert('Failed to save some evaluations');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleSubmit = async () => {
-        if (!currentEvaluation || !selectedEmployee) return;
-
-        const validation = validateHREvaluation(currentEvaluation);
-        if (!validation.isValid) {
-            setErrors(validation.errors);
+    const handleSubmitAll = async () => {
+        if (!confirm('Are you sure you want to finalize ALL evaluations? This will send them to Department Heads and you will not be able to edit them efficiently anymore.')) {
             return;
         }
 
-        setSaving(true);
+        setSubmitting(true);
         try {
-            await createOrUpdateHREvaluation(
-                selectedEmployee.id,
-                selectedMonth,
-                currentEvaluation as Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
-                currentUser!.id
-            );
-            
-            await submitHREvaluation(selectedEmployee.id, selectedMonth);
-            
+            // First ensure all current data is saved
+            await handleSaveAll();
+
+            // Then mark all as submitted
+            await submitAllHREvaluationsForMonth(selectedMonth);
+
+            alert('All evaluations have been submitted to Department Heads!');
             await fetchData();
-            setViewMode('list');
-            setSelectedEmployee(null);
-            setCurrentEvaluation(null);
         } catch (error) {
-            console.error('Error submitting evaluation:', error);
-            setErrors(['Failed to submit evaluation']);
+            console.error('Error submitting evaluations:', error);
+            alert('Failed to submit evaluations');
         } finally {
-            setSaving(false);
+            setSubmitting(false);
         }
     };
 
-    const getStatusBadge = (evaluation: HREvaluation) => {
-        if (evaluation.status === 'submitted') {
-            return (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <CheckCircle2 className="w-3 h-3 mr-1" />
-                    Submitted
-                </span>
-            );
-        }
-        return (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                <Edit className="w-3 h-3 mr-1" />
-                Draft
-            </span>
-        );
+    const downloadCSV = () => {
+        // Headers
+        const headers = [
+            'Employee ID', 'Name', 'Department', 'Month',
+            'Absence Without Permission', 'Delay & Early Departure (Mins)', 'Emergency Leaves',
+            'Unpaid Leave', 'Annual Paid Leave', 'Presence Score', 'Evaluation Status'
+        ];
+
+        // Rows
+        const rows = employees.map(emp => {
+            const data = evaluations[emp.id] || {};
+            const deptName = departments[emp.departmentId] || emp.departmentId; // Fallback to ID if name not found
+            return [
+                emp.id,
+                emp.fullName,
+                deptName,
+                selectedMonth,
+                data.absenceWithoutPermission || 0,
+                data.delayAndEarlyDeparture || 0,
+                data.emergencyLeaves || 0,
+                data.unpaidLeave || 0,
+                data.annualPaidLeave || 0,
+                (data.presenceScore || 100).toFixed(2),
+                data.status || 'draft'
+            ].map(val => `"${val}"`).join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `HR_Evaluations_${selectedMonth}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
-    if (loading) {
-        return <div className="p-6">Loading...</div>;
-    }
+    const filteredEmployees = employees.filter(emp =>
+        emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.departmentId.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-    if (!evaluationEnabled) {
-        return (
-            <div className="p-6">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-                    <div className="flex items-center">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
-                        <h3 className="text-lg font-medium text-yellow-800">Evaluation Period Not Enabled</h3>
-                    </div>
-                    <p className="text-yellow-700 mt-2">
-                        HR evaluations for {selectedMonth} are not enabled yet. Please enable the evaluation period first.
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return <div className="p-10 flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-600"></div></div>;
 
-    if (viewMode === 'edit' && selectedEmployee && currentEvaluation) {
-        return (
-            <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800">HR Presence Evaluation</h1>
-                        <p className="text-gray-600 mt-1">
-                            {selectedEmployee.fullName} - {selectedMonth}
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                    >
-                        Back to List
-                    </button>
-                </div>
-
-                {errors.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-center">
-                            <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                            <h3 className="text-sm font-medium text-red-800">Validation Errors</h3>
-                        </div>
-                        <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
-                            {errors.map((error, index) => (
-                                <li key={index}>{error}</li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-
-                <div className="bg-white rounded-lg shadow">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-800">Presence Criteria</h2>
-                        <p className="text-sm text-gray-600 mt-1">
-                            Based on the evaluation limits. Presence score will be calculated automatically.
-                        </p>
-                    </div>
-                    
-                    <div className="p-6 space-y-6">
-                        {/* Absence without permission */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Absence without permission (days)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={presenceLimits.absenceWithoutPermission}
-                                    value={currentEvaluation.absenceWithoutPermission || 0}
-                                    onChange={(e) => handleInputChange('absenceWithoutPermission', parseInt(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Maximum: {presenceLimits.absenceWithoutPermission} days
-                                </p>
-                            </div>
-
-                            {/* Delay and early departure */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Delay and early departure (minutes)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={presenceLimits.delayAndEarlyDeparture}
-                                    value={currentEvaluation.delayAndEarlyDeparture || 0}
-                                    onChange={(e) => handleInputChange('delayAndEarlyDeparture', parseInt(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Maximum: {presenceLimits.delayAndEarlyDeparture} minutes
-                                </p>
-                            </div>
-
-                            {/* Emergency leaves */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Emergency leaves (days)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={presenceLimits.emergencyLeaves}
-                                    value={currentEvaluation.emergencyLeaves || 0}
-                                    onChange={(e) => handleInputChange('emergencyLeaves', parseInt(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Maximum: {presenceLimits.emergencyLeaves} days
-                                </p>
-                            </div>
-
-                            {/* Unpaid leave */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Unpaid leave (days)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={presenceLimits.unpaidLeave}
-                                    value={currentEvaluation.unpaidLeave || 0}
-                                    onChange={(e) => handleInputChange('unpaidLeave', parseInt(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Maximum: {presenceLimits.unpaidLeave} days
-                                </p>
-                            </div>
-
-                            {/* Annual paid leave */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Annual paid leave (days)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={presenceLimits.annualPaidLeave}
-                                    value={currentEvaluation.annualPaidLeave || 0}
-                                    onChange={(e) => handleInputChange('annualPaidLeave', parseInt(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Maximum: {presenceLimits.annualPaidLeave} days
-                                </p>
-                            </div>
-
-                            {/* Calculated presence score */}
-                            <div className="bg-gray-50 p-4 rounded-lg">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Calculated Presence Score
-                                </label>
-                                <div className="text-2xl font-bold text-blue-600">
-                                    {currentEvaluation.presenceScore?.toFixed(2) || '10.00'} / 10
-                                </div>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Automatically calculated based on presence criteria
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Comments */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Comments (optional)
-                            </label>
-                            <textarea
-                                rows={3}
-                                value={currentEvaluation.comments || ''}
-                                onChange={(e) => setCurrentEvaluation({ ...currentEvaluation, comments: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Add any additional comments about this evaluation..."
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex justify-end space-x-4">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center"
-                    >
-                        <Save className="w-4 h-4 mr-2" />
-                        {saving ? 'Saving...' : 'Save Draft'}
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={saving || currentEvaluation.status === 'submitted'}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
-                    >
-                        <Send className="w-4 h-4 mr-2" />
-                        {saving ? 'Submitting...' : 'Submit Evaluation'}
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    // Removed evaluationEnabled check to allow manual entry at any time as requested.
 
     return (
-        <div className="p-6 space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-800">HR Presence Evaluations</h1>
-                <p className="text-gray-600 mt-1">Evaluate employee presence for {selectedMonth}</p>
-            </div>
+        <div className="p-6 space-y-6 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">HR Presence Evaluations</h1>
+                    <p className="text-slate-500">Enter attendance and presence metrics for all employees.</p>
+                </div>
 
-            {/* Month selector */}
-            <div className="bg-white rounded-lg shadow p-4">
-                <div className="flex items-center space-x-4">
-                    <label className="text-sm font-medium text-gray-700">Month:</label>
+                <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+                    <span className="text-sm font-bold text-slate-500 pl-2">Period:</span>
                     <input
                         type="month"
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="border-none bg-transparent font-bold text-slate-800 focus:ring-0 cursor-pointer"
                     />
                 </div>
             </div>
 
-            {/* Employee list */}
-            <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-800">Employees</h2>
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+                <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder="Search employees..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-200 focus:border-slate-400 transition-all"
+                    />
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Presence Score</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+
+                <div className="flex gap-2">
+                    <button
+                        onClick={downloadCSV}
+                        className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 flex items-center shadow-sm transition-all"
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        Save as CSV
+                    </button>
+                    <button
+                        onClick={handleSaveAll}
+                        disabled={saving}
+                        className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 flex items-center shadow-sm transition-all"
+                    >
+                        <Save className="w-4 h-4 mr-2" />
+                        {saving ? 'Saving...' : 'Save Drafts'}
+                    </button>
+                    <button
+                        onClick={handleSubmitAll}
+                        disabled={submitting}
+                        className="px-4 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 flex items-center shadow-md transition-all"
+                    >
+                        <Send className="w-4 h-4 mr-2" />
+                        {submitting ? 'Sending...' : 'Submit to Departments'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Main Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col min-h-0">
+                <div className="overflow-auto flex-1">
+                    <table className="w-full text-left border-collapse relative">
+                        <thead className="sticky top-0 z-20 bg-slate-50 shadow-sm">
+                            <tr className="border-b border-slate-200">
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 sticky left-0 bg-slate-50 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                    Employee
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 bg-red-50/50 text-center">
+                                    <div>Absence</div>
+                                    <div className="text-[9px] text-red-300 font-normal">Weight: 7</div>
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 bg-orange-50/50 text-center">
+                                    <div>Delay</div>
+                                    <div className="text-[9px] text-orange-300 font-normal">Weight: 7</div>
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-center">
+                                    <div>Emergency</div>
+                                    <div className="text-[9px] text-slate-300 font-normal">Weight: 2</div>
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-center">
+                                    <div>Unpaid</div>
+                                    <div className="text-[9px] text-slate-300 font-normal">Weight: 2</div>
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 text-center">
+                                    <div>Violation</div>
+                                    <div className="text-[9px] text-slate-300 font-normal">Weight: 2</div>
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-24 text-center bg-slate-100">
+                                    Score
+                                </th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-16 text-center">Status</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {employees.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                        No employees found
-                                    </td>
-                                </tr>
-                            ) : (
-                                employees.map((employee) => {
-                                    const evaluation = evaluations.find(e => e.employeeId === employee.id);
-                                    return (
-                                        <tr key={employee.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{employee.fullName}</div>
-                                                <div className="text-sm text-gray-500">{employee.email}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {employee.departmentId}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {evaluation ? getStatusBadge(evaluation) : (
-                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                        Not Started
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {evaluation ? (
-                                                    <div className="flex items-center">
-                                                        <span className="font-medium">{evaluation.presenceScore.toFixed(2)}</span>
-                                                        <span className="text-gray-400 ml-1">/10</span>
-                                                    </div>
-                                                ) : (
-                                                    '-'
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() => handleSelectEmployee(employee)}
-                                                    className="text-blue-600 hover:text-blue-900 flex items-center justify-end"
-                                                >
-                                                    <Eye className="w-4 h-4 mr-1" />
-                                                    {evaluation ? 'View/Edit' : 'Evaluate'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredEmployees.map(emp => {
+                                const data = evaluations[emp.id] || {};
+                                const isSubmitted = data.status === 'submitted';
+
+                                return (
+                                    <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="p-4 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] border-r border-slate-100">
+                                            <div>
+                                                <div className="font-bold text-slate-800">{emp.fullName}</div>
+                                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">ID: {emp.staffId || 'N/A'}</div>
+                                                <div className="text-xs text-slate-400">{departments[emp.departmentId] || emp.departmentId}</div>
+                                            </div>
+                                        </td>
+
+                                        {/* Absence Score */}
+                                        <td className="p-2 border-r border-slate-100 bg-red-50/10">
+                                            <input
+                                                type="number" min="0" max="100"
+                                                disabled={isSubmitted}
+                                                value={data.absenceScoreValue ?? 100}
+                                                onChange={(e) => handleInputChange(emp.id, 'absenceScoreValue', Number(e.target.value))}
+                                                className="w-full text-center font-mono font-bold text-red-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md py-1"
+                                                placeholder="100"
+                                            />
+                                        </td>
+
+                                        {/* Delay Score */}
+                                        <td className="p-2 border-r border-slate-100 bg-orange-50/10">
+                                            <input
+                                                type="number" min="0" max="100"
+                                                disabled={isSubmitted}
+                                                value={data.delayScoreValue ?? 100}
+                                                onChange={(e) => handleInputChange(emp.id, 'delayScoreValue', Number(e.target.value))}
+                                                className="w-full text-center font-mono font-bold text-orange-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md py-1"
+                                                placeholder="100"
+                                            />
+                                        </td>
+
+                                        {/* Emergency Score */}
+                                        <td className="p-2 border-r border-slate-100">
+                                            <input
+                                                type="number" min="0" max="100"
+                                                disabled={isSubmitted}
+                                                value={data.emergencyScoreValue ?? 100}
+                                                onChange={(e) => handleInputChange(emp.id, 'emergencyScoreValue', Number(e.target.value))}
+                                                className="w-full text-center font-mono text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md py-1"
+                                                placeholder="100"
+                                            />
+                                        </td>
+
+                                        {/* Unpaid Score */}
+                                        <td className="p-2 border-r border-slate-100">
+                                            <input
+                                                type="number" min="0" max="100"
+                                                disabled={isSubmitted}
+                                                value={data.unpaidScoreValue ?? 100}
+                                                onChange={(e) => handleInputChange(emp.id, 'unpaidScoreValue', Number(e.target.value))}
+                                                className="w-full text-center font-mono text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md py-1"
+                                                placeholder="100"
+                                            />
+                                        </td>
+
+                                        {/* Violation (Annual) Score */}
+                                        <td className="p-2 border-r border-slate-100">
+                                            <input
+                                                type="number" min="0" max="100"
+                                                disabled={isSubmitted}
+                                                value={data.violationScoreValue ?? 100}
+                                                onChange={(e) => handleInputChange(emp.id, 'violationScoreValue', Number(e.target.value))}
+                                                className="w-full text-center font-mono text-slate-700 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md py-1"
+                                                placeholder="100"
+                                            />
+                                        </td>
+
+                                        {/* Score */}
+                                        <td className="p-4 text-center bg-slate-50 font-bold text-slate-800 border-r border-slate-200">
+                                            {(data.presenceScore !== undefined ? data.presenceScore : 100).toFixed(2)}
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="p-4 text-center">
+                                            {isSubmitted ? (
+                                                <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
+                                            ) : (
+                                                <div className="w-2 h-2 rounded-full bg-slate-300 mx-auto" />
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+                <button
+                    onClick={handleSubmitAll}
+                    disabled={submitting}
+                    className="flex flex-col items-center justify-center w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-lg active:scale-95 disabled:opacity-70 disabled:active:scale-100"
+                >
+                    <span className="font-bold text-lg flex items-center">
+                        <Send className="w-5 h-5 mr-2" />
+                        Finalize & Send to Departments
+                    </span>
+                    <span className="text-xs text-slate-400 mt-1">
+                        This will unlock Department Head evaluations
+                    </span>
+                </button>
             </div>
         </div>
     );

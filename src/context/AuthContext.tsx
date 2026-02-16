@@ -30,7 +30,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Fetch extended user data from Firestore
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
-                    setCurrentUser(userDoc.data() as User);
+                    // Ensure ID is included from the document ID
+                    setCurrentUser({ ...userDoc.data(), id: userDoc.id } as User);
                 } else {
                     // Search for a matching Employee record to auto-promote
                     const employee = await employeeService.getEmployeeByEmail(user.email || '');

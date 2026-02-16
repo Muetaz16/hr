@@ -11,16 +11,13 @@ import {
     MoreHorizontal,
     UserPlus,
     Calendar,
-    Save,
     Download,
-    CheckCircle2,
     DollarSign
 } from 'lucide-react';
-import { timeService } from '../../services/timeService';
 import { evaluationService } from '../../services/evaluationService';
 import { payrollService } from '../../services/payrollService';
 import { format } from 'date-fns';
-import type { TimeRecord, DirectorEvaluation, PayrollResult } from '../../types';
+import type { DirectorEvaluation, PayrollResult } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { roleThemes } from '../../config/roleThemes';
 import type { UserRole } from '../../types';
@@ -38,19 +35,17 @@ const EmployeesPage: React.FC = () => {
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
 
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
-    const [timeRecords, setTimeRecords] = useState<Record<string, TimeRecord>>({});
     const [dirEvals, setDirEvals] = useState<Record<string, DirectorEvaluation>>({});
     const [payrollRecords, setPayrollRecords] = useState<Record<string, PayrollResult>>({});
-    const [savingTime, setSavingTime] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<Partial<Employee>>({
         fullName: '',
-        email: '',
         departmentId: '',
         groupId: '',
         role: 'EMPLOYEE',
         baseSalary: 0,
-        joinDate: new Date().toISOString().split('T')[0]
+        joinDate: new Date().toISOString().split('T')[0],
+        staffId: ''
     });
 
     useEffect(() => {
@@ -60,21 +55,16 @@ const EmployeesPage: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [emps, depts, grps, tRecords, pRecords] = await Promise.all([
+            const [emps, depts, grps, pRecords] = await Promise.all([
                 employeeService.getAllEmployees(),
                 departmentService.getAllDepartments(),
                 groupService.getAllGroups(),
-                timeService.getTimeRecordsByMonth(selectedMonth),
                 payrollService.getPayrollByMonth(selectedMonth)
             ]);
 
             setEmployees(emps);
             setDepartments(depts);
             setGroups(grps);
-
-            const tMap: Record<string, TimeRecord> = {};
-            tRecords.forEach(r => tMap[r.employeeId] = r);
-            setTimeRecords(tMap);
 
             const pMap: Record<string, PayrollResult> = {};
             pRecords.forEach(r => pMap[r.employeeId] = r);
@@ -93,35 +83,6 @@ const EmployeesPage: React.FC = () => {
             console.error("Error fetching data:", error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleTimeChange = (empId: string, field: keyof TimeRecord, value: number) => {
-        setTimeRecords(prev => ({
-            ...prev,
-            [empId]: {
-                ...(prev[empId] || { employeeId: empId, month: selectedMonth }),
-                [field]: value
-            } as TimeRecord
-        }));
-    };
-
-    const saveTimeRecord = async (empId: string, status: 'draft' | 'approved') => {
-        const record = timeRecords[empId];
-        if (!record) return;
-        setSavingTime(empId);
-        try {
-            await timeService.createOrUpdateTimeRecord({
-                ...record,
-                status,
-                employeeId: empId,
-                month: selectedMonth
-            });
-            fetchData();
-        } catch (error) {
-            console.error("Error saving time:", error);
-        } finally {
-            setSavingTime(null);
         }
     };
 
@@ -151,7 +112,7 @@ const EmployeesPage: React.FC = () => {
             }
             setIsModalOpen(false);
             setEditingId(null);
-            setFormData({ fullName: '', email: '', departmentId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0, joinDate: new Date().toISOString().split('T')[0] });
+            setFormData({ fullName: '', departmentId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0, joinDate: new Date().toISOString().split('T')[0], staffId: '' });
             fetchData();
         } catch (error) {
             console.error("Error saving employee:", error);
@@ -210,7 +171,7 @@ const EmployeesPage: React.FC = () => {
                     <button
                         onClick={() => {
                             setEditingId(null);
-                            setFormData({ fullName: '', departmentId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0, joinDate: new Date().toISOString().split('T')[0] });
+                            setFormData({ fullName: '', departmentId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0, joinDate: new Date().toISOString().split('T')[0], staffId: '' });
                             setIsModalOpen(true);
                         }}
                         className="flex items-center px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all text-sm group"
@@ -249,10 +210,9 @@ const EmployeesPage: React.FC = () => {
                         <thead>
                             <tr className="bg-slate-50/50 border-b border-slate-100">
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personnel</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Stage 1: Timing</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Stage 2: Perf</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Stage 3: Payroll</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Commit</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Performance Status</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Payroll Status</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -268,46 +228,10 @@ const EmployeesPage: React.FC = () => {
                                                 <div>
                                                     <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
                                                     <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
+                                                        <span className="mr-2 text-indigo-500">{emp.staffId || 'NO-ID'}</span>
                                                         <Calendar className="w-3 h-3 mr-1" /> Bound {emp.joinDate || 'N/A'}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <div className="flex flex-col gap-2">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="space-y-1">
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Worked</span>
-                                                        <input
-                                                            type="number"
-                                                            className="w-16 px-2 py-1 bg-slate-50 rounded border-none text-xs font-bold text-center"
-                                                            value={timeRecords[emp.id]?.workedHours || 0}
-                                                            onChange={(e) => handleTimeChange(emp.id, 'workedHours', Number(e.target.value))}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">OT</span>
-                                                        <input
-                                                            type="number"
-                                                            className="w-16 px-2 py-1 bg-blue-50 text-blue-600 rounded border-none text-xs font-bold text-center"
-                                                            value={timeRecords[emp.id]?.overtime || 0}
-                                                            onChange={(e) => handleTimeChange(emp.id, 'overtime', Number(e.target.value))}
-                                                        />
-                                                    </div>
-                                                    <button
-                                                        onClick={() => saveTimeRecord(emp.id, 'approved')}
-                                                        disabled={savingTime === emp.id}
-                                                        className={`mt-4 p-2 rounded-lg transition-all ${timeRecords[emp.id]?.status === 'approved' ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:scale-110'}`}
-                                                    >
-                                                        {savingTime === emp.id ? <div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin rounded-full"></div> :
-                                                            timeRecords[emp.id]?.status === 'approved' ? <CheckCircle2 size={14} /> : <Save size={14} />}
-                                                    </button>
-                                                </div>
-                                                {timeRecords[emp.id]?.status === 'approved' && (
-                                                    <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest flex items-center">
-                                                        <CheckCircle2 size={10} className="mr-1" /> Ready for Evaluation
-                                                    </span>
-                                                )}
                                             </div>
                                         </td>
                                         <td className="px-8 py-5 text-center">
@@ -359,7 +283,7 @@ const EmployeesPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modal - The Modal itself is now styled premium */}
+            {/* Modal */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -381,13 +305,13 @@ const EmployeesPage: React.FC = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">System Email</label>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Staff ID / Code</label>
                                     <input
-                                        type="email" required
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        type="text"
+                                        value={formData.staffId || ''}
+                                        onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
-                                        placeholder="Linking Email"
+                                        placeholder="e.g. EMP-001"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -399,6 +323,7 @@ const EmployeesPage: React.FC = () => {
                                     >
                                         <option value="EMPLOYEE">Employee</option>
                                         <option value="HR_MANAGER">HR Manager</option>
+                                        <option value="PERSONNEL">Personnel</option>
                                         <option value="HEAD_DEPARTMENT">Head of Department</option>
                                         <option value="HEAD_DIRECTOR">Head Director</option>
                                     </select>

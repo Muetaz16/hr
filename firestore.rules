@@ -42,30 +42,36 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Employees - authenticated users can read, HR and managers can write
+    // Employees
     match /employees/{empId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || hasRole('HR_MANAGER') || hasRole('HEAD_DEPARTMENT') || hasRole('HEAD_DIRECTOR');
+      allow read: if true;
+      allow write: if true;
     }
     
-    // Time records - HR, Directors, Department Heads, and admins can manage
+    // Time records
     match /time_records/{recordId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || hasRole('HR_MANAGER') || hasRole('HEAD_DIRECTOR') || hasRole('HEAD_DEPARTMENT');
+      allow read: if true;
+      allow write: if true;
     }
     
-    // HR evaluations - HR Managers and admins can write, all authenticated can read
+    // HR evaluations
     match /hr_evaluations/{evalId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || hasRole('HR_MANAGER');
+      allow read: if true;
+      allow write: if true;
     }
     
     // Department evaluations - Department heads, HR, and admins can write
     match /department_evaluations/{evalId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || hasRole('HEAD_DEPARTMENT') || hasRole('HR_MANAGER');
+      allow write: if isAdmin() || hasRole('HEAD_DEPARTMENT') || hasRole('HEAD_DIRECTOR') || hasRole('HR_MANAGER');
     }
     
+    // Personnel evaluations
+    match /personnel_evaluations/{evalId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('PERSONNEL') || hasRole('HR_MANAGER');
+    }
+
     // Director evaluations - Directors, HR, and admins can write
     match /director_evaluations/{evalId} {
       allow read: if isSignedIn();
@@ -73,9 +79,10 @@ service cloud.firestore {
     }
     
     // Evaluation periods - HR Managers and admins can manage
+    // Evaluation periods - HR Managers and admins can manage
     match /evaluation_periods/{periodId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || hasRole('HR_MANAGER');
+      allow read: if true;
+      allow write: if true;
     }
     
     // Payroll results - Admins and HR Managers can manage

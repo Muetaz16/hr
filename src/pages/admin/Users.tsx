@@ -113,8 +113,8 @@ const UsersPage: React.FC = () => {
     };
 
     const filteredUsers = users.filter(user =>
-        user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        (user.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (loading) return (
@@ -178,10 +178,10 @@ const UsersPage: React.FC = () => {
                                         <td className="px-8 py-5">
                                             <div className="flex items-center">
                                                 <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${userTheme.gradient} flex items-center justify-center text-white font-black text-sm mr-4 shadow-md group-hover:scale-110 transition-transform`}>
-                                                    {user.fullName.charAt(0)}
+                                                    {(user.fullName || 'U').charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-slate-800">{user.fullName}</p>
+                                                    <p className="font-bold text-slate-800">{user.fullName || 'Unknown User'}</p>
                                                     <div className="flex items-center text-xs text-slate-400 mt-0.5">
                                                         <Mail className="w-3 h-3 mr-1" /> {user.email}
                                                     </div>
@@ -190,7 +190,7 @@ const UsersPage: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-5">
                                             <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${userTheme.badge} ring-1 ring-current ring-opacity-10`}>
-                                                <Shield className="w-3 h-3 mr-1" /> {user.role.replace('_', ' ')}
+                                                <Shield className="w-3 h-3 mr-1" /> {(user.role || 'NA').replace('_', ' ')}
                                             </div>
                                         </td>
                                         <td className="px-8 py-5">
@@ -274,6 +274,7 @@ const UsersPage: React.FC = () => {
                             >
                                 <option value="EMPLOYEE">Employee</option>
                                 <option value="HR_MANAGER">HR Manager</option>
+                                <option value="PERSONNEL">Personnel</option>
                                 <option value="HEAD_DEPARTMENT">Head of Department</option>
                                 <option value="HEAD_DIRECTOR">Head Director</option>
                                 <option value="SUPER_ADMIN">Super Admin</option>
@@ -298,7 +299,7 @@ const UsersPage: React.FC = () => {
                                         ))}
                                     </select>
                                 </div>
-                                {formData.role === 'HEAD_DEPARTMENT' && (
+                                {['HEAD_DEPARTMENT', 'HEAD_DIRECTOR'].includes(formData.role) && (
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 block">Primary Department</label>
                                         <select

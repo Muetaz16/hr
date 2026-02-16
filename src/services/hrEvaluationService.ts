@@ -20,46 +20,52 @@ const PRESENCE_LIMITS = {
     delayAndEarlyDeparture: 180, // minutes
     emergencyLeaves: 3, // days
     unpaidLeave: 14, // days
-    annualPaidLeave: 14 // days
+    annualPaidLeave: 30 // days (informational, default max)
 };
 
 /**
  * Calculate presence score based on HR evaluation criteria
  * Score: 0-10 (10 = perfect presence, 0 = poor presence)
  */
-export function calculatePresenceScore(evaluation: Omit<HREvaluation, 'presenceScore' | 'id' | 'submittedAt' | 'submittedBy' | 'status'>): number {
-    let totalDeductions = 0;
-    let maxPossibleDeductions = 0;
+/**
+ * Calculate presence score based on HR evaluation criteria
+ * Returns a score out of 100 (which represents the 20% category).
+ * Weights: Absence (7), Delay (7), Emergency (2), Unpaid (2), Annual/Other (2) = 20 Total.
+ * Scaled to 100: Absence (35), Delay (35), Emergency (10), Unpaid (10), Other (10).
+ */
+/**
+ * Calculate presence score based on HR evaluation criteria
+ * Returns a score out of 100 (which represents the 20% category).
+ * Input: 5 metrics graded 0-100.
+ * Weights: Absence (0.35 of total 100), Delay (0.35), Emergency (0.10), Unpaid (0.10), Violation (0.10).
+ * (Equating to 7, 7, 2, 2, 2 out of 20).
+ */
+/**
+ * Calculate presence score based on HR evaluation criteria
+ * Returns a score out of 100 (which represents the 20% category).
+ * Input: 5 metrics graded 0-100.
+ * Weights: Absence (0.35 of total 100), Delay (0.35), Emergency (0.10), Unpaid (0.10), Violation (0.10).
+ * (Equating to 7, 7, 2, 2, 2 out of 20).
+ */
+export function calculatePresenceScore(evaluation: Partial<HREvaluation>): number {
+    // Defaults to 100 if undefined
+    const absence = evaluation.absenceScoreValue ?? 100;
+    const delay = evaluation.delayScoreValue ?? 100;
+    const emergency = evaluation.emergencyScoreValue ?? 100;
+    const unpaid = evaluation.unpaidScoreValue ?? 100;
+    const violation = evaluation.violationScoreValue ?? 100;
 
-    // Calculate deductions for each criterion
-    // Absence without permission: 0.5 points per day over 0
-    const absenceDeduction = Math.min(evaluation.absenceWithoutPermission * 0.5, 3.5);
-    totalDeductions += absenceDeduction;
-    maxPossibleDeductions += 3.5;
+    // Weights (Sum = 1.0)
+    // 7 points out of 20 = 35%
+    // 2 points out of 20 = 10%
+    const score =
+        (absence * 0.35) +
+        (delay * 0.35) +
+        (emergency * 0.10) +
+        (unpaid * 0.10) +
+        (violation * 0.10);
 
-    // Delay/early departure: 0.01 points per minute over 0
-    const delayDeduction = Math.min(evaluation.delayAndEarlyDeparture * 0.01, 1.8);
-    totalDeductions += delayDeduction;
-    maxPossibleDeductions += 1.8;
-
-    // Emergency leaves: 0.3 points per day over 0
-    const emergencyDeduction = Math.min(evaluation.emergencyLeaves * 0.3, 0.9);
-    totalDeductions += emergencyDeduction;
-    maxPossibleDeductions += 0.9;
-
-    // Unpaid leave: 0.2 points per day over 0
-    const unpaidDeduction = Math.min(evaluation.unpaidLeave * 0.2, 2.8);
-    totalDeductions += unpaidDeduction;
-    maxPossibleDeductions += 2.8;
-
-    // Annual paid leave: 0.1 points per day over 0 (considered normal)
-    const annualDeduction = Math.min(evaluation.annualPaidLeave * 0.1, 1.4);
-    totalDeductions += annualDeduction;
-    maxPossibleDeductions += 1.4;
-
-    // Calculate final score (10 - deductions, minimum 0)
-    const finalScore = Math.max(0, 10 - totalDeductions);
-    return Math.round(finalScore * 100) / 100; // Round to 2 decimal places
+    return Math.round(score * 100) / 100;
 }
 
 /**
@@ -73,7 +79,7 @@ export async function createOrUpdateHREvaluation(
 ): Promise<string> {
     const id = `${employeeId}_${month}`;
     const presenceScore = calculatePresenceScore(evaluationData);
-    
+
     const hrEvaluation: HREvaluation = {
         id,
         ...evaluationData,
@@ -138,6 +144,27 @@ export async function deleteHREvaluation(employeeId: string, month: string): Pro
 }
 
 /**
+ * Submit all draft evaluations for a specific month
+ */
+export async function submitAllHREvaluationsForMonth(month: string): Promise<void> {
+    const q = query(
+        collection(db, COLLECTION),
+        where('month', '==', month),
+        where('status', '==', 'draft')
+    );
+    const snapshot = await getDocs(q);
+
+    const batchPromises = snapshot.docs.map(docSnapshot => {
+        return updateDoc(docSnapshot.ref, {
+            status: 'submitted',
+            submittedAt: new Date().toISOString()
+        });
+    });
+
+    await Promise.all(batchPromises);
+}
+
+/**
  * Check if HR evaluation is completed for an employee/month
  */
 export async function isHREvaluationCompleted(employeeId: string, month: string): Promise<boolean> {
@@ -157,7 +184,7 @@ export function getPresenceLimits() {
  */
 export function validateHREvaluation(evaluationData: Partial<HREvaluation>): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
-    
+
     if (evaluationData.absenceWithoutPermission !== undefined) {
         if (evaluationData.absenceWithoutPermission < 0) {
             errors.push('Absence without permission cannot be negative');

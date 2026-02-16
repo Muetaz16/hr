@@ -24,24 +24,34 @@ export const userService = {
     async getUser(uid: string): Promise<User | null> {
         const userRef = doc(db, USERS_COLLECTION, uid);
         const snapshot = await getDoc(userRef);
-        return snapshot.exists() ? (snapshot.data() as User) : null;
+        return snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as User) : null;
     },
 
     async getAllUsers(): Promise<User[]> {
         const q = query(collection(db, USERS_COLLECTION));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data() as User);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
     },
 
     async getUsersByRole(role: UserRole): Promise<User[]> {
         const q = query(collection(db, USERS_COLLECTION), where('role', '==', role));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data() as User);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
     },
 
     async updateUser(uid: string, data: Partial<User>) {
+        if (!uid) throw new Error("User ID is required for update");
+
+        // Remove undefined fields to prevent Firestore errors
+        const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
+            if (value !== undefined) {
+                acc[key as keyof User] = value;
+            }
+            return acc;
+        }, {} as Partial<User>);
+
         const userRef = doc(db, USERS_COLLECTION, uid);
-        await updateDoc(userRef, data);
+        await updateDoc(userRef, cleanData);
     },
 
     async deleteUser(uid: string) {
