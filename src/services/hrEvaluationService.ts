@@ -1,172 +1,76 @@
-import {
-    collection,
-    doc,
-    setDoc,
-    getDoc,
-    getDocs,
-    query,
-    where,
-    updateDoc,
-    deleteDoc
-} from 'firebase/firestore';
-import { db } from '../firebase';
+import api from './apiClient';
 import type { HREvaluation } from '../types';
 
-const COLLECTION = 'hr_evaluations';
-
-// Presence limits from the evaluation criteria
 const PRESENCE_LIMITS = {
-    absenceWithoutPermission: 7, // days
-    delayAndEarlyDeparture: 180, // minutes
-    emergencyLeaves: 3, // days
-    unpaidLeave: 14, // days
-    annualPaidLeave: 30 // days (informational, default max)
+    absenceWithoutPermission: 7, // days (Weight: 7)
+    delayAndEarlyDeparture: 180, // minutes (Weight: 7)
+    emergencyLeaves: 3,          // days (Weight: 2)
+    unpaidLeave: 14,             // days (Weight: 2)
+    annualPaidLeave: 14          // days (Weight: 2)
 };
 
-/**
- * Calculate presence score based on HR evaluation criteria
- * Score: 0-10 (10 = perfect presence, 0 = poor presence)
- */
-/**
- * Calculate presence score based on HR evaluation criteria
- * Returns a score out of 100 (which represents the 20% category).
- * Weights: Absence (7), Delay (7), Emergency (2), Unpaid (2), Annual/Other (2) = 20 Total.
- * Scaled to 100: Absence (35), Delay (35), Emergency (10), Unpaid (10), Other (10).
- */
-/**
- * Calculate presence score based on HR evaluation criteria
- * Returns a score out of 100 (which represents the 20% category).
- * Input: 5 metrics graded 0-100.
- * Weights: Absence (0.35 of total 100), Delay (0.35), Emergency (0.10), Unpaid (0.10), Violation (0.10).
- * (Equating to 7, 7, 2, 2, 2 out of 20).
- */
-/**
- * Calculate presence score based on HR evaluation criteria
- * Returns a score out of 100 (which represents the 20% category).
- * Input: 5 metrics graded 0-100.
- * Weights: Absence (0.35 of total 100), Delay (0.35), Emergency (0.10), Unpaid (0.10), Violation (0.10).
- * (Equating to 7, 7, 2, 2, 2 out of 20).
- */
 export function calculatePresenceScore(evaluation: Partial<HREvaluation>): number {
-    // Defaults to 100 if undefined
-    const absence = evaluation.absenceScoreValue ?? 100;
-    const delay = evaluation.delayScoreValue ?? 100;
-    const emergency = evaluation.emergencyScoreValue ?? 100;
-    const unpaid = evaluation.unpaidScoreValue ?? 100;
-    const violation = evaluation.violationScoreValue ?? 100;
+    // 1. Absence without permission (Max 7 points)
+    const absenceDays = evaluation.absenceWithoutPermission ?? 0;
+    const absenceScore = Math.max(0, 7 - absenceDays);
 
-    // Weights (Sum = 1.0)
-    // 7 points out of 20 = 35%
-    // 2 points out of 20 = 10%
-    const score =
-        (absence * 0.35) +
-        (delay * 0.35) +
-        (emergency * 0.10) +
-        (unpaid * 0.10) +
-        (violation * 0.10);
+    // 2. Delay & Early Departure (Max 7 points)
+    const delayMins = evaluation.delayAndEarlyDeparture ?? 0;
+    const delayScore = Math.max(0, 7 - (delayMins / PRESENCE_LIMITS.delayAndEarlyDeparture * 7));
 
-    return Math.round(score * 100) / 100;
+    // 3. Emergency Leaves (Max 2 points)
+    const emergencyDays = evaluation.emergencyLeaves ?? 0;
+    const emergencyScore = Math.max(0, 2 - (emergencyDays / PRESENCE_LIMITS.emergencyLeaves * 2));
+
+    // 4. Unpaid Leave (Max 2 points)
+    const unpaidDays = evaluation.unpaidLeave ?? 0;
+    const unpaidScore = Math.max(0, 2 - (unpaidDays / PRESENCE_LIMITS.unpaidLeave * 2));
+
+    // 5. Annual Paid Leave (Max 2 points) - Replaces violationScore
+    const annualDays = evaluation.annualPaidLeave ?? 0;
+    const annualScore = Math.max(0, 2 - (annualDays / PRESENCE_LIMITS.annualPaidLeave * 2));
+
+    const totalScore = absenceScore + delayScore + emergencyScore + unpaidScore + annualScore;
+
+    return Math.round(totalScore * 100) / 100;
 }
 
-/**
- * Create or update HR evaluation
- */
 export async function createOrUpdateHREvaluation(
     employeeId: string,
     month: string,
     evaluationData: Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
     submittedBy: string
 ): Promise<string> {
-    const id = `${employeeId}_${month}`;
     const presenceScore = calculatePresenceScore(evaluationData);
-
-    const hrEvaluation: HREvaluation = {
-        id,
+    const payload = {
         ...evaluationData,
+        employeeId,
+        month,
         presenceScore,
-        submittedAt: new Date().toISOString(),
-        submittedBy,
-        status: evaluationData.status || 'draft'
+        submittedBy
     };
-
-    const docRef = doc(db, COLLECTION, id);
-    await setDoc(docRef, hrEvaluation, { merge: true });
-    return id;
+    const response = await api.post('/evaluations/hr', payload);
+    return response.data.id;
 }
 
-/**
- * Get HR evaluation for an employee and month
- */
 export async function getHREvaluation(employeeId: string, month: string): Promise<HREvaluation | null> {
-    const id = `${employeeId}_${month}`;
-    const docRef = doc(db, COLLECTION, id);
-    const snapshot = await getDoc(docRef);
-    return snapshot.exists() ? (snapshot.data() as HREvaluation) : null;
+    try {
+        const response = await api.get(`/evaluations/hr?employeeId=${employeeId}&month=${month}`);
+        return response.data || null;
+    } catch (error) {
+        return null;
+    }
 }
 
-/**
- * Get all HR evaluations for a month
- */
 export async function getHREvaluationsByMonth(month: string): Promise<HREvaluation[]> {
-    const q = query(collection(db, COLLECTION), where('month', '==', month));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as HREvaluation);
+    try {
+        const response = await api.get(`/evaluations/hr/month/${month}`);
+        return response.data;
+    } catch (error) {
+        return [];
+    }
 }
 
-/**
- * Get all HR evaluations for an employee
- */
-export async function getHREvaluationsByEmployee(employeeId: string): Promise<HREvaluation[]> {
-    const q = query(collection(db, COLLECTION), where('employeeId', '==', employeeId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as HREvaluation);
-}
-
-/**
- * Submit HR evaluation (change status from draft to submitted)
- */
-export async function submitHREvaluation(employeeId: string, month: string): Promise<void> {
-    const id = `${employeeId}_${month}`;
-    const docRef = doc(db, COLLECTION, id);
-    await updateDoc(docRef, {
-        status: 'submitted',
-        submittedAt: new Date().toISOString()
-    });
-}
-
-/**
- * Delete HR evaluation
- */
-export async function deleteHREvaluation(employeeId: string, month: string): Promise<void> {
-    const id = `${employeeId}_${month}`;
-    const docRef = doc(db, COLLECTION, id);
-    await deleteDoc(docRef);
-}
-
-/**
- * Submit all draft evaluations for a specific month
- */
-export async function submitAllHREvaluationsForMonth(month: string): Promise<void> {
-    const q = query(
-        collection(db, COLLECTION),
-        where('month', '==', month),
-        where('status', '==', 'draft')
-    );
-    const snapshot = await getDocs(q);
-
-    const batchPromises = snapshot.docs.map(docSnapshot => {
-        return updateDoc(docSnapshot.ref, {
-            status: 'submitted',
-            submittedAt: new Date().toISOString()
-        });
-    });
-
-    await Promise.all(batchPromises);
-}
-
-/**
- * Check if HR evaluation is completed for an employee/month
- */
 export async function isHREvaluationCompleted(employeeId: string, month: string): Promise<boolean> {
     const evaluation = await getHREvaluation(employeeId, month);
     return evaluation?.status === 'submitted';

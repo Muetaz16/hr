@@ -1,51 +1,42 @@
-import {
-    collection,
-    doc,
-    getDocs,
-    addDoc,
-    updateDoc,
-    deleteDoc
-} from 'firebase/firestore';
-import { db } from '../firebase';
+import api from './apiClient';
 import type { Department, Group } from '../types';
-
-const DEPTS_COLLECTION = 'departments';
-const GROUPS_COLLECTION = 'groups';
 
 export const departmentService = {
     async getAllDepartments(): Promise<Department[]> {
-        const snapshot = await getDocs(collection(db, DEPTS_COLLECTION));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
+        const response = await api.get('/departments');
+        return response.data;
     },
 
     async createDepartment(dept: Omit<Department, 'id'>) {
-        await addDoc(collection(db, DEPTS_COLLECTION), dept);
+        await api.post('/departments', dept);
     },
 
-    async updateDepartment(id: string, data: Partial<Department>) {
-        await updateDoc(doc(db, DEPTS_COLLECTION, id), data);
+    async updateDepartment(_id: string, _data: Partial<Department>) {
+        // Not implemented in backend yet, but placeholder
+        // await api.put(\`/departments/${id}\`, data);
     },
 
     async deleteDepartment(id: string) {
-        await deleteDoc(doc(db, DEPTS_COLLECTION, id));
+        await api.delete(`/departments/${id}`);
     }
 };
 
 export const groupService = {
     async getAllGroups(): Promise<Group[]> {
-        const snapshot = await getDocs(collection(db, GROUPS_COLLECTION));
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group));
+        const response = await api.get('/groups');
+        return response.data;
     },
 
     async createGroup(group: Omit<Group, 'id'>) {
-        await addDoc(collection(db, GROUPS_COLLECTION), group);
+        await api.post('/groups', group);
     },
 
-    async updateGroup(id: string, data: Partial<Group>) {
-        await updateDoc(doc(db, GROUPS_COLLECTION, id), data);
+    async updateGroup(_id: string, _data: Partial<Group>) {
+        // Not implemented in backend yet, but placeholder
+        // await api.put(\`/groups/${id}\`, data);
     },
 
     async deleteGroup(id: string) {
-        await deleteDoc(doc(db, GROUPS_COLLECTION, id));
+        await api.delete(`/groups/${id}`);
     }
 };
