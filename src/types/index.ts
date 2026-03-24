@@ -2,6 +2,7 @@ export type UserRole =
     | 'SUPER_ADMIN'
     | 'HEAD_DIRECTOR'
     | 'HEAD_DEPARTMENT'
+    | 'HEAD_UNIT'
     | 'HR_MANAGER'
     | 'EMPLOYEE'
     | 'PERSONNEL';
@@ -12,7 +13,16 @@ export interface User {
     role: UserRole;
     groupId?: string;
     departmentId?: string;
+    unitId?: string;
+    departmentIds?: string[];
     fullName: string;
+    employeeId?: string; // Link to HR record
+}
+
+export interface Unit {
+    id: string;
+    name: string;
+    departmentId: string;
 }
 
 export interface Group {
@@ -32,10 +42,32 @@ export interface Employee {
     email?: string; // Added for linking with Auth (Optional now)
     role: UserRole;
     departmentId: string;
+    unitId?: string;
     groupId: string;
     baseSalary: number;
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
+    position?: string;
+    fullNameArabic?: string;
+    passportNumber?: string;
+    contractNumber?: string;
+    nationality?: string;
+    jobCategory?: string;
+    jobGrade?: string;
+
+    // Contract Details
+    contractStartDate?: string;
+    contractEndDate?: string;
+    contractType?: string;
+    contractStatus?: string;
+    holidaysUsed: number;
+    emergencyHolidaysUsed?: number;
+    unpaidHolidaysUsed?: number;
+    bonusHolidays: number;
+    accruedHolidays?: number;
+    earnedHolidays?: number;
+    remainingHolidays?: number;
+    userId?: string; // Link to Auth record
 }
 
 export interface TimeRecord {
@@ -105,6 +137,16 @@ export interface EvaluationMetrics {
     dataPrivacy: number; // 7%
 }
 
+export interface UnitEvaluation extends EvaluationMetrics {
+    id: string;
+    employeeId: string;
+    month: string;
+    comments: string;
+    submittedAt: string;
+    submittedBy: string;
+    totalScore: number;
+}
+
 export interface DepartmentEvaluation extends EvaluationMetrics {
     id: string;
     employeeId: string;
@@ -113,7 +155,7 @@ export interface DepartmentEvaluation extends EvaluationMetrics {
     submittedAt: string;
     submittedBy: string;
     totalScore: number; // Calculated sum
-    hrEvaluationId?: string;
+    unitEvaluationId?: string;
 }
 
 export interface DirectorEvaluation extends EvaluationMetrics {
@@ -141,13 +183,34 @@ export interface PayrollResult {
     finalSalary: number;
 
     // Category Scores (matches user request for detailed breakdown)
-    hrPresenceScore?: number; // /100 (Scaled to 20% in Final)
+    hrPresenceScore?: number; // Out of 20 directly
     hrAbsenceDays?: number;   // Detail
     hrDelayMinutes?: number;  // Detail
+    hrEmergencyDays?: number; // Detail
+    hrUnpaidLeaves?: number;  // Detail
+    hrAnnualPaidLeaves?: number; // Detail
 
     adminScore?: number;      // /25
+    relColleagues?: number;
+    teamwork?: number;
+    workOrg?: number;
+    commSkills?: number;
+    regCompliance?: number;
+
     executiveScore?: number;  // /40
+    taskQuality?: number;
+    timeCommit?: number;
+    orgCompliance?: number;
+    probSolving?: number;
+    pressureHandling?: number;
+    contDev?: number;
+
     careScore?: number;       // /15
+    regAdherence?: number;
+    safetyAdherence?: number;
+    appearance?: number;
+    resPreservation?: number;
+    dataPrivacy?: number;
     // personnelScore removed from here to avoid duplicate with Personnel Metrics section below
 
     // Legacy/Aggregate
