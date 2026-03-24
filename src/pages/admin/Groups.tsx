@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { groupService } from '../../services/departmentService';
 import type { Group } from '../../types';
 import Modal from '../../components/Modal';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
 const GroupsPage: React.FC = () => {
+    const { t } = useTranslation();
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +52,7 @@ const GroupsPage: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm('Are you sure you want to delete this group?')) {
+        if (window.confirm(t('confirm_delete_group'))) {
             try {
                 await groupService.deleteGroup(id);
                 fetchGroups();
@@ -66,18 +68,18 @@ const GroupsPage: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div>{t('loading')}</div>;
 
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">Groups Management</h1>
+                <h1 className="text-2xl font-bold text-gray-800">{t('groups_management')}</h1>
                 <button
                     onClick={openNewModal}
                     className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                 >
                     <Plus size={18} className="mr-2" />
-                    Add Group
+                    {t('add_group')}
                 </button>
             </div>
 
@@ -85,8 +87,8 @@ const GroupsPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group Name</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('group_name')}</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -105,7 +107,7 @@ const GroupsPage: React.FC = () => {
                         ))}
                         {groups.length === 0 && (
                             <tr>
-                                <td colSpan={2} className="px-6 py-4 text-center text-gray-500">No groups found</td>
+                                <td colSpan={2} className="px-6 py-4 text-center text-gray-500">{t('no_groups')}</td>
                             </tr>
                         )}
                     </tbody>
@@ -115,11 +117,11 @@ const GroupsPage: React.FC = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={editingGroup ? 'Edit Group' : 'Add New Group'}
+                title={editingGroup ? t('edit_group') : t('add_new_group')}
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Group Name</label>
+                        <label className="block text-sm font-medium text-gray-700">{t('group_name')}</label>
                         <input
                             type="text"
                             required
@@ -134,13 +136,13 @@ const GroupsPage: React.FC = () => {
                             onClick={() => setIsModalOpen(false)}
                             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                         >
-                            Cancel
+                            {t('cancel')}
                         </button>
                         <button
                             type="submit"
                             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         >
-                            {editingGroup ? 'Update' : 'Create'}
+                            {editingGroup ? t('update') : t('create')}
                         </button>
                     </div>
                 </form>

@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { departmentService, groupService } from '../../services/departmentService';
-import type { Department, Group } from '../../types';
+import { unitService } from '../../services/unitService';
+import { departmentService } from '../../services/departmentService';
+import type { Unit, Department } from '../../types';
 import Modal from '../../components/Modal';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
-const DepartmentsPage: React.FC = () => {
+const UnitsPage: React.FC = () => {
     const { t } = useTranslation();
+    const [units, setUnits] = useState<Unit[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
-    const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingDept, setEditingDept] = useState<Department | null>(null);
-    const [formData, setFormData] = useState({ name: '', groupId: '' });
+    const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+    const [formData, setFormData] = useState({ name: '', departmentId: '' });
 
     useEffect(() => {
         fetchData();
@@ -21,12 +22,12 @@ const DepartmentsPage: React.FC = () => {
 
     const fetchData = async () => {
         try {
-            const [deptsData, groupsData] = await Promise.all([
-                departmentService.getAllDepartments(),
-                groupService.getAllGroups()
+            const [unitsData, deptsData] = await Promise.all([
+                unitService.getAllUnits(),
+                departmentService.getAllDepartments()
             ]);
+            setUnits(unitsData);
             setDepartments(deptsData);
-            setGroups(groupsData);
         } catch (error) {
             console.error("Error fetching data:", error);
         } finally {
@@ -34,61 +35,62 @@ const DepartmentsPage: React.FC = () => {
         }
     };
 
-    const getGroupName = (groupId: string) => {
-        return groups.find(g => g.id === groupId)?.name || 'Unknown Group';
+    const getDepartmentName = (departmentId: string) => {
+        return departments.find(d => d.id === departmentId)?.name || 'Unknown Department';
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            if (editingDept) {
-                await departmentService.updateDepartment(editingDept.id, formData);
+            if (editingUnit) {
+                await unitService.updateUnit(editingUnit.id, formData);
             } else {
-                await departmentService.createDepartment(formData);
+                await unitService.createUnit(formData);
             }
             setIsModalOpen(false);
-            setEditingDept(null);
-            setFormData({ name: '', groupId: '' });
+            setEditingUnit(null);
+            setFormData({ name: '', departmentId: '' });
             fetchData(); // Refresh list
         } catch (error) {
-            console.error("Error saving department:", error);
+            console.error("Error saving unit:", error);
         }
     };
 
-    const handleEdit = (dept: Department) => {
-        setEditingDept(dept);
-        setFormData({ name: dept.name, groupId: dept.groupId });
+    const handleEdit = (unit: Unit) => {
+        setEditingUnit(unit);
+        setFormData({ name: unit.name, departmentId: unit.departmentId });
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm(t('confirm_delete_dept'))) {
+        if (window.confirm(t('confirm_delete_unit', 'Are you sure you want to delete this unit?'))) {
             try {
-                await departmentService.deleteDepartment(id);
+                await unitService.deleteUnit(id);
                 fetchData();
             } catch (error) {
-                console.error("Error deleting department:", error);
+                console.error("Error deleting unit:", error);
             }
         }
     };
 
     const openNewModal = () => {
-        setEditingDept(null);
-        setFormData({ name: '', groupId: groups.length > 0 ? groups[0].id : '' });
+        setEditingUnit(null);
+        setFormData({ name: '', departmentId: departments.length > 0 ? departments[0].id : '' });
         setIsModalOpen(true);
     };
-    if (loading) return <div>{t('loading')}</div>;
+
+    if (loading) return <div>{t('loading', 'Loading...')}</div>;
 
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">{t('departments_management')}</h1>
+                <h1 className="text-2xl font-bold text-gray-800">{t('units_management', 'Units Management')}</h1>
                 <button
                     onClick={openNewModal}
                     className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                 >
                     <Plus size={18} className="mr-2" />
-                    {t('add_department')}
+                    {t('add_unit', 'Add Unit')}
                 </button>
             </div>
 
@@ -96,36 +98,36 @@ const DepartmentsPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('department_name')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('group')}</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('unit_name', 'Unit Name')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('department', 'Department')}</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions', 'Actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {departments.map((dept) => (
-                            <tr key={dept.id}>
+                        {units.map((unit) => (
+                            <tr key={unit.id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     <Link
-                                        to={`/employees?deptId=${dept.id}`}
+                                        to={`/employees?unitId=${unit.id}`}
                                         className="text-indigo-600 hover:text-indigo-900 hover:underline transition-colors"
                                     >
-                                        {dept.name}
+                                        {unit.name}
                                     </Link>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getGroupName(dept.groupId)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getDepartmentName(unit.departmentId)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onClick={() => handleEdit(dept)} className="text-indigo-600 hover:text-indigo-900 mr-4">
+                                    <button onClick={() => handleEdit(unit)} className="text-indigo-600 hover:text-indigo-900 mr-4">
                                         <Edit size={18} />
                                     </button>
-                                    <button onClick={() => handleDelete(dept.id)} className="text-red-600 hover:text-red-900">
+                                    <button onClick={() => handleDelete(unit.id)} className="text-red-600 hover:text-red-900">
                                         <Trash2 size={18} />
                                     </button>
                                 </td>
                             </tr>
                         ))}
-                        {departments.length === 0 && (
+                        {units.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">{t('no_departments')}</td>
+                                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">{t('no_units', 'No units found')}</td>
                             </tr>
                         )}
                     </tbody>
@@ -135,11 +137,11 @@ const DepartmentsPage: React.FC = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={editingDept ? t('edit_department') : t('add_new_department')}
+                title={editingUnit ? t('edit_unit', 'Edit Unit') : t('add_new_unit', 'Add New Unit')}
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">{t('department_name')}</label>
+                        <label className="block text-sm font-medium text-gray-700">{t('unit_name', 'Unit Name')}</label>
                         <input
                             type="text"
                             required
@@ -149,16 +151,16 @@ const DepartmentsPage: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">{t('group')}</label>
+                        <label className="block text-sm font-medium text-gray-700">{t('department', 'Department')}</label>
                         <select
                             required
-                            value={formData.groupId}
-                            onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                            value={formData.departmentId}
+                            onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                         >
-                            <option value="">{t('select_group')}</option>
-                            {groups.map(g => (
-                                <option key={g.id} value={g.id}>{g.name}</option>
+                            <option value="">{t('select_department', 'Select Department')}</option>
+                            {departments.map(d => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
                         </select>
                     </div>
@@ -168,13 +170,13 @@ const DepartmentsPage: React.FC = () => {
                             onClick={() => setIsModalOpen(false)}
                             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                         >
-                            {t('cancel')}
+                            {t('cancel', 'Cancel')}
                         </button>
                         <button
                             type="submit"
                             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         >
-                            {editingDept ? t('update') : t('create')}
+                            {editingUnit ? t('update', 'Update') : t('create', 'Create')}
                         </button>
                     </div>
                 </form>
@@ -183,4 +185,4 @@ const DepartmentsPage: React.FC = () => {
     );
 };
 
-export default DepartmentsPage;
+export default UnitsPage;
