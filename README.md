@@ -1,73 +1,69 @@
-# React + TypeScript + Vite
+# IPH SYSTEM (HR & Personnel Management)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+IPH SYSTEM is a comprehensive HR management platform designed for streamlined employee lifecycle tracking, performance evaluation, and payroll reporting.
 
-Currently, two official plugins are available:
+## 🚀 Recent Technical Updates (March 2026)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+This section provides a technical breakdown of the latest core system updates for the development team.
 
-## React Compiler
+### 1. Performance Evaluation Engine (100-Point Scale)
+The evaluation system has been refactored to use a standardized 100-point scale across all modules.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+*   **Scoring Logic**: Raw attendance and performance data are converted using localized weightages:
+    *   **Presence (20%)**: Calculated via `Math.max(0, 7 - AbsenceDays)` and normalized delay minutes.
+    *   **Administrative Behavior (25%)**: Peer, Team, and Rule compliance metrics.
+    *   **Executive Performance (40%)**: Task Quality, Time Commitment, and Problem Solving.
+    *   **Care & Discipline (15%)**: Safety, Appearance, and Data Privacy.
+*   **Implementation**: Logic residing in `src/services/payrollService.ts` and `src/pages/hr/EvaluationControl.tsx`. 
+*   **Reporting**: Excel/CSV exports in `payrollService.ts` now reflect these standardized scores with precision-guided styling using `xlsx-js-style`.
 
-## Expanding the ESLint configuration
+### 2. Data Integrity: Transactional User Deletion
+To prevent 500 status errors caused by foreign key constraints, a robust transactional deletion flow was implemented.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+*   **Mechanism**: Uses `prisma.$transaction` to ensure atomicity.
+*   **Cleanup Chain**: 
+    1.  Nullify `userId` in `Employee`.
+    2.  Nullify approval references in `LeaveRequest` (Unit, Dept, Director levels).
+    3.  Nullify authorship/assignments in `StaffTask` and `Announcement`.
+    4.  Nullify submission references in all Evaluation types (`HREvaluation`, `UnitEvaluation`, etc.).
+    5.  Cascade delete owner-specific records (Notifications, user-owned Leave Requests).
+*   **File**: `server/src/controllers/userController.ts`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 3. Internationalization & RTL Engine
+The system now supports full Arabic localization and Right-to-Left (RTL) layout dynamics.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+*   **Tech Stack**: `i18next`, `react-i18next`, `i18next-http-backend`.
+*   **Dynamic RTL**: Layouts automatically adjust based on the current language detected or selected.
+*   **Translation Mapping**: Managed via `public/locales/{{lng}}/translation.json`.
+*   **Branding**: Logo and title strings are now fully localized.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### 4. Brand Identity & Theming
+*   **Rebranding**: Transitioned from "IPH Portfolio" to **"IPH SYSTEM"**.
+*   **Theming**: Role-based themes (Super Admin vs. Employee) are managed in `src/config/roleThemes.ts` and applied via `MainLayout.tsx`.
+*   **Visuals**: High-fidelity UI using Tailwind CSS glassmorphism and Lucide-react icons.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🛠 Tech Stack
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, TanStack Query.
+- **Backend**: Node.js, Express, Prisma ORM, MySQL/PostgreSQL.
+- **State Management**: React Context API & TanStack Query.
+- **Internationalization**: i18next.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 📦 Getting Started
+
+1.  **Install Dependencies**:
+    ```bash
+    npm install
+    cd server && npm install
+    ```
+2.  **Environment Setup**:
+    Configure `.env` and `server/.env` with your database credentials.
+3.  **Run Development Server**:
+    ```bash
+    # Root directory (Frontend)
+    npm run dev
+    
+    # Server directory (Backend)
+    cd server && npm run dev
+    ```
