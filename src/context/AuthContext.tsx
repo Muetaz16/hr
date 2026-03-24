@@ -1,21 +1,22 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, db } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 import type { User } from '../types';
-import { employeeService } from '../services/employeeService';
-import { userService } from '../services/userService';
+
+// import api from '../services/apiClient';
 
 interface AuthContextType {
     currentUser: User | null;
     loading: boolean;
     isAdmin: boolean;
+    login: (token: string, user: User) => void;
+    logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
     currentUser: null,
     loading: true,
-    isAdmin: false
+    isAdmin: false,
+    login: () => { },
+    logout: () => { }
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -25,54 +26,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // Fetch extended user data from Firestore
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    // Ensure ID is included from the document ID
-                    setCurrentUser({ ...userDoc.data(), id: userDoc.id } as User);
-                } else {
-                    // Search for a matching Employee record to auto-promote
-                    const employee = await employeeService.getEmployeeByEmail(user.email || '');
-                    if (employee) {
-                        const newUser: User = {
-                            id: user.uid,
-                            email: user.email || '',
-                            role: employee.role,
-                            fullName: employee.fullName,
-                            groupId: employee.groupId,
-                            departmentId: employee.departmentId
-                        };
-                        try {
-                            await userService.syncUser(user.uid, newUser);
-                        } catch (e) {
-                            console.error("Failed to sync user role to Firestore:", e);
-                        }
-                        setCurrentUser(newUser);
+        const checkAuth = async () => {
+            const token = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+
+            if (token && savedUser) {
+                try {
+                    // Verify token with backend to catch expired/invalid tokens
+                    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+                    const response = await fetch(`${apiUrl}/auth/me`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        setCurrentUser(JSON.parse(savedUser));
+                    } else if (response.status === 401) {
+                        // Token is definitely invalid - clear
+                        console.warn('[Auth] Token unauthorized, clearing session.');
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
                     } else {
-                        // Fallback if no employee record found
-                        setCurrentUser({
-                            id: user.uid,
-                            email: user.email || '',
-                            role: 'EMPLOYEE',
-                            fullName: user.displayName || 'User'
-                        });
+                        // For 403 or others, maybe server is in a weird state? 
+                        // Let's trust the local user for now if we can't verify 100%
+                        console.warn(`[Auth] Verification returned ${response.status}. Keeping local session.`);
+                        setCurrentUser(JSON.parse(savedUser));
                     }
+                } catch (error) {
+                    // Network error (server not running) - keep user logged in locally
+                    console.warn('[Auth] Could not verify token against server (network error). Keeping local session.');
+                    setCurrentUser(JSON.parse(savedUser));
                 }
-            } else {
-                setCurrentUser(null);
             }
             setLoading(false);
-        });
-
-        return unsubscribe;
+        };
+        checkAuth();
     }, []);
+
+    const login = (token: string, user: User) => {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        setCurrentUser(user);
+    };
+
+    const logout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setCurrentUser(null);
+        window.location.href = '/login';
+    };
 
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
 
     return (
-        <AuthContext.Provider value={{ currentUser, loading, isAdmin }}>
+        <AuthContext.Provider value={{ currentUser, loading, isAdmin, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

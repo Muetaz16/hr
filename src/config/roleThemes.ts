@@ -27,6 +27,15 @@ export const roleThemes = {
         text: 'Head Director',
         badge: 'bg-red-100 text-red-700'
     },
+    HEAD_UNIT: {
+        primary: 'hsl(32, 98%, 51%)', // Amber/Orange
+        secondary: 'hsl(32, 98%, 65%)',
+        light: 'hsl(32, 98%, 95%)',
+        dark: 'hsl(32, 98%, 35%)',
+        gradient: 'from-[#f59e0b] to-[#b45309]',
+        text: 'Head Unit',
+        badge: 'bg-amber-100 text-amber-700'
+    },
     HEAD_DEPARTMENT: {
         primary: 'hsl(221, 83%, 53%)', // Professional Blue
         secondary: 'hsl(221, 83%, 70%)',
