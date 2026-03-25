@@ -67,3 +67,38 @@ The system now supports full Arabic localization and Right-to-Left (RTL) layout 
     # Server directory (Backend)
     cd server && npm run dev
     ```
+
+## 🗄 Database Management
+
+This project uses **PostgreSQL** with **Prisma ORM**. Here are the essential commands for managing your data.
+
+### 1. Visualizing Data (Prisma Studio)
+To browse and edit your data in a visual interface, run:
+```powershell
+cd server
+npx prisma studio
+```
+This will open a dashboard at `http://localhost:5555`.
+
+### 2. Creating a Database Backup
+To save a snapshot of your database (replace `18` with your PostgreSQL version):
+```powershell
+# In your PowerShell terminal:
+$date = Get-Date -Format "yyyy-MM-dd_HH-mm"
+$filename = "backup_$date.sql"
+& "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" -U postgres -d iph_hr_db > $filename
+```
+*Note: Default password is `admin123`.*
+
+### 3. Restoring a Backup
+To restore data from an existing backup file (e.g., `backup_2026-03-25.sql`):
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d iph_hr_db < "YOUR_BACKUP_FILE.sql"
+```
+> [!CAUTION]
+> **Warning**: Restoring a backup will overwrite your current database data.
+
+### 4. Admin Credentials
+The system includes a superadmin user as a starting point:
+- **Email**: `admin@admin.com`
+- **Password**: `admin123`
