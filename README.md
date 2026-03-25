@@ -98,7 +98,3 @@ To restore data from an existing backup file (e.g., `backup_2026-03-25.sql`):
 > [!CAUTION]
 > **Warning**: Restoring a backup will overwrite your current database data.
 
-### 4. Admin Credentials
-The system includes a superadmin user as a starting point:
-- **Email**: `admin@admin.com`
-- **Password**: `admin123`
