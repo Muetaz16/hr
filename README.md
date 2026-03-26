@@ -95,6 +95,9 @@ To restore data from an existing backup file (e.g., `backup_2026-03-25.sql`):
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d iph_hr_db < "YOUR_BACKUP_FILE.sql"
 ```
+or
+Get-Content "backup_2026-03-26_14-15.sql" | & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d iph_hr_db
+
 > [!CAUTION]
 > **Warning**: Restoring a backup will overwrite your current database data.
 
