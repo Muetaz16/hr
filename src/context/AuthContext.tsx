@@ -38,7 +38,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     if (response.ok) {
-                        setCurrentUser(JSON.parse(savedUser));
+                        const data = await response.json();
+                        if (data.user) {
+                            setCurrentUser(data.user);
+                            localStorage.setItem('user', JSON.stringify(data.user));
+                        } else {
+                            setCurrentUser(JSON.parse(savedUser));
+                        }
                     } else if (response.status === 401) {
                         // Token is definitely invalid - clear
                         console.warn('[Auth] Token unauthorized, clearing session.');

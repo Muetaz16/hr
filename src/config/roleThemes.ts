@@ -1,68 +1,105 @@
 // Premium role-based theme configuration with HSL for better harmony
 export const roleThemes = {
     SUPER_ADMIN: {
-        primary: 'hsl(262, 83%, 58%)', // Vibrant Purple
-        secondary: 'hsl(262, 83%, 70%)',
-        light: 'hsl(262, 83%, 96%)',
-        dark: 'hsl(262, 83%, 40%)',
-        gradient: 'from-[#7c3aed] to-[#4f46e5]',
+        primary: '#541c2c', // Deep Burgundy (Main)
+        secondary: '#aa7a51', // Accent Gold (Sub)
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#541c2c] to-[#aa7a51]',
         text: 'Super Admin',
-        badge: 'bg-purple-100 text-purple-700'
+        badge: 'bg-[#541c2c]/10 text-[#541c2c]'
     },
     HR_MANAGER: {
-        primary: 'hsl(187, 92%, 35%)', // Deep Teal/Cyan
-        secondary: 'hsl(187, 92%, 50%)',
-        light: 'hsl(187, 92%, 95%)',
-        dark: 'hsl(187, 92%, 25%)',
-        gradient: 'from-[#0891b2] to-[#0e7490]',
+        primary: '#541c2c',
+        secondary: '#d4aa80',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#541c2c] to-[#d4aa80]',
         text: 'HR Manager',
-        badge: 'bg-cyan-100 text-cyan-700'
+        badge: 'bg-[#d4aa80]/15 text-[#aa7a51]'
     },
     HEAD_DIRECTOR: {
-        primary: 'hsl(0, 72%, 51%)', // Elegant Red
-        secondary: 'hsl(0, 72%, 65%)',
-        light: 'hsl(0, 72%, 96%)',
-        dark: 'hsl(0, 72%, 35%)',
-        gradient: 'from-[#dc2626] to-[#991b1b]',
-        text: 'Head Director',
-        badge: 'bg-red-100 text-red-700'
+        primary: '#421220',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#421220] to-[#aa7a51]',
+        text: 'General Manager',
+        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
     },
     HEAD_UNIT: {
-        primary: 'hsl(32, 98%, 51%)', // Amber/Orange
-        secondary: 'hsl(32, 98%, 65%)',
-        light: 'hsl(32, 98%, 95%)',
-        dark: 'hsl(32, 98%, 35%)',
-        gradient: 'from-[#f59e0b] to-[#b45309]',
+        primary: '#aa7a51',
+        secondary: '#e3c4a2',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#aa7a51] to-[#e3c4a2]',
         text: 'Head Unit',
-        badge: 'bg-amber-100 text-amber-700'
+        badge: 'bg-[#e3c4a2]/30 text-[#aa7a51]'
     },
     HEAD_DEPARTMENT: {
-        primary: 'hsl(221, 83%, 53%)', // Professional Blue
-        secondary: 'hsl(221, 83%, 70%)',
-        light: 'hsl(221, 83%, 95%)',
-        dark: 'hsl(221, 83%, 35%)',
-        gradient: 'from-[#2563eb] to-[#1e40af]',
+        primary: '#541c2c',
+        secondary: '#e3c4a2',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#541c2c] to-[#e3c4a2]',
         text: 'Head Department',
-        badge: 'bg-blue-100 text-blue-700'
+        badge: 'bg-[#e3c4a2]/30 text-[#aa7a51]'
     },
     EMPLOYEE: {
-        primary: 'hsl(142, 69%, 36%)', // Nature Green
-        secondary: 'hsl(142, 69%, 55%)',
-        light: 'hsl(142, 69%, 95%)',
-        dark: 'hsl(142, 69%, 25%)',
-        gradient: 'from-[#16a34a] to-[#15803d]',
+        primary: '#541c2c',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#541c2c] to-[#aa7a51]',
         text: 'Employee',
-        badge: 'bg-green-100 text-green-700'
+        badge: 'bg-[#541c2c]/10 text-[#541c2c]'
     },
     PERSONNEL: {
-        primary: 'hsl(0, 0%, 45%)', // Professional Grey/Silver
-        secondary: 'hsl(0, 0%, 60%)',
-        light: 'hsl(0, 0%, 96%)',
-        dark: 'hsl(0, 0%, 30%)',
-        gradient: 'from-[#64748b] to-[#475569]',
+        primary: '#300a15',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#300a15] to-[#aa7a51]',
         text: 'Personnel',
-        badge: 'bg-slate-100 text-slate-700'
+        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
+    },
+    CHAIRMAN: {
+        primary: '#300a15',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#300a15] to-[#aa7a51]',
+        text: 'Chairman',
+        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
+    },
+    GENERAL_MANAGER: {
+        primary: '#421220',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#421220] to-[#aa7a51]',
+        text: 'General Manager',
+        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
+    },
+    HEAD_DIVISION: {
+        primary: '#421220',
+        secondary: '#aa7a51',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#421220] to-[#aa7a51]',
+        text: 'Head of Division',
+        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
+    },
+    HEAD_OFFICE: {
+        primary: '#541c2c',
+        secondary: '#e3c4a2',
+        light: '#fdfcf7',
+        dark: '#300a15',
+        gradient: 'from-[#541c2c] to-[#e3c4a2]',
+        text: 'Head of Office',
+        badge: 'bg-[#e3c4a2]/30 text-[#aa7a51]'
     }
 };
 
-export type UserRole = keyof typeof roleThemes;
+// Use the main type from index.ts instead, or keep this if needed locally
+export type ThemeUserRole = keyof typeof roleThemes;

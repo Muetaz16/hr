@@ -11,7 +11,8 @@ export const getDepartments = async (req: Request, res: Response) => {
             include: {
                 _count: {
                     select: { employees: true }
-                }
+                },
+                division: true
             }
         });
         res.json(departments);
@@ -22,9 +23,9 @@ export const getDepartments = async (req: Request, res: Response) => {
 
 export const createDepartment = async (req: Request, res: Response) => {
     try {
-        const { id, name, groupId } = req.body;
+        const { id, name, groupId, divisionId, isOffice } = req.body;
 
-        const data: any = { name, groupId };
+        const data: any = { name, groupId, divisionId, isOffice: !!isOffice };
         if (id) data.id = id;
 
         const department = await prisma.department.create({
@@ -36,7 +37,6 @@ export const createDepartment = async (req: Request, res: Response) => {
     }
 };
 
-// ... (deleteDepartment) -> Restoring implementation
 export const deleteDepartment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
@@ -44,6 +44,20 @@ export const deleteDepartment = async (req: Request, res: Response) => {
         res.json({ message: 'Department deleted' });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete department' });
+    }
+};
+
+export const updateDepartment = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, groupId, divisionId, isOffice } = req.body;
+        const department = await prisma.department.update({
+            where: { id },
+            data: { name, groupId, divisionId, isOffice: !!isOffice }
+        });
+        res.json(department);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update department' });
     }
 };
 
@@ -84,4 +98,74 @@ export const deleteGroup = async (req: Request, res: Response) => {
     }
 };
 
+export const updateGroup = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        const group = await prisma.group.update({
+            where: { id },
+            data: { name }
+        });
+        res.json(group);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update group' });
+    }
+};
 
+
+// --- Divisions ---
+
+export const getDivisions = async (req: Request, res: Response) => {
+    try {
+        const divisions = await prisma.division.findMany({
+            include: {
+                _count: {
+                    select: { departments: true, employees: true }
+                }
+            }
+        });
+        res.json(divisions);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch divisions' });
+    }
+};
+
+export const createDivision = async (req: Request, res: Response) => {
+    try {
+        const { id, name, directorateId } = req.body;
+
+        const data: any = { name, directorateId: directorateId || undefined };
+        if (id) data.id = id;
+
+        const division = await prisma.division.create({
+            data
+        });
+        res.status(201).json(division);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create division' });
+    }
+};
+
+export const updateDivision = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, directorateId } = req.body;
+        const division = await prisma.division.update({
+            where: { id },
+            data: { name, directorateId: directorateId || undefined }
+        });
+        res.json(division);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update division' });
+    }
+};
+
+export const deleteDivision = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await prisma.division.delete({ where: { id } });
+        res.json({ message: 'Division deleted' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete division' });
+    }
+};

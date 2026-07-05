@@ -17,18 +17,29 @@ import {
     ClipboardCheck,
     ShieldCheck,
     Zap,
-    Briefcase
+    Briefcase,
+    MonitorSmartphone,
+    UserPlus,
+    Sun,
+    Moon,
+    Key,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import type { UserRole } from '../types';
 import { useQuery } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
+import { userService } from '../services/userService';
+import api from '../services/apiClient';
 import { toast } from 'sonner';
+import Modal from '../components/Modal';
 
 interface NavItemBase {
     label: string;
     icon: any;
     roles: string[];
+    permissions?: string[];
 }
 
 interface NavItemSingle extends NavItemBase {
@@ -47,6 +58,7 @@ interface SubNavItem {
     label: string;
     path: string;
     roles: string[];
+    permissions?: string[];
 }
 
 interface NavGroup {
@@ -62,24 +74,101 @@ const MainLayout: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
 
+    // Profile Dropdown & Password Modal State
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPasswords, setShowPasswords] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+    const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+        const saved = localStorage.getItem('iph-theme');
+        return (saved as 'light' | 'dark') || 'dark';
+    });
+
+    useEffect(() => {
+        if (themeMode === 'dark') {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+        localStorage.setItem('iph-theme', themeMode);
+    }, [themeMode]);
+
+    const toggleTheme = () => {
+        setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+    };
+
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPassword !== confirmPassword) {
+            toast.error(t('passwords_do_not_match', { defaultValue: 'Passwords do not match!' }));
+            return;
+        }
+        if (newPassword.length < 6) {
+            toast.error(t('password_too_short', { defaultValue: 'Password must be at least 6 characters.' }));
+            return;
+        }
+
+        if (!currentUser?.id) return;
+
+        setIsChangingPassword(true);
+        try {
+            await api.post('/auth/change-password', { newPassword });
+            toast.success(t('password_changed_success', { defaultValue: 'Password updated successfully!' }));
+            setIsPasswordModalOpen(false);
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (error: any) {
+            console.error("Error changing password:", error);
+            const msg = error.response?.data?.error || t('error_changing_password', { defaultValue: 'Failed to change password.' });
+            toast.error(msg);
+        } finally {
+            setIsChangingPassword(false);
+        }
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('.profile-dropdown-container')) {
+                setIsProfileDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const navGroups: NavGroup[] = [
         {
             title: t('nav_group_core', { defaultValue: 'Core' }),
             items: [
-                { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }), path: '/staff-hub', icon: Zap, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }), path: '/staff-hub', icon: Zap, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_recruitment', { defaultValue: 'Recruitment' }), path: '/recruitment', icon: UserPlus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'HEAD_DEPARTMENT', 'HEAD_UNIT'] },
+                { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
             ]
         },
         {
             title: t('nav_group_ops', { defaultValue: 'Operations' }),
             items: [
-                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'] },
+                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'], permissions: ['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals'] },
+                {
+                    label: t('nav_operational_services', { defaultValue: 'Operation Hub' }),
+                    icon: MonitorSmartphone,
+                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'PERSONNEL'],
+                    children: [
+                        { label: t('nav_service_center', { defaultValue: 'Support Center' }), path: '/support-center', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'PERSONNEL'] },
+                        { label: t('nav_admin_operations', { defaultValue: 'Admin Operations' }), path: '/admin-operations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_onboarding', 'manage_it_issues'] },
+                    ]
+                }
             ]
         },
         {
@@ -90,11 +179,11 @@ const MainLayout: React.FC = () => {
                     icon: Users,
                     roles: ['SUPER_ADMIN', 'HR_MANAGER'],
                     children: [
-                        { label: t('nav_employees'), path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
-                        { label: t('nav_lifecycle_control', { defaultValue: 'Lifecycle Control' }), path: '/lifecycle-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
-                        { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
-                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
-                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
+                        { label: t('nav_employees'), path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_employees', 'manage_employees'] },
+                        { label: t('nav_lifecycle_control', { defaultValue: 'Lifecycle Control' }), path: '/lifecycle-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_lifecycle', 'manage_lifecycle_control'] },
+                        { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_contracts', 'manage_contract_management'] },
+                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                     ]
                 }
             ]
@@ -105,11 +194,11 @@ const MainLayout: React.FC = () => {
                 {
                     label: t('nav_evaluations'),
                     icon: ClipboardCheck,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL', 'HR_MANAGER'],
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL', 'HR_MANAGER'],
                     children: [
-                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'] },
-                        { label: t('nav_hr_evaluations'), path: '/hr-evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
-                        { label: t('nav_evaluation_control'), path: '/evaluation-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
+                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'] },
+                        { label: t('nav_hr_evaluations'), path: '/hr-evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_hr_evaluations', 'manage_evaluation_control'] },
+                        { label: t('nav_evaluation_control'), path: '/evaluation-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_evaluation_control'] },
                     ]
                 }
             ]
@@ -122,10 +211,10 @@ const MainLayout: React.FC = () => {
                     icon: ShieldCheck,
                     roles: ['SUPER_ADMIN'],
                     children: [
-                        { label: t('nav_departments'), path: '/departments', roles: ['SUPER_ADMIN'] },
-                        { label: t('nav_units', { defaultValue: 'Units' }), path: '/units', roles: ['SUPER_ADMIN'] },
-                        { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'] },
-                        { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'] },
+                        { label: t('nav_departments'), path: '/departments', roles: ['SUPER_ADMIN'], permissions: ['manage_departments'] },
+                        { label: t('nav_units', { defaultValue: 'Units' }), path: '/units', roles: ['SUPER_ADMIN'], permissions: ['manage_units'] },
+                        { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
+                        { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                     ]
                 }
             ]
@@ -190,19 +279,19 @@ const MainLayout: React.FC = () => {
     const activeInfo = findActiveItem();
 
     return (
-        <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-inter">
+        <div className="flex h-screen bg-[#541c2c] overflow-hidden font-inter">
             {/* Desktop Sidebar */}
             <aside
-                className={`flex flex-col bg-white border-r border-slate-200 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-30 shadow-2xl shadow-slate-200/40 relative
+                className={`flex flex-col bg-[#300a15] border-r border-[#e3c4a2]/15 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-30 shadow-2xl shadow-[#300a15]/50 relative
                     ${isSidebarOpen ? 'w-64' : 'w-20'}`}
             >
                 {/* Logo Section */}
-                <div className="h-22 flex items-center px-6 border-b border-slate-100 justify-center">
+                <div className="h-22 flex items-center px-6 border-b border-[#e3c4a2]/15 justify-center">
                     {isSidebarOpen ? (
                         <div className="flex items-center gap-3 animate-in fade-in duration-500">
                             <img src="/logo.png" alt="IPH SYSTEM Logo" className="h-10 object-contain" />
-                            <div className="h-8 w-[1px] bg-slate-200"></div>
-                            <span className="font-outfit font-black text-xl tracking-tighter text-slate-800 uppercase">IPH <span className="text-primary-500">SYSTEM</span></span>
+                            <div className="h-8 w-[1px] bg-[#e3c4a2]/20"></div>
+                            <span className="font-outfit font-black text-xl tracking-tighter text-white uppercase">IPH <span className="text-primary-200">SYSTEM</span></span>
                         </div>
                     ) : (
                         <div className={`p-2 rounded-2xl bg-gradient-to-br ${theme.gradient} shadow-lg shadow-purple-500/20 shrink-0`}>
@@ -216,8 +305,8 @@ const MainLayout: React.FC = () => {
                     {navGroups.map((group, gIdx) => {
                         const visibleItems = group.items.filter(item =>
                             currentUser && (
-                                ('path' in item && item.roles.includes(currentUser.role)) ||
-                                ('children' in item && item.children && item.children.some(c => c.roles.includes(currentUser.role)))
+                                ('path' in item && (item.roles.includes(currentUser.role) || (item.permissions && item.permissions.some(p => currentUser.permissions?.includes(p))))) ||
+                                ('children' in item && item.children && item.children.some(c => c.roles.includes(currentUser.role) || (c.permissions && c.permissions.some(p => currentUser.permissions?.includes(p)))))
                             )
                         );
 
@@ -226,7 +315,7 @@ const MainLayout: React.FC = () => {
                         return (
                             <div key={gIdx} className="space-y-2">
                                 {isSidebarOpen && (
-                                    <h3 className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 opacity-0 animate-[slideIn_0.5s_ease-out_forwards]" style={{ animationDelay: `${gIdx * 100}ms` }}>
+                                    <h3 className="px-4 text-[10px] font-black text-[#e3c4a2]/50 uppercase tracking-[0.2em] mb-4 opacity-0 animate-[slideIn_0.5s_ease-out_forwards]" style={{ animationDelay: `${gIdx * 100}ms` }}>
                                         {group.title}
                                     </h3>
                                 )}
@@ -245,11 +334,11 @@ const MainLayout: React.FC = () => {
                                                         to={item.path!}
                                                         className={`group flex items-center px-4 py-3.5 rounded-2xl transition-all duration-300 relative
                                                             ${isActive
-                                                                ? 'bg-primary-50 text-slate-900'
-                                                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                                                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                                                                : 'text-[#e3c4a2]/70 hover:bg-[#541c2c]/40 hover:text-white'}`}
                                                     >
                                                         <div className={`p-2 rounded-xl transition-all duration-300
-                                                            ${isActive ? `bg-white text-primary-600 shadow-sm border border-primary-100` : 'bg-transparent group-hover:bg-white group-hover:shadow-sm'}`}>
+                                                            ${isActive ? `bg-primary-600 text-primary-100` : 'bg-transparent group-hover:bg-white group-hover:shadow-sm'}`}>
                                                             <item.icon className="w-5 h-5" />
                                                         </div>
                                                         {isSidebarOpen && (
@@ -271,11 +360,11 @@ const MainLayout: React.FC = () => {
                                                         onClick={() => toggleSubMenu(item.label)}
                                                         className={`w-full group flex items-center px-4 py-3.5 rounded-2xl transition-all duration-300 relative
                                                             ${isActive
-                                                                ? 'bg-slate-50 text-slate-900'
-                                                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                                                                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                                                                : 'text-[#e3c4a2]/70 hover:bg-[#541c2c]/40 hover:text-white'}`}
                                                     >
                                                         <div className={`p-2 rounded-xl transition-all duration-300
-                                                            ${isActive ? `bg-white text-slate-800 shadow-sm border border-slate-200` : 'bg-transparent group-hover:bg-white group-hover:shadow-sm'}`}>
+                                                            ${isActive ? `bg-primary-600 text-primary-100` : 'bg-transparent group-hover:bg-white group-hover:shadow-sm'}`}>
                                                             <item.icon className="w-5 h-5" />
                                                         </div>
                                                         {isSidebarOpen && (
@@ -290,18 +379,18 @@ const MainLayout: React.FC = () => {
                                                 {/* Sub-menu block */}
                                                 {hasChildren && isSidebarOpen && (
                                                     <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                                                        <div className="ml-10 space-y-1 relative before:absolute before:left-[-1.25rem] before:top-0 before:bottom-4 before:w-[2px] before:bg-slate-100 before:rounded-full">
-                                                            {children?.filter(c => currentUser && c.roles.includes(currentUser.role)).map((child, cIdx) => (
+                                                        <div className="ml-10 space-y-1 relative before:absolute before:left-[-1.25rem] before:top-0 before:bottom-4 before:w-[2px] before:bg-[#e3c4a2]/15 before:rounded-full">
+                                                            {children?.filter(c => currentUser && (c.roles.includes(currentUser.role) || (c.permissions && c.permissions.some(p => currentUser.permissions?.includes(p))))).map((child, cIdx) => (
                                                                 <Link
                                                                     key={cIdx}
                                                                     to={child.path}
                                                                     className={`flex items-center px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 relative
                                                                         ${location.pathname === child.path
-                                                                            ? 'bg-white text-primary-600 shadow-sm border border-primary-50 translate-x-1'
-                                                                            : 'text-slate-500 hover:bg-white hover:text-slate-700 hover:translate-x-1'}`}
+                                                                            ? 'bg-primary-50 text-primary-500 shadow-sm border border-primary-100/50 translate-x-1'
+                                                                            : 'text-[#e3c4a2]/60 hover:bg-[#541c2c]/30 hover:text-white hover:translate-x-1'}`}
                                                                 >
                                                                     {location.pathname === child.path && (
-                                                                        <div className="absolute left-[-1.35rem] w-1.5 h-1.5 rounded-full bg-primary-600 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                                                                        <div className="absolute left-[-1.35rem] w-1.5 h-1.5 rounded-full bg-primary-600 shadow-[0_0_8px_rgba(84,28,44,0.6)]" />
                                                                     )}
                                                                     {child.label}
                                                                 </Link>
@@ -319,17 +408,17 @@ const MainLayout: React.FC = () => {
                 </nav>
 
                 {/* Bottom section (Toggle/Logout) */}
-                <div className="p-4 border-t border-slate-100 flex flex-col gap-2 bg-slate-50/30">
+                <div className="p-4 border-t border-[#e3c4a2]/10 flex flex-col gap-2 bg-[#300a15]/50">
                     <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className="w-full h-12 flex items-center justify-center rounded-2xl bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all shadow-sm border border-slate-200/50"
+                        className="w-full h-12 flex items-center justify-center rounded-2xl bg-[#541c2c]/40 hover:bg-[#541c2c]/75 text-[#e3c4a2]/70 hover:text-white transition-all shadow-sm border border-[#e3c4a2]/10"
                     >
                         {isSidebarOpen ? <Menu className="w-5 h-5 rotate-180" /> : <ChevronRight className="w-5 h-5" />}
                     </button>
 
                     <button
                         onClick={handleLogout}
-                        className="w-full h-12 flex items-center justify-center rounded-2xl bg-white hover:bg-red-50 text-red-500 transition-all shadow-sm border border-red-100 group"
+                        className="w-full h-12 flex items-center justify-center rounded-2xl bg-[#541c2c]/40 hover:bg-red-950/40 text-red-400 hover:text-red-300 transition-all shadow-sm border border-red-900/40 group"
                     >
                         <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                         {isSidebarOpen && <span className="ml-3 font-bold text-sm tracking-tight">{t('logout')}</span>}
@@ -340,13 +429,18 @@ const MainLayout: React.FC = () => {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 {/* Top Header */}
-                <header className="h-22 bg-white/80 backdrop-blur-3xl border-b border-slate-200/60 z-20 px-10 flex items-center justify-between sticky top-0">
+                <header className={`h-22 backdrop-blur-3xl border-b z-20 px-10 flex items-center justify-between sticky top-0 transition-all duration-300
+                    ${themeMode === 'dark' 
+                        ? 'bg-[#300a15]/80 border-[#e3c4a2]/15' 
+                        : 'bg-white/90 border-slate-200/80 shadow-sm'}`}>
                     <div className="flex items-center gap-6">
                         <div className="lg:flex flex-col">
-                            <h2 className="text-xl font-outfit font-black text-slate-800 tracking-tight leading-none mb-1">
+                            <h2 className={`text-xl font-outfit font-black tracking-tight leading-none mb-1 transition-colors duration-300
+                                ${themeMode === 'dark' ? 'text-white' : 'text-[#541c2c]'}`}>
                                 {activeInfo.label}
                             </h2>
-                            <div className="flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">
+                            <div className={`flex items-center text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-300
+                                ${themeMode === 'dark' ? 'text-[#e3c4a2]/60' : 'text-slate-500'}`}>
                                 <span>{t('main')}</span>
                                 {activeInfo.parent && (
                                     <>
@@ -361,51 +455,120 @@ const MainLayout: React.FC = () => {
                     <div className="flex items-center gap-8">
                         <LanguageSwitcher />
 
+                        {/* Theme Toggle Button */}
+                        <button
+                            onClick={toggleTheme}
+                            className={`p-2.5 rounded-2xl transition-all duration-300 active:scale-90 border flex items-center justify-center
+                                ${themeMode === 'dark' 
+                                    ? 'bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white border-[#e3c4a2]/15' 
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200'}`}
+                            title={themeMode === 'dark' ? 'Switch to Whiter Mode' : 'Switch to Dark Mode'}
+                        >
+                            {themeMode === 'dark' ? (
+                                <Sun className="w-5 h-5 animate-[spin_4s_linear_infinite]" />
+                            ) : (
+                                <Moon className="w-5 h-5" />
+                            )}
+                        </button>
+
                         {/* Search Bar */}
                         <div className="relative hidden xl:block">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-slate-400" />
+                                <Search className={`h-4 w-4 transition-colors duration-300 ${themeMode === 'dark' ? 'text-[#e3c4a2]/50' : 'text-slate-400'}`} />
                             </div>
                             <input
                                 type="text"
                                 placeholder={t('search_placeholder')}
-                                className="block w-72 pl-11 pr-4 py-2.5 bg-slate-100 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary-500/20 focus:bg-white transition-all duration-300"
+                                className={`block w-72 pl-11 pr-4 py-2.5 rounded-2xl text-sm font-medium transition-all duration-300 border
+                                    ${themeMode === 'dark'
+                                        ? 'bg-[#541c2c]/50 text-white placeholder:text-[#e3c4a2]/50 border-[#e3c4a2]/10 focus:ring-2 focus:ring-primary-500/35 focus:bg-[#300a15]'
+                                        : 'bg-slate-50 text-slate-900 placeholder:text-slate-400 border-slate-200 focus:ring-2 focus:ring-primary-500/20 focus:bg-white'}`}
                             />
                         </div>
 
                         {/* Notifications */}
                         <button
                             onClick={() => navigate('/tasks')}
-                            className="relative p-2.5 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-600 active:scale-90"
+                            className={`relative p-2.5 rounded-2xl active:scale-90 transition-all duration-300
+                                ${themeMode === 'dark'
+                                    ? 'hover:bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white'
+                                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
                         >
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
+                            <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)] bg-red-500
+                                ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`}></span>
                         </button>
 
-                        <div className="h-10 w-[1px] bg-slate-200"></div>
+                        <div className={`h-10 w-[1px] transition-colors duration-300 ${themeMode === 'dark' ? 'bg-[#e3c4a2]/20' : 'bg-slate-200'}`}></div>
 
-                        {/* User Profile */}
-                        <div className="flex items-center gap-4 group cursor-pointer active:scale-95 transition-all">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-black text-slate-800 leading-none mb-1.5">{currentUser?.fullName}</p>
-                                <div className={`inline-flex px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${theme.badge} border border-current opacity-80 backdrop-blur-sm`}>
-                                    {theme.text}
+                        {/* User Profile Container */}
+                        <div className="relative profile-dropdown-container">
+                            <div 
+                                className="flex items-center gap-4 group cursor-pointer active:scale-95 transition-all"
+                                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                            >
+                                <div className="text-right hidden sm:block">
+                                    <p className={`text-sm font-black leading-none mb-1.5 transition-colors duration-300
+                                        ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{currentUser?.fullName}</p>
+                                    <div className={`inline-flex px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-primary-500/20 border opacity-90 backdrop-blur-sm transition-all duration-300
+                                        ${themeMode === 'dark' ? 'text-[#e3c4a2] border-[#e3c4a2]/25' : 'text-primary-700 border-primary-200'}`}>
+                                        {theme.text}
+                                    </div>
+                                </div>
+                                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.gradient} flex items-center justify-center p-[2px] shadow-lg group-hover:rotate-6 transition-all duration-500`}>
+                                    <div className={`w-full h-full rounded-[14px] flex items-center justify-center shadow-inner animate-[fadeIn_0.5s_ease-out] transition-colors duration-300
+                                        ${themeMode === 'dark' ? 'bg-[#300a15]' : 'bg-white'}`}>
+                                        <User className="w-6 h-6" style={{ color: themeMode === 'dark' ? theme.secondary : '#541c2c' }} />
+                                    </div>
                                 </div>
                             </div>
-                            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.gradient} flex items-center justify-center p-[2px] shadow-lg group-hover:rotate-6 transition-all duration-500`}>
-                                <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center shadow-inner">
-                                    <User className="w-6 h-6" style={{ color: theme.primary }} />
+
+                            {/* Dropdown Menu */}
+                            {isProfileDropdownOpen && (
+                                <div className={`absolute right-0 mt-4 w-56 rounded-2xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-top-2 duration-200 z-50
+                                    ${themeMode === 'dark' 
+                                        ? 'bg-[#300a15]/95 border-[#e3c4a2]/15 shadow-[#300a15]/50' 
+                                        : 'bg-white border-slate-100 shadow-slate-200/50'}`}>
+                                    <div className="p-2 space-y-1">
+                                        <button 
+                                            onClick={() => {
+                                                setIsProfileDropdownOpen(false);
+                                                setIsPasswordModalOpen(true);
+                                            }}
+                                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors
+                                                ${themeMode === 'dark'
+                                                    ? 'text-[#e3c4a2]/80 hover:bg-[#541c2c]/40 hover:text-white'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}`}
+                                        >
+                                            <Key className="w-4 h-4" />
+                                            {t('change_password', { defaultValue: 'Change Password' })}
+                                        </button>
+                                        <div className={`h-px w-full my-1 ${themeMode === 'dark' ? 'bg-[#e3c4a2]/10' : 'bg-slate-100'}`}></div>
+                                        <button 
+                                            onClick={handleLogout}
+                                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors
+                                                ${themeMode === 'dark'
+                                                    ? 'text-red-400 hover:bg-red-950/40 hover:text-red-300'
+                                                    : 'text-red-500 hover:bg-red-50 hover:text-red-600'}`}
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            {t('logout', { defaultValue: 'Logout' })}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </header>
 
                 {/* Content Container */}
-                <main className="flex-1 overflow-y-auto p-10 relative scroll-smooth bg-[#f8fafc]">
+                <main className={`flex-1 overflow-y-auto p-10 relative scroll-smooth transition-colors duration-500
+                    ${themeMode === 'dark' ? 'bg-[#541c2c]' : 'bg-[#faf8f6]'}`}>
                     {/* Background Soft Blobs */}
-                    <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-primary-100/10 blur-[120px] rounded-full pointer-events-none -mr-48 -mt-48 transition-colors duration-1000"></div>
-                    <div className="fixed bottom-0 left-0 w-[500px] h-[500px] bg-purple-100/10 blur-[120px] rounded-full pointer-events-none -ml-48 -mb-48 transition-colors duration-1000"></div>
+                    <div className={`fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full pointer-events-none -mr-48 -mt-48 transition-colors duration-1000
+                        ${themeMode === 'dark' ? 'bg-[#e3c4a2]/5' : 'bg-[#aa7a51]/3'}`}></div>
+                    <div className={`fixed bottom-0 left-0 w-[500px] h-[500px] blur-[120px] rounded-full pointer-events-none -ml-48 -mb-48 transition-colors duration-1000
+                        ${themeMode === 'dark' ? 'bg-[#aa7a51]/5' : 'bg-[#e3c4a2]/3'}`}></div>
 
                     {/* Content wrapper */}
                     <div className="relative z-10 page-enter min-h-full">
@@ -413,6 +576,76 @@ const MainLayout: React.FC = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Change Password Modal */}
+            <Modal
+                isOpen={isPasswordModalOpen}
+                onClose={() => setIsPasswordModalOpen(false)}
+                title={t('change_password', { defaultValue: 'Change Password' })}
+            >
+                <form onSubmit={handleChangePassword} className="space-y-6">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                                {t('new_password', { defaultValue: 'New Password' })}
+                            </label>
+                            <div className="relative">
+                                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type={showPasswords ? "text" : "password"}
+                                    required
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    className="w-full pl-10 pr-12 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
+                                    placeholder={t('enter_new_password', { defaultValue: 'Enter new password' })}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPasswords(!showPasswords)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                                {t('confirm_password', { defaultValue: 'Confirm Password' })}
+                            </label>
+                            <div className="relative">
+                                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type={showPasswords ? "text" : "password"}
+                                    required
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full pl-10 pr-12 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
+                                    placeholder={t('confirm_new_password', { defaultValue: 'Confirm new password' })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <button
+                            type="button"
+                            onClick={() => setIsPasswordModalOpen(false)}
+                            className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                        >
+                            {t('cancel', { defaultValue: 'Cancel' })}
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isChangingPassword}
+                            className="px-5 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isChangingPassword && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                            {t('save_password', { defaultValue: 'Save Password' })}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

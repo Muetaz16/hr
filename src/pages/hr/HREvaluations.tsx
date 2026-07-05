@@ -195,8 +195,9 @@ const HREvaluations: React.FC = () => {
     };
 
     const filteredEmployees = employees.filter(emp =>
-        emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.departmentId.toLowerCase().includes(searchTerm.toLowerCase())
+        (emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            emp.departmentId.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (currentUser?.role === 'SUPER_ADMIN' || emp.userId !== currentUser?.id)
     );
 
     if (loading) return <div className="p-10 flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-600"></div></div>;
@@ -279,8 +280,8 @@ const HREvaluations: React.FC = () => {
                                     { label: t('absence_score'), weight: 7, limit: 7, bg: 'bg-red-50/40', text: 'text-red-600' },
                                     { label: t('delay_score'), weight: 7, limit: 180, bg: 'bg-orange-50/40', text: 'text-orange-600' },
                                     { label: t('emergency_score'), weight: 2, limit: 3 },
-                                    { label: t('unpaid_score'), weight: 2, limit: 14 },
-                                    { label: t('annual_paid_leave'), weight: 2, limit: 14 },
+                                    { label: t('unpaid_score'), weight: 2, limit: 12 },
+                                    { label: t('annual_paid_leave'), weight: 2, limit: 12 },
                                 ].map((h, i) => (
                                     <th key={i} className={`p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] w-32 text-center transition-colors hover:bg-slate-100/30 ${h.bg || ''}`}>
                                         <div className={h.text}>{h.label}</div>
@@ -302,8 +303,8 @@ const HREvaluations: React.FC = () => {
                                 const isSubmitted = data.status === 'submitted';
 
                                 return (
-                                    <tr 
-                                        key={emp.id} 
+                                    <tr
+                                        key={emp.id}
                                         className="hover:bg-slate-50/80 transition-all duration-300 group/row"
                                         style={{ animationDelay: `${eIdx * 30}ms` }}
                                     >
@@ -326,12 +327,12 @@ const HREvaluations: React.FC = () => {
                                             { field: 'absenceWithoutPermission', max: 7, color: 'text-red-600', bg: 'bg-red-50/10' },
                                             { field: 'delayAndEarlyDeparture', max: 180, color: 'text-orange-600', bg: 'bg-orange-50/10' },
                                             { field: 'emergencyLeaves', max: 3, isPercent: true },
-                                            { field: 'unpaidLeave', max: 14, isPercent: true },
-                                            { field: 'annualPaidLeave', max: 14, isPercent: true },
+                                            { field: 'unpaidLeave', max: 12, isPercent: true },
+                                            { field: 'annualPaidLeave', max: 12, isPercent: true },
                                         ].map((inp, iIdx) => {
                                             const rawValue = data[inp.field as keyof HREvaluation] ?? 0;
-                                            const displayValue = inp.isPercent 
-                                                ? Math.round((1 - (Number(rawValue) / inp.max)) * 100) 
+                                            const displayValue = inp.isPercent
+                                                ? Math.round((1 - (Number(rawValue) / inp.max)) * 100)
                                                 : rawValue;
 
                                             return (
@@ -348,7 +349,7 @@ const HREvaluations: React.FC = () => {
                                                             value={displayValue}
                                                             onChange={(e) => {
                                                                 const val = Number(e.target.value);
-                                                                const finalValue = inp.isPercent 
+                                                                const finalValue = inp.isPercent
                                                                     ? Math.max(0, (1 - (val / 100)) * inp.max)
                                                                     : val;
                                                                 handleInputChange(emp.id, inp.field as keyof HREvaluation, finalValue);
@@ -389,7 +390,7 @@ const HREvaluations: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900 rounded-[32px] p-8 gap-6 shadow-2xl relative overflow-hidden group/footer">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 blur-[80px] rounded-full pointer-events-none group-hover/footer:bg-primary-500/20 transition-colors duration-1000"></div>
-                
+
                 <div className="text-center sm:text-left relative z-10">
                     <h3 className="text-white font-outfit font-black text-xl mb-1 tracking-tight">{t('finalize_and_send')}</h3>
                     <p className="text-slate-400 text-sm font-medium">{t('finalize_helper')}</p>

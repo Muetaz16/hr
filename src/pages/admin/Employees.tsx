@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { employeeService } from '../../services/employeeService';
-import { departmentService, groupService } from '../../services/departmentService';
+import { departmentService, groupService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { toast } from 'sonner';
-import type { Employee, Department, Group, Unit } from '../../types';
+import type { Employee, Department, Group, Unit, Division } from '../../types';
 import Modal from '../../components/Modal';
 import {
     Edit,
@@ -17,8 +17,14 @@ import {
     Download,
     DollarSign,
     UserPlus,
-    AlertTriangle
+    AlertTriangle,
+    ChevronDown,
+    Check,
+    Lock,
+    Key,
+    Sparkles
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { evaluationService } from '../../services/evaluationService';
 import { payrollService } from '../../services/payrollService';
 import { format } from 'date-fns';
@@ -28,6 +34,12 @@ import { useAuth } from '../../context/AuthContext';
 import { roleThemes } from '../../config/roleThemes';
 import type { UserRole } from '../../types';
 import Skeleton from '../../components/Skeleton';
+import { 
+    POSITION_FACTORS, 
+    SKILL_FACTORS, 
+    SITE_FACTORS, 
+    LANGUAGE_FACTORS 
+} from '../../constants/factors';
 
 const EmployeesPage: React.FC = () => {
     const { t } = useTranslation();
@@ -35,25 +47,149 @@ const EmployeesPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const deptIdFilter = searchParams.get('deptId');
 
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [units, setUnits] = useState<Unit[]>([]);
-    const [groups, setGroups] = useState<Group[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [searchTerm, setSearchTerm] = useState('');
+
+    // Row Selection
+    const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+
+    // Advanced Multi-Select Filters
+    const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+    const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
 
-    const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
-    const [dirEvals, setDirEvals] = useState<Record<string, DirectorEvaluation>>({});
-    const [payrollRecords, setPayrollRecords] = useState<Record<string, PayrollResult>>({});
+    const { data, isLoading: loading, refetch: fetchData } = useQuery({
+        queryKey: ['employees-admin', selectedMonth],
+        queryFn: async () => {
+            console.log("Employees.tsx useQuery running...");
+            const [emps, depts, grps, uns, divs, pRecords] = await Promise.all([
+                employeeService.getAllEmployees().catch((e) => { console.error("emps error", e); return []; }),
+                departmentService.getAllDepartments().catch((e) => { console.error("depts error", e); return []; }),
+                groupService.getAllGroups().catch((e) => { console.error("grps error", e); return []; }),
+                unitService.getAllUnits().catch((e) => { console.error("uns error", e); return []; }),
+                divisionService.getAllDivisions().catch((e) => { console.error("divs error", e); return []; }),
+                payrollService.getPayrollByMonth(selectedMonth).catch((e) => { console.error("payroll error", e); return []; })
+            ]);
+            console.log("emps length:", emps?.length);
+
+            const pMap: Record<string, PayrollResult> = {};
+            if (pRecords && Array.isArray(pRecords)) {
+                pRecords.forEach((r: any) => pMap[r.employeeId] = r);
+            }
+
+            const evalPromises = (emps || []).map((e: any) => evaluationService.getDirectorEvaluation(e.id, selectedMonth).catch(() => null));
+            const evals = await Promise.all(evalPromises);
+            const eMap: Record<string, DirectorEvaluation> = {};
+            evals.forEach((ev, idx) => {
+                if (ev) eMap[(emps || [])[idx].id] = ev;
+            });
+
+            return {
+                employees: emps || [],
+                departments: depts || [],
+                groups: grps || [],
+                units: uns || [],
+                divisions: divs || [],
+                payrollRecords: pMap,
+                dirEvals: eMap
+            };
+        }
+    });
+
+    const employees = data?.employees || [];
+    const departments = data?.departments || [];
+    const groups = data?.groups || [];
+    const units = data?.units || [];
+    const divisions = data?.divisions || [];
+    const payrollRecords = data?.payrollRecords || {};
+    const dirEvals = data?.dirEvals || {};
+
+
+
+    // Helper Checklist Component for Premium UI
+    const FilterChecklist = ({
+        label,
+        options,
+        selected,
+        onChange,
+        icon: Icon = Filter
+    }: {
+        label: string,
+        options: { id: string, name: string }[],
+        selected: string[],
+        onChange: (ids: string[]) => void,
+        icon?: any
+    }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const toggle = (id: string) => {
+            if (selected.includes(id)) {
+                onChange(selected.filter(i => i !== id));
+            } else {
+                onChange([...selected, id]);
+            }
+        };
+
+        return (
+            <div className="relative">
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className={`flex items-center justify-between w-full px-4 py-3 bg-white border rounded-2xl text-xs font-bold transition-all shadow-sm ${selected.length > 0 ? 'border-indigo-500 ring-2 ring-indigo-50/50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <Icon className={`w-3.5 h-3.5 ${selected.length > 0 ? 'text-indigo-500' : 'text-slate-400'}`} />
+                        <span className="truncate">
+                            {selected.length === 0 ? label : `${label} (${selected.length})`}
+                        </span>
+                    </div>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+                        <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-20 max-h-64 overflow-y-auto animate-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between p-2 mb-1 border-b border-slate-50">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                                <button
+                                    onClick={() => onChange([])}
+                                    className="text-[9px] font-bold text-indigo-500 hover:text-indigo-700"
+                                >
+                                    {t('clear', { defaultValue: 'Clear' })}
+                                </button>
+                            </div>
+                            {options.map(opt => (
+                                <div
+                                    key={opt.id}
+                                    onClick={() => toggle(opt.id)}
+                                    className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors group"
+                                >
+                                    <span className={`text-xs font-medium ${selected.includes(opt.id) ? 'text-indigo-600 font-bold' : 'text-slate-600'}`}>
+                                        {opt.name}
+                                    </span>
+                                    {selected.includes(opt.id) && <Check className="w-3.5 h-3.5 text-indigo-500" />}
+                                </div>
+                            ))}
+                            {options.length === 0 && (
+                                <div className="p-4 text-center text-xs text-slate-400 italic">No options available</div>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    };
 
     const [formData, setFormData] = useState<Partial<Employee & { password?: string }>>({
         fullName: '',
         email: '',
         password: '',
+        directorateId: '',
+        divisionId: '',
         departmentId: '',
         unitId: '',
         groupId: '',
@@ -74,48 +210,30 @@ const EmployeesPage: React.FC = () => {
         contractNumber: '',
         nationality: '',
         jobCategory: '',
-        jobGrade: ''
+        jobGrade: '',
+        positionFactor: 1.0,
+        skillFactor: 1.0,
+        siteFactor: 1.0,
+        languageFactor: 1.0,
+        permissions: []
     });
 
-    useEffect(() => {
-        fetchData();
-    }, [currentUser, selectedMonth]);
-
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [emps, depts, grps, uns, pRecords] = await Promise.all([
-                employeeService.getAllEmployees(),
-                departmentService.getAllDepartments(),
-                groupService.getAllGroups(),
-                unitService.getAllUnits(),
-                payrollService.getPayrollByMonth(selectedMonth)
-            ]);
-
-            setEmployees(emps);
-            setDepartments(depts);
-            setGroups(grps);
-            setUnits(uns);
-
-            const pMap: Record<string, PayrollResult> = {};
-            pRecords.forEach(r => pMap[r.employeeId] = r);
-            setPayrollRecords(pMap);
-
-            // Fetch evaluations concurrently
-            const evalPromises = emps.map(e => evaluationService.getDirectorEvaluation(e.id, selectedMonth));
-            const evals = await Promise.all(evalPromises);
-            const eMap: Record<string, DirectorEvaluation> = {};
-            evals.forEach((ev, idx) => {
-                if (ev) eMap[emps[idx].id] = ev;
-            });
-            setDirEvals(eMap);
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setLoading(false);
-        }
+    const generateEmailFromFullName = (name: string) => {
+        if (!name) return '';
+        const parts = name.trim().split(/\s+/);
+        if (parts.length < 2) return parts[0].toLowerCase() + '@iph.com';
+        
+        const firstInitial = parts[0].charAt(0).toLowerCase();
+        const lastName = parts[parts.length - 1].toLowerCase();
+        
+        // Remove special characters from names for valid email
+        const cleanFirst = firstInitial.replace(/[^a-z0-9]/g, '');
+        const cleanLast = lastName.replace(/[^a-z0-9]/g, '');
+        
+        return `${cleanFirst}.${cleanLast}@iph.com`;
     };
+
+
 
     const handleExport = async () => {
         try {
@@ -157,11 +275,18 @@ const EmployeesPage: React.FC = () => {
             if (editingId) {
                 await employeeService.updateEmployee(editingId, formData);
             } else {
-            await employeeService.createEmployee(formData as any);
-        }
-        setIsModalOpen(false);
-        setEditingId(null);
-        setFormData({ fullName: '', email: '', password: '', departmentId: '', unitId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0, joinDate: new Date().toISOString().split('T')[0], staffId: '', position: '', contractStartDate: '', contractEndDate: '', contractType: 'Limited', contractStatus: 'Active', holidaysUsed: 0, bonusHolidays: 0 });
+                await employeeService.createEmployee(formData as any);
+            }
+            setIsModalOpen(false);
+            setEditingId(null);
+            setFormData({
+                fullName: '', email: '', password: '', directorateId: '', divisionId: '', departmentId: '', unitId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0,
+                joinDate: new Date().toISOString().split('T')[0], staffId: '', position: '', contractStartDate: '', contractEndDate: '',
+                contractType: 'RESDANT', contractStatus: 'Active', holidaysUsed: 0, emergencyHolidaysUsed: 0, unpaidHolidaysUsed: 0, bonusHolidays: 0, 
+                fullNameArabic: '', passportNumber: '', contractNumber: '1st', nationality: '', jobCategory: '', jobGrade: '',
+                positionFactor: 1.0, skillFactor: 1.0, siteFactor: 1.0, languageFactor: 1.0,
+                permissions: []
+            });
             fetchData();
             toast.success(editingId ? t('employee_updated') : t('employee_created'));
         } catch (error: any) {
@@ -204,7 +329,12 @@ const EmployeesPage: React.FC = () => {
             nationality: emp.nationality || '',
             jobCategory: emp.jobCategory || '',
             jobGrade: emp.jobGrade || '',
-            emergencyHolidaysUsed: emp.emergencyHolidaysUsed || 0
+            emergencyHolidaysUsed: emp.emergencyHolidaysUsed || 0,
+            positionFactor: emp.positionFactor || 1.0,
+            skillFactor: emp.skillFactor || 1.0,
+            siteFactor: emp.siteFactor || 1.0,
+            languageFactor: emp.languageFactor || 1.0,
+            permissions: (emp as any).permissions || []
         });
         setIsModalOpen(true);
     };
@@ -219,7 +349,10 @@ const EmployeesPage: React.FC = () => {
     const filteredEmployees = employees.filter(emp => {
         const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = !deptIdFilter || emp.departmentId === deptIdFilter;
-        return matchesSearch && matchesDept;
+        const matchesGroup = selectedGroups.length === 0 || selectedGroups.includes(departments.find(d => d.id === emp.departmentId)?.groupId || '');
+        const matchesUnit = selectedUnits.length === 0 || selectedUnits.includes(emp.unitId || '');
+        const matchesRole = selectedRoles.length === 0 || selectedRoles.includes(emp.role);
+        return matchesSearch && matchesDept && matchesGroup && matchesUnit && matchesRole;
     });
 
     const activeDeptName = departments.find(d => d.id === deptIdFilter)?.name;
@@ -288,62 +421,128 @@ const EmployeesPage: React.FC = () => {
                         <Download size={18} className="mr-2" />
                         {t('export_payroll')}
                     </button>
-                    <button
-                        onClick={() => {
-                            setEditingId(null);
-                            setFormData({
-                                fullName: '', email: '', password: '', departmentId: '', unitId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0,
-                                joinDate: new Date().toISOString().split('T')[0], staffId: '', position: '', contractStartDate: '', contractEndDate: '',
-                                contractType: 'RESDANT', contractStatus: 'Active', holidaysUsed: 0, emergencyHolidaysUsed: 0, unpaidHolidaysUsed: 0, bonusHolidays: 0,
-                                fullNameArabic: '', passportNumber: '', contractNumber: '', nationality: '', jobCategory: '', jobGrade: ''
-                            });
-                            setIsModalOpen(true);
-                        }}
-                        className="flex items-center px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all text-sm group"
-                    >
-                        <UserPlus size={18} className="mr-2 group-hover:rotate-12 transition-transform" />
-                        {t('board_new_employee')}
-                    </button>
+                    {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('register_employees')) && (
+                        <button
+                            onClick={() => {
+                                setEditingId(null);
+                                setFormData({
+                                    fullName: '', email: '', password: '', directorateId: '', divisionId: '', departmentId: '', unitId: '', groupId: '', role: 'EMPLOYEE', baseSalary: 0,
+                                    joinDate: new Date().toISOString().split('T')[0], staffId: '', position: '', contractStartDate: '', contractEndDate: '',
+                                    contractType: 'RESDANT', contractStatus: 'Active', holidaysUsed: 0, emergencyHolidaysUsed: 0, unpaidHolidaysUsed: 0, bonusHolidays: 0,
+                                     fullNameArabic: '', passportNumber: '', contractNumber: '', nationality: '', jobCategory: '', jobGrade: '',
+                                    positionFactor: 1.0, skillFactor: 1.0, siteFactor: 1.0, languageFactor: 1.0
+                                });
+                                setIsModalOpen(true);
+                            }}
+                            className="flex items-center px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all text-sm group"
+                        >
+                            <UserPlus size={18} className="mr-2 group-hover:rotate-12 transition-transform" />
+                            {t('board_new_employee')}
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Content Table Area */}
             <div className="glass-card rounded-[32px] overflow-hidden shadow-2xl shadow-slate-200/50">
                 {/* Search / Filter Toolbar */}
-                <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input
-                                type="text"
-                                placeholder={t('filter_candidates')}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-white border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-100 transition-all w-full sm:w-80"
-                            />
-                        </div>
-
-                        {deptIdFilter && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl animate-in fade-in slide-in-from-left-2">
-                                <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{t('department')}: {activeDeptName}</span>
-                                <button
-                                    onClick={() => {
-                                        searchParams.delete('deptId');
-                                        setSearchParams(searchParams);
-                                    }}
-                                    className="p-1 hover:bg-indigo-100 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors"
-                                >
-                                    <X size={14} />
-                                </button>
+                <div className="p-6 border-b border-slate-100 flex flex-col gap-6 bg-slate-50/30">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder={t('filter_candidates')}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-10 pr-4 py-2 bg-white border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-100 transition-all w-full sm:w-80"
+                                />
                             </div>
-                        )}
+
+                            {deptIdFilter && (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl animate-in fade-in slide-in-from-left-2">
+                                    <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{t('department')}: {activeDeptName}</span>
+                                    <button
+                                        onClick={() => {
+                                            searchParams.delete('deptId');
+                                            setSearchParams(searchParams);
+                                        }}
+                                        className="p-1 hover:bg-indigo-100 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => {
+                                    const headRoles = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'SUPER_ADMIN'];
+                                    setSelectedRoles(headRoles);
+                                }}
+                                className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-all"
+                            >
+                                {t('all_heads', { defaultValue: 'Select All Heads' })}
+                            </button>
+                            <div className="h-4 w-[1px] bg-slate-200"></div>
+                            <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+                                <Filter className="w-5 h-5" />
+                            </button>
+                            <div className="h-4 w-[1px] bg-slate-200"></div>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredEmployees.length} {t('results')} (RAW: {employees.length})</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-                            <Filter className="w-5 h-5" />
-                        </button>
-                        <div className="h-4 w-[1px] bg-slate-200"></div>
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredEmployees.length} {t('results')}</span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2 duration-300">
+                        {/* Group Filter */}
+                        <FilterChecklist
+                            label={t('all_groups', { defaultValue: 'Groups' })}
+                            options={groups.map(g => ({ id: g.id, name: g.name }))}
+                            selected={selectedGroups}
+                            onChange={setSelectedGroups}
+                        />
+
+                        {/* Unit Filter */}
+                        <FilterChecklist
+                            label={t('all_units', { defaultValue: 'Units' })}
+                            options={units.filter(u => {
+                                if (selectedGroups.length === 0) return true;
+                                const dept = departments.find(d => d.id === u.departmentId);
+                                return dept && selectedGroups.includes(dept.groupId);
+                            }).map(u => ({ id: u.id, name: u.name }))}
+                            selected={selectedUnits}
+                            onChange={setSelectedUnits}
+                        />
+
+                        {/* Role Filter */}
+                        <FilterChecklist
+                            label={t('all_roles', { defaultValue: 'Roles' })}
+                            options={[
+                                { id: 'EMPLOYEE', name: t('role_employee') },
+                                { id: 'HEAD_UNIT', name: t('role_head_unit') },
+                                { id: 'HEAD_DEPARTMENT', name: t('role_head_department') },
+                                { id: 'HEAD_OFFICE', name: 'Head of Office' },
+                                { id: 'HEAD_DIVISION', name: 'Head of Division' },
+                                { id: 'HEAD_DIRECTOR', name: t('role_head_director') },
+                                { id: 'HR_MANAGER', name: t('role_hr_manager') },
+                                { id: 'GENERAL_MANAGER', name: 'General Manager' },
+                                { id: 'CHAIRMAN', name: 'Chairman' },
+                                { id: 'PERSONNEL', name: t('role_personnel', { defaultValue: 'Personnel' }) },
+                                { id: 'SUPER_ADMIN', name: 'Global Administrator' }
+                            ]}
+                            selected={selectedRoles}
+                            onChange={setSelectedRoles}
+                        />
+
+                        {(selectedGroups.length > 0 || selectedUnits.length > 0 || selectedRoles.length > 0) && (
+                            <button
+                                onClick={() => { setSelectedGroups([]); setSelectedUnits([]); setSelectedRoles([]); }}
+                                className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 p-2 rounded-xl transition-all"
+                            >
+                                {t('clear_filters', { defaultValue: 'Clear Filters' })}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -351,6 +550,20 @@ const EmployeesPage: React.FC = () => {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="bg-slate-50/50 border-b border-slate-100">
+                                <th className="px-6 py-4 w-10">
+                                    <input
+                                        type="checkbox"
+                                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                        checked={selectedEmployeeIds.length === filteredEmployees.length && filteredEmployees.length > 0}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedEmployeeIds(filteredEmployees.map(emp => emp.id));
+                                            } else {
+                                                setSelectedEmployeeIds([]);
+                                            }
+                                        }}
+                                    />
+                                </th>
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('personnel')}</th>
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">{t('performance_status')}</th>
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">{t('holiday_balance')}</th>
@@ -361,8 +574,23 @@ const EmployeesPage: React.FC = () => {
                         <tbody className="divide-y divide-slate-100">
                             {filteredEmployees.map((emp) => {
                                 const empTheme = roleThemes[emp.role as UserRole] || theme;
+                                const isSelected = selectedEmployeeIds.includes(emp.id);
                                 return (
-                                    <tr key={emp.id} className="group hover:bg-slate-50/50 transition-colors">
+                                    <tr key={emp.id} className={`group hover:bg-slate-50/50 transition-colors ${isSelected ? 'bg-indigo-50/30' : ''}`}>
+                                        <td className="px-6 py-5">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                checked={isSelected}
+                                                onChange={() => {
+                                                    if (isSelected) {
+                                                        setSelectedEmployeeIds(selectedEmployeeIds.filter(id => id !== emp.id));
+                                                    } else {
+                                                        setSelectedEmployeeIds([...selectedEmployeeIds, emp.id]);
+                                                    }
+                                                }}
+                                            />
+                                        </td>
                                         <td className="px-8 py-5 whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold text-lg mr-4 shadow-sm group-hover:scale-105 transition-transform`}>
@@ -421,18 +649,22 @@ const EmployeesPage: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleEdit(emp)}
-                                                    className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm group/btn"
-                                                >
-                                                    <Edit size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(emp.id)}
-                                                    className="p-2.5 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
+                                                {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('edit_employees')) && (
+                                                    <button
+                                                        onClick={() => handleEdit(emp)}
+                                                        className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm group/btn"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </button>
+                                                )}
+                                                {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('delete_employees')) && (
+                                                    <button
+                                                        onClick={() => handleDelete(emp.id)}
+                                                        className="p-2.5 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
                                                 <button className="p-2.5 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 transition-all border border-transparent">
                                                     <MoreHorizontal size={16} />
                                                 </button>
@@ -462,7 +694,16 @@ const EmployeesPage: React.FC = () => {
                                     <input
                                         type="text" required
                                         value={formData.fullName}
-                                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                                        onChange={(e) => {
+                                            const newName = e.target.value;
+                                            const suggestedEmail = generateEmailFromFullName(newName);
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                fullName: newName,
+                                                // Only auto-update email if it's currently empty or was previously a generated one
+                                                email: (!prev.email || prev.email === generateEmailFromFullName(prev.fullName || '')) ? suggestedEmail : prev.email
+                                            }));
+                                        }}
                                         className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
                                         placeholder={t('full_legal_name')}
                                     />
@@ -499,7 +740,7 @@ const EmployeesPage: React.FC = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Position</label>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Position Title</label>
                                     <input
                                         type="text"
                                         value={formData.position || ''}
@@ -517,109 +758,120 @@ const EmployeesPage: React.FC = () => {
                                     >
                                         <option value="EMPLOYEE">{t('role_employee')}</option>
                                         <option value="HEAD_UNIT">{t('role_head_unit', { defaultValue: 'Head of Unit' })}</option>
-                                        <option value="HR_MANAGER">{t('role_hr_manager')}</option>
-                                        <option value="PERSONNEL">{t('role_personnel')}</option>
                                         <option value="HEAD_DEPARTMENT">{t('role_head_department')}</option>
+                                        <option value="HEAD_OFFICE">Head of Office</option>
+                                        <option value="HEAD_DIVISION">Head of Division</option>
                                         <option value="HEAD_DIRECTOR">{t('role_head_director')}</option>
+                                        <option value="HR_MANAGER">{t('role_hr_manager')}</option>
+                                        <option value="GENERAL_MANAGER">General Manager</option>
+                                        <option value="CHAIRMAN">Chairman</option>
+                                        <option value="PERSONNEL">{t('role_personnel')}</option>
                                     </select>
                                 </div>
                             </div>
                         </section>
 
-                        {formData.role === 'EMPLOYEE' ? (
-                            <section className="space-y-4">
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">{t('system_access_credentials', { defaultValue: 'System Access Credentials' })}</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('corporate_email')}</label>
-                                        <input
-                                            type="email"
-                                            value={formData.email || ''}
-                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
-                                            placeholder={t('email_placeholder')}
-                                        />
-                                        <p className="text-[9px] text-slate-400 font-medium italic">* {t('login_email_hint', { defaultValue: 'Required for platform access' })}</p>
-                                    </div>
-                                    {!editingId && (
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('initial_password', { defaultValue: 'Initial Password' })}</label>
-                                            <input
-                                                type="password"
-                                                value={formData.password || ''}
-                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
-                                                placeholder="••••••••"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            </section>
-                        ) : (
-                            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-                                <p className="text-[10px] text-amber-700 font-medium italic">
-                                    {t('admin_access_note', { defaultValue: 'For administrative roles (Manager/Director), please create the system account separately in Access Management after enrollment.' })}
-                                </p>
-                            </div>
-                        )}
-
                         <section className="space-y-4">
                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">{t('organizational_units')}</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('corporate_group')}</label>
-                                    <select
-                                        value={formData.groupId}
-                                        onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
-                                    >
-                                        <option value="">{t('select_group')}</option>
-                                        {groups.map(g => (
-                                            <option key={g.id} value={g.id}>{g.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {formData.role !== 'HEAD_DIRECTOR' && (
+                                {['CHAIRMAN', 'GENERAL_MANAGER'].includes(formData.role || '') ? (
+                                    <div className="col-span-2 text-sm text-slate-500 italic p-4 bg-slate-50 rounded-xl">
+                                        This role has global scope and does not require specific unit assignment.
+                                    </div>
+                                ) : (
                                     <>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('department')}</label>
-                                            <select
-                                                value={formData.departmentId}
-                                                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value, unitId: '' })}
-                                                className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
-                                            >
-                                                <option value="">{t('select_department')}</option>
-                                                {departments
-                                                    .filter(d => !formData.groupId || d.groupId === formData.groupId)
-                                                    .map(d => (
+                                        {formData.role === 'HEAD_DIVISION' ? (
+                                            <div className="space-y-2 col-span-2">
+                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Assigned Division</label>
+                                                <select
+                                                    value={formData.divisionId || ''}
+                                                    onChange={(e) => setFormData({ ...formData, divisionId: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                                >
+                                                    <option value="">Select Division</option>
+                                                    {divisions.map(d => (
                                                         <option key={d.id} value={d.id}>{d.name}</option>
                                                     ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                                                {t('unit', { defaultValue: 'Unit' })}
-                                                {formData.role === 'EMPLOYEE' && <span className="text-red-500 ml-1">*</span>}
-                                            </label>
-                                            <select
-                                                value={formData.unitId || ''}
-                                                onChange={(e) => setFormData({ ...formData, unitId: e.target.value })}
-                                                required={formData.role === 'EMPLOYEE'}
-                                                className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
-                                            >
-                                                <option value="">{formData.role === 'EMPLOYEE' ? t('select_unit_req', { defaultValue: 'Select Unit' }) : t('select_unit', { defaultValue: 'Select Unit (Optional)' })}</option>
-                                                {units
-                                                    .filter(u => !formData.departmentId || u.departmentId === formData.departmentId)
-                                                    .map(u => (
-                                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                                </select>
+                                            </div>
+                                        ) : formData.role === 'HEAD_OFFICE' ? (
+                                            <div className="space-y-2 col-span-2">
+                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Assigned Office</label>
+                                                <select
+                                                    value={formData.departmentId || ''}
+                                                    onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                                >
+                                                    <option value="">Select Office</option>
+                                                    {departments.filter(d => d.isOffice).map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name}</option>
                                                     ))}
-                                            </select>
-                                        </div>
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('corporate_group')}</label>
+                                                    <select
+                                                        value={formData.groupId || ''}
+                                                        onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                                                        className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                                    >
+                                                        <option value="">{t('select_group')}</option>
+                                                        {groups.map(g => (
+                                                            <option key={g.id} value={g.id}>{g.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {formData.role !== 'HEAD_DIRECTOR' && (
+                                                    <>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('department')} / Office</label>
+                                                            <select
+                                                                value={formData.departmentId || ''}
+                                                                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value, unitId: '' })}
+                                                                className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                                            >
+                                                                <option value="">{t('select_department')}</option>
+                                                                {departments
+                                                                    .filter(d => !formData.groupId || d.groupId === formData.groupId || d.isOffice)
+                                                                    .map(d => (
+                                                                        <option key={d.id} value={d.id}>{d.name} {d.isOffice ? '(Office)' : ''}</option>
+                                                                    ))}
+                                                            </select>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                                                                {t('unit', { defaultValue: 'Unit' })}
+                                                                {formData.role === 'EMPLOYEE' && <span className="text-red-500 ml-1">*</span>}
+                                                            </label>
+                                                            <select
+                                                                value={formData.unitId || ''}
+                                                                onChange={(e) => setFormData({ ...formData, unitId: e.target.value })}
+                                                                required={formData.role === 'EMPLOYEE'}
+                                                                className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                                            >
+                                                                <option value="">{formData.role === 'EMPLOYEE' ? t('select_unit_req', { defaultValue: 'Select Unit' }) : t('select_unit', { defaultValue: 'Select Unit (Optional)' })}</option>
+                                                                {units
+                                                                    .filter(u => !formData.departmentId || u.departmentId === formData.departmentId)
+                                                                    .map(u => (
+                                                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                                                    ))}
+                                                            </select>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
                                     </>
                                 )}
+                            </div>
+                        </section>
 
+                        <section className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">{t('employment_details', { defaultValue: 'Employment Details' })}</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('nationality', { defaultValue: 'Nationality' })}</label>
                                     <input
@@ -649,6 +901,136 @@ const EmployeesPage: React.FC = () => {
                                         className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all font-bold text-slate-800"
                                         placeholder="Junior"
                                     />
+                                </div>
+                            </div>
+                        </section>
+
+                         <section className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">{t('system_access_credentials', { defaultValue: 'System Access Credentials' })}</h4>
+                            <div className="p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100/50">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-500 shadow-sm">
+                                            <Lock size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-700">{t('auth_configuration', { defaultValue: 'Authentication Configuration' })}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium">{t('auth_hint', { defaultValue: 'Setting an email and password will create or update a linked system account.' })}</p>
+                                        </div>
+                                    </div>
+                                    {formData.fullName && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, email: generateEmailFromFullName(formData.fullName!) })}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-indigo-100 rounded-xl text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
+                                        >
+                                            <Sparkles size={12} />
+                                            Generate Suggestion
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('system_email', { defaultValue: 'Login Email' })}</label>
+                                        <div className="relative">
+                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <input
+                                                type="email"
+                                                value={formData.email || ''}
+                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                className="w-full pl-10 pr-4 py-3 bg-white border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all font-bold text-slate-800"
+                                                placeholder="user@example.com"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('account_password', { defaultValue: 'System Password' })}</label>
+                                        <div className="relative">
+                                            <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <input
+                                                type="password"
+                                                value={formData.password || ''}
+                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                className="w-full pl-10 pr-4 py-3 bg-white border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all font-bold text-slate-800"
+                                                placeholder={editingId ? "•••••••• (Leave blank to keep)" : "••••••••"}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                         <section className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2">Salary Factors & Multipliers</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block">Position Factor</label>
+                                    <select
+                                        value={formData.positionFactor || 1.0}
+                                        onChange={(e) => {
+                                            const val = Number(e.target.value);
+                                            const factorObj = POSITION_FACTORS.find(f => f.value === val);
+                                            setFormData({ 
+                                                ...formData, 
+                                                positionFactor: val,
+                                                skillFactor: val > 1.0 ? 1.0 : formData.skillFactor,
+                                                position: factorObj ? factorObj.name : formData.position
+                                            });
+                                        }}
+                                        className="w-full px-4 py-3 bg-blue-50 border-transparent rounded-xl focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                    >
+                                        <option value={1.0}>Standard (1.0)</option>
+                                        {POSITION_FACTORS.map(f => (
+                                            <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-indigo-500 uppercase tracking-wider block">Skill Factor</label>
+                                    <select
+                                        value={formData.skillFactor || 1.0}
+                                        onChange={(e) => {
+                                            const val = Number(e.target.value);
+                                            setFormData({ 
+                                                ...formData, 
+                                                skillFactor: val,
+                                                positionFactor: val > 1.0 ? 1.0 : formData.positionFactor 
+                                            });
+                                        }}
+                                        className="w-full px-4 py-3 bg-indigo-50 border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                    >
+                                        <option value={1.0}>Standard (1.0)</option>
+                                        {SKILL_FACTORS.map(f => (
+                                            <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-purple-500 uppercase tracking-wider block">Site Factor</label>
+                                    <select
+                                        value={formData.siteFactor || 1.0}
+                                        onChange={(e) => setFormData({ ...formData, siteFactor: Number(e.target.value) })}
+                                        className="w-full px-4 py-3 bg-purple-50 border-transparent rounded-xl focus:ring-2 focus:ring-purple-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                    >
+                                        <option value={1.0}>Office (1.0)</option>
+                                        {SITE_FACTORS.map(f => (
+                                            <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-pink-500 uppercase tracking-wider block">Language Factor</label>
+                                    <select
+                                        value={formData.languageFactor || 1.0}
+                                        onChange={(e) => setFormData({ ...formData, languageFactor: Number(e.target.value) })}
+                                        className="w-full px-4 py-3 bg-pink-50 border-transparent rounded-xl focus:ring-2 focus:ring-pink-100 focus:bg-white transition-all font-bold text-slate-800 appearance-none"
+                                    >
+                                        <option value={1.0}>Native (1.0)</option>
+                                        {LANGUAGE_FACTORS.map(f => (
+                                            <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
                         </section>

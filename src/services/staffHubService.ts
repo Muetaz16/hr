@@ -26,7 +26,10 @@ export interface StaffTask {
     deadline?: string;
     priority: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
     status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE';
+    category: 'ASSIGNED' | 'SELF_REPORT';
+    isReviewed: boolean;
     createdAt: string;
+    updatedAt: string;
     author?: { fullName: string; role: string };
     assignee?: { fullName: string; role: string };
     department?: { name: string };
@@ -79,11 +82,27 @@ export const staffHubService = {
         const response = await api.get('/staff-hub/tasks/scoped', { params: { status } });
         return response.data;
     },
+    async reviewTask(id: string) {
+        const response = await api.patch(`/staff-hub/tasks/${id}/review`);
+        return response.data;
+    },
 
 
     // Announcements
     async createAnnouncement(data: Partial<Announcement>) {
         const response = await api.post('/staff-hub/announcements', data);
+        return response.data;
+    },
+    async updateAnnouncement(id: string, data: Partial<Announcement>) {
+        const response = await api.put(`/staff-hub/announcements/${id}`, data);
+        return response.data;
+    },
+    async deleteAnnouncement(id: string) {
+        const response = await api.delete(`/staff-hub/announcements/${id}`);
+        return response.data;
+    },
+    async getAllAnnouncements() {
+        const response = await api.get('/staff-hub/announcements/all');
         return response.data;
     },
     async getAnnouncements(userId: string, departmentId: string) {

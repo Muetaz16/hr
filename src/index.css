@@ -5,42 +5,238 @@
 @theme {
   --font-inter: "Inter", sans-serif;
   --font-outfit: "Outfit", sans-serif;
+
+  /* Premium Burgundy (Main) & Gold (Sub) Palette */
+  --color-primary-50: #fdfcf7;   /* Ultra-light cream gold */
+  --color-primary-100: #e3c4a2;  /* Light Sand Gold (sub) */
+  --color-primary-200: #d4aa80;  /* Warm Sand Gold (sub) */
+  --color-primary-300: #aa7a51;  /* Accent Terracotta Gold (sub) */
+  --color-primary-500: #541c2c;  /* CORE DEEP BURGUNDY (MAIN BRAND COLOR) */
+  --color-primary-600: #421220;  /* Burgundy brand hover */
+  --color-primary-700: #300a15;  /* Burgundy brand dark active */
 }
 
 @layer base {
   body {
-    @apply antialiased text-slate-900;
+    @apply antialiased overflow-x-hidden;
     font-family: var(--font-inter);
-    background-color: #f8fafc;
+    background-color: #faf8f6;
     background-image:
-      radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.03) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(56, 189, 248, 0.03) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.03) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, rgba(239, 68, 68, 0.03) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(227, 196, 162, 0.15) 0px, transparent 60%),
+      radial-gradient(at 100% 0%, rgba(170, 122, 81, 0.08) 0px, transparent 60%);
     background-attachment: fixed;
+    color: #1e293b;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  body.dark-theme {
+    background-color: #541c2c;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(170, 122, 81, 0.15) 0px, transparent 60%),
+      radial-gradient(at 100% 0%, rgba(212, 170, 128, 0.15) 0px, transparent 60%),
+      radial-gradient(at 100% 100%, rgba(84, 28, 44, 0.4) 0px, transparent 60%),
+      radial-gradient(at 0% 100%, rgba(212, 170, 128, 0.1) 0px, transparent 60%);
+    color: #e3c4a2;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-outfit);
+    @apply tracking-tight;
+    color: #541c2c; /* Luxury Deep Burgundy for headings in Light Mode */
+    transition: color 0.3s ease;
+  }
+
+  body.dark-theme h1, 
+  body.dark-theme h2, 
+  body.dark-theme h3, 
+  body.dark-theme h4, 
+  body.dark-theme h5, 
+  body.dark-theme h6 {
+    color: #e3c4a2 !important; /* Sand Gold in Dark Mode */
+  }
+
+  /* Global contrast and visibility overrides for all text elements in Dark Mode */
+  body.dark-theme .text-slate-800, 
+  body.dark-theme .text-slate-900, 
+  body.dark-theme .text-slate-700, 
+  body.dark-theme .text-gray-800, 
+  body.dark-theme .text-gray-900, 
+  body.dark-theme .text-gray-700 {
+    color: #e3c4a2 !important; /* Sand Gold */
+  }
+
+  body.dark-theme .text-slate-600, 
+  body.dark-theme .text-slate-500, 
+  body.dark-theme .text-slate-400, 
+  body.dark-theme .text-gray-600, 
+  body.dark-theme .text-gray-500, 
+  body.dark-theme .text-gray-400 {
+    color: #aa7a51 !important;
+  }
+
+  body.dark-theme label {
+    color: #e3c4a2 !important;
   }
 }
 
 @layer utilities {
   .glass-card {
-    @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl shadow-slate-200/40;
+    @apply bg-white/90 backdrop-blur-2xl border border-slate-200/80 shadow-xl transition-all duration-300 rounded-[2rem];
   }
 
   .glass-panel {
-    @apply bg-white/50 backdrop-blur-md border border-white/30;
+    @apply bg-white/50 backdrop-blur-md border border-slate-100;
+  }
+
+  body.dark-theme .glass-card {
+    background-color: rgba(48, 10, 21, 0.8) !important;
+    border: 1px solid rgba(227, 196, 162, 0.2) !important;
+    box-shadow: 0 25px 50px -12px rgba(48, 10, 21, 0.6) !important;
+  }
+
+  body.dark-theme .glass-panel {
+    background-color: rgba(48, 10, 21, 0.5) !important;
+    border: 1px solid rgba(227, 196, 162, 0.15) !important;
+  }
+
+  /* Automatic Dark Mode Text overrides inside Glass Cards and Panels */
+  body.dark-theme .glass-card, 
+  body.dark-theme .glass-panel {
+    color: #e3c4a2 !important; /* Sand Gold */
+  }
+
+  body.dark-theme .glass-card h1, 
+  body.dark-theme .glass-card h2, 
+  body.dark-theme .glass-card h3, 
+  body.dark-theme .glass-card h4, 
+  body.dark-theme .glass-card h5, 
+  body.dark-theme .glass-card h6,
+  body.dark-theme .glass-panel h1, 
+  body.dark-theme .glass-panel h2, 
+  body.dark-theme .glass-panel h3, 
+  body.dark-theme .glass-panel h4, 
+  body.dark-theme .glass-panel h5, 
+  body.dark-theme .glass-panel h6 {
+    color: #e3c4a2 !important; /* Sand Gold */
+  }
+
+  body.dark-theme .glass-card p, 
+  body.dark-theme .glass-card .text-slate-500, 
+  body.dark-theme .glass-card .text-slate-400,
+  body.dark-theme .glass-panel p, 
+  body.dark-theme .glass-panel .text-slate-500, 
+  body.dark-theme .glass-panel .text-slate-400 {
+    color: rgba(227, 196, 162, 0.8) !important;
+  }
+
+  body.dark-theme .glass-card .text-slate-800, 
+  body.dark-theme .glass-card .text-slate-900, 
+  body.dark-theme .glass-card .text-slate-700, 
+  body.dark-theme .glass-card .text-slate-600,
+  body.dark-theme .glass-panel .text-slate-800, 
+  body.dark-theme .glass-panel .text-slate-900, 
+  body.dark-theme .glass-panel .text-slate-700, 
+  body.dark-theme .glass-panel .text-slate-600 {
+    color: #e3c4a2 !important; /* Sand Gold */
+  }
+
+  body.dark-theme .glass-card .bg-slate-50, 
+  body.dark-theme .glass-card .bg-slate-100\/50, 
+  body.dark-theme .glass-card .bg-slate-50\/50 {
+    background-color: rgba(84, 28, 44, 0.4) !important;
+  }
+
+  body.dark-theme .glass-card .border-slate-200, 
+  body.dark-theme .glass-card .border-slate-100 {
+    border-color: rgba(227, 196, 162, 0.15) !important;
+  }
+
+  body.dark-theme .glass-card input, 
+  body.dark-theme .glass-card select, 
+  body.dark-theme .glass-card textarea {
+    background-color: rgba(84, 28, 44, 0.3) !important;
+    border-color: rgba(227, 196, 162, 0.2) !important;
+    color: #e3c4a2 !important;
+  }
+
+  body.dark-theme .glass-card input:focus, 
+  body.dark-theme .glass-card select:focus, 
+  body.dark-theme .glass-card textarea:focus {
+    border-color: #aa7a51 !important;
+    background-color: rgba(84, 28, 44, 0.5) !important;
+  }
+
+  /* Automatically skin all standard light cards/panels to our premium glass burgundy mode */
+  body.dark-theme .bg-white, 
+  body.dark-theme .bg-slate-50, 
+  body.dark-theme .bg-gray-50, 
+  body.dark-theme .bg-slate-100,
+  body.dark-theme [class*="bg-white/"], 
+  body.dark-theme [class*="bg-slate-50/"],
+  body.dark-theme [class*="bg-slate-100/"],
+  body.dark-theme [class*="bg-indigo-50/"],
+  body.dark-theme [class*="bg-indigo-100/"],
+  body.dark-theme [class*="bg-indigo-50"],
+  body.dark-theme [class*="bg-indigo-100"] {
+    background-color: rgba(48, 10, 21, 0.8) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 1px solid rgba(227, 196, 162, 0.15) !important;
+    box-shadow: 0 25px 50px -12px rgba(48, 10, 21, 0.5) !important;
+    color: #e3c4a2 !important;
+  }
+
+  /* Automatically skin all light borders to delicate gold dust lines */
+  body.dark-theme .border-slate-100, 
+  body.dark-theme .border-slate-200, 
+  body.dark-theme .border-gray-100, 
+  body.dark-theme .border-gray-200,
+  body.dark-theme [class*="border-white/"],
+  body.dark-theme [class*="border-indigo-"],
+  body.dark-theme [class*="border-emerald-"],
+  body.dark-theme [class*="border-slate-"],
+  body.dark-theme [class*="border-gray-"] {
+    border-color: rgba(227, 196, 162, 0.15) !important;
+  }
+
+  /* Global inputs, selects, and textareas skinning */
+  input, select, textarea {
+    background-color: #ffffff !important;
+    border: 1px solid rgba(84, 28, 44, 0.15) !important;
+    color: #1e293b !important;
+    border-radius: 1rem !important;
+    padding: 0.75rem 1rem !important;
+    transition: all 0.3s ease !important;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: #541c2c !important;
+    background-color: #ffffff !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(84, 28, 44, 0.1) !important;
+  }
+
+  body.dark-theme input, 
+  body.dark-theme select, 
+  body.dark-theme textarea {
+    background-color: rgba(84, 28, 44, 0.3) !important;
+    border: 1px solid rgba(227, 196, 162, 0.2) !important;
+    color: #e3c4a2 !important;
+  }
+
+  body.dark-theme input:focus, 
+  body.dark-theme select:focus, 
+  body.dark-theme textarea:focus {
+    border-color: #aa7a51 !important;
+    background-color: rgba(84, 28, 44, 0.5) !important;
+    box-shadow: none !important;
   }
 
   .premium-shadow {
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.05), 0 10px 20px -10px rgba(0, 0, 0, 0.02);
+    box-shadow: 
+      0 10px 15px -3px rgba(48, 10, 21, 0.05),
+      0 4px 6px -4px rgba(48, 10, 21, 0.05),
+      0 20px 25px -5px rgba(48, 10, 21, 0.1);
   }
 
   .nav-transition {
@@ -49,14 +245,31 @@
   }
 
   .table-row-hover {
-    @apply hover:bg-white/60 transition-colors duration-200;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .table-row-hover:hover {
+    background-color: rgba(227, 196, 162, 0.05) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  }
+
+  body.dark-theme .table-row-hover:hover {
+    background-color: rgba(227, 196, 162, 0.05) !important;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 20px rgba(84, 28, 44, 0.3);
+  }
+
+  .hover-lift {
+    @apply transition-transform duration-300 hover:-translate-y-1;
   }
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -64,22 +277,663 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
+  background-color: rgba(227, 196, 162, 0.2) !important;
+  border-radius: 9999px !important;
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(227, 196, 162, 0.4) !important;
 }
 
 /* Page transitions */
 .page-enter {
-  animation: slideIn 0.4s ease-out forwards;
+  animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   PREMIUM LIGHT & DARK TABLE SKINS
+   ========================================================================== */
+
+table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  background-color: #ffffff !important; /* Clean premium pure white background in light mode */
+  border-radius: 1.5rem !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(84, 28, 44, 0.08) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Table headers */
+table thead {
+  background-color: #faf8f6 !important; /* Beautiful clean cream background */
+  border-bottom: 2px solid rgba(84, 28, 44, 0.1) !important;
+}
+
+table thead th {
+  color: #541c2c !important; /* Elegant dark burgundy for th in light mode */
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  font-size: 0.75rem !important;
+  padding: 1rem 1.5rem !important;
+  border-bottom: none !important;
+  text-align: left !important;
+}
+
+/* Table body and divisions */
+table tbody {
+  background-color: transparent !important;
+}
+
+table tbody tr {
+  border-bottom: 1px solid rgba(84, 28, 44, 0.05) !important;
+  background-color: transparent !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+table tbody tr:hover {
+  background-color: #faf8f6 !important;
+}
+
+table tbody td {
+  color: #1e293b !important; /* Sophisticated slate text for td in light mode */
+  padding: 1.25rem 1.5rem !important;
+  font-size: 0.875rem !important;
+  vertical-align: middle !important;
+}
+
+/* Scoped Premium Burgundy & Gold Dark Mode Table Override */
+body.dark-theme table {
+  background-color: rgba(48, 10, 21, 0.4) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body.dark-theme table thead {
+  background-color: rgba(30, 10, 18, 0.85) !important; /* Rich Dark Burgundy base */
+  border-bottom: 2px solid rgba(227, 196, 162, 0.25) !important; /* Elegant gold border line */
+}
+
+body.dark-theme table thead th {
+  color: #e3c4a2 !important; /* Glowing Sand Gold */
+}
+
+body.dark-theme table tbody tr {
+  border-bottom: 1px solid rgba(227, 196, 162, 0.1) !important; /* Soft sand divider */
+}
+
+body.dark-theme table tbody tr:hover {
+  background-color: rgba(227, 196, 162, 0.05) !important; /* Very delicate warm gold hover highlight */
+}
+
+body.dark-theme table tbody td {
+  color: #e3c4a2 !important; /* High contrast glowing Sand Gold */
+}
+
+body.dark-theme table tbody td p, 
+body.dark-theme table tbody td span:not(.badge), 
+body.dark-theme table tbody td div:not(.badge) {
+  color: #e3c4a2 !important;
+}
+
+body.dark-theme table tbody td .text-slate-500, 
+body.dark-theme table tbody td .text-slate-400,
+body.dark-theme table tbody td .text-gray-500,
+body.dark-theme table tbody td .text-slate-300 {
+  color: rgba(227, 196, 162, 0.7) !important; /* Light sand gold for subtitles/metadata */
+}
+
+body.dark-theme table tbody td .text-slate-800,
+body.dark-theme table tbody td .text-slate-900,
+body.dark-theme table tbody td .text-slate-700,
+body.dark-theme table tbody td .text-gray-800 {
+  color: #e3c4a2 !important;
+}
+
+/* Dividers and boundaries */
+body.dark-theme .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(227, 196, 162, 0.1) !important;
+}
+
+/* ==========================================================================
+   GORGEOUS LUXURY STATUS BADGES, PILLS, & TEXT HIGHLIGHT OVERRIDES (DARK ONLY)
+   ========================================================================== */
+
+/* 1. Emerald / Active / Success Status Badges */
+body.dark-theme .bg-emerald-50, 
+body.dark-theme .bg-emerald-100,
+body.dark-theme .text-emerald-600,
+body.dark-theme .text-emerald-700,
+body.dark-theme .border-emerald-100,
+body.dark-theme .border-emerald-200 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-emerald-50, 
+body.dark-theme table tbody td div.bg-emerald-50,
+body.dark-theme table tbody td span.bg-emerald-100, 
+body.dark-theme table tbody td div.bg-emerald-100,
+body.dark-theme table tbody td span[class*="bg-emerald-"], 
+body.dark-theme table tbody td div[class*="bg-emerald-"] {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 2. Rose / Red / Terminated / Inactive Status Badges */
+body.dark-theme .bg-rose-50, 
+body.dark-theme .bg-rose-100,
+body.dark-theme .bg-red-50, 
+body.dark-theme .bg-red-100,
+body.dark-theme .text-rose-600,
+body.dark-theme .text-red-600,
+body.dark-theme .border-rose-100,
+body.dark-theme .border-red-100 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-rose-50, 
+body.dark-theme table tbody td div.bg-rose-50,
+body.dark-theme table tbody td span.bg-red-50, 
+body.dark-theme table tbody td div.bg-red-50,
+body.dark-theme table tbody td span.bg-rose-100, 
+body.dark-theme table tbody td div.bg-rose-100,
+body.dark-theme table tbody td span.bg-red-100, 
+body.dark-theme table tbody td div.bg-red-100,
+body.dark-theme table tbody td span[class*="bg-rose-"], 
+body.dark-theme table tbody td div[class*="bg-rose-"],
+body.dark-theme table tbody td span[class*="bg-red-"], 
+body.dark-theme table tbody td div[class*="bg-red-"] {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+/* 3. Amber / Warning / On Leave Status Badges */
+body.dark-theme .bg-amber-50, 
+body.dark-theme .bg-amber-100,
+body.dark-theme .text-amber-600,
+body.dark-theme .border-amber-100,
+body.dark-theme .border-amber-200 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-amber-50, 
+body.dark-theme table tbody td div.bg-amber-50,
+body.dark-theme table tbody td span.bg-amber-100, 
+body.dark-theme table tbody td div.bg-amber-100,
+body.dark-theme table tbody td span[class*="bg-amber-"], 
+body.dark-theme table tbody td div[class*="bg-amber-"] {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+/* 4. Indigo / Info / Direct Non Resident Status Badges */
+body.dark-theme .bg-indigo-50, 
+body.dark-theme .bg-indigo-100,
+body.dark-theme .text-indigo-600,
+body.dark-theme .border-indigo-100,
+body.dark-theme .border-indigo-200 {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-indigo-50, 
+body.dark-theme table tbody td div.bg-indigo-50,
+body.dark-theme table tbody td span.bg-indigo-100, 
+body.dark-theme table tbody td div.bg-indigo-100,
+body.dark-theme table tbody td span[class*="bg-indigo-"], 
+body.dark-theme table tbody td div[class*="bg-indigo-"] {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+}
+
+/* 5. Slate / Neutral / Permanent Status Badges */
+body.dark-theme .bg-slate-50, 
+body.dark-theme .bg-slate-100,
+body.dark-theme .text-slate-600,
+body.dark-theme .border-slate-100,
+body.dark-theme .border-slate-200 {
+  background-color: rgba(227, 196, 162, 0.1) !important;
+  color: #e3c4a2 !important;
+  border: 1px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+body.dark-theme table tbody td span.bg-slate-50, 
+body.dark-theme table tbody td div.bg-slate-50,
+body.dark-theme table tbody td span.bg-slate-100, 
+body.dark-theme table tbody td div.bg-slate-100,
+body.dark-theme table tbody td span[class*="bg-slate-"], 
+body.dark-theme table tbody td div[class*="bg-slate-"] {
+  background-color: rgba(227, 196, 162, 0.1) !important;
+  color: #e3c4a2 !important;
+  border: 1px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+/* 6. General Inline Highlights and Sub-text coloring inside status cells */
+body.dark-theme .text-red-400, 
+body.dark-theme .text-red-500, 
+body.dark-theme .text-rose-500, 
+body.dark-theme .text-rose-600 {
+  color: #f87171 !important; /* Bright coral-red for negative balance/warnings */
+}
+
+body.dark-theme .text-emerald-500, 
+body.dark-theme .text-emerald-600, 
+body.dark-theme .text-emerald-700 {
+  color: #34d399 !important; /* Bright emerald for accrued/positive values */
+}
+
+body.dark-theme .text-blue-400, 
+body.dark-theme .text-blue-500, 
+body.dark-theme .text-indigo-400, 
+body.dark-theme .text-indigo-500 {
+  color: #a5b4fc !important; /* Bright indigo-blue for bonus */
+}
+
+body.dark-theme .text-amber-500, 
+body.dark-theme .text-amber-600 {
+  color: #fbbf24 !important; /* Bright gold for pending status elements */
+}
+
+/* ==========================================================================
+   SEMANTIC PAYROLL TABLE HIGH-CONTRAST LIGHT & DARK SKINS
+   ========================================================================== */
+
+/* Payroll table headers */
+.payroll-header-cell {
+  background-color: #faf8f6 !important;
+  color: #541c2c !important;
+  border-bottom: 2px solid rgba(84, 28, 44, 0.1) !important;
+  border-right: 1px solid rgba(84, 28, 44, 0.08) !important;
+  transition: all 0.3s ease !important;
+}
+
+body.dark-theme .payroll-header-cell {
+  background-color: #300a15 !important;
+  color: #e3c4a2 !important;
+  border-bottom: 2px solid rgba(227, 196, 162, 0.25) !important;
+  border-right: 1px solid rgba(227, 196, 162, 0.15) !important;
+}
+
+/* Payroll headers with high z-index and primary color borders */
+.payroll-header-cell-primary {
+  background-color: #faf8f6 !important;
+  color: #541c2c !important;
+  border-bottom: 2px solid rgba(84, 28, 44, 0.1) !important;
+  border-right: 2px solid rgba(84, 28, 44, 0.15) !important;
+  transition: all 0.3s ease !important;
+}
+
+body.dark-theme .payroll-header-cell-primary {
+  background-color: #300a15 !important;
+  color: #e3c4a2 !important;
+  border-bottom: 2px solid rgba(227, 196, 162, 0.25) !important;
+  border-right: 2px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+/* Category headers colSpan bg */
+.payroll-cat-presence { background-color: rgba(99, 102, 241, 0.08) !important; }
+.payroll-cat-admin { background-color: rgba(16, 185, 129, 0.08) !important; }
+.payroll-cat-exec { background-color: rgba(59, 130, 246, 0.08) !important; }
+.payroll-cat-care { background-color: rgba(245, 158, 11, 0.08) !important; }
+
+body.dark-theme .payroll-cat-presence { background-color: rgba(49, 46, 129, 0.4) !important; }
+body.dark-theme .payroll-cat-admin { background-color: rgba(6, 78, 59, 0.4) !important; }
+body.dark-theme .payroll-cat-exec { background-color: rgba(30, 58, 138, 0.4) !important; }
+body.dark-theme .payroll-cat-care { background-color: rgba(120, 53, 4, 0.4) !important; }
+
+/* Sticky employee left column */
+.payroll-sticky-employee {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border-right: 2px solid rgba(84, 28, 44, 0.15) !important;
+  transition: all 0.3s ease !important;
+}
+
+tr:hover .payroll-sticky-employee {
+  background-color: #faf8f6 !important;
+}
+
+body.dark-theme .payroll-sticky-employee {
+  background-color: rgba(48, 10, 21, 0.95) !important;
+  color: #e3c4a2 !important;
+  border-right: 2px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+body.dark-theme tr:hover .payroll-sticky-employee {
+  background-color: rgba(84, 28, 44, 0.95) !important;
+}
+
+/* Employee text elements */
+.payroll-employee-name {
+  color: #1e293b !important;
+  transition: color 0.3s ease !important;
+}
+body.dark-theme .payroll-employee-name {
+  color: #e3c4a2 !important;
+}
+
+.payroll-employee-id {
+  color: #541c2c !important;
+  background-color: #faf8f6 !important;
+  border: 1px solid rgba(84, 28, 44, 0.15) !important;
+}
+body.dark-theme .payroll-employee-id {
+  color: #aa7a51 !important;
+  background-color: #541c2c !important;
+  border: 1px solid rgba(227, 196, 162, 0.15) !important;
+}
+
+/* Individual Score Cells and Dividers */
+.payroll-score-cell {
+  border-right: 1px solid rgba(84, 28, 44, 0.08) !important;
+}
+body.dark-theme .payroll-score-cell {
+  border-right: 1px solid rgba(227, 196, 162, 0.1) !important;
+}
+
+.payroll-score-text {
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+body.dark-theme .payroll-score-text {
+  color: rgba(227, 196, 162, 0.8) !important;
+  font-weight: 700 !important;
+}
+
+/* Summary Sub-columns (SC) backdrops */
+.payroll-sc-presence { background-color: rgba(99, 102, 241, 0.08) !important; }
+.payroll-sc-admin { background-color: rgba(16, 185, 129, 0.08) !important; }
+.payroll-sc-exec { background-color: rgba(59, 130, 246, 0.08) !important; }
+.payroll-sc-care { background-color: rgba(245, 158, 11, 0.08) !important; }
+
+body.dark-theme .payroll-sc-presence { background-color: rgba(99, 102, 241, 0.15) !important; }
+body.dark-theme .payroll-sc-admin { background-color: rgba(16, 185, 129, 0.15) !important; }
+body.dark-theme .payroll-sc-exec { background-color: rgba(59, 130, 246, 0.15) !important; }
+body.dark-theme .payroll-sc-care { background-color: rgba(245, 158, 11, 0.15) !important; }
+
+/* Dynamic Summary Column Text Colors */
+.payroll-presence-text { color: #4f46e5 !important; }
+.payroll-admin-text { color: #059669 !important; }
+.payroll-exec-text { color: #2563eb !important; }
+.payroll-care-text { color: #d97706 !important; }
+
+body.dark-theme .payroll-presence-text { color: #a5b4fc !important; }
+body.dark-theme .payroll-admin-text { color: #34d399 !important; }
+body.dark-theme .payroll-exec-text { color: #93c5fd !important; }
+body.dark-theme .payroll-care-text { color: #fbbf24 !important; }
+
+/* Bonus & Training Cells */
+.payroll-bonus-text {
+  color: #b45309 !important;
+  font-weight: 700 !important;
+}
+body.dark-theme .payroll-bonus-text {
+  color: #fbbf24 !important;
+  font-weight: 700 !important;
+}
+
+.payroll-training-text {
+  color: #475569 !important;
+}
+body.dark-theme .payroll-training-text {
+  color: rgba(227, 196, 162, 0.7) !important;
+}
+
+/* Final Score columns */
+.payroll-final-score-cell {
+  background-color: rgba(84, 28, 44, 0.05) !important;
+  border-right: 2px solid rgba(84, 28, 44, 0.15) !important;
+}
+body.dark-theme .payroll-final-score-cell {
+  background-color: rgba(170, 122, 81, 0.1) !important;
+  border-right: 2px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+.payroll-final-score-text {
+  color: #541c2c !important;
+  font-weight: 900 !important;
+}
+body.dark-theme .payroll-final-score-text {
+  color: #fbbf24 !important;
+  font-weight: 900 !important;
+}
+
+/* ==========================================================================
+   SEMANTIC LIFECYCLE TABLE HIGH-CONTRAST LIGHT & DARK SKINS
+   ========================================================================== */
+
+/* Lifecycle table headers */
+.lifecycle-header-cell {
+  background-color: #faf8f6 !important;
+  color: #541c2c !important;
+  border-bottom: 2px solid rgba(84, 28, 44, 0.1) !important;
+  border-right: 1px solid rgba(84, 28, 44, 0.08) !important;
+  transition: all 0.3s ease !important;
+}
+
+body.dark-theme .lifecycle-header-cell {
+  background-color: #300a15 !important;
+  color: #e3c4a2 !important;
+  border-bottom: 2px solid rgba(227, 196, 162, 0.25) !important;
+  border-right: 1px solid rgba(227, 196, 162, 0.15) !important;
+}
+
+/* Sticky headers left/right */
+.lifecycle-header-cell-sticky {
+  background-color: #faf8f6 !important;
+  color: #541c2c !important;
+  border-bottom: 2px solid rgba(84, 28, 44, 0.1) !important;
+  border-right: 2px solid rgba(84, 28, 44, 0.15) !important;
+  transition: all 0.3s ease !important;
+}
+
+body.dark-theme .lifecycle-header-cell-sticky {
+  background-color: #300a15 !important;
+  color: #e3c4a2 !important;
+  border-bottom: 2px solid rgba(227, 196, 162, 0.25) !important;
+  border-right: 2px solid rgba(227, 196, 162, 0.25) !important;
+}
+
+/* Sticky body columns left/right */
+.lifecycle-sticky-col-1 {
+  background-color: #ffffff !important;
+  color: #94a3b8 !important;
+  border-right: 1px solid rgba(84, 28, 44, 0.08) !important;
+  transition: all 0.3s ease !important;
+}
+
+tr:hover .lifecycle-sticky-col-1 {
+  background-color: #faf8f6 !important;
+}
+
+body.dark-theme .lifecycle-sticky-col-1 {
+  background-color: rgba(48, 10, 21, 0.95) !important;
+  color: #aa7a51 !important;
+  border-right: 1px solid rgba(227, 196, 162, 0.15) !important;
+}
+
+body.dark-theme tr:hover .lifecycle-sticky-col-1 {
+  background-color: rgba(84, 28, 44, 0.95) !important;
+}
+
+.lifecycle-sticky-col-2 {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border-right: 2px solid rgba(84, 28, 44, 0.12) !important;
+  transition: all 0.3s ease !important;
+}
+
+tr:hover .lifecycle-sticky-col-2 {
+  background-color: #faf8f6 !important;
+}
+
+body.dark-theme .lifecycle-sticky-col-2 {
+  background-color: rgba(48, 10, 21, 0.95) !important;
+  color: #e3c4a2 !important;
+  border-right: 2px solid rgba(227, 196, 162, 0.2) !important;
+}
+
+body.dark-theme tr:hover .lifecycle-sticky-col-2 {
+  background-color: rgba(84, 28, 44, 0.95) !important;
+}
+
+.lifecycle-sticky-col-actions {
+  background-color: #ffffff !important;
+  border-left: 2px solid rgba(84, 28, 44, 0.12) !important;
+  transition: all 0.3s ease !important;
+}
+
+tr:hover .lifecycle-sticky-col-actions {
+  background-color: #faf8f6 !important;
+}
+
+body.dark-theme .lifecycle-sticky-col-actions {
+  background-color: rgba(48, 10, 21, 0.95) !important;
+  border-left: 2px solid rgba(227, 196, 162, 0.2) !important;
+}
+
+body.dark-theme tr:hover .lifecycle-sticky-col-actions {
+  background-color: rgba(84, 28, 44, 0.95) !important;
+}
+
+/* Factor Columns (blue, indigo, purple, pink) */
+.lifecycle-factor-blue { background-color: rgba(59, 130, 246, 0.08) !important; color: #2563eb !important; }
+.lifecycle-factor-indigo { background-color: rgba(99, 102, 241, 0.08) !important; color: #4f46e5 !important; }
+.lifecycle-factor-purple { background-color: rgba(168, 85, 247, 0.08) !important; color: #7c3aed !important; }
+.lifecycle-factor-pink { background-color: rgba(236, 72, 153, 0.08) !important; color: #db2777 !important; }
+
+body.dark-theme .lifecycle-factor-blue { background-color: rgba(30, 58, 138, 0.3) !important; color: #93c5fd !important; }
+body.dark-theme .lifecycle-factor-indigo { background-color: rgba(49, 46, 129, 0.3) !important; color: #a5b4fc !important; }
+body.dark-theme .lifecycle-factor-purple { background-color: rgba(88, 28, 135, 0.3) !important; color: #c084fc !important; }
+body.dark-theme .lifecycle-factor-pink { background-color: rgba(131, 24, 67, 0.3) !important; color: #fbcfe8 !important; }
+
+/* Leave columns (emerald, amber, rose) */
+.lifecycle-factor-emerald { background-color: rgba(16, 185, 129, 0.08) !important; color: #059669 !important; }
+.lifecycle-factor-amber { background-color: rgba(245, 158, 11, 0.08) !important; color: #d97706 !important; }
+.lifecycle-factor-rose { background-color: rgba(244, 63, 94, 0.08) !important; color: #e11d48 !important; }
+
+body.dark-theme .lifecycle-factor-emerald { background-color: rgba(6, 78, 59, 0.3) !important; color: #34d399 !important; }
+body.dark-theme .lifecycle-factor-amber { background-color: rgba(120, 53, 4, 0.3) !important; color: #fbbf24 !important; }
+body.dark-theme .lifecycle-factor-rose { background-color: rgba(159, 18, 57, 0.3) !important; color: #fda4af !important; }
+
+/* Bottom Insight Card */
+.lifecycle-insight-card {
+  background: #faf8f6 !important;
+  border: 1px solid rgba(84, 28, 44, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(84, 28, 44, 0.04) !important;
+  transition: all 0.3s ease !important;
+}
+
+body.dark-theme .lifecycle-insight-card {
+  background: linear-gradient(135deg, #1e060d 0%, #300a15 100%) !important;
+  border: 1px solid rgba(227, 196, 162, 0.15) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+.lifecycle-insight-title {
+  color: #541c2c !important;
+}
+
+body.dark-theme .lifecycle-insight-title {
+  color: #e3c4a2 !important;
+}
+
+.lifecycle-insight-desc {
+  color: #64748b !important;
+}
+
+body.dark-theme .lifecycle-insight-desc {
+  color: rgba(227, 196, 162, 0.7) !important;
+}
+
+.lifecycle-insight-icon-bg {
+  background-color: rgba(84, 28, 44, 0.05) !important;
+  border: 1px solid rgba(84, 28, 44, 0.12) !important;
+  color: #541c2c !important;
+}
+
+body.dark-theme .lifecycle-insight-icon-bg {
+  background-color: rgba(227, 196, 162, 0.1) !important;
+  border: 1px solid rgba(227, 196, 162, 0.25) !important;
+  color: #e3c4a2 !important;
+}
+
+.lifecycle-insight-badge {
+  background-color: #541c2c !important;
+  color: #ffffff !important;
+}
+
+body.dark-theme .lifecycle-insight-badge {
+  background-color: #aa7a51 !important;
+  color: #300a15 !important;
+}
+
+.lifecycle-insight-count {
+  color: #541c2c !important;
+}
+
+body.dark-theme .lifecycle-insight-count {
+  color: #e3c4a2 !important;
+}
+
+.lifecycle-insight-count-label {
+  color: #64748b !important;
+}
+
+body.dark-theme .lifecycle-insight-count-label {
+  color: #aa7a51 !important;
+}
+
+/* Premium Export Button styling */
+.lifecycle-export-btn {
+  background-color: #541c2c !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(84, 28, 44, 0.15) !important;
+}
+
+.lifecycle-export-btn:hover {
+  background-color: #70273c !important;
+}
+
+body.dark-theme .lifecycle-export-btn {
+  background-color: #aa7a51 !important;
+  color: #300a15 !important;
+  box-shadow: 0 4px 14px rgba(170, 122, 81, 0.3) !important;
+}
+
+body.dark-theme .lifecycle-export-btn:hover {
+  background-color: #e3c4a2 !important;
 }

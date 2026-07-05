@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { employeeService } from '../services/employeeService';
 import { timeService } from '../services/timeService';
@@ -19,6 +20,7 @@ import { roleThemes } from '../config/roleThemes';
 
 const TimeTrackingPage: React.FC = () => {
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [timeRecords, setTimeRecords] = useState<Record<string, TimeRecord>>({});
     const [loading, setLoading] = useState(true);
@@ -114,8 +116,8 @@ const TimeTrackingPage: React.FC = () => {
             {/* Header Section */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/20">
                 <div>
-                    <h1 className="text-3xl font-outfit font-bold text-slate-800 tracking-tight">Time & Attendance</h1>
-                    <p className="text-slate-500 mt-1">Monitor working hours and operational engagement</p>
+                    <h1 className="text-3xl font-outfit font-bold text-slate-800 tracking-tight">{t('time_attendance_title')}</h1>
+                    <p className="text-slate-500 mt-1">{t('time_attendance_subtitle')}</p>
                 </div>
 
                 <div className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-1.5 rounded-2xl shadow-sm border border-white/40">
@@ -137,40 +139,40 @@ const TimeTrackingPage: React.FC = () => {
                     <div className="glass-card p-6 rounded-3xl border-l-4 border-blue-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-xl -mr-6 -mt-6 transition-all group-hover:bg-blue-500/20"></div>
                         <div className="flex items-center justify-between mb-4 relative z-10">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">Global Capacity</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">{t('global_capacity')}</span>
                             <div className="p-2 bg-blue-50/80 rounded-lg">
                                 <Timer className="w-5 h-5 text-blue-500" />
                             </div>
                         </div>
                         <div className="flex items-end gap-2 relative z-10">
                             <span className="text-3xl font-outfit font-bold text-slate-800">{totalAssigned}h</span>
-                            <span className="text-xs text-slate-400 mb-1.5 font-medium">Assigned Total</span>
+                            <span className="text-xs text-slate-400 mb-1.5 font-medium">{t('assigned_total')}</span>
                         </div>
                     </div>
                     <div className="glass-card p-6 rounded-3xl border-l-4 border-emerald-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl -mr-6 -mt-6 transition-all group-hover:bg-emerald-500/20"></div>
                         <div className="flex items-center justify-between mb-4 relative z-10">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">Actual Engagement</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">{t('actual_engagement')}</span>
                             <div className="p-2 bg-emerald-50/80 rounded-lg">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                             </div>
                         </div>
                         <div className="flex items-end gap-2 relative z-10">
                             <span className="text-3xl font-outfit font-bold text-slate-800">{totalWorked}h</span>
-                            <span className="text-xs text-emerald-600 mb-1.5 font-bold bg-emerald-50 px-1.5 rounded">{((totalWorked / (totalAssigned || 1)) * 100).toFixed(1)}% Yield</span>
+                            <span className="text-xs text-emerald-600 mb-1.5 font-bold bg-emerald-50 px-1.5 rounded">{((totalWorked / (totalAssigned || 1)) * 100).toFixed(1)}% {t('yield')}</span>
                         </div>
                     </div>
                     <div className="glass-card p-6 rounded-3xl border-l-4 border-orange-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/10 rounded-full blur-xl -mr-6 -mt-6 transition-all group-hover:bg-orange-500/20"></div>
                         <div className="flex items-center justify-between mb-4 relative z-10">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">Overtime Burn</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md">{t('overtime_burn')}</span>
                             <div className="p-2 bg-orange-50/80 rounded-lg">
                                 <ArrowUpRight className="w-5 h-5 text-orange-500" />
                             </div>
                         </div>
                         <div className="flex items-end gap-2 relative z-10">
                             <span className="text-3xl font-outfit font-bold text-slate-800">{totalOvertime}h</span>
-                            <span className="text-xs text-orange-600 mb-1.5 font-bold bg-orange-50 px-1.5 rounded">Priority Status</span>
+                            <span className="text-xs text-orange-600 mb-1.5 font-bold bg-orange-50 px-1.5 rounded">{t('priority_status')}</span>
                         </div>
                     </div>
                 </div>
@@ -183,7 +185,7 @@ const TimeTrackingPage: React.FC = () => {
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                         <input
                             type="text"
-                            placeholder="Find workforce member..."
+                            placeholder={t('find_workforce_member')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-11 pr-4 py-2.5 bg-white/50 border-white/40 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-80 shadow-sm"
@@ -191,7 +193,7 @@ const TimeTrackingPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3 px-4 py-2 bg-white/40 rounded-xl border border-white/40">
                         <Filter className="w-4 h-4 text-slate-500" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{filteredEmployees.length} Members List</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{filteredEmployees.length} {t('members_list')}</span>
                     </div>
                 </div>
 
@@ -199,13 +201,13 @@ const TimeTrackingPage: React.FC = () => {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/80 border-b border-slate-200 text-left">
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Identity</th>
-                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Assigned</th>
-                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Worked</th>
-                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Overtime</th>
-                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Absence</th>
-                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Late (M)</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">Commit</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('identity')}</th>
+                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('assigned')}</th>
+                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('worked')}</th>
+                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('overtime')}</th>
+                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('absence')}</th>
+                                <th className="px-5 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('late')}</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right sticky top-0 bg-slate-50/95 backdrop-blur-sm z-10">{t('commit')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -227,7 +229,7 @@ const TimeTrackingPage: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-slate-800 text-sm group-hover:text-indigo-700 transition-colors">{emp.fullName}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Active Engagement</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{t('active_engagement')}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -292,7 +294,7 @@ const TimeTrackingPage: React.FC = () => {
                             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed border-slate-200">
                                 <AlertCircle className="w-8 h-8 text-slate-300" />
                             </div>
-                            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No Workforce Records Detected</p>
+                            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">{t('no_workforce_records')}</p>
                         </div>
                     )}
                 </div>

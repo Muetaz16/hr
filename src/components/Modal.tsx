@@ -6,9 +6,9 @@ interface ModalProps {
     onClose: () => void;
     title: string;
     children: React.ReactNode;
+    maxWidth?: string;
 }
-
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-xl' }) => {
     const [shouldRender, setShouldRender] = useState(isOpen);
 
     useEffect(() => {
@@ -29,7 +29,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
             onTransitionEnd={handleAnimationEnd}
         >
             <div
-                className={`bg-white rounded-[32px] shadow-2xl w-full max-w-xl overflow-hidden border border-white/20 transform transition-all duration-300 cubic-bezier(0.34, 1.56, 0.64, 1) ${isOpen ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-4 opacity-0'
+                className={`bg-white rounded-[32px] shadow-2xl w-full ${maxWidth} overflow-hidden border border-white/20 transform transition-all duration-300 cubic-bezier(0.34, 1.56, 0.64, 1) ${isOpen ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-4 opacity-0'
                     }`}
                 onClick={(e) => e.stopPropagation()}
             >

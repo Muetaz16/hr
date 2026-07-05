@@ -11,7 +11,7 @@ import {
     enableAllDepartments
 } from '../../services/evaluationPeriodService';
 import type { Department, EvaluationPeriod, Employee } from '../../types';
-import { CheckCircle, XCircle, Calendar, Trash2, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Calendar, Trash2, AlertTriangle, Search } from 'lucide-react';
 
 type EvaluationType = 'HR' | 'DEPT' | 'DIRECTOR' | 'PERSONNEL';
 
@@ -30,6 +30,7 @@ const EvaluationControl: React.FC = () => {
     const [activeTab, setActiveTab] = useState<EvaluationType>('DIRECTOR'); // Default to Director
     const [evaluations, setEvaluations] = useState<any[]>([]);
     const [monitorLoading, setMonitorLoading] = useState(false);
+    const [monitorSearchTerm, setMonitorSearchTerm] = useState('');
 
     useEffect(() => {
         fetchInitialData();
@@ -128,6 +129,11 @@ const EvaluationControl: React.FC = () => {
         if (!id) return 'Unknown';
         return employees.find(e => e.id === id)?.fullName || 'Unknown';
     };
+
+    const filteredEvaluations = evaluations.filter(ev => {
+        const name = getEmployeeName(ev.employeeId).toLowerCase();
+        return name.includes(monitorSearchTerm.toLowerCase());
+    });
 
     const getDepartmentName = (id?: string) => {
         if (!id) return 'All Departments';
@@ -238,20 +244,33 @@ const EvaluationControl: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Tabs */}
-                    <div className="flex p-1 bg-slate-100 rounded-xl">
-                        {(['DIRECTOR', 'DEPT', 'HR', 'PERSONNEL'] as EvaluationType[]).map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab
-                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                            >
-                                {tab}
-                            </button>
-                        ))}
+                    {/* Search and Tabs */}
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="relative group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                            <input 
+                                type="text"
+                                placeholder="Search employee..."
+                                value={monitorSearchTerm}
+                                onChange={(e) => setMonitorSearchTerm(e.target.value)}
+                                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
+                            />
+                        </div>
+
+                        <div className="flex p-1 bg-slate-100 rounded-xl">
+                            {(['DIRECTOR', 'DEPT', 'HR', 'PERSONNEL'] as EvaluationType[]).map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab
+                                        ? 'bg-white text-indigo-600 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -269,14 +288,14 @@ const EvaluationControl: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {evaluations.length === 0 ? (
+                                {filteredEvaluations.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} className="px-6 py-12 text-center text-slate-400 text-sm">
-                                            No {activeTab.toLowerCase()} evaluations found for this month.
+                                            No {activeTab.toLowerCase()} evaluations found matching your search.
                                         </td>
                                     </tr>
                                 ) : (
-                                    evaluations.map((evalItem) => (
+                                    filteredEvaluations.map((evalItem) => (
                                         <tr key={evalItem.id} className="hover:bg-slate-50/50 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-700">{getEmployeeName(evalItem.employeeId)}</div>

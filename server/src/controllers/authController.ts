@@ -42,7 +42,8 @@ export const login = async (req: Request, res: Response) => {
                 fullName: user.fullName,
                 unitId: user.unitId,
                 departmentId: user.departmentId,
-                departmentIds: user.departmentIds
+                departmentIds: user.departmentIds,
+                permissions: user.permissions
             },
             process.env.JWT_SECRET as string,
             { expiresIn: '24h' }
@@ -60,5 +61,31 @@ export const login = async (req: Request, res: Response) => {
         console.error('[AUTH] CRITICAL ERROR during login:', error.message);
         if (error.code) console.error('[AUTH] Prisma Error Code:', error.code);
         res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+    try {
+        const { newPassword } = req.body;
+        const userId = (req as any).user?.id;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ error: 'New password is required and must be at least 6 characters' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+        });
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (error: any) {
+        console.error('[AUTH] ERROR during change password:', error.message);
+        res.status(500).json({ error: 'Failed to update password' });
     }
 };

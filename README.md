@@ -2,7 +2,7 @@
 
 IPH SYSTEM is a comprehensive HR management platform designed for streamlined employee lifecycle tracking, performance evaluation, and payroll reporting.
 
-## 🚀 Recent Technical Updates (March 2026)
+##  Recent Technical Updates (March 2026)
 
 This section provides a technical breakdown of the latest core system updates for the development team.
 
@@ -44,13 +44,13 @@ The system now supports full Arabic localization and Right-to-Left (RTL) layout 
 
 ---
 
-## 🛠 Tech Stack
+##  Tech Stack
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, TanStack Query.
 - **Backend**: Node.js, Express, Prisma ORM, MySQL/PostgreSQL.
 - **State Management**: React Context API & TanStack Query.
 - **Internationalization**: i18next.
 
-## 📦 Getting Started
+##  Getting Started
 
 1.  **Install Dependencies**:
     ```bash
@@ -68,7 +68,7 @@ The system now supports full Arabic localization and Right-to-Left (RTL) layout 
     cd server && npm run dev
     ```
 
-## 🗄 Database Management
+##  Database Management
 
 This project uses **PostgreSQL** with **Prisma ORM**. Here are the essential commands for managing your data.
 

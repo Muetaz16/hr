@@ -1,5 +1,5 @@
 import api from './apiClient';
-import type { Department, Group } from '../types';
+import type { Department, Group, Division } from '../types';
 
 export const departmentService = {
     async getAllDepartments(): Promise<Department[]> {
@@ -11,9 +11,8 @@ export const departmentService = {
         await api.post('/departments', dept);
     },
 
-    async updateDepartment(_id: string, _data: Partial<Department>) {
-        // Not implemented in backend yet, but placeholder
-        // await api.put(\`/departments/${id}\`, data);
+    async updateDepartment(id: string, data: Partial<Department>) {
+        await api.put(`/departments/${id}`, data);
     },
 
     async deleteDepartment(id: string) {
@@ -31,12 +30,30 @@ export const groupService = {
         await api.post('/groups', group);
     },
 
-    async updateGroup(_id: string, _data: Partial<Group>) {
-        // Not implemented in backend yet, but placeholder
-        // await api.put(\`/groups/${id}\`, data);
+    async updateGroup(id: string, data: Partial<Group>) {
+        await api.put(`/groups/${id}`, data);
     },
 
     async deleteGroup(id: string) {
         await api.delete(`/groups/${id}`);
+    }
+};
+
+export const divisionService = {
+    async getAllDivisions(): Promise<Division[]> {
+        const response = await api.get('/divisions');
+        return response.data;
+    },
+
+    async createDivision(division: Omit<Division, 'id' | '_count'>) {
+        await api.post('/divisions', division);
+    },
+
+    async updateDivision(id: string, data: Partial<Division>) {
+        await api.put(`/divisions/${id}`, data);
+    },
+
+    async deleteDivision(id: string) {
+        await api.delete(`/divisions/${id}`);
     }
 };

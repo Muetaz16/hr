@@ -14,7 +14,7 @@ const UnitsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
-    const [formData, setFormData] = useState({ name: '', departmentId: '' });
+    const [formData, setFormData] = useState({ name: '', departmentId: '', headcount: 0 });
 
     useEffect(() => {
         fetchData();
@@ -49,7 +49,7 @@ const UnitsPage: React.FC = () => {
             }
             setIsModalOpen(false);
             setEditingUnit(null);
-            setFormData({ name: '', departmentId: '' });
+            setFormData({ name: '', departmentId: '', headcount: 0 });
             fetchData(); // Refresh list
         } catch (error) {
             console.error("Error saving unit:", error);
@@ -58,7 +58,7 @@ const UnitsPage: React.FC = () => {
 
     const handleEdit = (unit: Unit) => {
         setEditingUnit(unit);
-        setFormData({ name: unit.name, departmentId: unit.departmentId });
+        setFormData({ name: unit.name, departmentId: unit.departmentId, headcount: unit.headcount || 0 });
         setIsModalOpen(true);
     };
 
@@ -75,7 +75,11 @@ const UnitsPage: React.FC = () => {
 
     const openNewModal = () => {
         setEditingUnit(null);
-        setFormData({ name: '', departmentId: departments.length > 0 ? departments[0].id : '' });
+        setFormData({ 
+            name: '', 
+            departmentId: departments.length > 0 ? departments[0].id : '',
+            headcount: 0
+        });
         setIsModalOpen(true);
     };
 
@@ -100,6 +104,7 @@ const UnitsPage: React.FC = () => {
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('unit_name', 'Unit Name')}</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('department', 'Department')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('headcount', 'Headcount')}</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions', 'Actions')}</th>
                         </tr>
                     </thead>
@@ -115,6 +120,11 @@ const UnitsPage: React.FC = () => {
                                     </Link>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getDepartmentName(unit.departmentId)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <span className="font-bold text-slate-700">{unit._count?.employees || 0}</span>
+                                    <span className="text-slate-400 mx-1">/</span>
+                                    <span className="text-slate-500">{unit.headcount || '∞'}</span>
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <button onClick={() => handleEdit(unit)} className="text-indigo-600 hover:text-indigo-900 mr-4">
                                         <Edit size={18} />
@@ -163,6 +173,18 @@ const UnitsPage: React.FC = () => {
                                 <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">{t('headcount', 'Headcount Capacity')}</label>
+                        <input
+                            type="number"
+                            min="0"
+                            value={formData.headcount}
+                            onChange={(e) => setFormData({ ...formData, headcount: parseInt(e.target.value) || 0 })}
+                            placeholder="0 = Unlimited"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Set the maximum number of employees for this unit.</p>
                     </div>
                     <div className="flex justify-end space-x-3 pt-4">
                         <button

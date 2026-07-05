@@ -1,5 +1,9 @@
 export type UserRole =
     | 'SUPER_ADMIN'
+    | 'CHAIRMAN'
+    | 'GENERAL_MANAGER'
+    | 'HEAD_DIVISION'
+    | 'HEAD_OFFICE'
     | 'HEAD_DIRECTOR'
     | 'HEAD_DEPARTMENT'
     | 'HEAD_UNIT'
@@ -12,17 +16,23 @@ export interface User {
     email: string;
     role: UserRole;
     groupId?: string;
+    divisionId?: string;
     departmentId?: string;
     unitId?: string;
     departmentIds?: string[];
     fullName: string;
     employeeId?: string; // Link to HR record
+    permissions?: string[]; // Granular access permissions
 }
 
 export interface Unit {
     id: string;
     name: string;
     departmentId: string;
+    headcount: number;
+    _count?: {
+        employees: number;
+    };
 }
 
 export interface Group {
@@ -30,10 +40,27 @@ export interface Group {
     name: string;
 }
 
+export interface Directorate {
+    id: string;
+    name: string;
+}
+
+export interface Division {
+    id: string;
+    name: string;
+    directorateId?: string;
+    _count?: {
+        departments: number;
+        employees: number;
+    };
+}
+
 export interface Department {
     id: string;
     name: string;
     groupId: string;
+    divisionId?: string;
+    isOffice?: boolean;
 }
 
 export interface Employee {
@@ -41,6 +68,8 @@ export interface Employee {
     fullName: string;
     email?: string; // Added for linking with Auth (Optional now)
     role: UserRole;
+    directorateId?: string;
+    divisionId?: string;
     departmentId: string;
     unitId?: string;
     groupId: string;
@@ -54,6 +83,11 @@ export interface Employee {
     nationality?: string;
     jobCategory?: string;
     jobGrade?: string;
+    positionFactor?: number;
+    skillFactor?: number;
+    siteFactor?: number;
+    languageFactor?: number;
+    roleCategory?: string;
 
     // Contract Details
     contractStartDate?: string;
@@ -64,10 +98,34 @@ export interface Employee {
     emergencyHolidaysUsed?: number;
     unpaidHolidaysUsed?: number;
     bonusHolidays: number;
+    bonusEmergencyHolidays?: number;
     accruedHolidays?: number;
     earnedHolidays?: number;
     remainingHolidays?: number;
     userId?: string; // Link to Auth record
+    permissions?: string[]; // Granular access permissions
+    contracts?: Contract[];
+}
+
+export interface Contract {
+    id: string;
+    employeeId: string;
+    contractNumber?: string;
+    startDate: string;
+    endDate?: string;
+    type?: string;
+    status: 'ACTIVE' | 'EXPIRED' | 'TERMINATED' | 'ARCHIVED';
+    salary: number;
+    notes?: string;
+    position?: string;
+    jobCategory?: string;
+    jobGrade?: string;
+    holidaysUsed: number;
+    emergencyHolidaysUsed: number;
+    unpaidHolidaysUsed: number;
+    documentUrl?: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface TimeRecord {
@@ -170,6 +228,39 @@ export interface DirectorEvaluation extends EvaluationMetrics {
     departmentEvaluationId?: string;
 }
 
+export interface DivisionEvaluation extends EvaluationMetrics {
+    id: string;
+    employeeId: string;
+    month: string;
+    comments: string;
+    submittedAt: string;
+    submittedBy: string;
+    totalScore: number;
+    departmentEvaluationId?: string;
+}
+
+export interface GMEvaluation {
+    id: string;
+    employeeId: string;
+    month: string;
+    finalScore: number;
+    comments?: string;
+    locked: boolean;
+    lockedAt?: string;
+    submittedBy: string;
+}
+
+export interface ChairmanEvaluation {
+    id: string;
+    employeeId: string;
+    month: string;
+    finalScore: number;
+    comments?: string;
+    locked: boolean;
+    lockedAt?: string;
+    submittedBy: string;
+}
+
 export interface PayrollResult {
     id: string;
     employeeId: string;
@@ -178,7 +269,10 @@ export interface PayrollResult {
     overtime: number;
     absences: number;
     departmentScore: number;
+    divisionScore?: number;
     directorScore: number;
+    gmScore?: number;
+    chairmanScore?: number;
     finalScore: number;
     finalSalary: number;
 
@@ -259,4 +353,30 @@ export interface EvaluationPeriod {
     enabledBy: string; // HR Manager user ID
     enabledAt: string;
     notes?: string;
+}
+
+export interface RecruitmentRequest {
+    id: string;
+    requesterId: string;
+    unitId?: string;
+    departmentId: string;
+    jobTitle: string;
+    reason?: string;
+    status: 'PENDING' | 'DEPT_APPROVED' | 'HR_APPROVED' | 'FULLY_APPROVED' | 'REJECTED';
+    deptNote?: string;
+    hrNote?: string;
+    gmNote?: string;
+    deptApprovedById?: string;
+    hrApprovedById?: string;
+    gmApprovedById?: string;
+    createdAt: string;
+    updatedAt: string;
+    
+    // Included Relations
+    requester?: { id: string; fullName: string; role: string };
+    unit?: { id: string; name: string };
+    department?: { id: string; name: string };
+    deptApprovedBy?: { id: string; fullName: string };
+    hrApprovedBy?: { id: string; fullName: string };
+    gmApprovedBy?: { id: string; fullName: string };
 }

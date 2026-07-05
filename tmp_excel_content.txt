@@ -1,0 +1,133 @@
+All Sheets: Contract Master Table, Contract Renewal Database, Contract renewal form, Personnel Action Form requests, Personnel Action Form
+
+================================================================
+SHEET: Contract Master Table
+================================================================
+ 0: General Entitlement for Paid per contract (14 days) | General Entitlement for Unpaid Per contract (14 days) | General Entitlement for Emergency Per contract (3 days) |  |  |  |  | Requested leave date
+ 1: 14 | 14 | 3 |  |  |  |  | 46108
+ 3: Contract Status | Expiring Month | Employee ID | Employee Name | E mail address | Passport | Employee name in arabic | Employee Contract number | Date of Employment | Contract Start | Contract End | Type of contract | Nationality | Collected up to requested leave date | Added from reward section  (track history of adding leaves through the comment) | Remaining leave from the previous contract | Paid used during this contract | Actual Paid Balance | Remaining Paid Balance | Unpaid used during this contract | Actual Unpaid Balance Remaining | Emergency used during this contract | Actual emegrency balance Remaining | To be transfered to the next contract | Comment | Department | Unit | Position | Direct Supervisor Name | Next Authority level name | Job Category | Job Grade | Changes during this contract and dates of changes | UAE Visa Filipinos start date | UAE Visa Cost | UAE Visa attachment | Contract Renewal Form attachment | Leave request annual attachment | GM bonus | Attach GM Bonus letters | GM Bonus acknowledgment by payroll | Biannual bonus | Biannaual bonus info acknowledged by payroll | Attach Biannual approved list | Disciplinary action measure | Appreciacion letter attachment | Health insurance benefit type | Special services used
+ 4: Active |  | IPH-0125-036 | MUETAZ MOHAMMED LAYYAS | motaz.layas999@gmail.com | HH51NF6Y | معتز محمد عبدالرازق لياس | 1st | 46060 | 46060 | 46240 | Resident | Libyan |  |  |  |  | 3.416666667 | 3.416666667 |  | 14 | 1 | 2 |  |  | Business Development & Strategy | IT & Systems Enablement | IT Engineer |  |  | Engineer | Junior
+ 5: Active |  | IPH-0225-001 | Valerija Stanisic | valerijastanisic1997@gmail.com | 15674822 | فاليريا ستانيسيتش | 2nd | 46023 | 46025 | 46205 | Direct Non - Resident | Serbian |  |  | 0 | 4 | 6.333333333 | 2.333333333 | 4 | 10 | 1 | 3 |  |  | Human Resources | Human Resources | Head of Human Resources |  |  | Administrative Officer | Lead |  |  |  |  |  |  |  |  |  | 2000
+ 6: Active |  | IPH-0325-001 | Zoran Pesut | zoranpesut@outlook.com | /017025507 | زوران بيشوت | 1st | 46023 | 46064 | 46244 | Art Gradnja | Serbian |  |  |  |  | 3.083333333 | 3.083333333 |  | 14 |  | 3 |  |  | Human Resources | Employee Management | Employee Management HR Auditor |  |  | Administrative Officer | Junior |  |  |  |  |  |  |  |  |  | 1248
+
+================================================================
+SHEET: Contract Renewal Database
+================================================================
+ 0: Contract Status | Expiring Month | Employee ID | Employee Name | Employee Contract number | Date of Employment | Contract Start | Contract End | Type of contract | Nationality | Collected up to requested leave date | Remaining leave from the previous contract | Paid used during this contract | Actual Paid Balance Remaining | Unpaid used during this contract | Actual Unpaid Balance Remaining | Emergency used during this contract | Actual emegrency balance Remaining | To be transfered to the next contract | Comment | Department | Unit | Position | Job Category | Job Grade | Chnages during this contract and dates of changes | UAE Visa Filipinos start date | UAE Visa Cost | UAE Visa attachment | Contract Renewal Form attachment | Leave request annual attachment | Performance evaluation 1st month during this contract | Performance evaluation 2nd month during this contract | Performance evaluation 3rd month during this contract | Performance evaluation 4th month during this contract | Performance evaluation 5th month during this contract | Performance evaluation 6th month during this contract | Average performance | New contract start date | New contract end date
+ 1:  | 46054 | IPH-0325-001 | Zoran Pesut | 2nd | 11.08.2025 | 45880 | 46064 | Art Gradnja | Serbian | #REF! |  | 10 |  | 6 | 8 | 3 | 3 |  |  | Human Resources | Employee Management | Employee Management HR Auditor | Administrative Officer | Junior
+ 3: VALUES FROM CONTRACT MASTER TABLE |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | MANUAL HR ENTRY FROM EMPLOYEE PERFRORMANCE AND PROMOTION INDEX TRACKER |  |  |  |  |  |  |  |  | Attachment
+ 4: Contract Status | Expiring Month | Employee ID | Employee Name | Employee Contract number | Date of Employment | Contract Start | Contract End | Type of contract | Nationality | Collected up to requested leave date | Remaining leave from the previous contract | Paid used during this contract | Actual Paid Balance Remaining | Unpaid used during this contract | Actual Unpaid Balance Remaining | Emergency used during this contract | Actual emegrency balance Remaining | To be transfered to the next contract | Comment | Division | Department | Position | Job Category | Job Grade | Chnages during this contract and dates of changes | UAE Visa Filipinos start date | UAE Visa Cost | UAE Visa attachment | Contract Renewal Form attachment | Leave request annual attachment | Performance evaluation 1st month during this contract | Performance evaluation 2nd month during this contract | Performance evaluation 3rd month during this contract | Performance evaluation 4th month during this contract | Performance evaluation 5th month during this contract | Performance evaluation 6th month during this contract | Average performance | New contract start date | New contract end date | Attach signed contract renewal form | ATTACH LEAVE REQUEST APPROVED IF THERE IS ANY
+ 5: Active | 46054 | 5248 | Aldin Kavazovic | 2nd |  | 45927 | 46108 | Art Gradnja | Serbian | #REF! |  |  | #REF! |  | #REF! |  | #REF! |  |  | Engineering Affairs Division | Technical Affairs Department | Head Of BIM Team
+ 6:  | 46054 | IPH-0325-001 | Zoran Pesut | 2nd | 11.08.2025 | 45880 | 46064 | Art Gradnja | Serbian |  |  | 10 |  | 6 | 8 | 3 | 3 |  |  | Human Resources | Employee Management | Employee Management HR Auditor | Administrative Officer | Junior
+23:  |  |  |  |  | 
+
+================================================================
+SHEET: Contract renewal form
+================================================================
+ 1: CONTRACT RENEWAL FORM |  | نموذج تجديد العقد
+ 2: Employee Information |  | معلومات الموظف
+ 3: Employee Name: | Zoran Pesut |  | اسم الموظف
+ 4: ID No.: | IPH-0325-001 |  | الرقم الوظيفي
+ 5: Department: | Human Resources |  | القسم
+ 6: Unit: | Employee Management |  | الوحدة
+ 7: Position: | Employee Management HR Auditor |  | الوظيفة
+ 8: Category: | Administrative Officer |  | فئة
+ 9: Current Job grade: | Junior |  | الدرجة الوظيفية
+10: Contract Start Date: | 45880 |  | تاريخ بدء العقد
+11: Contract End Date: | 46064 |  | تاريخ انتهاء العقد
+12: Performance Evaluation Result Summary |  | ملخص نتائج تقييم الأداء
+13: Evaluation Month  شهر التقييم |  | Evaluation Score  نتيجة التقييم
+14: AUG |  | 0.9
+15: SEP |  | 0.88
+16: OCT |  | 0.85
+17: NOV |  | 0.9
+18: DEC |  | 0.92
+19: JAN |  | 0.95
+20: Overall performance rating: | 0.9 |  | التقييم العام للأداء
+21: Performance Management Specialist: | Nora Bugazia |  | أخصائي إدارة الأداء:
+22: Signature & Date: |  |  | التوقيع والتاريخ
+23: Renewal Contract Details |  | تفاصيل تجديد العقد
+24: New Contract Start Date: | 46065 |  | تاريخ بدء العقد الجديد
+25: New Contract End Date: | 46246 |  | تاريخ انتهاء العقد الجديد
+26: Contract Renewal Recommendation |  | توصية بتجديد العقد
+27: Decision:  القرار | Renewal تجديد | Termination of Contract إنهاء العقد | Non-Renewal عدم التجديد
+28:  | true |  | 
+29: Approvals |  | الاعتمادات
+30:  | Name:  الاسم | Signature & Date:  التوقيع والتاريخ
+31: Head Of Department  رئيس القسم
+32: Head of Division/Office  مدير الادارة / المكتب
+33: Head of Human Resources:  رئيس قسم الموارد البشرية
+34: Employee Acknowledgement |  | اقرار و القبول
+35: Employee Name:  اسم الموظف |  | Signature & Date:  التوقيع والتاريخ
+36: General Manager Authentication |  | اعتماد المدير العام
+37: Name:  الاسم |  | Signature & Date:  التوقيع والتاريخ
+
+================================================================
+SHEET: Personnel Action Form requests
+================================================================
+ 0: FORM RESULTS |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | FORM DETAILS
+ 2: Timestamp | Department name requesting this transfer / ما اسم القسم الذي طلب هذا النقل؟ | Name of the person who filled out this form / اسم الشخص الذي قام بتعبئة هذا النموذج | The employee who needs to change their position (name) / الموظف الذي يحتاج إلى تغيير منصبه (الاسم) | Employee ID   رقم تعريف الموظف | Current Division   القسم الحالي | Current Department   القسم الحالي | Current Unit    الوحدة الحالي | Current Position Title   المسمى الوظيفي الحالي | Reports To   يتبع لـ | Work Location   موقع العمل | New Division   القسم الجديد | New Department   قسم جديد | New Unit الوحدة الجديدة | New Position Title   مسمى وظيفي جديد | Reports To   يتبع لـ (new) | Place of Work   مكان العمل | Effective Date   تاريخ السريان | الشركة الحالية Current Company | New Company الشركة الجديدة | Year of Change | Month of change | Employee ID: | Employee name: | Current Division | Current Department | Current Unit | Current Position Title | Job Category | Job Grade: | Reports to | Work Location | New Division: | New Department: | New Unit: | New Position title: | New Job category: | New Job grade: | Reports to . | Place of work: | Factor for Position: | Factor for Location/Frontline: | Skill Factor: | Type of transfer | Effectivity Date:
+ 3: 46096.61572686343 | Human Resource | Hazem Adam | Dragan Stoiljkovic | - | General Management | Human Resource |  | Head of Human Resource | General Manager | Office - مكتب | General Management | Human Resource |  | Head of Human Resource | General Manager | Office - مكتب | 46106 | Almawel | IPH | 2026 | March |  | Dragan Stoiljkovic |  | Human Resource | General Management | Head of Human Resource | Adminstritve Officer | Associate Consultant | General Manager | Office - مكتب | General Management | Human Resource |  | Head of Human Resources | Adminstritve Officer | Associate Consultant | General Manager | Back Office | YES | NO | NO | Lateral transfer نقل على نفس الدرجة | 46096
+ 5: FORM RESULTS |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | FORM DETAILS |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | DOCUMENTS
+ 7: Timestamp | Department name requesting this transfer / ما اسم القسم الذي طلب هذا النقل؟ | Name of the person who filled out this form / اسم الشخص الذي قام بتعبئة هذا النموذج | The employee who needs to change their position (name) / الموظف الذي يحتاج إلى تغيير منصبه (الاسم) | Employee ID   رقم تعريف الموظف | Current Division   القسم الحالي | Current Department   القسم الحالي | Current Unit    الوحدة الحالي | Current Position Title   المسمى الوظيفي الحالي | Reports To   يقدم تقاريره لـ | Work Location   موقع العمل | New Division  الادارة الجديدة | New Department   القسم الجديد | New Unit الوحدة الجديدة | New Position Title   مسمى وظيفي جديد | Reports To   يقدم تقاريره لـ | Place of Work   مكان العمل | Effective Date   تاريخ السريان | الشركة الحالية Current Company | New Company الشركة الجديدة | Year of Change | Month of change | Employee ID: | Employee name: | Current Division | Current Department | Current Unit | Current Position Title | Job Category | Job Grade: | Reports to | Work Location | New Division: | New Department: | New Unit: | New Position title: | New Job category: | New Job grade: | Reports to . | Place of work: | Factor for Position: | Factor for Location/Frontline: | Skill Factor: | Type of transfer | Effectivity Date: | Attach prepared personnel action form | Attach signed personnel action form | Financial change to be applied? | Attach the job offer prepared | Attach the job offer signed | Monthly change | Acknowledged by payroll
+ 8: 46040.60758649306 | Enmaa CEO office | Valerija Stanisic | Alen Evlic | MER-0326-007 | Engineering | Control |  | Head of Control | Head of Engineering | Office - مكتب |  | CEO | CEO | Office Manager | Enmaa CEO | Office - مكتب | 46054 | Meraas | Enmaa | 2026 | February | MER-0326-007 | Alen Evlic |  | Control | Engineering | Head of Control | Engineer | Associate Consultant | Head of Engineering | Office - مكتب |  | CEO |  | Office Manager | Engineer | Associate Consultant | CEO | Office | YES | NO | NO | Permanent | 46054 |  | Personal Action - Alen Evlic | YES
+ 9: 46063.650438888886 | Human recourses - IPH | Hazem Adam | Fatima Flores | IPH-0325-003 | Human recourses - IPH | Employee Management Unit |  | People Development Specialist | Head of HR | Office - مكتب |  | Employee Management Unit | Human recourses | Performance Management Specialist | Head of Unit | Office - مكتب | 46064 | IPH | Almawel | 2026 | February |  | Fatima Flores |  | Employee Management Unit | Human recourses - IPH | People Development Specialist | Administrative |  |  | Office - مكتب |  | Employee Management Unit |  |  |  |  |  | Office | NO | NO | NO |  | 46064 |  | Fatima - Personal Action.pdf | NO |  |  |  | Acknowledged
+10: 46064.60529814815 | Finance & Treasury | Hazem Adam | Abdullah Fathi Abdullah Akweiri | IPH-0125-005 | Finance & Treasury | Audit Reporting & Planning |  | Reporting & Planning Auditor | Head of Unit | Office - مكتب |  | Prepare and Review Department | Finance Affairs Division | Accountant | Head of Unit | Office - مكتب | 46067 | IPH | Meraas | 2026 | February |  | Abdullah Fathi Abdullah Akweiri |  | Audit Reporting & Planning | Finance & Treasury | Reporting & Planning Auditor |  |  |  | Office - مكتب |  | Prepare and Review Department |  |  |  |  |  |  | NO | NO | NO |  |  |  | Abdallah Queri - Personal Action.pdf |  |  |  |  | Acknowledged
+11: 46064.68278791667 | Finance & Treasury | Hazem Adam | Omar Bashir Mohammad Shanbira | IPH-0125-007 | NA | Finance & Treasury | Audit Reporting & Planning | Reporting & Planning Auditor | Head of Unit | Office - مكتب |  | General Management | Executive Office | Accountant | Head of Department | Office - مكتب | 01.03.2026 | IPH | Meraas | 2026 | March | IPH-0125-007 | Omar Bashir Mohammad Shanbira |  | Finance & Treasury | NA | Reporting & Planning Auditor | Finacial Officer | Lead | Head of Unit | Office - مكتب |  | Executive Office |  | Audoter | Finacial Officer | Lead | Head of Unit | Office | No | No | No | Lateral transfer نقل على نفس الدرجة | 46082
+12: 46065.51998273148 | Business Development & Strategy | Hazem Adam | Yarob Mustafa Omran Bensaleem | IPH-0125-008 | Business Development & Strategy | IT & Systems Enablement |  | Network Engineer | Head of Unit | Office - مكتب |  | Audit Compliance & Monitoring | Top Management | Engineer in Audit Compliance & Monitoring | Head of Audit Compliance & Monitoring - Diya Al-Bira | Office - مكتب | 46067 | IPH | IPH | 2026 | February |  | Yarob Mustafa Omran Bensaleem |  | IT & Systems Enablement | Business Development & Strategy | Network Engineer |  |  |  | Office - مكتب |  | Audit Compliance & Monitoring |  |  |  |  |  |  |  |  | NO |  |  |  | Yarob Mustafa - Personal Action.pdf | NO |  |  |  | Acknowledged
+13: 46095.60639020833 | Human Resources- Farqadan | Amal Issa Elobidi | Fatma Fayez Elkwafi | 008 | Gm Office -Farqadan company | General management office |  | Head of general manager office | The general manager of Farqadan For Travel and Tourism | Office - مكتب |  | Head of Human Resources | Human Resources | Head of Human Resources | The general manager of Farqadan for travel and Tourism | Office - مكتب | 46092 | Farqadan for travel and Tourisim | Farqadan for travel and Tourism |  |  |  | Fatma Fayez Elkwafi |  | General management office | Gm Office -Farqadan company | Head of general manager office |  |  |  | Office - مكتب |  | Head of Human Resources | 
+14: 46096.56419991898 | Human Resource | Hazem Adam | Valerija Stanisic | IPH-0225-001 | Human Resource | Human Resource |  | Head of Human Resource | General Manager | Office - مكتب | Business Development & Strategy | Business Development & Strategy |  | Head of Business Development & Strategy | General Manager | Office - مكتب | 46106 | IPH | IPH |  |  |  | Valerija Stanisic |  | Human Resource | Human Resource | Head of Human Resource |  |  |  | Office - مكتب |  | Business Development & Strategy | Business Development & Strategy
+15: 46096.61572686343 | Human Resource | Hazem Adam | Dragan Stoiljkovic | - | General Management | Human Resource |  | Head of Human Resource | General Manager | Office - مكتب | General Management | Human Resource |  | Head of Human Resource | General Manager | Office - مكتب | 46106 | Almawel | IPH | 2026 | March |  | Dragan Stoiljkovic |  | Human Resource | General Management | Head of Human Resource | Adminstritve Officer | Associate Consultant | General Manager | Office - مكتب |  | Human Resource | General Management | Head of Human Resources | Adminstritve Officer | Associate Consultant | General Manager | Back Office | YES | NO | NO | Lateral transfer نقل على نفس الدرجة | 46096
+16: 1 | Human recourses - IPH | Nora Bugazia | Qais Anis Benhalim | MER-125-345 | General Management | Human recourses |  | Employee Relation | Head of Human Resources | Office - مكتب |  | Human Resources - Trass | Top Management | Head of Human Resources | General Manager | Office - مكتب | 25\02\2026 | Meraas | Trass | 2026 | February | MER-125-245 | Qais Anis Benhalim |  | Human Resources | Top Management | Head of Human Resources |  |  |  | Office - مكتب |  | Human Resources |  | Head of Human Resources | Adminstritve Officer |  | General Manager | Office | YES | NO | NO | Permanent | 25\02\2026 |  | Qais Personal Action Form.pdfg | YES
+17: 46064.68278791667 | Finance & Treasury | Nora | Younes Aboujreeda Salem Aoun | IPH-0125-006 | NA | Finance & Treasury | Audit Reporting & Planning | Reporting & Planning Auditor | Head of Unit | Office - مكتب |  | General Management | Executive Office | Accountant | Head of Department | Office - مكتب | 01.03.2026 | IPH | Meraas | 2026 | March | IPH-0125-006 | Younes Aboujreeda Salem Aoun |  | Finance & Treasury | NA | Reporting & Planning Auditor | Finacial Officer | Junior | Head of Unit | Office - مكتب |  | Executive Office |  | Audoter | Finacial Officer | Junior | General Manager | Office | No | No | No | Lateral transfer نقل على نفس الدرجة | 46082
+18: 46064.68278791667 | Finance & Treasury | Nora | Mustafa Abdulhafiz Ibrahim Abuhairi | IPH-0125-025 | NA | Finance & Treasury | Audit Reporting & Planning | Reporting & Planning Auditor | Head of Unit | Office - مكتب |  | General Management Office | General Management | Accountant | Head of Department | Office - مكتب | 01.03.2026 | IPH | Qoot Almadina | 2026 | March | IPH-0125-006 | Mustafa Abdulhafiz Ibrahim Abuhairi |  | Finance & Treasury | NA | Reporting & Planning Auditor | Finacial Officer | Lead | Head of Unit | Office - مكتب |  | General Management |  | Audoter | Finacial Officer | Lead | Head of Unit | Office | No | No | No | Lateral transfer نقل على نفس الدرجة | 46082
+19: 46064.68278791667 | Finance & Treasury | Nora | Walid Bashir Abdulqader Saleh | IPH-0125-029 | NA | Finance & Treasury | Audit Reporting & Planning | Reporting & Planning Auditor | Head of Unit | Office - مكتب |  | General Management Office | General Management | Accountant | Head of Department | Office - مكتب | 01.03.2026 | IPH | Qoot Almadina | 2026 | March | IPH-0125-029 | Walid Bashir Abdulqader Saleh |  | Finance & Treasury | NA | Reporting & Planning Auditor | Finacial Officer | Lead | Head of Unit | Office - مكتب |  | General Management |  | Audoter | Finacial Officer | Lead | Head of Unit | Office | No | No | No | Lateral transfer نقل على نفس الدرجة | 46082
+20: 46092 |  | Esra Elmahdi Abukhamadah | Samira Omar Ali | IPH-0125-043 | NA | Business Development & Strategy | NA | Business Development Consutant | General Manager | Office - مكتب |  | Top Management | Legal and Compilance Office | Head of Legal and Compliance Office | General Manager | Office - مكتب | 25.03.2026 | IPH | IPH | 2026 | March | IPH-0125-043 | Samira Omar Ali |  | Business Development & Strategy | NA | Business Development Consutant | Operation Officer | Lead Consultant | Head of Unit | Office - مكتب |  | Top Management | Legal and Compilance | Head of Legal and Compliance Office | Adminstritve Officer | Lead Consultant | General Manager | Office | Yes | No | No | Lateral transfer نقل على نفس الدرجة | 46106
+21: 46092 |  | Esra Elmahdi Abukhamadah | Osama Alzaroq Masoud | IPH-0125-042 | NA | Business Development & Strategy | NA | Business Development Consutant | General Manager | Office - مكتب |  | Operation Support Services | Operation Support Services | Head of Operations Support Services | General Manager | Office - مكتب | 25.03.2026 | IPH | IPH | 2026 | March | IPH-0125-042 | Osama Alzaroq Masoud |  | Business Development & Strategy | NA | Business Development Consutant | Operation Officer | Senior | Head of Unit | Office - مكتب |  | Operation Support Services | Operation Support Services | Head of Operations Support Services | Operation Officer | Senior | General Manager | Office | Yes | No | No | Lateral transfer نقل على نفس الدرجة | 46198
+22: 46095 |  | Esra Elmahdi Abukhamadah | Abdulrraziq Abdulwanis Aljahani | IPH-0125-044 | NA | Human recourses | NA | Data Analyst | Head of Department | Office - مكتب |  | Business Development & Strategy | Process Excelience & Standardization | Data Analyst | Head of Department | Office - مكتب |  | IPH | IPH | 2026 | March | IPH-0125-044 | Abdulrraziq Abdulwanis Aljahani |  | Human Resources | NA | Data Analyst | Operation Officer | Intern | Head of Unit | Office - مكتب |  | Business Development & Strategy | Process Excelience & Standardization | Data Analyst | Engineer | Intern | Head of Unit | Office | No | No | No | Lateral transfer نقل على نفس الدرجة
+
+================================================================
+SHEET: Personnel Action Form
+================================================================
+ 0: Document Reference No: | IPH-HRD-HOU-F-002-R00 |  |  |  | مرجع النموذج:
+ 1: Personal Action Form |  |  | نموذج تغيير حالة موظف
+ 2: EMPLOYEE INFROMATION |  |  | معلومات الموظف
+ 3: Employee ID: | - |  |  |  | معرف الموظف:
+ 4: Employee name: | Dragan Stoiljkovic |  |  |  | اسم الموظف:
+ 5: Current Company | Almawel |  |  |  | الشركة الحالية:
+ 6: Current Division: | General Management |  |  |  | الادارة الحالية:
+ 7: Current Department: | Human Resource |  |  |  | القسم الحالي:
+ 8: Current Unit: |  |  |  |  | الوحدة الحالية:
+ 9: Current Position Title | Head of Human Resource |  |  |  | عنوان الوظيفة الحالية:
+10: Job Category | Adminstritve Officer |  |  |  | فئة الوظيفة:
+11: Job Grade: | Associate Consultant |  |  |  | درجة الوظيفة:
+12: Reports to | General Manager |  |  |  | التقارير إلى:
+13: Work Location | Office - مكتب |  |  |  | مكان العمل:
+14: TRANSFER DETAILS |  |  | تفاصيل الانتقال
+15: New Company: | IPH |  |  |  | الشركة الجديدة:
+16: New Division: | General Management |  |  |  | الادارة الجديدة:
+17: New Department: | Human Resource |  |  |  | القسم الحالية:
+18: New Unit: |  |  |  |  | الوحدة الحالي:
+19: New Position title: | Head of Human Resource |  |  |  | المسمى الوظيفي الجديد:
+20: New Job category: | Adminstritve Officer |  |  |  | الفئة الوظيفة الجديدة:
+21: New Job grade: | Associate Consultant |  |  |  | درجة الوظيفة الجديدة:
+22: Reports to: | General Manager |  |  |  | يقدم تقريرة الي:
+23: Place of work: | Office - مكتب |  |  |  | مكان العمل:
+24: Factor for Position: | YES |  |  |  | علاوه وظيفة:
+25: Factor for Location/Frontline: | NO |  |  |  | عامل الموقع/الخط الأمامي:
+26: Skill Factor: | NO |  |  |  | عامل المهارة:
+27: Type of transfer: | Lateral transfer نقل على نفس الدرجة |  |  |  | نوع الانتقال:
+28: Effectivity Date: | 46096 |  |  |  | تاريخ السريان:
+29: APPROVALS |  |  | الاعتمادات
+30: Current Department / Division الإدارة / القسم الحالي |  | Designated Department / Division   الادارة / القسم  المعينة
+31: Head of Division  مدير الادارة | Head of Department  رئيس القسم | Head of Division  مدير الادارة |  | Head of Department  رئيس القسم
+33: In cases where a department or division change occurs, approval and signature are required from the designated division and department heads  في حال تغيير القسم أو الإدارة، يجب الحصول على موافقة وتوقيع رؤساء القسم والإدارة المختصة
+34: Present Department / Division الإدارة / القسم الحالي |  | Designated Department / Division   الادارة / القسم  المعينة
+35: Head of HR (Current Company) |  | Head of HR (New Company)
+36: رئيس قسم الموارد البشرية ( الشركة الحالية ) |  | رئيس قسم الموارد البشرية ( الشركة الجديدة )
+38: General Manager (Current Company) |  | General Manager (New Company)
+39: المدير العام ( الشركة الحالية ) |  | المدير العام ( الشركة الجديدة )
+41: Acknowledgment and Acceptance (Employee) |  |  | الاقرار و الموافقة(الموظف:)
+42: Signature & Date  التوقيع والتاريخ
+43: Investment Portfolio Holding Approvals
+44: Head of HR - IPH رئيس الموارد البشرية حافضة الاستثمار القابضة |  | General Manager IPH المدير العام حافظة الاستثمار القابضة

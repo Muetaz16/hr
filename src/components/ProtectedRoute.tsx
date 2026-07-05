@@ -1,25 +1,48 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import type { UserRole } from '../types';
 
 interface ProtectedRouteProps {
     allowedRoles?: UserRole[];
+    allowedPermissions?: string[];
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, allowedPermissions }) => {
     const { currentUser, loading } = useAuth();
+    const { t } = useTranslation();
 
     if (loading) {
-        return <div className="p-8 text-center text-gray-500">Loading auth...</div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <div className="flex flex-col items-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                    <p className="text-slate-400 font-medium animate-pulse">{t ? t('loading_auth') : 'Authenticating...'}</p>
+                </div>
+            </div>
+        );
     }
 
     if (!currentUser) {
         return <Navigate to="/login" replace />;
     }
 
-    if (allowedRoles && currentUser.role && !allowedRoles.includes(currentUser.role)) {
-        return <Navigate to="/unauthorized" replace />;
+    if (allowedRoles || allowedPermissions) {
+        let hasRoleAccess = false;
+        let hasPermissionAccess = false;
+
+        if (allowedRoles && currentUser.role && allowedRoles.includes(currentUser.role)) {
+            hasRoleAccess = true;
+        }
+
+        if (allowedPermissions && currentUser.permissions) {
+            hasPermissionAccess = allowedPermissions.some(perm => currentUser.permissions?.includes(perm));
+        }
+
+        if (!hasRoleAccess && !hasPermissionAccess) {
+            return <Navigate to="/unauthorized" replace />;
+        }
     }
 
     return <Outlet />;

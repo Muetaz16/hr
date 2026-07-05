@@ -7,7 +7,10 @@ export const getUnits = async (req: express.Request, res: express.Response) => {
     //
     try {
         const units = await prisma.unit.findMany({
-            include: { department: true }
+            include: { 
+                department: true,
+                _count: { select: { employees: true } }
+            }
         });
         res.json(units);
     } catch (error) {
@@ -18,9 +21,13 @@ export const getUnits = async (req: express.Request, res: express.Response) => {
 
 export const createUnit = async (req: express.Request, res: express.Response) => {
     try {
-        const { name, departmentId } = req.body;
+        const { name, departmentId, headcount } = req.body;
         const unit = await prisma.unit.create({
-            data: { name, departmentId },
+            data: { 
+                name, 
+                departmentId, 
+                headcount: parseInt(headcount) || 0 
+            },
             include: { department: true }
         });
         res.status(201).json(unit);
@@ -33,10 +40,14 @@ export const createUnit = async (req: express.Request, res: express.Response) =>
 export const updateUnit = async (req: express.Request, res: express.Response) => {
     try {
         const { id } = req.params;
-        const { name, departmentId } = req.body;
+        const { name, departmentId, headcount } = req.body;
         const unit = await prisma.unit.update({
             where: { id },
-            data: { name, departmentId },
+            data: { 
+                name, 
+                departmentId, 
+                headcount: parseInt(headcount) || 0 
+            },
             include: { department: true }
         });
         res.json(unit);

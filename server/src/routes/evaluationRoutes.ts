@@ -1,0 +1,49 @@
+import { Router } from 'express';
+import {
+    getHREvaluation, getHREvaluationsByMonth, saveHREvaluation,
+    getUnitEvaluation, getUnitEvaluationsByMonth, saveUnitEvaluation,
+    getDeptEvaluation, getDeptEvaluationsByMonth, saveDeptEvaluation,
+    getDirectorEvaluation, getDirectorEvaluationsByMonth, saveDirectorEvaluation, lockEvaluation,
+    getPersonnelEvaluation, getPersonnelEvaluationsByMonth, savePersonnelEvaluation,
+    deleteHREvaluation, deleteUnitEvaluation, deleteDeptEvaluation, deleteDirectorEvaluation, deletePersonnelEvaluation
+} from '../controllers/evaluationController';
+import { authenticateToken, authorizeRoles } from '../middleware/auth';
+
+const router = Router();
+console.log("DEBUG: Loading Evaluation Routes...");
+router.use(authenticateToken);
+
+// HR
+router.get('/hr', getHREvaluation); // ?employeeId=x&month=y
+router.get('/hr/month/:month', getHREvaluationsByMonth);
+router.post('/hr', saveHREvaluation);
+
+// Unit
+router.get('/unit', getUnitEvaluation);
+router.get('/unit/month/:month', getUnitEvaluationsByMonth);
+router.post('/unit', saveUnitEvaluation);
+
+// Dept
+router.get('/dept', getDeptEvaluation);
+router.get('/dept/month/:month', getDeptEvaluationsByMonth);
+router.post('/dept', saveDeptEvaluation);
+
+// Director
+router.get('/director', getDirectorEvaluation);
+router.get('/director/month/:month', getDirectorEvaluationsByMonth);
+router.post('/director', saveDirectorEvaluation);
+router.post('/director/lock', lockEvaluation);
+
+// Personnel
+router.get('/personnel', getPersonnelEvaluation);
+router.get('/personnel/month/:month', getPersonnelEvaluationsByMonth);
+router.post('/personnel', savePersonnelEvaluation);
+
+// Delete Routes (Super Admin Only)
+router.delete('/hr/:id', authorizeRoles('SUPER_ADMIN'), deleteHREvaluation);
+router.delete('/unit/:id', authorizeRoles('SUPER_ADMIN'), deleteUnitEvaluation);
+router.delete('/dept/:id', authorizeRoles('SUPER_ADMIN'), deleteDeptEvaluation);
+router.delete('/director/:id', authorizeRoles('SUPER_ADMIN'), deleteDirectorEvaluation);
+router.delete('/personnel/:id', authorizeRoles('SUPER_ADMIN'), deletePersonnelEvaluation);
+
+export default router;

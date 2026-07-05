@@ -2,16 +2,18 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
+import compression from 'compression';
 import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
 const prisma = new PrismaClient();
 const SERVER_VERSION = "2026-03-17-V3"; // Updated to verify reload
 
 app.use(helmet());
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
@@ -39,6 +41,8 @@ import timeRoutes from './routes/timeRoutes';
 import evaluationPeriodRoutes from './routes/evaluationPeriodRoutes';
 import staffHubRoutes from './routes/staffHubRoutes';
 import unitRoutes from './routes/unitRoutes';
+import operationsRoutes from './routes/operationsRoutes';
+import recruitmentRoutes from './routes/recruitmentRoutes';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -58,6 +62,8 @@ app.use('/api/time', timeRoutes);
 app.use('/api/evaluation-periods', evaluationPeriodRoutes);
 app.use('/api/staff-hub', staffHubRoutes);
 app.use('/api/units', unitRoutes);
+app.use('/api/operations', operationsRoutes);
+app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

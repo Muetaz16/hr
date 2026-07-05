@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Employee" ADD COLUMN     "holidaysUsed" DOUBLE PRECISION NOT NULL DEFAULT 0;

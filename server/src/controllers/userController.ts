@@ -17,6 +17,7 @@ export const getUsers = async (req: Request, res: Response) => {
                 unitId: true,
                 departmentIds: true,
                 groupId: true,
+                permissions: true,
                 createdAt: true,
                 employee: {
                     select: {
@@ -42,7 +43,7 @@ export const getUsers = async (req: Request, res: Response) => {
 // Create a new user
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { email, password, fullName, role, departmentId, unitId, departmentIds, groupId, employeeId } = req.body;
+        const { email, password, fullName, role, departmentId, unitId, departmentIds, groupId, employeeId, permissions } = req.body;
         const normalizedEmail = email?.toLowerCase();
 
         const existingUser = await prisma.user.findUnique({
@@ -64,6 +65,7 @@ export const createUser = async (req: Request, res: Response) => {
             unitId,
             departmentIds: departmentIds || [],
             groupId,
+            permissions: permissions || [],
         };
         if (req.body.id) data.id = req.body.id;
 
@@ -78,6 +80,7 @@ export const createUser = async (req: Request, res: Response) => {
                 unitId: true,
                 departmentIds: true,
                 groupId: true,
+                permissions: true,
                 createdAt: true,
             }
         });
@@ -101,7 +104,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { email, fullName, role, departmentId, unitId, departmentIds, groupId, password, employeeId } = req.body;
+        const { email, fullName, role, departmentId, unitId, departmentIds, groupId, password, employeeId, permissions } = req.body;
         const normalizedEmail = email?.toLowerCase();
 
         const dataToUpdate: any = {
@@ -112,6 +115,7 @@ export const updateUser = async (req: Request, res: Response) => {
             unitId,
             departmentIds: departmentIds || [],
             groupId,
+            permissions: permissions || [],
         };
 
         if (password) {
@@ -130,6 +134,7 @@ export const updateUser = async (req: Request, res: Response) => {
                 unitId: true,
                 departmentIds: true,
                 groupId: true,
+                permissions: true,
                 createdAt: true,
             }
         });
@@ -192,12 +197,17 @@ export const deleteUser = async (req: Request, res: Response) => {
                 where: { assigneeId: id },
                 data: { assigneeId: null }
             }),
-            // 4. Clear Announcements
+            // 4. Clear Support Ticket assignments
+            prisma.supportTicket.updateMany({
+                where: { assigneeId: id },
+                data: { assigneeId: null }
+            }),
+            // 5. Clear Announcements
             prisma.announcement.updateMany({
                 where: { authorId: id },
                 data: { authorId: null }
             }),
-            // 5. Clear Evaluations submitted by user
+            // 6. Clear Evaluations submitted by user
             prisma.hREvaluation.updateMany({
                 where: { submittedById: id },
                 data: { submittedById: null }
@@ -218,19 +228,19 @@ export const deleteUser = async (req: Request, res: Response) => {
                 where: { submittedById: id },
                 data: { submittedById: null }
             }),
-            // 6. Clear Evaluation Periods enabled by user
+            // 7. Clear Evaluation Periods enabled by user
             prisma.evaluationPeriod.updateMany({
                 where: { enabledById: id },
                 data: { enabledById: null }
             }),
-            // 7. Delete records strictly owned by user (normally cascades, but safe to force)
+            // 8. Delete records strictly owned by user (normally cascades, but safe to force)
             prisma.notification.deleteMany({
                 where: { userId: id }
             }),
             prisma.leaveRequest.deleteMany({
                 where: { userId: id }
             }),
-            // 8. Final Delete
+            // 9. Final Delete
             prisma.user.delete({ where: { id } })
         ]);
 

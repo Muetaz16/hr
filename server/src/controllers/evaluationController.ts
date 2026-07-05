@@ -57,7 +57,6 @@ const mapOrgEvalFromDB = (evalData: any) => {
     };
 };
 
-// Helper to map Frontend Dept/Director Evaluation to DB format
 const mapOrgEvalToDB = (data: any, submittedById: string) => {
     return {
         employeeId: data.employeeId,
@@ -80,6 +79,22 @@ const mapOrgEvalToDB = (data: any, submittedById: string) => {
         dataPrivacy: data.dataPrivacy,
         submittedById
     };
+};
+
+const checkEvaluationPeriod = async (month: string, departmentId?: string | null) => {
+    const periods = await prisma.evaluationPeriod.findMany({
+        where: { month: String(month), enabled: true }
+    });
+    
+    if (periods.length === 0) return false;
+    
+    // If any period is "global" (no departmentId), then it's enabled for everyone
+    if (periods.some(p => !p.departmentId)) return true;
+    
+    // Otherwise, check if specifically enabled for this department
+    if (departmentId && periods.some(p => p.departmentId === departmentId)) return true;
+    
+    return false;
 };
 
 // --- HR Evaluations ---
@@ -136,6 +151,12 @@ export const saveHREvaluation = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
         }
 
+        // Check if evaluation period is enabled
+        const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
+        if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
+        }
+
         const dbData = mapHREvalToDB(data, submittedById);
 
         const existing = await prisma.hREvaluation.findFirst({
@@ -187,6 +208,18 @@ export const saveUnitEvaluation = async (req: Request, res: Response) => {
         const submitterExists = await prisma.user.findUnique({ where: { id: submittedById } });
         if (!submitterExists) {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
+        }
+
+        // Check if evaluation period is enabled
+        const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
+        if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
+        }
+
+        // Self-evaluation check
+        const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } });
+        if (employee?.userId === submittedById && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'You cannot evaluate yourself' });
         }
 
         const dbData = {
@@ -268,6 +301,24 @@ export const saveDeptEvaluation = async (req: Request, res: Response) => {
         const submitterExists = await prisma.user.findUnique({ where: { id: submittedById } });
         if (!submitterExists) {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
+        }
+
+        // Check if evaluation period is enabled
+        const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
+        if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
+        }
+
+        // Self-evaluation check and GM role restriction
+        const targetEmployee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true, role: true } });
+        if (targetEmployee?.userId === submittedById && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'You cannot evaluate yourself' });
+        }
+
+        if (submitterExists.role === 'HEAD_DIRECTOR') {
+            if (targetEmployee?.role !== 'HEAD_UNIT' && targetEmployee?.role !== 'HEAD_DEPARTMENT') {
+                return res.status(403).json({ error: 'General Managers can only evaluate Heads of Unit and Department' });
+            }
         }
 
         const dbData = {
@@ -354,6 +405,24 @@ export const saveDirectorEvaluation = async (req: Request, res: Response) => {
         const submitterExists = await prisma.user.findUnique({ where: { id: submittedById } });
         if (!submitterExists) {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
+        }
+
+        // Check if evaluation period is enabled
+        const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
+        if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
+        }
+
+        // Self-evaluation check and GM role restriction
+        const targetEmployee = await prisma.employee.findUnique({ where: { id: String(employeeId) }, select: { userId: true, role: true } });
+        if (targetEmployee?.userId === submittedById && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'You cannot evaluate yourself' });
+        }
+
+        if (submitterExists.role === 'HEAD_DIRECTOR') {
+            if (targetEmployee?.role !== 'HEAD_UNIT' && targetEmployee?.role !== 'HEAD_DEPARTMENT') {
+                return res.status(403).json({ error: 'General Managers can only evaluate Heads of Unit and Department' });
+            }
         }
 
         const dbData = {
@@ -461,6 +530,12 @@ export const savePersonnelEvaluation = async (req: Request, res: Response) => {
         const submitterExists = await prisma.user.findUnique({ where: { id: submittedById } });
         if (!submitterExists) {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
+        }
+
+        // Check if evaluation period is enabled
+        const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
+        if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
         }
 
         const dbData = {

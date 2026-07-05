@@ -3,12 +3,22 @@ import type { Employee } from '../types';
 
 export const employeeService = {
     async getAllEmployees(): Promise<Employee[]> {
-        const response = await api.get('/employees');
-        return response.data;
+        try {
+            const response = await api.get('/employees');
+            return response.data;
+        } catch (e) {
+            console.error("getAllEmployees FAILED in frontend:", e);
+            throw e;
+        }
     },
 
     async getMyEmployeeRecord(): Promise<Employee> {
         const response = await api.get('/employees/me');
+        return response.data;
+    },
+
+    async getEmployeeById(id: string): Promise<Employee> {
+        const response = await api.get(`/employees/${id}`);
         return response.data;
     },
 
@@ -52,6 +62,16 @@ export const employeeService = {
 
     async getExpiringContracts(days: number = 30): Promise<Employee[]> {
         const response = await api.get(`/employees/contracts/expiring?days=${days}`);
+        return response.data;
+    },
+
+    async renewContract(id: string, data: any) {
+        const response = await api.post(`/employees/${id}/renew`, data);
+        return response.data;
+    },
+
+    async terminateEmployee(id: string, data: any) {
+        const response = await api.post(`/employees/${id}/terminate`, data);
         return response.data;
     }
 };

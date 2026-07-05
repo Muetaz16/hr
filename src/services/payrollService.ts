@@ -2,6 +2,7 @@ import api from './apiClient';
 import type { PayrollResult } from '../types';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx-js-style';
+import { format } from 'date-fns';
 
 export const payrollService = {
     async savePayrollResult(result: Omit<PayrollResult, 'id'>) {
@@ -193,33 +194,135 @@ export const payrollService = {
     },
 
     createNestedHeaderSheet(dataRows: any[][]): XLSX.WorkSheet {
+        // Calculate dynamic values for KPI cards
+        const totalScores = dataRows.map(r => Number(r[30])).filter(val => !isNaN(val));
+        const avgScore = totalScores.length > 0 ? totalScores.reduce((a, b) => a + b, 0) / totalScores.length : 0;
+        const excellentCount = totalScores.filter(s => s >= 90).length;
+
         // Styles cast to any to bypass strict nested property typing issues in xlsx-js-style
-        const baseStyle: any = { font: { sz: 10 }, alignment: { horizontal: 'center', vertical: 'center' }, border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } } };
-        const headerStyle: any = { ...baseStyle, font: { ...baseStyle.font, bold: true }, fill: { fgColor: { rgb: "F1F5F9" } } };
+        const baseStyle: any = {
+            font: { name: "Segoe UI", sz: 10, color: { rgb: "300A15" } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: {
+                top: { style: 'thin', color: { rgb: "F1ECE6" } },
+                bottom: { style: 'thin', color: { rgb: "F1ECE6" } },
+                left: { style: 'thin', color: { rgb: "F1ECE6" } },
+                right: { style: 'thin', color: { rgb: "F1ECE6" } }
+            }
+        };
+
+        const zebraStyle: any = {
+            ...baseStyle,
+            fill: { fgColor: { rgb: "FAF8F6" } }
+        };
+
+        const titleStyle: any = {
+            font: { name: "Segoe UI", sz: 16, bold: true, color: { rgb: "E3C4A2" } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "541C2C" } }
+        };
         
-        const presenceStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "E0E7FF" } }, font: { ...headerStyle.font, color: { rgb: "4338CA" } } };
-        const adminStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "D1FAE5" } }, font: { ...headerStyle.font, color: { rgb: "047857" } } };
-        const execStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "DBEAFE" } }, font: { ...headerStyle.font, color: { rgb: "1D4ED8" } } };
-        const careStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "FEF3C7" } }, font: { ...headerStyle.font, color: { rgb: "B45309" } } };
+        const metaStyle: any = {
+            font: { name: "Segoe UI", sz: 10, italic: true, color: { rgb: "AA7A51" } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "FAF7F5" } }
+        };
 
-        const subPresenceStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "F5F7FF" } }, font: { ...baseStyle.font, sz: 8 } };
-        const subAdminStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "F0FDF4" } }, font: { ...baseStyle.font, sz: 8 } };
-        const subExecStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "EFF6FF" } }, font: { ...baseStyle.font, sz: 8 } };
-        const subCareStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FFFBEB" } }, font: { ...baseStyle.font, sz: 8 } };
+        const kpiLabelStyle: any = {
+            font: { name: "Segoe UI", sz: 9, bold: true, color: { rgb: "AA7A51" } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "FDFCF7" } },
+            border: {
+                top: { style: 'thin', color: { rgb: "E3C4A2" } },
+                left: { style: 'thin', color: { rgb: "E3C4A2" } },
+                right: { style: 'thin', color: { rgb: "E3C4A2" } }
+            }
+        };
 
-        const scorePresenceStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "EEF2FF" } }, font: { ...baseStyle.font, bold: true, color: { rgb: "4338CA" } } };
-        const scoreAdminStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "ECFDF5" } }, font: { ...baseStyle.font, bold: true, color: { rgb: "047857" } } };
-        const scoreExecStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "EFF6FF" } }, font: { ...baseStyle.font, bold: true, color: { rgb: "1D4ED8" } } };
-        const scoreCareStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FFFBEB" } }, font: { ...baseStyle.font, bold: true, color: { rgb: "B45309" } } };
+        const kpiValueStyle = (colorHex: string): any => ({
+            font: { name: "Segoe UI", sz: 14, bold: true, color: { rgb: colorHex } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "FDFCF7" } },
+            border: {
+                bottom: { style: 'thin', color: { rgb: "E3C4A2" } },
+                left: { style: 'thin', color: { rgb: "E3C4A2" } },
+                right: { style: 'thin', color: { rgb: "E3C4A2" } }
+            }
+        });
 
-        // Header Rows with Styles
+        const headerStyle: any = {
+            ...baseStyle,
+            font: { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "E3C4A2" } },
+            fill: { fgColor: { rgb: "541C2C" } },
+            border: {
+                top: { style: 'thin', color: { rgb: "AA7A51" } },
+                bottom: { style: 'thin', color: { rgb: "AA7A51" } },
+                left: { style: 'thin', color: { rgb: "AA7A51" } },
+                right: { style: 'thin', color: { rgb: "AA7A51" } }
+            }
+        };
+        
+        const presenceStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "AA7A51" } }, font: { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "FFFFFF" } } };
+        const adminStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "541C2C" } }, font: { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "E3C4A2" } } };
+        const execStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "AA7A51" } }, font: { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "FFFFFF" } } };
+        const careStyle: any = { ...headerStyle, fill: { fgColor: { rgb: "541C2C" } }, font: { name: "Segoe UI", sz: 10, bold: true, color: { rgb: "E3C4A2" } } };
+
+        const subPresenceStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FAF7F5" } }, font: { name: "Segoe UI", sz: 8, bold: true, color: { rgb: "AA7A51" } } };
+        const subAdminStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FBF8F5" } }, font: { name: "Segoe UI", sz: 8, bold: true, color: { rgb: "541C2C" } } };
+        const subExecStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FAF7F5" } }, font: { name: "Segoe UI", sz: 8, bold: true, color: { rgb: "AA7A51" } } };
+        const subCareStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FBF8F5" } }, font: { name: "Segoe UI", sz: 8, bold: true, color: { rgb: "541C2C" } } };
+
+        const scorePresenceStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FDFCF7" } }, font: { name: "Segoe UI", sz: 9, bold: true, color: { rgb: "541C2C" } } };
+        const scoreAdminStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FAF7F5" } }, font: { name: "Segoe UI", sz: 9, bold: true, color: { rgb: "AA7A51" } } };
+        const scoreExecStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FDFCF7" } }, font: { name: "Segoe UI", sz: 9, bold: true, color: { rgb: "541C2C" } } };
+        const scoreCareStyle: any = { ...baseStyle, fill: { fgColor: { rgb: "FAF7F5" } }, font: { name: "Segoe UI", sz: 9, bold: true, color: { rgb: "AA7A51" } } };
+
+        // 1. Title Row
+        const row1 = [{ v: "IPH HR SYSTEM - WORKFORCE PERFORMANCE PAYROLL REPORT", s: titleStyle }];
+        for (let i = 1; i < 31; i++) row1.push({ v: "", s: titleStyle });
+        
+        // 2. Metadata Row
+        const row2 = [{ v: `Report Context: Performance-Driven Payroll | Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')} | Total Records: ${dataRows.length}`, s: metaStyle }];
+        for (let i = 1; i < 31; i++) row2.push({ v: "", s: metaStyle });
+        
+        // 3. Spacer Row
+        const row3 = Array(31).fill({ v: "", s: { fill: { fgColor: { rgb: "FFFFFF" } } } });
+
+        // 4. KPI Card Labels Row
+        const row4 = Array(31).fill({ v: "", s: { fill: { fgColor: { rgb: "FFFFFF" } } } });
+        row4[1] = { v: "TOTAL EMPLOYEES", s: kpiLabelStyle };
+        row4[2] = { v: "", s: kpiLabelStyle };
+        row4[3] = { v: "", s: kpiLabelStyle };
+        row4[11] = { v: "AVERAGE PERFORMANCE SCORE", s: kpiLabelStyle };
+        row4[12] = { v: "", s: kpiLabelStyle };
+        row4[13] = { v: "", s: kpiLabelStyle };
+        row4[21] = { v: "EXCELLENT PERFORMERS (>=90%)", s: kpiLabelStyle };
+        row4[22] = { v: "", s: kpiLabelStyle };
+        row4[23] = { v: "", s: kpiLabelStyle };
+
+        // 5. KPI Card Values Row
+        const row5 = Array(31).fill({ v: "", s: { fill: { fgColor: { rgb: "FFFFFF" } } } });
+        row5[1] = { v: dataRows.length, s: kpiValueStyle("541C2C") };
+        row5[2] = { v: "", s: kpiValueStyle("541C2C") };
+        row5[3] = { v: "", s: kpiValueStyle("541C2C") };
+        row5[11] = { v: `${avgScore.toFixed(2)}%`, s: kpiValueStyle("059669") };
+        row5[12] = { v: "", s: kpiValueStyle("059669") };
+        row5[13] = { v: "", s: kpiValueStyle("059669") };
+        row5[21] = { v: excellentCount, s: kpiValueStyle("4F46E5") };
+        row5[22] = { v: "", s: kpiValueStyle("4F46E5") };
+        row5[23] = { v: "", s: kpiValueStyle("4F46E5") };
+
+        // 6. Spacer Row
+        const row6 = Array(31).fill({ v: "", s: { fill: { fgColor: { rgb: "FFFFFF" } } } });
+
+        // 7. Header Rows with Styles (Shifted by 6 rows)
         const h1 = [
             { v: 'Staff ID', s: headerStyle }, { v: 'Employee Name', s: headerStyle }, { v: 'Month', s: headerStyle },
             { v: 'Presence (20%)', s: presenceStyle }, '', '', '', '', { v: 'Score', s: presenceStyle },
             { v: 'Admin (25%)', s: adminStyle }, '', '', '', '', { v: 'Score', s: adminStyle },
             { v: 'Exec (40%)', s: execStyle }, '', '', '', '', '', { v: 'Score', s: execStyle },
             { v: 'Care (15%)', s: careStyle }, '', '', '', '', { v: 'Score', s: careStyle },
-            { v: 'Bonus', s: headerStyle }, { v: 'Training', s: headerStyle }, { v: 'Total', s: { ...headerStyle, font: { ...headerStyle.font, sz: 11 } } }
+            { v: 'Bonus', s: headerStyle }, { v: 'Training', s: headerStyle }, { v: 'Total', s: { ...headerStyle, font: { name: "Segoe UI", sz: 11, bold: true, color: { rgb: "E3C4A2" } } } }
         ];
 
         const h2 = [
@@ -231,50 +334,101 @@ export const payrollService = {
             '', '', ''
         ];
 
-        // Format Data Rows
-        const styledData = dataRows.map(row => row.map((val, idx) => {
-            let s = baseStyle;
-            if (idx >= 3 && idx <= 7) s = subPresenceStyle;
-            else if (idx === 8) s = scorePresenceStyle;
-            else if (idx >= 9 && idx <= 13) s = subAdminStyle;
-            else if (idx === 14) s = scoreAdminStyle;
-            else if (idx >= 15 && idx <= 20) s = subExecStyle;
-            else if (idx === 21) s = scoreExecStyle;
-            else if (idx >= 22 && idx <= 26) s = subCareStyle;
-            else if (idx === 27) s = scoreCareStyle;
-            else if (idx === 30) s = { ...baseStyle, font: { ...baseStyle.font, bold: true, sz: 11 } };
+        // Format Data Rows with Premium Overlays
+        const styledData = dataRows.map((row, rIdx) => row.map((val, idx) => {
+            let s = rIdx % 2 === 0 ? baseStyle : zebraStyle;
             
-            // Numbers should be fixed to 1 decimal for consistency if they are numbers
+            if (idx >= 3 && idx <= 7) s = { ...s, ...subPresenceStyle, font: { ...s.font, ...subPresenceStyle.font } };
+            else if (idx === 8) s = { ...s, ...scorePresenceStyle, font: { ...s.font, ...scorePresenceStyle.font } };
+            else if (idx >= 9 && idx <= 13) s = { ...s, ...subAdminStyle, font: { ...s.font, ...subAdminStyle.font } };
+            else if (idx === 14) s = { ...s, ...scoreAdminStyle, font: { ...s.font, ...scoreAdminStyle.font } };
+            else if (idx >= 15 && idx <= 20) s = { ...s, ...subExecStyle, font: { ...s.font, ...subExecStyle.font } };
+            else if (idx === 21) s = { ...s, ...scoreExecStyle, font: { ...s.font, ...scoreExecStyle.font } };
+            else if (idx >= 22 && idx <= 26) s = { ...s, ...subCareStyle, font: { ...s.font, ...subCareStyle.font } };
+            else if (idx === 27) s = { ...s, ...scoreCareStyle, font: { ...s.font, ...scoreCareStyle.font } };
+            else if (idx === 30) {
+                const numericVal = Number(val);
+                if (!isNaN(numericVal)) {
+                    if (numericVal >= 90) {
+                        s = {
+                            ...s,
+                            fill: { fgColor: { rgb: "E6F4EA" } },
+                            font: { ...s.font, bold: true, color: { rgb: "047857" } }
+                        };
+                    } else if (numericVal >= 80) {
+                        s = {
+                            ...s,
+                            fill: { fgColor: { rgb: "F0FDFA" } },
+                            font: { ...s.font, bold: true, color: { rgb: "0D9488" } }
+                        };
+                    } else if (numericVal < 50) {
+                        s = {
+                            ...s,
+                            fill: { fgColor: { rgb: "FEF2F2" } },
+                            font: { ...s.font, bold: true, color: { rgb: "B91C1C" } }
+                        };
+                    } else {
+                        s = {
+                            ...s,
+                            font: { ...s.font, bold: true, color: { rgb: "541C2C" } }
+                        };
+                    }
+                } else {
+                    s = {
+                        ...s,
+                        font: { ...s.font, bold: true }
+                    };
+                }
+            }
+
+            // Left align employee name
+            if (idx === 1) {
+                s = { ...s, alignment: { horizontal: 'left', vertical: 'center' } };
+            }
+            
+            // Numbers should be fixed to 1 decimal for consistency if they are numbers (except Staff ID and Month)
             let displayVal = val;
-            if (typeof val === 'number') displayVal = val.toFixed(1);
+            if (typeof val === 'number' && idx !== 0) displayVal = val.toFixed(1);
 
             return { v: displayVal, s };
         }));
 
-        const aoa = [h1, h2, ...styledData];
+        const aoa = [row1, row2, row3, row4, row5, row6, h1, h2, ...styledData];
         const worksheet = XLSX.utils.aoa_to_sheet(aoa);
 
-        // Define Merges
+        // Define Merges (All indexes shifted down by 6 rows!)
         worksheet['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // Staff ID
-            { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // Name
-            { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, // Month
-            { s: { r: 0, c: 3 }, e: { r: 0, c: 7 } }, // Presence
-            { s: { r: 0, c: 9 }, e: { r: 0, c: 13 } }, // Admin
-            { s: { r: 0, c: 15 }, e: { r: 0, c: 20 } }, // Exec
-            { s: { r: 0, c: 22 }, e: { r: 0, c: 26 } }, // Care
-            { s: { r: 0, c: 28 }, e: { r: 1, c: 28 } }, // Bonus
-            { s: { r: 0, c: 29 }, e: { r: 1, c: 29 } }, // Training
-            { s: { r: 0, c: 30 }, e: { r: 1, c: 30 } }, // Total
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 30 } }, // Title
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 30 } }, // Metadata
+            { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } }, // KPI 1 Label
+            { s: { r: 4, c: 1 }, e: { r: 4, c: 3 } }, // KPI 1 Value
+            { s: { r: 3, c: 11 }, e: { r: 3, c: 13 } }, // KPI 2 Label
+            { s: { r: 4, c: 11 }, e: { r: 4, c: 13 } }, // KPI 2 Value
+            { s: { r: 3, c: 21 }, e: { r: 3, c: 23 } }, // KPI 3 Label
+            { s: { r: 4, c: 21 }, e: { r: 4, c: 23 } }, // KPI 3 Value
+            
+            { s: { r: 6, c: 0 }, e: { r: 7, c: 0 } }, // Staff ID
+            { s: { r: 6, c: 1 }, e: { r: 7, c: 1 } }, // Name
+            { s: { r: 6, c: 2 }, e: { r: 7, c: 2 } }, // Month
+            { s: { r: 6, c: 3 }, e: { r: 6, c: 7 } }, // Presence group
+            { s: { r: 6, c: 9 }, e: { r: 6, c: 13 } }, // Admin group
+            { s: { r: 6, c: 15 }, e: { r: 6, c: 20 } }, // Exec group
+            { s: { r: 6, c: 22 }, e: { r: 6, c: 26 } }, // Care group
+            { s: { r: 6, c: 28 }, e: { r: 7, c: 28 } }, // Bonus
+            { s: { r: 6, c: 29 }, e: { r: 7, c: 29 } }, // Training
+            { s: { r: 6, c: 30 }, e: { r: 7, c: 30 } }, // Total
         ];
+
+        // Freeze panes split at the subheaders (Row 8)
+        worksheet['!views'] = [{ state: 'frozen', ySplit: 8, xSplit: 2 }];
 
         // Column Widths (Compact Layout)
         const wscols = ArrayObject(h1.length, 6); // Default compact
         wscols[0] = { wch: 10 }; // ID
         wscols[1] = { wch: 25 }; // Name
         wscols[2] = { wch: 10 }; // Month
-        wscols[28] = { wch: 15 }; // Bonus
-        wscols[29] = { wch: 30 }; // Training
+        wscols[28] = { wch: 12 }; // Bonus
+        wscols[29] = { wch: 25 }; // Training
         wscols[30] = { wch: 10 }; // Total
         worksheet['!cols'] = wscols;
 

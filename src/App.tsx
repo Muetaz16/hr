@@ -26,8 +26,20 @@ const StaffHubPage = lazy(() => import('./pages/StaffHub'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
 const ApprovalsPage = lazy(() => import('./pages/Approvals'));
 const LifecycleControlPage = lazy(() => import('./pages/hr/LifecycleControl'));
+const SupportCenterPage = lazy(() => import('./pages/SupportCenter'));
+const AdminOperationsPage = lazy(() => import('./pages/admin/AdminOperations'));
+const RecruitmentPage = lazy(() => import('./pages/Recruitment'));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Loading Fallback
 const PageLoader = () => (
@@ -53,28 +65,52 @@ function App() {
                 <Route element={<MainLayout />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/tasks" element={<TasksPage />} />
-                  <Route path="/employees" element={<EmployeesPage />} />
-                  <Route path="/time-tracking" element={<TimeTrackingPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_employees', 'manage_employees']} />}>
+                    <Route path="/employees" element={<EmployeesPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
+                    <Route path="/time-tracking" element={<TimeTrackingPage />} />
+                  </Route>
                   <Route path="/evaluations" element={<EvaluationsPage />} />
-                  <Route path="/contracts/:id" element={<ContractDetailPage />} />
-                  <Route path="/contract-management" element={<ContractManagementPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_contracts', 'manage_contract_management']} />}>
+                    <Route path="/contracts/:id" element={<ContractDetailPage />} />
+                    <Route path="/contract-management" element={<ContractManagementPage />} />
+                  </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>
+                  <Route path="/recruitment" element={<RecruitmentPage />} />
 
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['manage_evaluation_control']} />}>
                     <Route path="/evaluation-control" element={<EvaluationControlPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_hr_evaluations', 'manage_evaluation_control']} />}>
                     <Route path="/hr-evaluations" element={<HREvaluationsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
                     <Route path="/payroll" element={<PayrollPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_lifecycle', 'manage_lifecycle_control']} />}>
                     <Route path="/lifecycle-control" element={<LifecycleControlPage />} />
                   </Route>
 
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+                  <Route path="/support-center" element={<SupportCenterPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['manage_onboarding', 'manage_it_issues']} />}>
+                    <Route path="/admin-operations" element={<AdminOperationsPage />} />
+                  </Route>
+
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_departments']} />}>
                     <Route path="/departments" element={<DepartmentsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_units']} />}>
                     <Route path="/units" element={<UnitsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_groups']} />}>
                     <Route path="/groups" element={<GroupsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_users']} />}>
                     <Route path="/users" element={<UsersPage />} />
                   </Route>
                 </Route>
