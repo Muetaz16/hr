@@ -16,10 +16,12 @@ import {
     Search,
     Download
 } from 'lucide-react';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 const HREvaluations: React.FC = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
+    const confirm = useConfirm();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [departments, setDepartments] = useState<Record<string, string>>({});
     const [evaluations, setEvaluations] = useState<Record<string, Partial<HREvaluation>>>({});
@@ -136,7 +138,7 @@ const HREvaluations: React.FC = () => {
     };
 
     const handleSubmitAll = async () => {
-        if (!confirm(t('finalize_confirm'))) {
+        if (!(await confirm({ message: t('finalize_confirm'), danger: false }))) {
             return;
         }
 

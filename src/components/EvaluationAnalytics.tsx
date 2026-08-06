@@ -1,8 +1,9 @@
 import React from 'react';
+import { TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-    LineChart,
-    Line,
+    AreaChart,
+    Area,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -36,15 +37,22 @@ const EvaluationAnalytics: React.FC<Props> = ({ data, departments }) => {
     }
 
     return (
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-slate-800 font-outfit">{t('performance_trends_report')}</h3>
-                <p className="text-sm text-slate-500">{t('avg_rating_subtitle')}</p>
+        <div className="glass-card p-6 md:p-8 rounded-[2rem] relative overflow-hidden border-none shadow-premium-shadow bg-white/40 backdrop-blur-3xl">
+            <div className="mb-8 flex items-center justify-between">
+                <div>
+                    <h3 className="text-2xl font-black text-slate-800 font-outfit tracking-tight flex items-center gap-3">
+                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
+                            <TrendingUp className="w-5 h-5" />
+                        </div>
+                        {t('performance_trends_report')}
+                    </h3>
+                    <p className="text-sm font-bold text-slate-400 mt-2 ml-14 uppercase tracking-widest">{t('avg_rating_subtitle')}</p>
+                </div>
             </div>
 
             <div className="h-[400px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
+                    <AreaChart
                         data={data}
                         margin={{
                             top: 20,
@@ -53,7 +61,18 @@ const EvaluationAnalytics: React.FC<Props> = ({ data, departments }) => {
                             bottom: 5,
                         }}
                     >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <defs>
+                            {departments.map((dept, index) => (
+                                <linearGradient key={`grad-${dept}`} id={`color-${index}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={colors[index % colors.length]} stopOpacity={0.4}/>
+                                    <stop offset="95%" stopColor={colors[index % colors.length]} stopOpacity={0}/>
+                                </linearGradient>
+                            ))}
+                            <filter id="shadow" height="200%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#000" floodOpacity="0.15" />
+                            </filter>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" opacity={0.6} />
                         <XAxis
                             dataKey="month"
                             tick={{ fontSize: 12, fill: '#64748b' }}
@@ -69,24 +88,35 @@ const EvaluationAnalytics: React.FC<Props> = ({ data, departments }) => {
                             label={{ value: t('avg_score'), angle: -90, position: 'insideLeft', style: { fill: '#94a3b8' } }}
                         />
                         <Tooltip
-                            cursor={{ stroke: '#cbd5e1', strokeWidth: 2 }}
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '5 5' }}
+                            contentStyle={{ 
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)', 
+                                backdropFilter: 'blur(12px)',
+                                borderRadius: '16px', 
+                                border: '1px solid rgba(255, 255, 255, 0.5)', 
+                                boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+                                padding: '12px 16px',
+                                fontWeight: 'bold'
+                            }}
                         />
                         <Legend wrapperStyle={{ paddingTop: '20px' }} />
 
                         {departments.map((dept, index) => (
-                            <Line
+                            <Area
                                 key={dept}
-                                type="monotone"
+                                type="natural"
                                 dataKey={dept}
                                 name={dept}
                                 stroke={colors[index % colors.length]}
-                                strokeWidth={3}
-                                dot={{ r: 4, strokeWidth: 2 }}
-                                activeDot={{ r: 8 }}
+                                strokeWidth={4}
+                                fillOpacity={1}
+                                fill={`url(#color-${index})`}
+                                style={{ filter: 'url(#shadow)' }}
+                                dot={{ r: 4, strokeWidth: 3, fill: '#fff', stroke: colors[index % colors.length] }}
+                                activeDot={{ r: 7, strokeWidth: 4, fill: '#fff', stroke: colors[index % colors.length] }}
                             />
                         ))}
-                    </LineChart>
+                    </AreaChart>
                 </ResponsiveContainer>
             </div>
         </div>

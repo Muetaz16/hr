@@ -17,6 +17,12 @@ export const employeeService = {
         return response.data;
     },
 
+    // Auto Staff ID: IPH-<residencyDigit><YY>-<SEQ> (e.g. IPH-126-001 for a 2026 resident).
+    async getNextStaffId(residentStatus: string, year?: string | number): Promise<{ prefix: string; nextSeq: number; staffId: string }> {
+        const response = await api.get('/employees/next-staff-id', { params: { residentStatus, year } });
+        return response.data;
+    },
+
     async getEmployeeById(id: string): Promise<Employee> {
         const response = await api.get(`/employees/${id}`);
         return response.data;
@@ -58,6 +64,16 @@ export const employeeService = {
 
     async deleteEmployee(id: string) {
         await api.delete(`/employees/${id}`);
+    },
+
+    // Upload a single document file; returns its stored public URL (e.g. /uploads/documents/xyz.pdf).
+    async uploadDocument(file: File): Promise<{ url: string; name: string }> {
+        const fd = new FormData();
+        fd.append('file', file);
+        const response = await api.post('/employees/upload-document', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
     },
 
     async getExpiringContracts(days: number = 30): Promise<Employee[]> {

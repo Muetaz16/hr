@@ -17,8 +17,9 @@ export const login = async (req: Request, res: Response) => {
         }
 
         console.log('[AUTH] Querying database for user...');
-        const user = await prisma.user.findUnique({
-            where: { email: normalizedEmail },
+        // Case-insensitive lookup so accounts stored with any capitalisation still authenticate.
+        const user = await prisma.user.findFirst({
+            where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
         });
 
         if (!user) {

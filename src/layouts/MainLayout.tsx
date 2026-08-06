@@ -18,19 +18,22 @@ import {
     ShieldCheck,
     Zap,
     Briefcase,
-    MonitorSmartphone,
     UserPlus,
     Sun,
     Moon,
     Key,
     Eye,
-    EyeOff
+    EyeOff,
+    Megaphone
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
+import { canAccess } from '../utils/access';
 import type { UserRole } from '../types';
 import { useQuery } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
 import { userService } from '../services/userService';
+import { notificationService } from '../services/notificationService';
+import type { AppNotification } from '../services/notificationService';
 import api from '../services/apiClient';
 import { toast } from 'sonner';
 import Modal from '../components/Modal';
@@ -73,6 +76,23 @@ const MainLayout: React.FC = () => {
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
+
+    // Notifications
+    const [notifOpen, setNotifOpen] = useState(false);
+    const { data: notifData, refetch: refetchNotifs } = useQuery({
+        queryKey: ['notifications'],
+        queryFn: () => notificationService.getMine(),
+        refetchInterval: 60000,
+    });
+    const notifications = notifData?.notifications || [];
+    const unreadCount = notifData?.unread || 0;
+
+    const handleNotifClick = async (n: AppNotification) => {
+        if (!n.isRead) { await notificationService.markRead(n.id).catch(() => {}); refetchNotifs(); }
+        setNotifOpen(false);
+        if (n.link) navigate(n.link);
+    };
+    const handleMarkAllRead = async () => { await notificationService.markAllRead().catch(() => {}); refetchNotifs(); };
 
     // Profile Dropdown & Password Modal State
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -152,7 +172,22 @@ const MainLayout: React.FC = () => {
             items: [
                 { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }), path: '/staff-hub', icon: Zap, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_recruitment', { defaultValue: 'Recruitment' }), path: '/recruitment', icon: UserPlus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'HEAD_DEPARTMENT', 'HEAD_UNIT'] },
+                { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                {
+                    label: t('nav_recruitment', { defaultValue: 'Recruitment' }),
+                    icon: UserPlus,
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER'],
+                    children: [
+                        { label: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), path: '/recruitment/requests', roles: ['SUPER_ADMIN', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions-browse', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_recruitment_approvals', { defaultValue: 'Approvals' }), path: '/recruitment/approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['recruitment_approvals'] },
+                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_hiring_list', { defaultValue: 'Hiring List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                    ]
+                },
                 { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
             ]
         },
@@ -160,15 +195,6 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_ops', { defaultValue: 'Operations' }),
             items: [
                 { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'], permissions: ['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals'] },
-                {
-                    label: t('nav_operational_services', { defaultValue: 'Operation Hub' }),
-                    icon: MonitorSmartphone,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'PERSONNEL'],
-                    children: [
-                        { label: t('nav_service_center', { defaultValue: 'Support Center' }), path: '/support-center', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'PERSONNEL'] },
-                        { label: t('nav_admin_operations', { defaultValue: 'Admin Operations' }), path: '/admin-operations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_onboarding', 'manage_it_issues'] },
-                    ]
-                }
             ]
         },
         {
@@ -196,7 +222,7 @@ const MainLayout: React.FC = () => {
                     icon: ClipboardCheck,
                     roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL', 'HR_MANAGER'],
                     children: [
-                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'] },
+                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['view_evaluations'] },
                         { label: t('nav_hr_evaluations'), path: '/hr-evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_hr_evaluations', 'manage_evaluation_control'] },
                         { label: t('nav_evaluation_control'), path: '/evaluation-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_evaluation_control'] },
                     ]
@@ -213,6 +239,7 @@ const MainLayout: React.FC = () => {
                     children: [
                         { label: t('nav_departments'), path: '/departments', roles: ['SUPER_ADMIN'], permissions: ['manage_departments'] },
                         { label: t('nav_units', { defaultValue: 'Units' }), path: '/units', roles: ['SUPER_ADMIN'], permissions: ['manage_units'] },
+                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_job_descriptions'] },
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                     ]
@@ -279,7 +306,10 @@ const MainLayout: React.FC = () => {
     const activeInfo = findActiveItem();
 
     return (
-        <div className="flex h-screen bg-[#541c2c] overflow-hidden font-inter">
+        <div 
+            className="flex h-screen bg-[#541c2c] overflow-hidden font-inter"
+            style={{ '--sidebar-width': isSidebarOpen ? '16rem' : '5rem' } as React.CSSProperties}
+        >
             {/* Desktop Sidebar */}
             <aside
                 className={`flex flex-col bg-[#300a15] border-r border-[#e3c4a2]/15 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-30 shadow-2xl shadow-[#300a15]/50 relative
@@ -301,12 +331,12 @@ const MainLayout: React.FC = () => {
                 </div>
 
                 {/* Nav groups */}
-                <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scroll-smooth no-scrollbar">
+                <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-6 px-4 pb-10 space-y-8 scroll-smooth">
                     {navGroups.map((group, gIdx) => {
                         const visibleItems = group.items.filter(item =>
                             currentUser && (
-                                ('path' in item && (item.roles.includes(currentUser.role) || (item.permissions && item.permissions.some(p => currentUser.permissions?.includes(p))))) ||
-                                ('children' in item && item.children && item.children.some(c => c.roles.includes(currentUser.role) || (c.permissions && c.permissions.some(p => currentUser.permissions?.includes(p)))))
+                                ('path' in item && canAccess(currentUser, item.roles, item.permissions)) ||
+                                ('children' in item && item.children && item.children.some(c => canAccess(currentUser, c.roles, c.permissions)))
                             )
                         );
 
@@ -378,9 +408,9 @@ const MainLayout: React.FC = () => {
 
                                                 {/* Sub-menu block */}
                                                 {hasChildren && isSidebarOpen && (
-                                                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                                                    <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[640px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                                                         <div className="ml-10 space-y-1 relative before:absolute before:left-[-1.25rem] before:top-0 before:bottom-4 before:w-[2px] before:bg-[#e3c4a2]/15 before:rounded-full">
-                                                            {children?.filter(c => currentUser && (c.roles.includes(currentUser.role) || (c.permissions && c.permissions.some(p => currentUser.permissions?.includes(p))))).map((child, cIdx) => (
+                                                            {children?.filter(c => canAccess(currentUser, c.roles, c.permissions)).map((child, cIdx) => (
                                                                 <Link
                                                                     key={cIdx}
                                                                     to={child.path}
@@ -487,17 +517,57 @@ const MainLayout: React.FC = () => {
                         </div>
 
                         {/* Notifications */}
-                        <button
-                            onClick={() => navigate('/tasks')}
-                            className={`relative p-2.5 rounded-2xl active:scale-90 transition-all duration-300
-                                ${themeMode === 'dark'
-                                    ? 'hover:bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white'
-                                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
-                        >
-                            <Bell className="w-5 h-5" />
-                            <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)] bg-red-500
-                                ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`}></span>
-                        </button>
+                        <div className="relative notif-dropdown-container">
+                            <button
+                                onClick={() => setNotifOpen(o => !o)}
+                                className={`relative p-2.5 rounded-2xl active:scale-90 transition-all duration-300
+                                    ${themeMode === 'dark'
+                                        ? 'hover:bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white'
+                                        : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                            >
+                                <Bell className="w-5 h-5" />
+                                {unreadCount > 0 && (
+                                    <span className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-black text-white bg-red-500 border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)]
+                                        ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`}>
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {notifOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                                    <div className={`absolute right-0 mt-4 w-96 max-w-[90vw] rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-top-2 duration-200 overflow-hidden
+                                        ${themeMode === 'dark' ? 'bg-[#300a15]/95 border-[#e3c4a2]/15' : 'bg-white border-slate-100'}`}>
+                                        <div className={`flex items-center justify-between px-4 py-3 border-b ${themeMode === 'dark' ? 'border-[#e3c4a2]/10' : 'border-slate-100'}`}>
+                                            <span className={`text-sm font-black ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('notifications', { defaultValue: 'Notifications' })}</span>
+                                            {unreadCount > 0 && (
+                                                <button onClick={handleMarkAllRead} className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase tracking-widest">
+                                                    {t('mark_all_read', { defaultValue: 'Mark all read' })}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-96 overflow-y-auto">
+                                            {notifications.length === 0 ? (
+                                                <div className="px-4 py-10 text-center text-xs font-bold text-slate-400">{t('no_notifications', { defaultValue: 'No notifications yet.' })}</div>
+                                            ) : notifications.map(n => (
+                                                <button key={n.id} onClick={() => handleNotifClick(n)}
+                                                    className={`w-full text-left px-4 py-3 border-b transition-colors flex gap-3
+                                                        ${themeMode === 'dark' ? 'border-[#e3c4a2]/5 hover:bg-[#541c2c]/40' : 'border-slate-50 hover:bg-slate-50'}
+                                                        ${!n.isRead ? (themeMode === 'dark' ? 'bg-[#541c2c]/20' : 'bg-indigo-50/40') : ''}`}>
+                                                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.isRead ? 'bg-transparent' : 'bg-indigo-500'}`} />
+                                                    <div className="min-w-0">
+                                                        <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>
+                                                        <p className={`text-[11px] font-medium ${themeMode === 'dark' ? 'text-[#e3c4a2]/70' : 'text-slate-500'}`}>{n.content}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
 
                         <div className={`h-10 w-[1px] transition-colors duration-300 ${themeMode === 'dark' ? 'bg-[#e3c4a2]/20' : 'bg-slate-200'}`}></div>
 
@@ -562,7 +632,7 @@ const MainLayout: React.FC = () => {
                 </header>
 
                 {/* Content Container */}
-                <main className={`flex-1 overflow-y-auto p-10 relative scroll-smooth transition-colors duration-500
+                <main id="main-scroll-container" className={`flex-1 overflow-y-auto p-10 relative scroll-smooth transition-colors duration-500
                     ${themeMode === 'dark' ? 'bg-[#541c2c]' : 'bg-[#faf8f6]'}`}>
                     {/* Background Soft Blobs */}
                     <div className={`fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full pointer-events-none -mr-48 -mt-48 transition-colors duration-1000

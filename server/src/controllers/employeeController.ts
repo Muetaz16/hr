@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
+import { presetForRole } from '../utils/rolePresets';
 
 const prisma = new PrismaClient();
 
@@ -30,9 +31,9 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
 
         console.log(`[GET_ALL_EMPLOYEES] Filter:`, JSON.stringify(where));
 
-        const employees = await prisma.employee.findMany({ 
+        const employees = await prisma.employee.findMany({
             where,
-            include: { user: { select: { permissions: true } } }
+            include: { user: { select: { permissions: true } }, jobDescription: true }
         });
 
         const isSensitiveRole = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(role);
@@ -67,10 +68,11 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
 export const getEmployeeById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const employee = await prisma.employee.findUnique({ 
+        const employee = await prisma.employee.findUnique({
             where: { id },
-            include: { 
+            include: {
                 user: { select: { permissions: true } },
+                jobDescription: true,
                 contracts: {
                     orderBy: { createdAt: 'desc' }
                 }
@@ -86,6 +88,20 @@ export const getEmployeeById = async (req: Request, res: Response) => {
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employee' });
+    }
+};
+
+// Upload a single employee document (CV, degree, passport copy, etc.). Multer has already
+// stored the file under /uploads/documents; we just return its public URL to the client,
+// which then saves that URL onto the employee record via create/update.
+export const uploadEmployeeDocument = async (req: Request, res: Response) => {
+    try {
+        const file = (req as any).file;
+        if (!file) return res.status(400).json({ error: 'No file uploaded' });
+        res.json({ url: `/uploads/documents/${file.filename}`, name: file.originalname });
+    } catch (error) {
+        console.error('Error uploading employee document:', error);
+        res.status(500).json({ error: 'Failed to upload document' });
     }
 };
 
@@ -106,13 +122,61 @@ const parseFloatSafe = (val: any): number => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
+// Residency → the leading digit of the auto Staff ID (IPH-<digit><YY>-<SEQ>).
+const residencyDigit = (status?: string): string | null => {
+    const v = (status || '').trim().toUpperCase();
+    if (v === 'RESDANT') return '1';
+    if (v === 'DIRCT NONE RESDANT') return '2';
+    if (v === 'NONE RESDANT') return '3';
+    return null;
+};
+
+// GET /employees/next-staff-id?residentStatus=RESDANT&year=26
+// Builds the prefix IPH-<digit><YY>- and returns the next available sequence for it.
+export const getNextStaffId = async (req: Request, res: Response) => {
+    try {
+        const digit = residencyDigit(req.query.residentStatus as string);
+        if (!digit) {
+            return res.status(400).json({ error: 'A residency status (RESDANT / DIRCT NONE RESDANT / NONE RESDANT) is required to generate a Staff ID.' });
+        }
+        // Two-digit year: use the value passed in, else the current year.
+        const rawYear = String(req.query.year || '').replace(/\D/g, '');
+        const yy = rawYear ? rawYear.slice(-2).padStart(2, '0') : String(new Date().getFullYear()).slice(-2);
+        const prefix = `IPH-${digit}${yy}-`;
+
+        const existing = await prisma.employee.findMany({
+            where: { staffId: { startsWith: prefix } },
+            select: { staffId: true },
+        });
+        let maxSeq = 0;
+        for (const e of existing) {
+            const suffix = (e.staffId || '').slice(prefix.length);
+            const n = parseInt(suffix, 10);
+            if (!isNaN(n) && n > maxSeq) maxSeq = n;
+        }
+        const nextSeq = maxSeq + 1;
+        res.json({ prefix, nextSeq, staffId: `${prefix}${String(nextSeq).padStart(3, '0')}` });
+    } catch (error) {
+        console.error('Error generating next staff ID:', error);
+        res.status(500).json({ error: 'Failed to generate the next Staff ID' });
+    }
+};
+
 export const createEmployee = async (req: Request, res: Response) => {
     try {
         const {
             id, fullName, email, password, role, departmentId, unitId, groupId, divisionId, directorateId, baseSalary, joinDate, staffId,
-            position, contractStartDate, contractEndDate, contractType, contractStatus, holidaysUsed, bonusHolidays,
-                fullNameArabic, passportNumber, contractNumber, nationality, jobCategory, jobGrade, emergencyHolidaysUsed,
-            unpaidHolidaysUsed, permissions, roleCategory, positionFactor, skillFactor, siteFactor, languageFactor
+            position, placeOfWork, contractStartDate, contractEndDate, contractType, contractStatus, holidaysUsed, bonusHolidays,
+                fullNameArabic, passportNumber, contractNumber, nationality, jobCategory, jobGrade, salaryStructureType, emergencyHolidaysUsed,
+            unpaidHolidaysUsed, permissions, roleCategory, positionFactor, skillFactor, siteFactor, languageFactor, evaluationPoints, jobDescriptionId,
+            // Extended Identity Details (recruitment intake form)
+            dateOfBirth, placeOfBirth, nationalId, academicQualification, gender, bloodType,
+            idCardNumber, idPlaceOfIssue, idIssueDate, passportPlaceOfIssue, passportExpiryDate,
+            drivingLicenseType, drivingLicenseNumber, drivingLicenseExpiry, drivingLicensePlaceOfIssue,
+            personalPhone, personalEmail, emergencyContactNumber, residentialAddress,
+            workedBefore, hasRelativesInCompany, relativesNames,
+            bankName, bankBranchName, bankAccountNumber, arrivalDate,
+            cvUrl, degreeUrl, birthCertUrl, passportCopyUrl, bankCheckUrl, photoUrl, idCardUrl, jobOfferUrl, healthCertUrl
         } = req.body;
 
         // Sanitization of foreign keys
@@ -121,42 +185,76 @@ export const createEmployee = async (req: Request, res: Response) => {
         const cleanGroupId = (groupId === '' || groupId === 'null' || groupId === 'undefined') ? null : groupId;
         const cleanDivisionId = (divisionId === '' || divisionId === 'null' || divisionId === 'undefined' || !divisionId) ? null : divisionId;
         const cleanDirectorateId = (directorateId === '' || directorateId === 'null' || directorateId === 'undefined' || !directorateId) ? null : directorateId;
+        const cleanJobDescriptionId = (jobDescriptionId === '' || jobDescriptionId === 'null' || jobDescriptionId === 'undefined' || !jobDescriptionId) ? null : jobDescriptionId;
 
-        console.log('Creating employee with data:', { id, fullName, email, departmentId: cleanDeptId, groupId: cleanGroupId, unitId: cleanUnitId });
+        // Emails are the login identifier — normalise to lowercase so authentication (which lowercases
+        // the entered email) always matches what we store.
+        const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
 
-        // Validate required fields
-        if (role !== 'HEAD_DIRECTOR' && (!cleanDeptId || !cleanGroupId)) {
-            console.error('Missing departmentId or groupId');
-            return res.status(400).json({ error: 'Department and Group are required' });
+        // Every enrolled person — no matter the role (standard Employee, any Head, GM, HR, Personnel,
+        // etc.) — gets a login account created right here from their email. If no password is supplied,
+        // it falls back to the default '123456'. (Previously only standard employees got an account and
+        // management roles had to be linked separately from Access Management.)
+        const autoCreateAccount = true;
+
+        // A Job Description (Staffing Plan slot) is required for all new employees except
+        // global-scope roles (General Manager / Chairman) which have no organizational unit to attach to.
+        const globalScopeRoles = ['GENERAL_MANAGER', 'CHAIRMAN'];
+        if (!globalScopeRoles.includes(role) && !cleanJobDescriptionId) {
+            return res.status(400).json({ error: 'A Job Description must be selected. New employees cannot be added without an assigned Job Description (Staffing Plan slot).' });
         }
 
-        if (role === 'HEAD_DIRECTOR' && !cleanGroupId) {
-            console.error('Missing groupId for Director');
-            return res.status(400).json({ error: 'Group is required' });
+        console.log('Creating employee with data:', { id, fullName, email, role, departmentId: cleanDeptId, groupId: cleanGroupId, unitId: cleanUnitId, divisionId: cleanDivisionId });
+
+        // Validate required fields — mirror the enrolment form's scoping so a role is only
+        // asked for the scope it actually collects. Group is no longer required for anyone
+        // (it is now optional on the Employee model):
+        //  - Department: only the department-scoped roles (Employee / Head of Dept / Head of Unit).
+        //  - Head of Division: a Division.  Head of Office: a Department (the office).
+        //  - GM / Chairman / HR Manager / Personnel / Super Admin / Directorate Head: global/own scope.
+        const rolesRequiringDept = ['EMPLOYEE', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+        if (rolesRequiringDept.includes(role) && !cleanDeptId) {
+            console.error('Missing departmentId for role', role);
+            return res.status(400).json({ error: `A Department is required for the ${String(role).replace(/_/g, ' ').toLowerCase()} role.` });
+        }
+
+        if (role === 'HEAD_DIVISION' && !cleanDivisionId) {
+            console.error('Missing divisionId for Division Head');
+            return res.status(400).json({ error: 'A Division is required for a Head of Division.' });
+        }
+
+        if (role === 'HEAD_OFFICE' && !cleanDeptId) {
+            console.error('Missing departmentId for Office Head');
+            return res.status(400).json({ error: 'An Office (department) is required for a Head of Office.' });
         }
 
         // Use a transaction to ensure both Employee and User are created or none
         const result = await prisma.$transaction(async (tx) => {
             let userId: string | undefined;
 
-            // 1. Create User if email and password are provided
-            if (email && password) {
-                const existingUser = await tx.user.findUnique({ where: { email } });
+            // 1. Create a login account for standard employees (heads are linked via Access Management).
+            // If no password is supplied, fall back to the same default the Access Management screen uses.
+            if (autoCreateAccount && normalizedEmail) {
+                const existingUser = await tx.user.findFirst({ where: { email: { equals: normalizedEmail, mode: 'insensitive' } } });
                 if (existingUser) {
-                    throw new Error('User with this email already exists');
+                    throw new Error('A system account with this email already exists.');
                 }
 
-                const hashedPassword = await bcrypt.hash(password, 10);
+                const hashedPassword = await bcrypt.hash(password || '123456', 10);
+                // Seed the account with its role's recommended permissions so the person has
+                // sensible default access immediately and Access Management shows those toggles
+                // pre-selected. If the caller sent explicit permissions, honour those instead.
+                const seededPermissions = (permissions && permissions.length) ? permissions : presetForRole(role);
                 const user = await tx.user.create({
                     data: {
-                        email,
+                        email: normalizedEmail,
                         password: hashedPassword,
                         fullName,
                         role: role || 'EMPLOYEE',
                         departmentId: cleanDeptId,
                         unitId: cleanUnitId,
                         groupId: cleanGroupId,
-                        permissions: permissions || []
+                        permissions: seededPermissions
                     }
                 });
                 userId = user.id;
@@ -177,20 +275,59 @@ export const createEmployee = async (req: Request, res: Response) => {
             }
             // -------------------------------------
 
-            // 2. Create Employee
+            // --- Check Job Description staffing plan capacity ---
+            if (cleanJobDescriptionId) {
+                const jobDescription = await tx.jobDescription.findUnique({
+                    where: { id: cleanJobDescriptionId },
+                    include: { _count: { select: { employees: true } } }
+                });
+
+                if (!jobDescription) {
+                    throw new Error('Selected Job Description was not found.');
+                }
+
+                if (jobDescription._count.employees >= jobDescription.plannedCount) {
+                    throw new Error(`Job Description "${jobDescription.title}" is above the staffing plan (${jobDescription._count.employees}/${jobDescription.plannedCount} filled). Increase the planned headcount before adding more employees.`);
+                }
+            }
+            // -----------------------------------------------------
+
+            // Dynamic Position Factor Logic
+            let dynamicPositionFactor = parseFloatSafe(positionFactor) || 1.0;
+
+            if ((role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE') && cleanDeptId) {
+                const dept = await tx.department.findUnique({ where: { id: cleanDeptId } });
+                if (dept && dept.positionFactor) dynamicPositionFactor = dept.positionFactor;
+            } else if (role === 'HEAD_DIVISION' && cleanDivisionId) {
+                const div = await tx.division.findUnique({ where: { id: cleanDivisionId } });
+                if (div && div.positionFactor) dynamicPositionFactor = div.positionFactor;
+            } else if (role === 'HEAD_DIRECTORATE' && cleanDirectorateId) {
+                const dir = await tx.directorate.findUnique({ where: { id: cleanDirectorateId } });
+                if (dir && dir.positionFactor) dynamicPositionFactor = dir.positionFactor;
+            } else if (role === 'HEAD_UNIT' && cleanUnitId) {
+                const unit = await tx.unit.findUnique({ where: { id: cleanUnitId }, include: { _count: { select: { employees: true } } } });
+                if (unit) {
+                    dynamicPositionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
+                }
+            } else if (role === 'GENERAL_MANAGER') {
+                dynamicPositionFactor = 1.60;
+            }
+
             const data: any = {
                 fullName,
-                email: email || null,
+                email: normalizedEmail,
                 role: role || 'EMPLOYEE',
                 departmentId: cleanDeptId,
                 unitId: cleanUnitId,
                 groupId: cleanGroupId,
                 divisionId: cleanDivisionId,
                 directorateId: cleanDirectorateId,
+                jobDescriptionId: cleanJobDescriptionId,
                 baseSalary: parseFloatSafe(baseSalary),
                 joinDate: parseDate(joinDate) || new Date().toISOString(),
                 staffId: staffId || null,
                 position: position || null,
+                placeOfWork: placeOfWork || null,
                 contractStartDate: parseDate(contractStartDate),
                 contractEndDate: parseDate(contractEndDate),
                 contractType: contractType || null,
@@ -205,16 +342,55 @@ export const createEmployee = async (req: Request, res: Response) => {
                 nationality: nationality || null,
                 jobCategory: jobCategory || null,
                 jobGrade: jobGrade || null,
+                salaryStructureType: salaryStructureType || null,
                 roleCategory: roleCategory || 'Support',
-                positionFactor: parseFloatSafe(positionFactor) || 1.0,
+                positionFactor: dynamicPositionFactor,
                 skillFactor: parseFloatSafe(skillFactor) || 1.0,
                 siteFactor: parseFloatSafe(siteFactor) || 1.0,
-                languageFactor: parseFloatSafe(languageFactor) || 1.0
+                languageFactor: parseFloatSafe(languageFactor) || 1.0,
+                evaluationPoints: parseFloatSafe(evaluationPoints) || 0,
+                // Extended Identity Details
+                dateOfBirth: parseDate(dateOfBirth),
+                placeOfBirth: placeOfBirth || null,
+                nationalId: nationalId || null,
+                academicQualification: academicQualification || null,
+                gender: gender || null,
+                bloodType: bloodType || null,
+                idCardNumber: idCardNumber || null,
+                idPlaceOfIssue: idPlaceOfIssue || null,
+                idIssueDate: parseDate(idIssueDate),
+                passportPlaceOfIssue: passportPlaceOfIssue || null,
+                passportExpiryDate: parseDate(passportExpiryDate),
+                drivingLicenseType: drivingLicenseType || null,
+                drivingLicenseNumber: drivingLicenseNumber || null,
+                drivingLicenseExpiry: parseDate(drivingLicenseExpiry),
+                drivingLicensePlaceOfIssue: drivingLicensePlaceOfIssue || null,
+                personalPhone: personalPhone || null,
+                personalEmail: personalEmail || null,
+                emergencyContactNumber: emergencyContactNumber || null,
+                residentialAddress: residentialAddress || null,
+                workedBefore: workedBefore || null,
+                hasRelativesInCompany: hasRelativesInCompany || null,
+                relativesNames: relativesNames || null,
+                bankName: bankName || null,
+                bankBranchName: bankBranchName || null,
+                bankAccountNumber: bankAccountNumber || null,
+                arrivalDate: parseDate(arrivalDate),
+                cvUrl: cvUrl || null,
+                degreeUrl: degreeUrl || null,
+                birthCertUrl: birthCertUrl || null,
+                passportCopyUrl: passportCopyUrl || null,
+                bankCheckUrl: bankCheckUrl || null,
+                photoUrl: photoUrl || null,
+                idCardUrl: idCardUrl || null,
+                jobOfferUrl: jobOfferUrl || null,
+                healthCertUrl: healthCertUrl || null
             };
 
             // Enforce Exclusivity: Position Factor OR Skill Factor
             if (data.positionFactor > 1.0 && data.skillFactor > 1.0) {
-                throw new Error('Employee cannot have both Position Factor and Skill Factor simultaneously.');
+                // Since positionFactor might be dynamically assigned based on role, prioritize it
+                data.skillFactor = 1.0;
             }
 
             data.userId = userId || null;
@@ -282,7 +458,18 @@ export const createEmployee = async (req: Request, res: Response) => {
         res.json(result);
     } catch (error: any) {
         console.error("Error creating employee:", error);
-        res.status(500).json({ error: error.message || 'Failed to create employee' });
+        // Business-rule failures thrown inside the transaction (duplicate account email,
+        // unit/staffing capacity, etc.) are the user's to fix, so return 400 with the exact
+        // message. Prisma error code + meta are included so the client can be specific.
+        const message = error?.message || 'Failed to create employee';
+        const isValidation = error?.code === 'P2002' || error?.code === 'P2003' ||
+            /already exists|capacity|staffing plan|required|not found/i.test(message);
+        res.status(isValidation ? 400 : 500).json({
+            error: message,
+            details: message,
+            code: error?.code,
+            meta: error?.meta,
+        });
     }
 };
 
@@ -307,16 +494,18 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.unitId !== undefined) {
             data.unitId = (body.unitId === '' || body.unitId === 'null' || body.unitId === 'undefined') ? null : body.unitId;
         }
-        if (body.groupId !== undefined) data.groupId = body.groupId;
+        if (body.groupId !== undefined) {
+            data.groupId = (body.groupId === '' || body.groupId === 'null' || body.groupId === 'undefined') ? null : body.groupId;
+        }
         if (body.baseSalary !== undefined) data.baseSalary = parseFloatSafe(body.baseSalary);
 
         // --- Check Headcount if Unit is changing ---
         if (body.unitId !== undefined) {
             const cleanUnitId = (body.unitId === '' || body.unitId === 'null' || body.unitId === 'undefined') ? null : body.unitId;
-            
+
             // Get current employee record to see if they are already in this unit
             const currentEmp = await prisma.employee.findUnique({ where: { id }, select: { unitId: true } });
-            
+
             if (cleanUnitId && cleanUnitId !== currentEmp?.unitId) {
                 const unit = await prisma.unit.findUnique({
                     where: { id: cleanUnitId },
@@ -332,6 +521,30 @@ export const updateEmployee = async (req: Request, res: Response) => {
         }
         // -------------------------------------------
 
+        // --- Check Job Description staffing plan capacity if changing ---
+        if (body.jobDescriptionId !== undefined) {
+            const cleanJobDescriptionId = (body.jobDescriptionId === '' || body.jobDescriptionId === 'null' || body.jobDescriptionId === 'undefined') ? null : body.jobDescriptionId;
+            data.jobDescriptionId = cleanJobDescriptionId;
+
+            const currentEmpJD = await prisma.employee.findUnique({ where: { id }, select: { jobDescriptionId: true } });
+
+            if (cleanJobDescriptionId && cleanJobDescriptionId !== currentEmpJD?.jobDescriptionId) {
+                const jobDescription = await prisma.jobDescription.findUnique({
+                    where: { id: cleanJobDescriptionId },
+                    include: { _count: { select: { employees: true } } }
+                });
+
+                if (!jobDescription) {
+                    return res.status(404).json({ error: 'Selected Job Description was not found.' });
+                }
+
+                if (jobDescription._count.employees >= jobDescription.plannedCount) {
+                    return res.status(403).json({ error: `Job Description "${jobDescription.title}" is above the staffing plan (${jobDescription._count.employees}/${jobDescription.plannedCount} filled).` });
+                }
+            }
+        }
+        // -----------------------------------------------------------------
+
         if (body.joinDate !== undefined) {
             const parsed = parseDate(body.joinDate);
             if (parsed) data.joinDate = parsed;
@@ -339,6 +552,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
         if (body.staffId !== undefined) data.staffId = body.staffId || null;
         if (body.position !== undefined) data.position = body.position || null;
+        if (body.placeOfWork !== undefined) data.placeOfWork = body.placeOfWork || null;
         if (body.contractStartDate !== undefined) data.contractStartDate = parseDate(body.contractStartDate);
         if (body.contractEndDate !== undefined) data.contractEndDate = parseDate(body.contractEndDate);
         if (body.contractType !== undefined) data.contractType = body.contractType || null;
@@ -353,19 +567,86 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.nationality !== undefined) data.nationality = body.nationality || null;
         if (body.jobCategory !== undefined) data.jobCategory = body.jobCategory || null;
         if (body.jobGrade !== undefined) data.jobGrade = body.jobGrade || null;
+        if (body.salaryStructureType !== undefined) data.salaryStructureType = body.salaryStructureType || null;
         if (body.roleCategory !== undefined) data.roleCategory = body.roleCategory || 'Support';
         if (body.positionFactor !== undefined) data.positionFactor = parseFloatSafe(body.positionFactor);
         if (body.skillFactor !== undefined) data.skillFactor = parseFloatSafe(body.skillFactor);
         if (body.siteFactor !== undefined) data.siteFactor = parseFloatSafe(body.siteFactor);
         if (body.languageFactor !== undefined) data.languageFactor = parseFloatSafe(body.languageFactor);
+        if (body.evaluationPoints !== undefined) data.evaluationPoints = parseFloatSafe(body.evaluationPoints);
+
+        // --- Extended Identity Details ---
+        if (body.dateOfBirth !== undefined) data.dateOfBirth = parseDate(body.dateOfBirth);
+        if (body.placeOfBirth !== undefined) data.placeOfBirth = body.placeOfBirth || null;
+        if (body.nationalId !== undefined) data.nationalId = body.nationalId || null;
+        if (body.academicQualification !== undefined) data.academicQualification = body.academicQualification || null;
+        if (body.gender !== undefined) data.gender = body.gender || null;
+        if (body.bloodType !== undefined) data.bloodType = body.bloodType || null;
+        if (body.idCardNumber !== undefined) data.idCardNumber = body.idCardNumber || null;
+        if (body.idPlaceOfIssue !== undefined) data.idPlaceOfIssue = body.idPlaceOfIssue || null;
+        if (body.idIssueDate !== undefined) data.idIssueDate = parseDate(body.idIssueDate);
+        if (body.passportPlaceOfIssue !== undefined) data.passportPlaceOfIssue = body.passportPlaceOfIssue || null;
+        if (body.passportExpiryDate !== undefined) data.passportExpiryDate = parseDate(body.passportExpiryDate);
+        if (body.drivingLicenseType !== undefined) data.drivingLicenseType = body.drivingLicenseType || null;
+        if (body.drivingLicenseNumber !== undefined) data.drivingLicenseNumber = body.drivingLicenseNumber || null;
+        if (body.drivingLicenseExpiry !== undefined) data.drivingLicenseExpiry = parseDate(body.drivingLicenseExpiry);
+        if (body.drivingLicensePlaceOfIssue !== undefined) data.drivingLicensePlaceOfIssue = body.drivingLicensePlaceOfIssue || null;
+        if (body.personalPhone !== undefined) data.personalPhone = body.personalPhone || null;
+        if (body.personalEmail !== undefined) data.personalEmail = body.personalEmail || null;
+        if (body.emergencyContactNumber !== undefined) data.emergencyContactNumber = body.emergencyContactNumber || null;
+        if (body.residentialAddress !== undefined) data.residentialAddress = body.residentialAddress || null;
+        if (body.workedBefore !== undefined) data.workedBefore = body.workedBefore || null;
+        if (body.hasRelativesInCompany !== undefined) data.hasRelativesInCompany = body.hasRelativesInCompany || null;
+        if (body.relativesNames !== undefined) data.relativesNames = body.relativesNames || null;
+        if (body.bankName !== undefined) data.bankName = body.bankName || null;
+        if (body.bankBranchName !== undefined) data.bankBranchName = body.bankBranchName || null;
+        if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber || null;
+        if (body.arrivalDate !== undefined) data.arrivalDate = parseDate(body.arrivalDate);
+        if (body.cvUrl !== undefined) data.cvUrl = body.cvUrl || null;
+        if (body.degreeUrl !== undefined) data.degreeUrl = body.degreeUrl || null;
+        if (body.birthCertUrl !== undefined) data.birthCertUrl = body.birthCertUrl || null;
+        if (body.passportCopyUrl !== undefined) data.passportCopyUrl = body.passportCopyUrl || null;
+        if (body.bankCheckUrl !== undefined) data.bankCheckUrl = body.bankCheckUrl || null;
+        if (body.photoUrl !== undefined) data.photoUrl = body.photoUrl || null;
+        if (body.idCardUrl !== undefined) data.idCardUrl = body.idCardUrl || null;
+        if (body.jobOfferUrl !== undefined) data.jobOfferUrl = body.jobOfferUrl || null;
+        if (body.healthCertUrl !== undefined) data.healthCertUrl = body.healthCertUrl || null;
 
         // Fetch current values to check exclusivity against updates
         const currentEmp = await prisma.employee.findUnique({ where: { id } });
+
+        // Dynamic Position Factor Logic for Update
+        const targetRole = data.role || currentEmp?.role;
+        const targetDeptId = data.departmentId !== undefined ? data.departmentId : currentEmp?.departmentId;
+        const targetDivId = data.divisionId !== undefined ? data.divisionId : currentEmp?.divisionId;
+        const targetDirId = data.directorateId !== undefined ? data.directorateId : currentEmp?.directorateId;
+        const targetUnitId = data.unitId !== undefined ? data.unitId : currentEmp?.unitId;
+
+        if ((targetRole === 'HEAD_DEPARTMENT' || targetRole === 'HEAD_OFFICE') && targetDeptId) {
+            const dept = await prisma.department.findUnique({ where: { id: targetDeptId } });
+            if (dept && dept.positionFactor) data.positionFactor = dept.positionFactor;
+        } else if (targetRole === 'HEAD_DIVISION' && targetDivId) {
+            const div = await prisma.division.findUnique({ where: { id: targetDivId } });
+            if (div && div.positionFactor) data.positionFactor = div.positionFactor;
+        } else if (targetRole === 'HEAD_DIRECTORATE' && targetDirId) {
+            const dir = await prisma.directorate.findUnique({ where: { id: targetDirId } });
+            if (dir && dir.positionFactor) data.positionFactor = dir.positionFactor;
+        } else if (targetRole === 'HEAD_UNIT' && targetUnitId) {
+            const unit = await prisma.unit.findUnique({ where: { id: targetUnitId }, include: { _count: { select: { employees: true } } } });
+            if (unit) {
+                data.positionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
+            }
+        } else if (targetRole === 'GENERAL_MANAGER') {
+            data.positionFactor = 1.60;
+        }
+
         const finalPF = data.positionFactor !== undefined ? data.positionFactor : (currentEmp?.positionFactor || 1.0);
-        const finalSF = data.skillFactor !== undefined ? data.skillFactor : (currentEmp?.skillFactor || 1.0);
+        let finalSF = data.skillFactor !== undefined ? data.skillFactor : (currentEmp?.skillFactor || 1.0);
 
         if (finalPF > 1.0 && finalSF > 1.0) {
-            return res.status(400).json({ error: 'Employee cannot have both Position Factor and Skill Factor simultaneously.' });
+            // Since positionFactor might be dynamically assigned based on role, prioritize it
+            data.skillFactor = 1.0;
+            finalSF = 1.0;
         }
 
         console.log('Final Database Update Payload:', JSON.stringify(data, null, 2));
@@ -469,7 +750,8 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
         }
 
         const employee = await prisma.employee.findUnique({
-            where: { userId: req.user.id }
+            where: { userId: req.user.id },
+            include: { jobDescription: true }
         });
 
         if (!employee) {

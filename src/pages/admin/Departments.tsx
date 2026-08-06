@@ -5,10 +5,12 @@ import { departmentService, groupService, divisionService } from '../../services
 import { directorateService } from '../../services/directorateService';
 import type { Department, Group, Division } from '../../types';
 import Modal from '../../components/Modal';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { Plus, Edit, Trash2, LayoutGrid, Building2, Building } from 'lucide-react';
 
 const DepartmentsPage: React.FC = () => {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [activeTab, setActiveTab] = useState<'DIRECTORATES' | 'DIVISIONS' | 'DEPARTMENTS'>('DIRECTORATES');
     const [departments, setDepartments] = useState<Department[]>([]);
     const [divisions, setDivisions] = useState<Division[]>([]);
@@ -19,17 +21,17 @@ const DepartmentsPage: React.FC = () => {
     // Department Modal
     const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState<Department | null>(null);
-    const [deptFormData, setDeptFormData] = useState({ name: '', groupId: '', divisionId: '', isOffice: false });
+    const [deptFormData, setDeptFormData] = useState({ name: '', groupId: '', divisionId: '', isOffice: false, positionFactor: 1.0 });
 
     // Division Modal
     const [isDivModalOpen, setIsDivModalOpen] = useState(false);
     const [editingDiv, setEditingDiv] = useState<Division | null>(null);
-    const [divFormData, setDivFormData] = useState({ name: '', directorateId: '' });
+    const [divFormData, setDivFormData] = useState({ name: '', directorateId: '', positionFactor: 1.0 });
 
     // Directorate Modal
     const [isDirModalOpen, setIsDirModalOpen] = useState(false);
     const [editingDir, setEditingDir] = useState<any | null>(null);
-    const [dirFormData, setDirFormData] = useState({ name: '' });
+    const [dirFormData, setDirFormData] = useState({ name: '', positionFactor: 1.0 });
 
     useEffect(() => {
         fetchData();
@@ -83,13 +85,14 @@ const DepartmentsPage: React.FC = () => {
             name: dept.name, 
             groupId: dept.groupId, 
             divisionId: dept.divisionId || '', 
-            isOffice: dept.isOffice || false 
+            isOffice: dept.isOffice || false,
+            positionFactor: (dept as any).positionFactor || 1.0
         });
         setIsDeptModalOpen(true);
     };
 
     const handleDeleteDept = async (id: string) => {
-        if (window.confirm(t('confirm_delete_dept'))) {
+        if (await confirm({ message: t('confirm_delete_dept'), danger: true })) {
             try {
                 await departmentService.deleteDepartment(id);
                 fetchData();
@@ -101,7 +104,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDeptModal = () => {
         setEditingDept(null);
-        setDeptFormData({ name: '', groupId: groups.length > 0 ? groups[0].id : '', divisionId: '', isOffice: false });
+        setDeptFormData({ name: '', groupId: groups.length > 0 ? groups[0].id : '', divisionId: '', isOffice: false, positionFactor: 1.0 });
         setIsDeptModalOpen(true);
     };
 
@@ -123,12 +126,12 @@ const DepartmentsPage: React.FC = () => {
 
     const handleEditDiv = (div: Division) => {
         setEditingDiv(div);
-        setDivFormData({ name: div.name });
+        setDivFormData({ name: div.name, directorateId: div.directorateId || '', positionFactor: (div as any).positionFactor || 1.0 });
         setIsDivModalOpen(true);
     };
 
     const handleDeleteDiv = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this division?")) {
+        if (await confirm({ message: "Are you sure you want to delete this division?", danger: true })) {
             try {
                 await divisionService.deleteDivision(id);
                 fetchData();
@@ -140,7 +143,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDivModal = () => {
         setEditingDiv(null);
-        setDivFormData({ name: '', directorateId: '' });
+        setDivFormData({ name: '', directorateId: '', positionFactor: 1.0 });
         setIsDivModalOpen(true);
     };
 
@@ -162,12 +165,12 @@ const DepartmentsPage: React.FC = () => {
 
     const handleEditDir = (dir: any) => {
         setEditingDir(dir);
-        setDirFormData({ name: dir.name });
+        setDirFormData({ name: dir.name, positionFactor: (dir as any).positionFactor || 1.0 });
         setIsDirModalOpen(true);
     };
 
     const handleDeleteDir = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this directorate?")) {
+        if (await confirm({ message: "Are you sure you want to delete this directorate?", danger: true })) {
             try {
                 await directorateService.deleteDirectorate(id);
                 fetchData();
@@ -179,7 +182,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDirModal = () => {
         setEditingDir(null);
-        setDirFormData({ name: '' });
+        setDirFormData({ name: '', positionFactor: 1.0 });
         setIsDirModalOpen(true);
     };
 
@@ -378,6 +381,14 @@ const DepartmentsPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                     </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <input
+                            type="number" step="0.05" min="1.0" required value={dirFormData.positionFactor}
+                            onChange={(e) => setDirFormData({ ...dirFormData, positionFactor: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                    </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={() => setIsDirModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">{editingDir ? 'Update' : 'Create'}</button>
@@ -408,6 +419,14 @@ const DepartmentsPage: React.FC = () => {
                                 <option key={dir.id} value={dir.id}>{dir.name}</option>
                             ))}
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <input
+                            type="number" step="0.05" min="1.0" required value={divFormData.positionFactor}
+                            onChange={(e) => setDivFormData({ ...divFormData, positionFactor: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={() => setIsDivModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -474,6 +493,15 @@ const DepartmentsPage: React.FC = () => {
                             <option value="">{t('select_group')}</option>
                             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                         </select>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <input
+                            type="number" step="0.05" min="1.0" required value={deptFormData.positionFactor}
+                            onChange={(e) => setDeptFormData({ ...deptFormData, positionFactor: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
                     </div>
                     
                     <div className="flex justify-end gap-3 pt-4">

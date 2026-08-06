@@ -23,7 +23,7 @@ router.delete('/users/:id', authorizeAccess([], ['manage_users']), deleteUser);
 
 // Departments (Admin/HR only)
 // Departments (Viewable by all staff)
-router.get('/departments', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'), getDepartments);
+router.get('/departments', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'GENERAL_MANAGER', 'CHAIRMAN'), getDepartments);
 router.post('/departments', authorizeAccess(['HR_MANAGER'], ['manage_departments']), createDepartment);
 router.put('/departments/:id', authorizeAccess(['HR_MANAGER'], ['manage_departments']), updateDepartment);
 router.delete('/departments/:id', authorizeAccess(['HR_MANAGER'], ['manage_departments']), deleteDepartment);

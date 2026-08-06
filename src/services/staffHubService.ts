@@ -10,9 +10,11 @@ export interface LeaveRequest {
     startTime?: string;
     endTime?: string;
     reason?: string;
+    attachmentUrl?: string;
+    attachmentName?: string;
     managerNote?: string;
     hrNote?: string;
-    status: 'PENDING' | 'APPROVED_BY_MANAGER' | 'REJECTED' | 'COMPLETED';
+    status: 'PENDING' | 'APPROVED_BY_UNIT' | 'APPROVED_BY_DEPT' | 'APPROVED_BY_DIVISION' | 'APPROVED_BY_DIRECTOR' | 'REJECTED' | 'COMPLETED';
     createdAt: string;
 }
 
@@ -42,14 +44,18 @@ export interface Announcement {
     targetId?: string;
     title: string;
     content: string;
+    attachmentUrl?: string;
+    attachmentName?: string;
     expiryDate?: string;
     createdAt: string;
 }
 
 export const staffHubService = {
     // Requests
-    async createRequest(data: Partial<LeaveRequest>) {
-        const response = await api.post('/staff-hub/requests', data);
+    async createRequest(data: FormData | Partial<LeaveRequest>) {
+        const response = await api.post('/staff-hub/requests', data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {}
+        });
         return response.data;
     },
     async updateRequestStatus(id: string, statusData: { status: string; managerNote?: string; hrNote?: string }) {
@@ -60,7 +66,7 @@ export const staffHubService = {
         const response = await api.get(`/staff-hub/requests/employee/${employeeId}`);
         return response.data;
     },
-    async getPendingRequests(filters: { departmentId?: string; groupId?: string; unitId?: string; status?: string }) {
+    async getPendingRequests(filters: { departmentId?: string; groupId?: string; unitId?: string; divisionId?: string; status?: string }) {
         const response = await api.get('/staff-hub/requests/pending', { params: filters });
         return response.data;
     },
@@ -89,12 +95,16 @@ export const staffHubService = {
 
 
     // Announcements
-    async createAnnouncement(data: Partial<Announcement>) {
-        const response = await api.post('/staff-hub/announcements', data);
+    async createAnnouncement(data: FormData | Partial<Announcement>) {
+        const response = await api.post('/staff-hub/announcements', data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {}
+        });
         return response.data;
     },
-    async updateAnnouncement(id: string, data: Partial<Announcement>) {
-        const response = await api.put(`/staff-hub/announcements/${id}`, data);
+    async updateAnnouncement(id: string, data: FormData | Partial<Announcement>) {
+        const response = await api.put(`/staff-hub/announcements/${id}`, data, {
+            headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {}
+        });
         return response.data;
     },
     async deleteAnnouncement(id: string) {

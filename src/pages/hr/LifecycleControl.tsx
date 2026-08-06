@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
+import { departmentService } from '../../services/departmentService';
+import { SERVER_URL } from '../../services/apiClient';
+import Modal from '../../components/Modal';
 import {
     Search,
     Filter,
-    Download,
     Plus,
     Plane,
-    AlertCircle,
     FileSpreadsheet,
     Stethoscope,
     Edit3,
@@ -18,31 +19,114 @@ import {
     CreditCard,
     Globe,
     MinusSquare,
+    Eye,
+    Phone,
+    Landmark,
+    Paperclip,
+    Briefcase,
+    CalendarDays,
+    ExternalLink,
+    Upload,
     FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
-import { format, isPast, parseISO, differenceInDays } from 'date-fns';
+import { format, parseISO, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 import type { Employee } from '../../types';
-import { 
-    POSITION_FACTORS, 
-    SKILL_FACTORS, 
-    SITE_FACTORS, 
-    LANGUAGE_FACTORS 
-} from '../../constants/factors';
 
 const LifecycleControl: React.FC = () => {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('All');
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState<Partial<Employee>>({});
+    const [detailEmp, setDetailEmp] = useState<Employee | null>(null);
+    const [detailEditing, setDetailEditing] = useState(false);
+    const [detailForm, setDetailForm] = useState<Partial<Employee>>({});
+    const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+
+    const handleDetailDocUpload = async (k: string, file?: File) => {
+        if (!file) return;
+        setUploadingDoc(k);
+        try {
+            const { url } = await employeeService.uploadDocument(file);
+            setDetailForm(f => ({ ...f, [k]: url }));
+            toast.success(t('document_uploaded', { defaultValue: 'Document uploaded' }));
+        } catch (err) {
+            console.error('Document upload failed', err);
+            toast.error(t('document_upload_failed', { defaultValue: 'Upload failed. Please try again.' }));
+        } finally {
+            setUploadingDoc(null);
+        }
+    };
+
+    const buildDetailForm = (emp: Employee): Partial<Employee> => {
+        const d = (x?: string) => x ? format(parseISO(x), 'yyyy-MM-dd') : '';
+        return {
+            ...emp,
+            dateOfBirth: d(emp.dateOfBirth),
+            idIssueDate: d(emp.idIssueDate),
+            passportExpiryDate: d(emp.passportExpiryDate),
+            drivingLicenseExpiry: d(emp.drivingLicenseExpiry),
+            arrivalDate: d(emp.arrivalDate),
+            joinDate: d(emp.joinDate),
+            contractStartDate: d(emp.contractStartDate),
+            contractEndDate: d(emp.contractEndDate),
+        };
+    };
+    const openDetail = (emp: Employee, editing = false) => {
+        setDetailEmp(emp);
+        if (editing) setDetailForm(buildDetailForm(emp));
+        setDetailEditing(editing);
+    };
+    const closeDetail = () => {
+        setDetailEmp(null);
+        setDetailEditing(false);
+    };
+    const beginDetailEdit = () => {
+        if (!detailEmp) return;
+        setDetailForm(buildDetailForm(detailEmp));
+        setDetailEditing(true);
+    };
+    const saveDetailEdit = () => {
+        if (!detailEmp) return;
+        updateEmployeeMutation.mutate(
+            { id: detailEmp.id, data: detailForm },
+            {
+                onSuccess: (updated: any) => {
+                    if (updated) setDetailEmp(updated);
+                    setDetailEditing(false);
+                }
+            }
+        );
+    };
+
+    // Quick +/- adjust a leave counter straight from the detail view. While editing it just
+    // nudges the form value; in view mode it persists immediately (optimistic update).
+    const quickAdjustLeave = (
+        field: 'holidaysUsed' | 'emergencyHolidaysUsed' | 'unpaidHolidaysUsed',
+        amount: number
+    ) => {
+        if (!detailEmp) return;
+        if (detailEditing) {
+            setDetailForm(f => ({ ...f, [field]: Math.max(0, (Number((f as any)[field]) || 0) + amount) }));
+            return;
+        }
+        const next = Math.max(0, (Number((detailEmp as any)[field]) || 0) + amount);
+        setDetailEmp({ ...detailEmp, [field]: next } as Employee);
+        updateEmployeeMutation.mutate({ id: detailEmp.id, data: { [field]: next } as Partial<Employee> });
+    };
 
     const { data: employees = [], isLoading } = useQuery({
         queryKey: ['employees-lifecycle'],
         queryFn: employeeService.getAllEmployees
     });
+
+    const { data: departments = [] } = useQuery({
+        queryKey: ['departments-lifecycle'],
+        queryFn: departmentService.getAllDepartments
+    });
+
+    const deptName = (id?: string) => departments.find((d: any) => d.id === id)?.name || '—';
 
     const updateEmployeeMutation = useMutation({
         mutationFn: async ({ id, data }: { id: string, data: Partial<Employee> }) => {
@@ -51,7 +135,6 @@ const LifecycleControl: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['employees-lifecycle'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-            setEditingId(null);
             toast.success(t('update_success', { defaultValue: 'Employee updated successfully' }));
         },
         onError: () => {
@@ -59,35 +142,22 @@ const LifecycleControl: React.FC = () => {
         }
     });
 
-    const handleQuickLeave = (emp: Employee, type: 'Paid' | 'Emergency' | 'Unpaid', amount: number) => {
-        const currentUsed = type === 'Paid'
-            ? (emp.holidaysUsed || 0)
-            : type === 'Emergency'
-                ? (emp.emergencyHolidaysUsed || 0)
-                : (emp.unpaidHolidaysUsed || 0);
 
-        const updateData = type === 'Paid'
-            ? { holidaysUsed: currentUsed + amount }
-            : type === 'Emergency'
-                ? { emergencyHolidaysUsed: currentUsed + amount }
-                : { unpaidHolidaysUsed: currentUsed + amount };
-
-        updateEmployeeMutation.mutate({ id: emp.id, data: updateData });
-    };
-
-    const startEditing = (emp: Employee) => {
-        setEditingId(emp.id);
-        setEditForm({
-            ...emp,
-            joinDate: emp.joinDate ? format(parseISO(emp.joinDate), 'yyyy-MM-dd') : '',
-            contractStartDate: emp.contractStartDate ? format(parseISO(emp.contractStartDate), 'yyyy-MM-dd') : '',
-            contractEndDate: emp.contractEndDate ? format(parseISO(emp.contractEndDate), 'yyyy-MM-dd') : '',
-        });
-    };
-
-    const saveEdit = () => {
-        if (!editingId) return;
-        updateEmployeeMutation.mutate({ id: editingId, data: editForm });
+    // Natural, human-friendly ordering of Staff IDs so the grid always reads
+    // sequentially (IPH-125-001, IPH-125-002, … IPH-126-001) instead of a random
+    // insertion order. Records without a Staff ID sink to the bottom, then sort by name.
+    const compareStaffId = (a: Employee, b: Employee) => {
+        const ax = (a.staffId || '').trim();
+        const bx = (b.staffId || '').trim();
+        if (ax && bx) {
+            const cmp = ax.localeCompare(bx, undefined, { numeric: true, sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+        } else if (ax && !bx) {
+            return -1;
+        } else if (!ax && bx) {
+            return 1;
+        }
+        return a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' });
     };
 
     const filteredEmployees = employees.filter(emp => {
@@ -96,7 +166,7 @@ const LifecycleControl: React.FC = () => {
             (emp.passportNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterType === 'All' || emp.contractType === filterType;
         return matchesSearch && matchesFilter;
-    });
+    }).sort(compareStaffId);
 
     const getStatusStyle = (status?: string) => {
         switch (status) {
@@ -159,428 +229,88 @@ const LifecycleControl: React.FC = () => {
             {/* Excel-style Table Content Area */}
             <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl shadow-slate-200/50 overflow-hidden flex flex-col h-[750px] relative">
                 <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar scroll-smooth">
-                    <table className="min-w-[2800px] text-left table-fixed border-separate border-spacing-0">
+                    <table className="min-w-[1100px] w-full text-left border-separate border-spacing-0">
                         <thead className="sticky top-0 z-30">
                             <tr className="uppercase tracking-[0.2em]">
-                                <th className="w-16 px-4 py-6 text-[10px] font-black text-center sticky left-0 z-40 lifecycle-header-cell-sticky">#</th>
-                                <th className="w-64 px-4 py-6 text-[10px] font-black sticky left-16 z-40 lifecycle-header-cell-sticky">{t('employee')}</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black lifecycle-header-cell">{t('staff_id')}</th>
-                                <th className="w-48 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Position</th>
-                                <th className="w-48 px-4 py-6 text-[10px] font-black lifecycle-header-cell">FullName (Arabic)</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Passport #</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Nationality</th>
-                                <th className="w-48 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Job Category</th>
-                                <th className="w-32 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Job Grade</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black lifecycle-header-cell">Contract Type</th>
-                                <th className="w-32 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell">C. Num</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell">Status</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black text-center uppercase tracking-widest leading-none lifecycle-header-cell">Base Salary</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black text-center uppercase tracking-widest leading-none lifecycle-header-cell">Join Date</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black text-center uppercase tracking-widest leading-none lifecycle-header-cell">Cont. Start</th>
-                                <th className="w-40 px-4 py-6 text-[10px] font-black text-center uppercase tracking-widest leading-none lifecycle-header-cell">Cont. End</th>
-
-                                {/* Factor Columns */}
-                                <th className="w-32 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-blue">POS FACTOR</th>
-                                <th className="w-32 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-indigo">SKILL FACTOR</th>
-                                <th className="w-32 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-purple">SITE FACTOR</th>
-                                <th className="w-32 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-pink">LANG FACTOR</th>
-
-                                {/* Paid Leave Sections */}
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-emerald">PAID ACCRUED</th>
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-emerald">PAID TAKEN</th>
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-emerald">PAID BAL</th>
-
-                                {/* Unpaid Leave Sections */}
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-amber">UNPAID TAKEN</th>
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-amber">UNPAID BAL (14)</th>
-
-                                {/* Emergency Leave Sections */}
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-rose">EMERG TAKEN</th>
-                                <th className="w-24 px-4 py-6 text-[10px] font-black text-center lifecycle-header-cell lifecycle-factor-rose">EMERG BAL (3)</th>
-
-                                <th className="w-56 px-4 py-6 text-[10px] font-black text-center sticky right-0 z-40 border-l border-white/5 shadow-[-4px_0_15px_rgba(0,0,0,0.15)] lifecycle-header-cell-sticky">{t('actions')}</th>
+                                <th className="w-16 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">#</th>
+                                <th className="px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('employee')}</th>
+                                <th className="w-44 px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('staff_id')}</th>
+                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">Position</th>
+                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">Department</th>
+                                <th className="w-44 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">Contract Type</th>
+                                <th className="w-40 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">Status</th>
+                                <th className="w-64 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredEmployees.map((emp, idx) => {
-                                const isEditing = editingId === emp.id;
-                                return (
-                                    <tr key={emp.id} className={`hover:bg-primary-50/30 transition-all duration-300 group ${isEditing ? 'bg-primary-50 ring-2 ring-primary-500 ring-inset z-10 relative shadow-lg' : ''}`}>
-                                        <td className="px-4 py-5 text-center sticky left-0 transition-colors z-20 border-r border-slate-50 lifecycle-sticky-col-1">
-                                            <span className="text-xs font-black transition-colors">{idx + 1}</span>
-                                        </td>
-                                        <td className="px-4 py-5 sticky left-16 transition-colors z-20 border-r border-slate-100 lifecycle-sticky-col-2">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.fullName || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-primary-500/20"
-                                                />
-                                            ) : (
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                                                        <User className="w-4 h-4 text-slate-500" />
-                                                    </div>
-                                                    <span className="text-sm font-black">{emp.fullName}</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-5 font-mono font-bold text-slate-500 text-xs text-center">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.staffId || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, staffId: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs"
-                                                />
-                                            ) : (emp.staffId || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-sm font-bold text-slate-600 truncate">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.position || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs"
-                                                />
-                                            ) : (emp.position || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-right font-medium text-slate-500" dir="rtl">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.fullNameArabic || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, fullNameArabic: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs text-right"
-                                                />
-                                            ) : (emp.fullNameArabic || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-sm font-black text-slate-600 uppercase tracking-tighter">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.passportNumber || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, passportNumber: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-black uppercase"
-                                                />
-                                            ) : (emp.passportNumber || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-sm font-bold text-slate-600">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.nationality || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, nationality: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs"
-                                                />
-                                            ) : (emp.nationality || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-sm font-medium text-slate-500 italic">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.jobCategory || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, jobCategory: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs"
-                                                />
-                                            ) : (emp.jobCategory || '---')}
-                                        </td>
-                                        <td className="px-4 py-5 text-xs font-black text-primary-600">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editForm.jobGrade || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, jobGrade: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-black uppercase"
-                                                />
-                                            ) : (emp.jobGrade || '---')}
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.contractType || 'RESDANT'}
-                                                    onChange={(e) => setEditForm({ ...editForm, contractType: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-black"
-                                                >
-                                                    <option value="RESDANT">RESDANT</option>
-                                                    <option value="DIRCT NONE RESDANT">DIRCT NONE RESDANT</option>
-                                                    <option value="NONE RESDANT">NONE RESDANT</option>
-                                                </select>
-                                            ) : (
-                                                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase tracking-[0.15em] shadow-sm
-                                                    ${emp.contractType === 'NONE RESDANT' ? 'bg-amber-50  border-amber-100' :
-                                                        emp.contractType === 'DIRCT NONE RESDANT' ? 'bg-indigo-50  border-indigo-100' : 'bg-emerald-50  border-emerald-100'}
-                                                `}>
-                                                    {emp.contractType || '---'}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-5 text-center text-sm font-black text-slate-700">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.contractNumber || '1st'}
-                                                    onChange={(e) => setEditForm({ ...editForm, contractNumber: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-bold"
-                                                >
-                                                    <option value="1st">1st</option>
-                                                    <option value="2nd">2nd</option>
-                                                    <option value="3rd">3rd</option>
-                                                    <option value="4th">4th</option>
-                                                    <option value="Permanent">Permanent</option>
-                                                </select>
-                                            ) : (emp.contractNumber || '1st')}
-                                        </td>
-                                        <td className="px-4 py-5 text-center">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.contractStatus || 'Active'}
-                                                    onChange={(e) => setEditForm({ ...editForm, contractStatus: e.target.value })}
-                                                    className="w-full px-3 py-1.5 bg-white border border-primary-200 rounded-lg text-xs font-bold"
-                                                >
-                                                    <option value="Active">Active</option>
-                                                    <option value="Expired">Expired</option>
-                                                    <option value="Inactive">Inactive</option>
-                                                    <option value="Terminated">Terminated</option>
-                                                    <option value="On Leave">On Leave</option>
-                                                </select>
-                                            ) : (
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${getStatusStyle(emp.contractStatus)}`}>
-                                                    {emp.contractStatus || 'ACTIVE'}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-5 text-center">
-                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-xl border border-slate-200 text-slate-700">
-                                                <CreditCard className="w-3.5 h-3.5 opacity-50" />
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={editForm.baseSalary || 0}
-                                                        onChange={(e) => setEditForm({ ...editForm, baseSalary: Number(e.target.value) })}
-                                                        className="w-16 bg-transparent border-none p-0 text-sm font-black focus:ring-0"
-                                                    />
-                                                ) : <span className="text-sm font-black">{emp.baseSalary?.toLocaleString()}</span>}
+                            {filteredEmployees.map((emp, idx) => (
+                                <tr key={emp.id} className={`hover:bg-primary-50/40 transition-all duration-200 group ${idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'}`}>
+                                    <td className="px-5 py-4 text-center border-r border-slate-50">
+                                        <span className="text-xs font-black text-slate-400">{idx + 1}</span>
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shrink-0 font-black text-sm shadow-sm">
+                                                {emp.fullName?.trim()?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-5 text-center">
-                                            {isEditing ? (
-                                                <input
-                                                    type="date"
-                                                    value={editForm.joinDate || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, joinDate: e.target.value })}
-                                                    className="px-2 py-1 bg-white border border-primary-200 rounded-lg text-[10px] font-bold"
-                                                />
-                                            ) : emp.joinDate ? (
-                                                <span className="text-xs font-bold text-slate-600 font-black">{format(parseISO(emp.joinDate), 'dd/MM/yyyy')}</span>
-                                            ) : '---'}
-                                        </td>
-                                        <td className="px-4 py-5 text-center">
-                                            {isEditing ? (
-                                                <input
-                                                    type="date"
-                                                    value={editForm.contractStartDate || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, contractStartDate: e.target.value })}
-                                                    className="px-2 py-1 bg-white border border-primary-200 rounded-lg text-[10px] font-bold"
-                                                />
-                                            ) : emp.contractStartDate ? (
-                                                <span className="text-xs font-bold text-slate-600 font-black">{format(parseISO(emp.contractStartDate), 'dd/MM/yyyy')}</span>
-                                            ) : '---'}
-                                        </td>
-                                        <td className="px-4 py-5 text-center border-r border-slate-100 bg-slate-50/10">
-                                            {isEditing ? (
-                                                <input
-                                                    type="date"
-                                                    value={editForm.contractEndDate || ''}
-                                                    onChange={(e) => setEditForm({ ...editForm, contractEndDate: e.target.value })}
-                                                    className="px-2 py-1 bg-white border border-primary-200 rounded-lg text-[10px] font-bold"
-                                                />
-                                            ) : emp.contractEndDate ? (
-                                                <span className={`text-xs font-black ${isPast(parseISO(emp.contractEndDate)) ? 'text-rose-500 underline' : 'text-slate-600'}`}>
-                                                    {format(parseISO(emp.contractEndDate), 'dd/MM/yyyy')}
-                                                </span>
-                                            ) : <span className="text-slate-300 italic text-[10px]">UNDATED</span>}
-                                        </td>
-
-                                        <td className="px-4 py-5 text-center lifecycle-factor-blue">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.positionFactor || 1.0}
-                                                    onChange={(e) => {
-                                                        const val = Number(e.target.value);
-                                                        setEditForm({ 
-                                                            ...editForm, 
-                                                            positionFactor: val,
-                                                            skillFactor: val > 1.0 ? 1.0 : editForm.skillFactor 
-                                                        });
-                                                    }}
-                                                    className="w-32 px-1 py-1 bg-white border border-blue-200 rounded text-[10px] font-black text-center"
-                                                >
-                                                    <option value={1.0}>Standard (1.0)</option>
-                                                    {POSITION_FACTORS.map(f => (
-                                                        <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
-                                                    ))}
-                                                </select>
-                                            ) : <span className="text-sm font-black ">{emp.positionFactor || 1.0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center lifecycle-factor-indigo">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.skillFactor || 1.0}
-                                                    onChange={(e) => {
-                                                        const val = Number(e.target.value);
-                                                        setEditForm({ 
-                                                            ...editForm, 
-                                                            skillFactor: val,
-                                                            positionFactor: val > 1.0 ? 1.0 : editForm.positionFactor 
-                                                        });
-                                                    }}
-                                                    className="w-32 px-1 py-1 bg-white border border-indigo-200 rounded text-[10px] font-black text-center"
-                                                >
-                                                    <option value={1.0}>Standard (1.0)</option>
-                                                    {SKILL_FACTORS.map(f => (
-                                                        <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
-                                                    ))}
-                                                </select>
-                                            ) : <span className="text-sm font-black ">{emp.skillFactor || 1.0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center lifecycle-factor-purple">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.siteFactor || 1.0}
-                                                    onChange={(e) => setEditForm({ ...editForm, siteFactor: Number(e.target.value) })}
-                                                    className="w-32 px-1 py-1 bg-white border border-purple-200 rounded text-[10px] font-black text-center"
-                                                >
-                                                    <option value={1.0}>Office (1.0)</option>
-                                                    {SITE_FACTORS.map(f => (
-                                                        <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
-                                                    ))}
-                                                </select>
-                                            ) : <span className="text-sm font-black ">{emp.siteFactor || 1.0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center border-r border-slate-100 lifecycle-factor-pink">
-                                            {isEditing ? (
-                                                <select
-                                                    value={editForm.languageFactor || 1.0}
-                                                    onChange={(e) => setEditForm({ ...editForm, languageFactor: Number(e.target.value) })}
-                                                    className="w-32 px-1 py-1 bg-white border border-pink-200 rounded text-[10px] font-black text-center"
-                                                >
-                                                    <option value={1.0}>Native (1.0)</option>
-                                                    {LANGUAGE_FACTORS.map(f => (
-                                                        <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
-                                                    ))}
-                                                </select>
-                                            ) : <span className="text-sm font-black ">{emp.languageFactor || 1.0}</span>}
-                                        </td>
-
-                                        {/* Paid Leave Cells */}
-                                        <td className="px-4 py-5 text-center lifecycle-factor-emerald">
-                                            <span className="text-sm font-black ">
-                                                {emp.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(emp.contractStartDate)) / 12) : 0}
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-black text-slate-800 truncate">{emp.fullName}</div>
+                                                {emp.fullNameArabic && (
+                                                    <div className="text-[11px] font-bold text-slate-400 truncate" dir="rtl">{emp.fullNameArabic}</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        {emp.staffId ? (
+                                            <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono font-black text-xs tracking-tight">
+                                                {emp.staffId}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-5 text-center lifecycle-factor-emerald">
-                                            {isEditing ? (
-                                                <input
-                                                    type="number" step="0.5"
-                                                    value={editForm.holidaysUsed || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, holidaysUsed: Number(e.target.value) })}
-                                                    className="w-16 px-1 py-1 bg-white border border-emerald-200 rounded text-xs font-black text-center"
-                                                />
-                                            ) : <span className="text-sm font-black ">{emp.holidaysUsed || 0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center border-r border-emerald-100 lifecycle-factor-emerald">
-                                            <span className="text-sm font-black ">
-                                                {(emp.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(emp.contractStartDate)) / 12) : 0) - (emp.holidaysUsed || 0)}
-                                            </span>
-                                        </td>
-
-                                        {/* Unpaid Leave Cells */}
-                                        <td className="px-4 py-5 text-center lifecycle-factor-amber">
-                                            {isEditing ? (
-                                                <input
-                                                    type="number" step="0.5"
-                                                    value={editForm.unpaidHolidaysUsed || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, unpaidHolidaysUsed: Number(e.target.value) })}
-                                                    className="w-16 px-1 py-1 bg-white border border-amber-200 rounded text-xs font-black text-center"
-                                                />
-                                            ) : <span className="text-sm font-black ">{emp.unpaidHolidaysUsed || 0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center border-r border-amber-100 lifecycle-factor-amber">
-                                            <span className="text-sm font-black ">{14 - (emp.unpaidHolidaysUsed || 0)}</span>
-                                        </td>
-
-                                        {/* Emergency Leave Cells */}
-                                        <td className="px-4 py-5 text-center lifecycle-factor-rose">
-                                            {isEditing ? (
-                                                <input
-                                                    type="number" step="0.5"
-                                                    value={editForm.emergencyHolidaysUsed || 0}
-                                                    onChange={(e) => setEditForm({ ...editForm, emergencyHolidaysUsed: Number(e.target.value) })}
-                                                    className="w-16 px-1 py-1 bg-white border border-rose-200 rounded text-xs font-black text-center"
-                                                />
-                                            ) : <span className="text-sm font-black ">{emp.emergencyHolidaysUsed || 0}</span>}
-                                        </td>
-                                        <td className="px-4 py-5 text-center lifecycle-factor-rose">
-                                            <span className="text-sm font-black ">{3 - (emp.emergencyHolidaysUsed || 0)}</span>
-                                        </td>
-
-                                        {/* Actions Column */}
-                                        <td className="px-4 py-5 text-center sticky right-0 transition-colors z-20 border-l border-slate-100 shadow-[-10px_0_20px_rgba(0,0,0,0.05)] lifecycle-sticky-col-actions">
-                                            {isEditing ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={saveEdit}
-                                                        disabled={updateEmployeeMutation.isPending}
-                                                        className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 active:scale-90 flex items-center gap-1.5"
-                                                    >
-                                                        <Check className="w-4 h-4" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Save</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setEditingId(null)}
-                                                        className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all active:scale-90"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={() => startEditing(emp)}
-                                                        className="p-2.5 bg-primary-50 text-primary-600 rounded-xl hover:bg-primary-600 hover:text-white transition-all shadow-sm active:scale-90 group/btn"
-                                                        title="Edit Row"
-                                                    >
-                                                        <Edit3 className="w-4 h-4" />
-                                                    </button>
-                                                    <div className="w-[1px] h-6 bg-slate-200 mx-1"></div>
-                                                    <button
-                                                        onClick={() => handleQuickLeave(emp, 'Paid', 1)}
-                                                        className="p-2.5 bg-emerald-50  rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-90"
-                                                        title="+1 Paid"
-                                                    >
-                                                        <Plus className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleQuickLeave(emp, 'Unpaid', 1)}
-                                                        className="p-2.5 bg-amber-50  rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm active:scale-90"
-                                                        title="+1 Unpaid"
-                                                    >
-                                                        <MinusSquare className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleQuickLeave(emp, 'Emergency', 1)}
-                                                        className="p-2.5 bg-rose-50  rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-sm active:scale-90"
-                                                        title="+1 Emergency"
-                                                    >
-                                                        <AlertCircle className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                        ) : <span className="text-slate-300 italic text-xs">---</span>}
+                                    </td>
+                                    <td className="px-5 py-4 text-sm font-bold text-slate-600 truncate">{emp.position || '—'}</td>
+                                    <td className="px-5 py-4 text-sm font-semibold text-slate-500 truncate">{deptName(emp.departmentId)}</td>
+                                    <td className="px-5 py-4 text-center">
+                                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase tracking-[0.15em] shadow-sm
+                                            ${emp.contractType === 'NONE RESDANT' ? 'bg-amber-50 border-amber-100 text-amber-700' :
+                                                emp.contractType === 'DIRCT NONE RESDANT' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}
+                                        `}>
+                                            {emp.contractType || '---'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-4 text-center">
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${getStatusStyle(emp.contractStatus)}`}>
+                                            {emp.contractStatus || 'ACTIVE'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => openDetail(emp)}
+                                                className="px-3.5 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm active:scale-95 inline-flex items-center gap-1.5"
+                                                title={t('view_details', { defaultValue: 'View Details' })}
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest leading-none">{t('details', { defaultValue: 'Details' })}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => openDetail(emp, true)}
+                                                className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all active:scale-90"
+                                                title={t('edit', { defaultValue: 'Edit' })}
+                                            >
+                                                <Edit3 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredEmployees.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="px-5 py-20 text-center text-slate-400 font-bold">
+                                        {t('no_records_found', { defaultValue: 'No matching employees found.' })}
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -811,6 +541,279 @@ const LifecycleControl: React.FC = () => {
                     <div className="text-[10px] font-black uppercase tracking-widest lifecycle-insight-count-label">Total Active Staff</div>
                 </div>
             </div>
+
+            {/* Full Employee Detail / Edit Page */}
+            <Modal
+                isOpen={!!detailEmp}
+                onClose={closeDetail}
+                title={detailEmp ? `${detailEmp.fullName}${detailEmp.staffId ? ' · ' + detailEmp.staffId : ''}` : ''}
+                fullScreen
+                fullScreenWidth="max-w-7xl"
+                headerActions={detailEmp ? (
+                    detailEditing ? (
+                        <>
+                            <button
+                                onClick={saveDetailEdit}
+                                disabled={updateEmployeeMutation.isPending}
+                                className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-emerald-700 transition-all inline-flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                            >
+                                <Check className="w-4 h-4" /> {t('save', { defaultValue: 'Save' })}
+                            </button>
+                            <button
+                                onClick={() => setDetailEditing(false)}
+                                className="px-4 py-2.5 bg-slate-100 text-slate-500 rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all inline-flex items-center gap-1.5"
+                            >
+                                <X className="w-4 h-4" /> {t('cancel', { defaultValue: 'Cancel' })}
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={beginDetailEdit}
+                            className="px-4 py-2.5 bg-primary-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-primary-700 transition-all inline-flex items-center gap-1.5 shadow-sm"
+                        >
+                            <Edit3 className="w-4 h-4" /> {t('edit', { defaultValue: 'Edit' })}
+                        </button>
+                    )
+                ) : null}
+            >
+                {detailEmp && (() => {
+                    const emp = detailEmp;
+                    const src: any = detailEditing ? detailForm : emp;
+                    const editing = detailEditing;
+                    const fmt = (d?: string) => d ? format(parseISO(d), 'dd MMM yyyy') : '—';
+                    const num = (x: any) => Number(x) || 0;
+                    const paidAccrued = src.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(src.contractStartDate)) / 12) : 0;
+                    const paidTaken = num(src.holidaysUsed);
+                    const unpaidTaken = num(src.unpaidHolidaysUsed);
+                    const emergTaken = num(src.emergencyHolidaysUsed);
+
+                    const setF = (k: string, v: any) => setDetailForm(f => ({ ...f, [k]: v }));
+                    const inputCls = "w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm font-bold text-slate-700 shadow-sm";
+
+                    const Section = ({ icon: Icon, title, color, wide, children }: any) => (
+                        <div className={`rounded-3xl border border-slate-100 bg-white p-6 shadow-sm ${wide ? 'xl:col-span-2' : ''}`}>
+                            <div className="flex items-center gap-2.5 mb-5">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}><Icon className="w-4 h-4" /></div>
+                                <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.2em]">{title}</h4>
+                            </div>
+                            <div className={`grid grid-cols-1 sm:grid-cols-2 ${wide ? 'lg:grid-cols-3' : ''} gap-x-6 gap-y-4`}>{children}</div>
+                        </div>
+                    );
+
+                    const Row = ({ label, value, dir }: { label: string; value?: any; dir?: 'rtl' | 'ltr' }) => (
+                        <div className="min-w-0">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
+                            <div className="text-sm font-bold text-slate-700 break-words" dir={dir}>{(value === 0 || value) ? value : <span className="text-slate-300">—</span>}</div>
+                        </div>
+                    );
+
+                    const Field = ({ label, k, type = 'text', options, dir }: { label: string; k: string; type?: string; options?: string[]; dir?: 'rtl' | 'ltr' }) => {
+                        if (!editing) {
+                            let v: any = emp[k as keyof Employee];
+                            if (type === 'date') v = v ? fmt(v as string) : '';
+                            if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
+                            return <Row label={label} value={v} dir={dir} />;
+                        }
+                        return (
+                            <div className="min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{label}</label>
+                                {options ? (
+                                    <select value={detailForm[k as keyof Employee] as any ?? ''} onChange={e => setF(k, e.target.value)} className={`${inputCls} cursor-pointer`}>
+                                        <option value="">—</option>
+                                        {options.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                ) : (
+                                    <input type={type} dir={dir} value={detailForm[k as keyof Employee] as any ?? ''} onChange={e => setF(k, e.target.value)} className={`${inputCls} ${dir === 'rtl' ? 'text-right' : ''}`} />
+                                )}
+                            </div>
+                        );
+                    };
+
+                    const docs = [
+                        { label: t('doc_cv', { defaultValue: 'CV / Resume' }), k: 'cvUrl' },
+                        { label: t('doc_degree', { defaultValue: 'University Degree' }), k: 'degreeUrl' },
+                        { label: t('doc_birth_cert', { defaultValue: 'Birth Certificate' }), k: 'birthCertUrl' },
+                        { label: t('doc_passport_copy', { defaultValue: 'Passport Copy' }), k: 'passportCopyUrl' },
+                        { label: t('doc_bank_check', { defaultValue: 'Cancelled Bank Check' }), k: 'bankCheckUrl' },
+                        { label: t('doc_photo', { defaultValue: 'Photo' }), k: 'photoUrl' },
+                        { label: t('doc_id_card', { defaultValue: 'ID & Driving Card' }), k: 'idCardUrl' },
+                        { label: t('doc_job_offer', { defaultValue: 'Signed Job Offer' }), k: 'jobOfferUrl' },
+                        { label: t('doc_health_cert', { defaultValue: 'Health Certificate' }), k: 'healthCertUrl' },
+                    ];
+
+                    return (
+                        <div className="space-y-6">
+                            {/* Header banner */}
+                            <div className="relative overflow-hidden rounded-[28px] p-6 sm:p-8 text-white shadow-xl shadow-primary-900/25 bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900">
+                                {/* decorative glows + watermark */}
+                                <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+                                <div className="absolute -bottom-24 -left-16 w-72 h-72 rounded-full bg-black/20 blur-3xl pointer-events-none" />
+                                <User className="absolute -bottom-8 right-4 w-48 h-48 text-white/[0.06] pointer-events-none select-none" />
+
+                                <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+                                    <div className="w-20 h-20 rounded-[22px] bg-white/15 ring-4 ring-white/10 flex items-center justify-center font-black text-3xl shrink-0 shadow-inner backdrop-blur-sm">
+                                        {emp.fullName?.trim()?.charAt(0)?.toUpperCase() || <User className="w-8 h-8" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        {editing ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <input value={detailForm.fullName ?? ''} onChange={e => setF('fullName', e.target.value)} placeholder="Full name" className="px-3.5 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white placeholder-white/50 font-black focus:ring-2 focus:ring-white/30 outline-none" />
+                                                <input value={detailForm.fullNameArabic ?? ''} onChange={e => setF('fullNameArabic', e.target.value)} placeholder="الاسم بالعربية" dir="rtl" className="px-3.5 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white placeholder-white/50 font-bold text-right focus:ring-2 focus:ring-white/30 outline-none" />
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="text-2xl font-black tracking-tight truncate">{emp.fullName}</div>
+                                                {emp.fullNameArabic
+                                                    ? <div className="text-sm font-bold text-white/70 truncate mt-0.5" dir="rtl">{emp.fullNameArabic}</div>
+                                                    : <div className="text-xs font-bold text-white/50 truncate mt-0.5">{emp.email || t('no_email', { defaultValue: 'No email on file' })}</div>}
+                                            </>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                                            {editing ? (
+                                                <input value={detailForm.staffId ?? ''} onChange={e => setF('staffId', e.target.value)} placeholder="Staff ID" className="px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/50 text-[11px] font-mono font-black w-40 outline-none focus:ring-2 focus:ring-white/30" />
+                                            ) : (
+                                                emp.staffId && <span className="px-3 py-1 rounded-full bg-white/15 border border-white/10 backdrop-blur-sm text-[11px] font-mono font-black tracking-tight">{emp.staffId}</span>
+                                            )}
+                                            {emp.role && !editing && (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/10 backdrop-blur-sm text-[11px] font-bold">
+                                                    <Briefcase className="w-3 h-3 opacity-70" />{String(emp.role).replace(/_/g, ' ')}
+                                                </span>
+                                            )}
+                                            {emp.position && !editing && <span className="px-3 py-1 rounded-full bg-white/15 border border-white/10 backdrop-blur-sm text-[11px] font-bold">{emp.position}</span>}
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-sm text-[11px] font-bold text-white/90">
+                                                <Landmark className="w-3 h-3 opacity-70" />{deptName(emp.departmentId)}
+                                            </span>
+                                            {!editing && (
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${emp.contractStatus === 'Active' || !emp.contractStatus ? 'bg-emerald-400/20 border-emerald-300/30 text-emerald-50' : 'bg-white/10 border-white/15 text-white/80'}`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{emp.contractStatus || 'Active'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Section grid — two columns on wide screens so it uses the full width */}
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                                <Section icon={User} title={t('identity_details', { defaultValue: 'Identity Details' })} color="bg-indigo-50 text-indigo-600">
+                                    <Field label={t('gender', { defaultValue: 'Gender' })} k="gender" options={['Male', 'Female']} />
+                                    <Field label={t('date_of_birth', { defaultValue: 'Date of Birth' })} k="dateOfBirth" type="date" />
+                                    <Field label={t('place_of_birth', { defaultValue: 'Place of Birth' })} k="placeOfBirth" />
+                                    <Field label={t('nationality', { defaultValue: 'Nationality' })} k="nationality" />
+                                    <Field label={t('national_id', { defaultValue: 'National ID' })} k="nationalId" />
+                                    <Field label={t('blood_type', { defaultValue: 'Blood Type' })} k="bloodType" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} />
+                                    <Field label={t('academic_qualification', { defaultValue: 'Academic Qualification' })} k="academicQualification" />
+                                </Section>
+
+                                <Section icon={CreditCard} title={t('official_documents', { defaultValue: 'ID, Passport & License' })} color="bg-teal-50 text-teal-600">
+                                    <Field label={t('id_card_number', { defaultValue: 'ID Card Number' })} k="idCardNumber" />
+                                    <Field label={t('id_place_of_issue', { defaultValue: 'ID Place of Issue' })} k="idPlaceOfIssue" />
+                                    <Field label={t('id_issue_date', { defaultValue: 'ID Issue Date' })} k="idIssueDate" type="date" />
+                                    <Field label={t('passport_number', { defaultValue: 'Passport Number' })} k="passportNumber" />
+                                    <Field label={t('passport_place_of_issue', { defaultValue: 'Passport Place of Issue' })} k="passportPlaceOfIssue" />
+                                    <Field label={t('passport_expiry_date', { defaultValue: 'Passport Expiry' })} k="passportExpiryDate" type="date" />
+                                    <Field label={t('driving_license_type', { defaultValue: 'License Type' })} k="drivingLicenseType" />
+                                    <Field label={t('driving_license_number', { defaultValue: 'License Number' })} k="drivingLicenseNumber" />
+                                    <Field label={t('driving_license_expiry', { defaultValue: 'License Expiry' })} k="drivingLicenseExpiry" type="date" />
+                                    <Field label={t('driving_license_place_of_issue', { defaultValue: 'License Place of Issue' })} k="drivingLicensePlaceOfIssue" />
+                                </Section>
+
+                                <Section icon={Phone} title={t('contact_and_address', { defaultValue: 'Contact & Address' })} color="bg-emerald-50 text-emerald-600">
+                                    <Field label={t('personal_phone', { defaultValue: 'Personal Phone' })} k="personalPhone" />
+                                    <Field label={t('personal_email', { defaultValue: 'Personal E-mail' })} k="personalEmail" />
+                                    <Field label={t('email_label', { defaultValue: 'Login Email' })} k="email" />
+                                    <Field label={t('emergency_contact', { defaultValue: 'Emergency Contact' })} k="emergencyContactNumber" />
+                                    <Field label={t('residential_address', { defaultValue: 'Residential Address' })} k="residentialAddress" />
+                                </Section>
+
+                                <Section icon={Briefcase} title={t('employment_details', { defaultValue: 'Employment Details' })} color="bg-blue-50 text-blue-600">
+                                    <Row label={t('role_type', { defaultValue: 'Role' })} value={emp.role} />
+                                    <Field label="Position" k="position" />
+                                    <Field label={t('job_category', { defaultValue: 'Job Category' })} k="jobCategory" />
+                                    <Field label={t('job_grade', { defaultValue: 'Job Grade' })} k="jobGrade" />
+                                    <Field label="Contract Type" k="contractType" options={['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT']} />
+                                    <Field label="Contract #" k="contractNumber" options={['1st', '2nd', '3rd', '4th', 'Permanent']} />
+                                    <Field label="Status" k="contractStatus" options={['Active', 'Expired', 'Inactive', 'Terminated', 'On Leave']} />
+                                    <Field label="Base Salary" k="baseSalary" type="number" />
+                                    <Field label={t('arrival_date', { defaultValue: 'Arrival Date' })} k="arrivalDate" type="date" />
+                                    <Field label="Join Date" k="joinDate" type="date" />
+                                    <Field label="Contract Start" k="contractStartDate" type="date" />
+                                    <Field label="Contract End" k="contractEndDate" type="date" />
+                                    <Field label={t('worked_before', { defaultValue: 'Worked Before?' })} k="workedBefore" options={['Yes', 'No']} />
+                                    <Field label={t('has_relatives', { defaultValue: 'Relatives in Company?' })} k="hasRelativesInCompany" options={['Yes', 'No']} />
+                                    <Field label={t('relatives_names', { defaultValue: "Relatives' Names" })} k="relativesNames" />
+                                </Section>
+
+                                <Section icon={CalendarDays} title={t('leave_balances', { defaultValue: 'Leave Balances' })} color="bg-amber-50 text-amber-600">
+                                    <Row label="Paid Accrued" value={paidAccrued} />
+                                    <Field label="Paid Taken" k="holidaysUsed" type="number" />
+                                    <Row label="Paid Balance" value={paidAccrued - paidTaken} />
+                                    <Field label="Unpaid Taken" k="unpaidHolidaysUsed" type="number" />
+                                    <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
+                                    <Field label="Emergency Taken" k="emergencyHolidaysUsed" type="number" />
+                                    <Row label="Emergency Balance (3)" value={3 - emergTaken} />
+                                    {/* Quick add — log a leave day without opening edit mode */}
+                                    <div className="sm:col-span-2 flex flex-wrap items-center gap-2 pt-4 mt-1 border-t border-slate-100">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">{t('quick_add', { defaultValue: 'Quick Add' })}</span>
+                                        <button type="button" onClick={() => quickAdjustLeave('holidaysUsed', 1)} disabled={updateEmployeeMutation.isPending} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 text-[11px] font-black hover:bg-emerald-600 hover:text-white transition-all active:scale-95 disabled:opacity-50">
+                                            <Plus className="w-3.5 h-3.5" /> {t('paid', { defaultValue: 'Paid' })}
+                                        </button>
+                                        <button type="button" onClick={() => quickAdjustLeave('emergencyHolidaysUsed', 1)} disabled={updateEmployeeMutation.isPending} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 text-[11px] font-black hover:bg-rose-600 hover:text-white transition-all active:scale-95 disabled:opacity-50">
+                                            <Plus className="w-3.5 h-3.5" /> {t('emergency', { defaultValue: 'Emergency' })}
+                                        </button>
+                                        <button type="button" onClick={() => quickAdjustLeave('unpaidHolidaysUsed', 1)} disabled={updateEmployeeMutation.isPending} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 text-[11px] font-black hover:bg-amber-600 hover:text-white transition-all active:scale-95 disabled:opacity-50">
+                                            <Plus className="w-3.5 h-3.5" /> {t('unpaid', { defaultValue: 'Unpaid' })}
+                                        </button>
+                                    </div>
+                                </Section>
+
+                                <Section icon={Landmark} title={t('bank_details', { defaultValue: 'Bank Details' })} color="bg-slate-100 text-slate-600">
+                                    <Field label={t('bank_name', { defaultValue: 'Bank Name' })} k="bankName" />
+                                    <Field label={t('bank_branch', { defaultValue: 'Bank Branch' })} k="bankBranchName" />
+                                    <Field label={t('bank_account_number', { defaultValue: 'Account Number' })} k="bankAccountNumber" />
+                                </Section>
+
+                                <Section icon={Paperclip} title={t('documents_attachments', { defaultValue: 'Documents & Attachments' })} color="bg-indigo-50 text-indigo-600" wide>
+                                    {docs.map(d => {
+                                        const raw = (editing ? detailForm[d.k as keyof Employee] : emp[d.k as keyof Employee]) as string | undefined;
+                                        const href = raw ? (raw.startsWith('http') ? raw : `${SERVER_URL}${raw}`) : '';
+                                        const busy = uploadingDoc === d.k;
+                                        if (editing) {
+                                            return (
+                                                <div key={d.k} className="min-w-0">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">{d.label}</label>
+                                                    {raw ? (
+                                                        <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                                            <span className="flex-1 min-w-0 truncate text-xs font-bold text-slate-700">{raw.split('/').pop()}</span>
+                                                            <a href={href} target="_blank" rel="noopener noreferrer" className="shrink-0 text-emerald-700 text-[10px] font-black uppercase tracking-wider">{t('view', { defaultValue: 'View' })}</a>
+                                                            <button type="button" onClick={() => setF(d.k, '')} className="shrink-0 text-slate-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+                                                        </div>
+                                                    ) : (
+                                                        <label className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${busy ? 'border-primary-300 bg-primary-50/50' : 'border-slate-200 bg-white hover:border-primary-400'}`}>
+                                                            <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" disabled={busy} onChange={e => handleDetailDocUpload(d.k, e.target.files?.[0])} />
+                                                            {busy ? <span className="text-[11px] font-black text-primary-500 uppercase tracking-widest animate-pulse">{t('uploading', { defaultValue: 'Uploading…' })}</span> : <><Upload className="w-4 h-4 text-slate-400" /><span className="text-[11px] font-bold text-slate-500">{t('choose_file', { defaultValue: 'Choose file' })}</span></>}
+                                                        </label>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        return (
+                                            <div key={d.k} className="flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
+                                                {raw ? (
+                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary-600 hover:text-primary-700 inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                        {t('view', { defaultValue: 'View' })} <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                ) : <span className="shrink-0 text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
+                                            </div>
+                                        );
+                                    })}
+                                </Section>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
         </div>
     );
 };

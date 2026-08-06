@@ -30,6 +30,7 @@ model User {
   enabledPeriods           EvaluationPeriod[]
   hrEvaluations            HREvaluation[]         @relation("HREvaluationsSubmittedBy")
   leaveDeptApprovals       LeaveRequest[]         @relation("LeaveDeptApprovals")
+  leaveDivisionApprovals   LeaveRequest[]         @relation("LeaveDivisionApprovals")
   leaveDirApprovals        LeaveRequest[]         @relation("LeaveDirApprovals")
   leaveUnitApprovals       LeaveRequest[]         @relation("LeaveUnitApprovals")
   leaveRequests            LeaveRequest[]
@@ -39,6 +40,10 @@ model User {
   gmRecruitmentApprovals   RecruitmentRequest[]   @relation("RecruitmentGMApproval")
   hrRecruitmentApprovals   RecruitmentRequest[]   @relation("RecruitmentHRApproval")
   recruitmentRequests      RecruitmentRequest[]   @relation("RecruitmentRequester")
+  candidatesCreated        Candidate[]            @relation("CandidateCreator")
+  candidatesScreened       Candidate[]            @relation("CandidateScreener")
+  candidatesHrEvaluated    Candidate[]            @relation("CandidateHrEvaluator")
+  candidatesTechEvaluated  Candidate[]            @relation("CandidateTechEvaluator")
   assignedTasks            StaffTask[]            @relation("TasksAssignedTo")
   authoredTasks            StaffTask[]            @relation("TasksAuthoredBy")
   supportTickets           SupportTicket[]        @relation("TicketRequester")
@@ -63,7 +68,9 @@ model Department {
   units               Unit[]
   divisionId          String?
   isOffice            Boolean              @default(false)
+  positionFactor      Float                @default(1.0)
   division            Division?            @relation(fields: [divisionId], references: [id])
+  jobDescriptions     JobDescription[]
 }
 
 model Directorate {
@@ -73,6 +80,8 @@ model Directorate {
   employees   Employee[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  positionFactor Float     @default(1.0)
+  jobDescriptions JobDescription[]
 }
 
 model Division {
@@ -82,6 +91,9 @@ model Division {
   directorate         Directorate?         @relation(fields: [directorateId], references: [id])
   departments         Department[]
   employees           Employee[]
+  positionFactor      Float                @default(1.0)
+  jobDescriptions     JobDescription[]
+  recruitmentRequests RecruitmentRequest[]
 }
 
 model Unit {
@@ -92,6 +104,35 @@ model Unit {
   employees           Employee[]
   recruitmentRequests RecruitmentRequest[]
   department          Department           @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  jobDescriptions     JobDescription[]
+}
+
+model JobDescription {
+  id             String       @id @default(uuid())
+  title          String
+  description    String?
+  isHead         Boolean      @default(false)
+  plannedCount   Int          @default(1)
+  jobCategories  String[]     @default([])
+  workLocations  String[]     @default([])
+  details        Json?
+  directorateId  String?
+  divisionId     String?
+  departmentId   String?
+  unitId         String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  directorate    Directorate? @relation(fields: [directorateId], references: [id], onDelete: Cascade)
+  division       Division?    @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  unit           Unit?        @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+  recruitmentRequests RecruitmentRequest[]
+
+  @@index([directorateId])
+  @@index([divisionId])
+  @@index([departmentId])
+  @@index([unitId])
 }
 
 model Employee {
@@ -100,7 +141,7 @@ model Employee {
   email                  String?                @unique
   role                   String                 @default("EMPLOYEE")
   departmentId           String?
-  groupId                String
+  groupId                String?
   baseSalary             Float                  @default(0)
   joinDate               DateTime
   staffId                String?
@@ -113,11 +154,13 @@ model Employee {
   userId                 String?                @unique
   unitId                 String?
   position               String?
+  placeOfWork            String?
   contractNumber         String?
   emergencyHolidaysUsed  Float                  @default(0)
   fullNameArabic         String?
   jobCategory            String?
   jobGrade               String?
+  salaryStructureType    String?
   nationality            String?
   passportNumber         String?
   unpaidHolidaysUsed     Float                  @default(0)
@@ -130,6 +173,46 @@ model Employee {
   siteFactor             Float                  @default(1.0)
   skillFactor            Float                  @default(1.0)
   languageFactor         Float                  @default(1.0)
+  evaluationPoints       Float                  @default(0)
+  promotionNotified      Boolean                @default(false)
+  // --- Extended Identity Details (recruitment intake form) ---
+  dateOfBirth                DateTime?
+  placeOfBirth               String?
+  nationalId                 String?
+  academicQualification      String?
+  gender                     String?
+  bloodType                  String?
+  idCardNumber               String?
+  idPlaceOfIssue             String?
+  idIssueDate                DateTime?
+  passportPlaceOfIssue       String?
+  passportExpiryDate         DateTime?
+  drivingLicenseType         String?
+  drivingLicenseNumber       String?
+  drivingLicenseExpiry       DateTime?
+  drivingLicensePlaceOfIssue String?
+  personalPhone              String?
+  personalEmail              String?
+  emergencyContactNumber     String?
+  residentialAddress         String?
+  workedBefore               String?
+  hasRelativesInCompany      String?
+  relativesNames             String?
+  bankName                   String?
+  bankBranchName             String?
+  bankAccountNumber          String?
+  arrivalDate                DateTime?
+  cvUrl                      String?
+  degreeUrl                  String?
+  birthCertUrl               String?
+  passportCopyUrl            String?
+  bankCheckUrl               String?
+  photoUrl                   String?
+  idCardUrl                  String?
+  jobOfferUrl                String?
+  healthCertUrl              String?
+  jobDescriptionId       String?
+  jobDescription         JobDescription?        @relation(fields: [jobDescriptionId], references: [id])
   assetRequests          AssetRequest[]
   contracts              Contract[]
   departmentEvaluations  DepartmentEvaluation[]
@@ -142,7 +225,7 @@ model Employee {
   directorate            Directorate?           @relation(fields: [directorateId], references: [id])
   division               Division?              @relation(fields: [divisionId], references: [id])
   department             Department?            @relation(fields: [departmentId], references: [id])
-  group                  Group                  @relation(fields: [groupId], references: [id])
+  group                  Group?                 @relation(fields: [groupId], references: [id])
   unit                   Unit?                  @relation(fields: [unitId], references: [id])
   user                   User?                  @relation(fields: [userId], references: [id])
   hrEvaluations          HREvaluation[]
@@ -155,6 +238,7 @@ model Employee {
   @@index([departmentId])
   @@index([unitId])
   @@index([groupId])
+  @@index([jobDescriptionId])
 }
 
 model Contract {
@@ -407,15 +491,19 @@ model LeaveRequest {
   startTime            String?
   endTime              String?
   reason               String?
+  attachmentUrl        String?
+  attachmentName       String?
   managerNote          String?
   hrNote               String?
   status               String    @default("PENDING")
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deptApprovedById     String?
+  divisionApprovedById String?
   directorApprovedById String?
   unitApprovedById     String?
   deptApprovedBy       User?     @relation("LeaveDeptApprovals", fields: [deptApprovedById], references: [id])
+  divisionApprovedBy   User?     @relation("LeaveDivisionApprovals", fields: [divisionApprovedById], references: [id])
   directorApprovedBy   User?     @relation("LeaveDirApprovals", fields: [directorApprovedById], references: [id])
   employee             Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   unitApprovedBy       User?     @relation("LeaveUnitApprovals", fields: [unitApprovedById], references: [id])
@@ -450,15 +538,17 @@ model StaffTask {
 }
 
 model Announcement {
-  id         String    @id @default(uuid())
-  authorId   String?
-  targetType String
-  targetId   String?
-  title      String
-  content    String
-  expiryDate DateTime?
-  createdAt  DateTime  @default(now())
-  author     User?     @relation(fields: [authorId], references: [id])
+  id             String    @id @default(uuid())
+  authorId       String?
+  targetType     String
+  targetId       String?
+  title          String
+  content        String
+  attachmentUrl  String?
+  attachmentName String?
+  expiryDate     DateTime?
+  createdAt      DateTime  @default(now())
+  author         User?     @relation(fields: [authorId], references: [id])
 }
 
 model Notification {
@@ -516,9 +606,16 @@ model RecruitmentRequest {
   id               String     @id @default(uuid())
   requesterId      String
   unitId           String?
-  departmentId     String
+  departmentId     String?
+  divisionId       String?
   jobTitle         String
   reason           String?
+  type             String     @default("HIRE") // HIRE | JD_CHANGE
+  jobDescriptionId String?
+  jdPayload        Json?
+  quantity         Int        @default(1) // number of people to hire under this requisition
+  filled           Boolean    @default(false)
+  filledAt         DateTime?
   status           String     @default("PENDING")
   hrNote           String?
   gmNote           String?
@@ -528,12 +625,108 @@ model RecruitmentRequest {
   updatedAt        DateTime   @updatedAt
   deptApprovedById String?
   deptNote         String?
-  department       Department @relation(fields: [departmentId], references: [id])
+  deptApprovedAt   DateTime?
+  hrApprovedAt     DateTime?
+  gmApprovedAt     DateTime?
+  department       Department?     @relation(fields: [departmentId], references: [id])
+  division         Division?       @relation(fields: [divisionId], references: [id])
+  jobDescription   JobDescription? @relation(fields: [jobDescriptionId], references: [id])
   deptApprovedBy   User?      @relation("RecruitmentDeptApproval", fields: [deptApprovedById], references: [id])
   gmApprovedBy     User?      @relation("RecruitmentGMApproval", fields: [gmApprovedById], references: [id])
   hrApprovedBy     User?      @relation("RecruitmentHRApproval", fields: [hrApprovedById], references: [id])
   requester        User       @relation("RecruitmentRequester", fields: [requesterId], references: [id])
   unit             Unit?      @relation(fields: [unitId], references: [id])
+  candidates       Candidate[]
+
+  @@index([status])
+  @@index([type])
+}
+
+// A candidate sourced by HR against an approved HIRE requisition, moving through the hiring pipeline:
+// SCREENING (head accept/reject) -> INTERVIEW (schedule + HR & technical evaluations + final decision)
+// -> OFFER (candidate accepts/declines the offer) -> HIRED (enrolled as an employee) | REJECTED | WITHDRAWN.
+model Candidate {
+  id            String    @id @default(uuid())
+  requisitionId String
+  fullName      String
+  phone         String?
+  email         String?
+  cvPath        String?
+
+  // Application profile captured when the candidate is added
+  source            String?   // where the candidate came from (referral / agency / job board...)
+  degreePath        String?   // uploaded degree certificate
+  portfolioPath     String?   // uploaded portfolio (designers only)
+  speciality        String?   // graduation certificate name / speciality
+  yearsExperience   String?   // years of relevant work experience
+  salaryExpectation String?   // salary expectations
+  nationality       String?
+  dateOfBirth       DateTime?
+  placeOfLiving     String?
+
+  stage         String    @default("SCREENING") // SCREENING | INTERVIEW | OFFER | HIRED | REJECTED | WITHDRAWN
+
+  // Screening — the requesting head accepts or rejects the candidate
+  screenDecision String?  // ACCEPTED | REJECTED
+  screenNote     String?
+  screenById     String?
+  screenAt       DateTime?
+
+  // Interview scheduling
+  interviewAt       DateTime?
+  interviewLocation String?
+  interviewNote     String?
+
+  // HR evaluation (score 1-5 + recommendation). hrScore is the overall (average of hrCriteria).
+  hrScore     Int?
+  hrRecommend Boolean?
+  hrNote      String?
+  hrCriteria  Json?    // { englishProficiency, motivation, culturalFit, communication, professionalism } each 1-5
+  hrEvalById  String?
+  hrEvalAt    DateTime?
+
+  // Technical evaluation by the requesting head. techScore is the overall (average of techCriteria).
+  techScore     Int?
+  techRecommend Boolean?
+  techNote      String?
+  techCriteria  Json?  // { technicalKnowledge, problemSolving, relevantExperience, softwareProficiency, learningAdaptability } each 1-5
+  techEvalById  String?
+  techEvalAt    DateTime?
+
+  // Final decision after both evaluations
+  finalDecision String?  // ACCEPTED | REJECTED
+  finalNote     String?
+
+  // Offer / onboarding — the candidate's response to the offer
+  offerDecision String?  // ACCEPTED | DECLINED
+  offerNote     String?
+  offerAt       DateTime?
+
+  // Job-offer parameters captured up front (on the hiring list) and reused to generate the offer
+  salaryStructure String?  // e.g. SS-01-LYD
+  jobGrade        String?  // experience-derived grade: Trainee | Intern | Junior | Lead | Senior
+  placeOfWork     String?  // chosen from the job description's work locations
+  contractMonths  Int?     // 3 or 6
+  residentStatus  String?  // RESDANT | DIRCT NONE RESDANT | NONE RESDANT (maps to the employee contract type)
+
+  // Stamped when HR generates the candidate's job-offer document
+  offerGeneratedAt DateTime?
+
+  // Set once the accepted candidate is enrolled as an employee
+  employeeId String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requisition RecruitmentRequest @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  createdBy   User?              @relation("CandidateCreator", fields: [createdById], references: [id])
+  screenBy    User?              @relation("CandidateScreener", fields: [screenById], references: [id])
+  hrEvalBy    User?              @relation("CandidateHrEvaluator", fields: [hrEvalById], references: [id])
+  techEvalBy  User?              @relation("CandidateTechEvaluator", fields: [techEvalById], references: [id])
+
+  @@index([requisitionId])
+  @@index([stage])
 }
 
 model DivisionEvaluation {
@@ -594,4 +787,15 @@ model ChairmanEvaluation {
   submittedBy      User?     @relation("ChairmanEvaluationsSubmittedBy", fields: [submittedById], references: [id])
 
   @@index([employeeId, month])
+}
+
+model SalaryStructure {
+  id              String   @id @default(uuid())
+  jobCategory     String
+  jobGrade        String
+  structureLevel  String
+  hourlyRate      Float
+  monthlyRate     Float
+
+  @@unique([jobCategory, jobGrade, structureLevel])
 }

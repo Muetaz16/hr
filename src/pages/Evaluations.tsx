@@ -23,10 +23,12 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import { roleThemes } from '../config/roleThemes';
 import type { UserRole } from '../types';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const EvaluationsPage: React.FC = () => {
     const { currentUser } = useAuth();
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -202,7 +204,7 @@ const EvaluationsPage: React.FC = () => {
                     finalScore: 0 // Service calculates this
                 });
 
-                if (window.confirm("Approve and Lock this evaluation? This cannot be undone.")) {
+                if (await confirm({ message: "Approve and Lock this evaluation? This cannot be undone.", danger: false })) {
                     await evaluationService.lockEvaluation(id);
                 }
             }

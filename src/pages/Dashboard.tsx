@@ -33,6 +33,7 @@ import { useQuery } from '@tanstack/react-query';
 import EvaluationAnalytics from '../components/EvaluationAnalytics';
 import ContractNotifications from '../components/ContractNotifications';
 import Skeleton from '../components/Skeleton';
+import JobDescriptionView from '../components/JobDescriptionView';
 
 const Dashboard: React.FC = () => {
     const { currentUser } = useAuth();
@@ -433,7 +434,24 @@ const Dashboard: React.FC = () => {
                             <p className="text-slate-500 text-sm font-medium">{t('my_lifecycle_subtitle', { defaultValue: 'Your personal HR record, contract, and leave balances' })}</p>
                         </div>
                     </div>
-                    
+
+                    {myEmployeeData.jobDescription && (
+                        <div className="glass-card p-8 rounded-[32px] border-none shadow-premium-shadow relative overflow-hidden">
+                            <div className="flex items-center gap-4 mb-6 relative z-10">
+                                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                                    <FileText className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-slate-800 tracking-tight">{t('my_job_description', { defaultValue: 'My Job Description' })}</h3>
+                                    <span className="text-sm font-medium text-slate-400">{t('my_job_description_sub', { defaultValue: 'Your assigned position and responsibilities' })}</span>
+                                </div>
+                            </div>
+                            <div className="relative z-10">
+                                <JobDescriptionView jd={myEmployeeData.jobDescription} />
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Contract Details Card */}
                         <div className="lg:col-span-1 glass-card p-8 rounded-[32px] border-none shadow-premium-shadow relative overflow-hidden group">

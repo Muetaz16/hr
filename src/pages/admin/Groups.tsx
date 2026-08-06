@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { groupService } from '../../services/departmentService';
 import type { Group } from '../../types';
 import Modal from '../../components/Modal';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
 const GroupsPage: React.FC = () => {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,7 +54,7 @@ const GroupsPage: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm(t('confirm_delete_group'))) {
+        if (await confirm({ message: t('confirm_delete_group'), danger: true })) {
             try {
                 await groupService.deleteGroup(id);
                 fetchGroups();

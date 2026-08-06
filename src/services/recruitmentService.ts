@@ -7,18 +7,23 @@ export const recruitmentService = {
         return response.data;
     },
 
-    createRequest: async (data: { jobTitle: string; reason?: string; unitId?: string; departmentId: string }): Promise<RecruitmentRequest> => {
+    createRequest: async (data: Partial<RecruitmentRequest> & { reason?: string }): Promise<RecruitmentRequest> => {
         const response = await api.post('/recruitment', { ...data });
         return response.data;
     },
 
-    updateRequest: async (id: string, data: { jobTitle: string; reason?: string; unitId?: string; departmentId: string }): Promise<RecruitmentRequest> => {
+    updateRequest: async (id: string, data: Partial<RecruitmentRequest>): Promise<RecruitmentRequest> => {
         const response = await api.put(`/recruitment/${id}`, { ...data });
         return response.data;
     },
 
     updateStatus: async (id: string, status: string, note?: string): Promise<RecruitmentRequest> => {
         const response = await api.put(`/recruitment/${id}/status`, { status, note });
+        return response.data;
+    },
+
+    markFilled: async (id: string): Promise<RecruitmentRequest> => {
+        const response = await api.put(`/recruitment/${id}/status`, { status: 'FILLED' });
         return response.data;
     },
 

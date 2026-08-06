@@ -18,11 +18,13 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../components/ConfirmDialog';
 import type { Employee, PayrollResult, TimeRecord } from '../types';
 
 const PayrollPage: React.FC = () => {
     const { currentUser } = useAuth();
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
     const [loading, setLoading] = useState(false);
     const [payrollData, setPayrollData] = useState<PayrollResult[]>([]);
@@ -64,7 +66,7 @@ const PayrollPage: React.FC = () => {
     };
 
     const handleGeneratePayroll = async () => {
-        if (!window.confirm(t('confirm_compile_report'))) return;
+        if (!(await confirm({ message: t('confirm_compile_report'), danger: false }))) return;
 
 
         setLoading(true);
@@ -271,7 +273,7 @@ const PayrollPage: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm(t('confirm_delete_report'))) return;
+        if (!(await confirm({ message: t('confirm_delete_report'), danger: true }))) return;
         setLoading(true);
         try {
             await payrollService.deletePayrollResult(id);

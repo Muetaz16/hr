@@ -224,6 +224,18 @@ export const deleteUser = async (req: Request, res: Response) => {
                 where: { submittedById: id },
                 data: { submittedById: null }
             }),
+            prisma.divisionEvaluation.updateMany({
+                where: { submittedById: id },
+                data: { submittedById: null }
+            }),
+            prisma.gMEvaluation.updateMany({
+                where: { submittedById: id },
+                data: { submittedById: null }
+            }),
+            prisma.chairmanEvaluation.updateMany({
+                where: { submittedById: id },
+                data: { submittedById: null }
+            }),
             prisma.personnelEvaluation.updateMany({
                 where: { submittedById: id },
                 data: { submittedById: null }
@@ -233,14 +245,51 @@ export const deleteUser = async (req: Request, res: Response) => {
                 where: { enabledById: id },
                 data: { enabledById: null }
             }),
-            // 8. Delete records strictly owned by user (normally cascades, but safe to force)
+            // 8. Clear Recruitment approvals (nullable) done by this user
+            prisma.recruitmentRequest.updateMany({
+                where: { deptApprovedById: id },
+                data: { deptApprovedById: null }
+            }),
+            prisma.recruitmentRequest.updateMany({
+                where: { gmApprovedById: id },
+                data: { gmApprovedById: null }
+            }),
+            prisma.recruitmentRequest.updateMany({
+                where: { hrApprovedById: id },
+                data: { hrApprovedById: null }
+            }),
+            // 9. Clear Candidate relations (all nullable) touched by this user
+            prisma.candidate.updateMany({
+                where: { createdById: id },
+                data: { createdById: null }
+            }),
+            prisma.candidate.updateMany({
+                where: { screenById: id },
+                data: { screenById: null }
+            }),
+            prisma.candidate.updateMany({
+                where: { hrEvalById: id },
+                data: { hrEvalById: null }
+            }),
+            prisma.candidate.updateMany({
+                where: { techEvalById: id },
+                data: { techEvalById: null }
+            }),
+            // 10. Delete records strictly owned by user.
+            // Recruitment requests keep a REQUIRED requester, so they can't be detached —
+            // remove the ones this user raised so the account can be deleted.
+            prisma.recruitmentRequest.deleteMany({
+                where: { requesterId: id }
+            }),
             prisma.notification.deleteMany({
                 where: { userId: id }
             }),
             prisma.leaveRequest.deleteMany({
                 where: { userId: id }
             }),
-            // 9. Final Delete
+            // SupportTicket.requester and AssetRequest.requester are onDelete: Cascade,
+            // so those rows are removed automatically with the user.
+            // 11. Final Delete
             prisma.user.delete({ where: { id } })
         ]);
 
@@ -251,9 +300,21 @@ export const deleteUser = async (req: Request, res: Response) => {
         if (error.code === 'P2025') {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.status(500).json({ 
-            error: 'Failed to delete user. Please ensure all related data is properly handled.',
-            details: error.message 
+        // A foreign-key restriction means some record still points at this user. Surface
+        // exactly which relation so it can be handled, instead of a generic 500.
+        if (error.code === 'P2003') {
+            const field = error.meta?.field_name || error.meta?.constraint || 'a related record';
+            return res.status(409).json({
+                error: `This user is still referenced by ${field}. That link must be removed before the account can be deleted.`,
+                code: error.code,
+                meta: error.meta,
+            });
+        }
+        res.status(500).json({
+            error: error.message || 'Failed to delete user.',
+            details: error.message,
+            code: error.code,
+            meta: error.meta,
         });
     }
 };

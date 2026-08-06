@@ -10,6 +10,31 @@ export type UserRole =
     | 'HR_MANAGER'
     | 'EMPLOYEE'
     | 'PERSONNEL';
+    
+export const JOB_CATEGORIES = [
+    'Administrative Officer',
+    'Engineer',
+    'Financial Officer',
+    'Operation Officer',
+    'Support Officer',
+    'Supervisor',
+    'Technician'
+] as const;
+
+export type JobCategory = typeof JOB_CATEGORIES[number];
+
+export const JOB_GRADES = [
+    'Trainee',
+    'Intern',
+    'Junior',
+    'Lead',
+    'Senior',
+    'Associate Consultant',
+    'Lead Consultant',
+    'Senior consultant'
+] as const;
+
+export type JobGrade = typeof JOB_GRADES[number];
 
 export interface User {
     id: string;
@@ -63,6 +88,46 @@ export interface Department {
     isOffice?: boolean;
 }
 
+export interface JDSection {
+    en?: string;
+    ar?: string;
+}
+
+export interface JobDescriptionDetails {
+    jobPurpose?: JDSection;
+    keyResponsibilities?: JDSection;
+    kpi?: JDSection;
+    education?: JDSection;
+    experience?: JDSection;
+    skills?: JDSection;
+    trainingLicenses?: JDSection;
+    workingConditions?: JDSection;
+}
+
+export interface JobDescription {
+    id: string;
+    title: string;
+    description?: string;
+    isHead: boolean;
+    plannedCount: number;
+    jobCategories?: JobCategory[];
+    workLocations?: string[]; // 'OFFICE' | 'SITE'
+    details?: JobDescriptionDetails;
+    directorateId?: string;
+    divisionId?: string;
+    departmentId?: string;
+    unitId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    directorate?: { id: string; name: string };
+    division?: { id: string; name: string };
+    department?: { id: string; name: string };
+    unit?: { id: string; name: string };
+    _count?: {
+        employees: number;
+    };
+}
+
 export interface Employee {
     id: string;
     fullName: string;
@@ -77,17 +142,57 @@ export interface Employee {
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
     position?: string;
+    placeOfWork?: string; // Office / Site — locked from the job description at onboarding
     fullNameArabic?: string;
     passportNumber?: string;
     contractNumber?: string;
     nationality?: string;
+
+    // Extended Identity Details (recruitment intake form)
+    dateOfBirth?: string;
+    placeOfBirth?: string;
+    nationalId?: string;
+    academicQualification?: string;
+    gender?: string;
+    bloodType?: string;
+    idCardNumber?: string;
+    idPlaceOfIssue?: string;
+    idIssueDate?: string;
+    passportPlaceOfIssue?: string;
+    passportExpiryDate?: string;
+    drivingLicenseType?: string;
+    drivingLicenseNumber?: string;
+    drivingLicenseExpiry?: string;
+    drivingLicensePlaceOfIssue?: string;
+    personalPhone?: string;
+    personalEmail?: string;
+    emergencyContactNumber?: string;
+    residentialAddress?: string;
+    workedBefore?: string;
+    hasRelativesInCompany?: string;
+    relativesNames?: string;
+    bankName?: string;
+    bankBranchName?: string;
+    bankAccountNumber?: string;
+    arrivalDate?: string;
+    cvUrl?: string;
+    degreeUrl?: string;
+    birthCertUrl?: string;
+    passportCopyUrl?: string;
+    bankCheckUrl?: string;
+    photoUrl?: string;
+    idCardUrl?: string;
+    jobOfferUrl?: string;
+    healthCertUrl?: string;
     jobCategory?: string;
     jobGrade?: string;
+    salaryStructureType?: string;
     positionFactor?: number;
     skillFactor?: number;
     siteFactor?: number;
     languageFactor?: number;
     roleCategory?: string;
+    evaluationPoints?: number;
 
     // Contract Details
     contractStartDate?: string;
@@ -105,6 +210,8 @@ export interface Employee {
     userId?: string; // Link to Auth record
     permissions?: string[]; // Granular access permissions
     contracts?: Contract[];
+    jobDescriptionId?: string;
+    jobDescription?: JobDescription;
 }
 
 export interface Contract {
@@ -359,9 +466,17 @@ export interface RecruitmentRequest {
     id: string;
     requesterId: string;
     unitId?: string;
-    departmentId: string;
+    departmentId?: string;
+    divisionId?: string;
     jobTitle: string;
     reason?: string;
+    type?: 'HIRE' | 'JD_CHANGE';
+    jobDescriptionId?: string;
+    jdPayload?: any;
+    quantity?: number;
+    hiredCount?: number;
+    filled?: boolean;
+    filledAt?: string;
     status: 'PENDING' | 'DEPT_APPROVED' | 'HR_APPROVED' | 'FULLY_APPROVED' | 'REJECTED';
     deptNote?: string;
     hrNote?: string;
@@ -369,14 +484,96 @@ export interface RecruitmentRequest {
     deptApprovedById?: string;
     hrApprovedById?: string;
     gmApprovedById?: string;
+    deptApprovedAt?: string;
+    hrApprovedAt?: string;
+    gmApprovedAt?: string;
     createdAt: string;
     updatedAt: string;
-    
+
     // Included Relations
     requester?: { id: string; fullName: string; role: string };
     unit?: { id: string; name: string };
     department?: { id: string; name: string };
+    division?: { id: string; name: string };
+    jobDescription?: { id: string; title: string; plannedCount: number; workLocations?: string[]; _count?: { employees: number } };
     deptApprovedBy?: { id: string; fullName: string };
     hrApprovedBy?: { id: string; fullName: string };
     gmApprovedBy?: { id: string; fullName: string };
+}
+
+export type CandidateStage = 'SCREENING' | 'INTERVIEW' | 'OFFER' | 'HIRED' | 'REJECTED' | 'WITHDRAWN';
+
+export interface Candidate {
+    id: string;
+    requisitionId: string;
+    fullName: string;
+    phone?: string;
+    email?: string;
+    cvPath?: string;
+    degreePath?: string;
+    portfolioPath?: string;
+    source?: string;
+    speciality?: string;
+    yearsExperience?: string;
+    salaryExpectation?: string;
+    nationality?: string;
+    dateOfBirth?: string;
+    placeOfLiving?: string;
+    stage: CandidateStage;
+
+    // Screening (requesting head)
+    screenDecision?: 'ACCEPTED' | 'REJECTED';
+    screenNote?: string;
+    screenById?: string;
+    screenAt?: string;
+
+    // Interview
+    interviewAt?: string;
+    interviewLocation?: string;
+    interviewNote?: string;
+
+    // HR evaluation
+    hrScore?: number;
+    hrRecommend?: boolean;
+    hrNote?: string;
+    hrCriteria?: Record<string, number>;
+    hrEvalById?: string;
+    hrEvalAt?: string;
+
+    // Technical evaluation (requesting head)
+    techScore?: number;
+    techRecommend?: boolean;
+    techNote?: string;
+    techCriteria?: Record<string, number>;
+    techEvalById?: string;
+    techEvalAt?: string;
+
+    // Final decision + offer / onboarding
+    finalDecision?: 'ACCEPTED' | 'REJECTED';
+    finalNote?: string;
+    offerDecision?: 'ACCEPTED' | 'DECLINED';
+    offerNote?: string;
+    offerAt?: string;
+
+    // Job-offer parameters captured on the hiring list
+    salaryStructure?: string;
+    jobGrade?: string;
+    placeOfWork?: string;
+    contractMonths?: number;
+    residentStatus?: string; // RESDANT | DIRCT NONE RESDANT | NONE RESDANT
+    offerGeneratedAt?: string;
+
+    employeeId?: string;
+    createdById?: string;
+    createdAt: string;
+    updatedAt: string;
+
+    // Included relations
+    requisition?: RecruitmentRequest & {
+        jobDescription?: { id: string; title: string; plannedCount: number; isHead?: boolean; jobCategories?: string[]; workLocations?: string[]; _count?: { employees: number } };
+    };
+    createdBy?: { id: string; fullName: string };
+    screenBy?: { id: string; fullName: string };
+    hrEvalBy?: { id: string; fullName: string };
+    techEvalBy?: { id: string; fullName: string };
 }

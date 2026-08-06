@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import compression from 'compression';
 import { PrismaClient } from '@prisma/client';
+import path from 'path';
 
 dotenv.config();
 
@@ -12,10 +13,14 @@ const port = process.env.PORT || 5001;
 const prisma = new PrismaClient();
 const SERVER_VERSION = "2026-03-17-V3"; // Updated to verify reload
 
-app.use(helmet());
+// Cross-Origin Resource Sharing
+app.use(helmet({ crossOriginResourcePolicy: false })); // Allow cross-origin static file serving
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Global Request Logger
 app.use((req, res, next) => {
@@ -43,6 +48,10 @@ import staffHubRoutes from './routes/staffHubRoutes';
 import unitRoutes from './routes/unitRoutes';
 import operationsRoutes from './routes/operationsRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
+import salaryStructureRoutes from './routes/salaryStructureRoutes';
+import jobDescriptionRoutes from './routes/jobDescriptionRoutes';
+import candidateRoutes from './routes/candidateRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -64,6 +73,10 @@ app.use('/api/staff-hub', staffHubRoutes);
 app.use('/api/units', unitRoutes);
 app.use('/api/operations', operationsRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
+app.use('/api/salary-structures', salaryStructureRoutes);
+app.use('/api/job-descriptions', jobDescriptionRoutes);
+app.use('/api/candidates', candidateRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

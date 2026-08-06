@@ -1,0 +1,737 @@
+[
+  {
+    "category": "Engineer",
+    "grade": "Senior consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 29.5,
+    "monthlyRate": 61361
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 1.5,
+    "monthlyRate": 23922
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 0.5,
+    "monthlyRate": 42642
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 4.5,
+    "monthlyRate": 50963
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 4.5,
+    "monthlyRate": 7176
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 27.5,
+    "monthlyRate": 57201
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 1,
+    "monthlyRate": 22881
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 8.5,
+    "monthlyRate": 38482
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 2.5,
+    "monthlyRate": 46803
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 2.5,
+    "monthlyRate": 6760
+  },
+  {
+    "category": "Engineer",
+    "grade": "Associate Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 25.5,
+    "monthlyRate": 53041
+  },
+  {
+    "category": "Engineer",
+    "grade": "Associate Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 0.5,
+    "monthlyRate": 21841
+  },
+  {
+    "category": "Engineer",
+    "grade": "Associate Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 6.5,
+    "monthlyRate": 34322
+  },
+  {
+    "category": "Engineer",
+    "grade": "Associate Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 42643
+  },
+  {
+    "category": "Engineer",
+    "grade": "Associate Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 6344
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 25,
+    "monthlyRate": 52001
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior",
+    "structure": "SS-02-USD",
+    "hourlyRate": 0,
+    "monthlyRate": 20801
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior",
+    "structure": "SS-03-USD",
+    "hourlyRate": 4.5,
+    "monthlyRate": 30161
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 8.5,
+    "monthlyRate": 38482
+  },
+  {
+    "category": "Engineer",
+    "grade": "Senior",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 8.5,
+    "monthlyRate": 5928
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 23,
+    "monthlyRate": 4784
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead",
+    "structure": "SS-02-USD",
+    "hourlyRate": 9,
+    "monthlyRate": 18721
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead",
+    "structure": "SS-03-USD",
+    "hourlyRate": 2.5,
+    "monthlyRate": 26001
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 6.5,
+    "monthlyRate": 34322
+  },
+  {
+    "category": "Engineer",
+    "grade": "Lead",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 6.5,
+    "monthlyRate": 5512
+  },
+  {
+    "category": "Engineer",
+    "grade": "Junior",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 21,
+    "monthlyRate": 4368
+  },
+  {
+    "category": "Engineer",
+    "grade": "Junior",
+    "structure": "SS-02-USD",
+    "hourlyRate": 6.5,
+    "monthlyRate": 13521
+  },
+  {
+    "category": "Engineer",
+    "grade": "Junior",
+    "structure": "SS-03-USD",
+    "hourlyRate": 0.5,
+    "monthlyRate": 21841
+  },
+  {
+    "category": "Engineer",
+    "grade": "Junior",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 4.5,
+    "monthlyRate": 30162
+  },
+  {
+    "category": "Engineer",
+    "grade": "Junior",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 4.5,
+    "monthlyRate": 5096
+  },
+  {
+    "category": "Engineer",
+    "grade": "Intern",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 13.5,
+    "monthlyRate": 2808
+  },
+  {
+    "category": "Engineer",
+    "grade": "Intern",
+    "structure": "SS-02-USD",
+    "hourlyRate": 6,
+    "monthlyRate": 1248
+  },
+  {
+    "category": "Engineer",
+    "grade": "Intern",
+    "structure": "SS-03-USD",
+    "hourlyRate": 8.5,
+    "monthlyRate": 17681
+  },
+  {
+    "category": "Engineer",
+    "grade": "Intern",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 2.5,
+    "monthlyRate": 26001
+  },
+  {
+    "category": "Engineer",
+    "grade": "Intern",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 2.5,
+    "monthlyRate": 2600
+  },
+  {
+    "category": "Engineer",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 11.5,
+    "monthlyRate": 2392
+  },
+  {
+    "category": "Engineer",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 5.5,
+    "monthlyRate": 1144
+  },
+  {
+    "category": "Engineer",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 6.5,
+    "monthlyRate": 13521
+  },
+  {
+    "category": "Engineer",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 21841
+  },
+  {
+    "category": "Engineer",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 2184
+  },
+  {
+    "category": "Financial Officer",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 11.5,
+    "monthlyRate": 2392
+  },
+  {
+    "category": "Financial Officer",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 5,
+    "monthlyRate": 1040
+  },
+  {
+    "category": "Financial Officer",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 6.5,
+    "monthlyRate": 13521
+  },
+  {
+    "category": "Financial Officer",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 21841
+  },
+  {
+    "category": "Financial Officer",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 0.5,
+    "monthlyRate": 2184
+  },
+  {
+    "category": "Operation Officer",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 11,
+    "monthlyRate": 2288
+  },
+  {
+    "category": "Operation Officer",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 4.5,
+    "monthlyRate": 936
+  },
+  {
+    "category": "Operation Officer",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 6,
+    "monthlyRate": 12481
+  },
+  {
+    "category": "Operation Officer",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 0,
+    "monthlyRate": 20801
+  },
+  {
+    "category": "Operation Officer",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 0,
+    "monthlyRate": 2080
+  },
+  {
+    "category": "Administrative Officer",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 10.5,
+    "monthlyRate": 2184
+  },
+  {
+    "category": "Administrative Officer",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 4,
+    "monthlyRate": 832
+  },
+  {
+    "category": "Administrative Officer",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 5,
+    "monthlyRate": 1040
+  },
+  {
+    "category": "Administrative Officer",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 9,
+    "monthlyRate": 1872
+  },
+  {
+    "category": "Administrative Officer",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 9,
+    "monthlyRate": 1872
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Senior consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 19.5,
+    "monthlyRate": 4056
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Senior consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 8,
+    "monthlyRate": 16641
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Senior consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 2,
+    "monthlyRate": 24961
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Senior consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 6,
+    "monthlyRate": 33282
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Senior consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 6,
+    "monthlyRate": 5408
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 10,
+    "monthlyRate": 2080
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 3.5,
+    "monthlyRate": 728
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 5,
+    "monthlyRate": 1040
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 9,
+    "monthlyRate": 1872
+  },
+  {
+    "category": "Supervisor",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 9,
+    "monthlyRate": 1872
+  },
+  {
+    "category": "Technician",
+    "grade": "Senior consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 18.5,
+    "monthlyRate": 3848
+  },
+  {
+    "category": "Technician",
+    "grade": "Senior consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 7.5,
+    "monthlyRate": 15601
+  },
+  {
+    "category": "Technician",
+    "grade": "Senior consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 1,
+    "monthlyRate": 22881
+  },
+  {
+    "category": "Technician",
+    "grade": "Senior consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 5,
+    "monthlyRate": 31202
+  },
+  {
+    "category": "Technician",
+    "grade": "Senior consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 5,
+    "monthlyRate": 5200
+  },
+  {
+    "category": "Technician",
+    "grade": "Lead Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 17.5,
+    "monthlyRate": 3640
+  },
+  {
+    "category": "Technician",
+    "grade": "Lead Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 7,
+    "monthlyRate": 14561
+  },
+  {
+    "category": "Technician",
+    "grade": "Lead Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 0,
+    "monthlyRate": 20801
+  },
+  {
+    "category": "Technician",
+    "grade": "Lead Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 4,
+    "monthlyRate": 29122
+  },
+  {
+    "category": "Technician",
+    "grade": "Lead Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 4,
+    "monthlyRate": 4992
+  },
+  {
+    "category": "Technician",
+    "grade": "Associate Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 16.5,
+    "monthlyRate": 3432
+  },
+  {
+    "category": "Technician",
+    "grade": "Associate Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 6.5,
+    "monthlyRate": 1352
+  },
+  {
+    "category": "Technician",
+    "grade": "Associate Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 9,
+    "monthlyRate": 18721
+  },
+  {
+    "category": "Technician",
+    "grade": "Associate Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 3,
+    "monthlyRate": 27042
+  },
+  {
+    "category": "Technician",
+    "grade": "Associate Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 3,
+    "monthlyRate": 4784
+  },
+  {
+    "category": "Technician",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 9.5,
+    "monthlyRate": 1976
+  },
+  {
+    "category": "Technician",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 3,
+    "monthlyRate": 624
+  },
+  {
+    "category": "Technician",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 4,
+    "monthlyRate": 832
+  },
+  {
+    "category": "Technician",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 8,
+    "monthlyRate": 1664
+  },
+  {
+    "category": "Technician",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 8,
+    "monthlyRate": 1664
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Senior consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 16.5,
+    "monthlyRate": 3432
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Senior consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 6,
+    "monthlyRate": 12481
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Senior consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 0,
+    "monthlyRate": 20801
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Senior consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 4,
+    "monthlyRate": 29121
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Senior consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 4,
+    "monthlyRate": 2912
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Lead Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 16,
+    "monthlyRate": 3328
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Lead Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 5.5,
+    "monthlyRate": 1144
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Lead Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 9,
+    "monthlyRate": 18721
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Lead Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 3,
+    "monthlyRate": 27041
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Lead Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 3,
+    "monthlyRate": 2704
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Associate Consultant",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 15.5,
+    "monthlyRate": 3224
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Associate Consultant",
+    "structure": "SS-02-USD",
+    "hourlyRate": 5,
+    "monthlyRate": 1040
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Associate Consultant",
+    "structure": "SS-03-USD",
+    "hourlyRate": 8,
+    "monthlyRate": 16641
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Associate Consultant",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 2,
+    "monthlyRate": 24961
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Associate Consultant",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 2,
+    "monthlyRate": 2496
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Trainee",
+    "structure": "SS-01-LYD",
+    "hourlyRate": 9,
+    "monthlyRate": 1872
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Trainee",
+    "structure": "SS-02-USD",
+    "hourlyRate": 1,
+    "monthlyRate": 208
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Trainee",
+    "structure": "SS-03-USD",
+    "hourlyRate": 3,
+    "monthlyRate": 624
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Trainee",
+    "structure": "SS-04-EUR",
+    "hourlyRate": 7,
+    "monthlyRate": 1456
+  },
+  {
+    "category": "Support Officer",
+    "grade": "Trainee",
+    "structure": "SS-05-EUR",
+    "hourlyRate": 7,
+    "monthlyRate": 1456
+  }
+]

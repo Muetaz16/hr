@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/access';
 import type { UserRole } from '../types';
 
 interface ProtectedRouteProps {
@@ -29,18 +30,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, allowedPe
     }
 
     if (allowedRoles || allowedPermissions) {
-        let hasRoleAccess = false;
-        let hasPermissionAccess = false;
-
-        if (allowedRoles && currentUser.role && allowedRoles.includes(currentUser.role)) {
-            hasRoleAccess = true;
-        }
-
-        if (allowedPermissions && currentUser.permissions) {
-            hasPermissionAccess = allowedPermissions.some(perm => currentUser.permissions?.includes(perm));
-        }
-
-        if (!hasRoleAccess && !hasPermissionAccess) {
+        if (!canAccess(currentUser, allowedRoles, allowedPermissions)) {
             return <Navigate to="/unauthorized" replace />;
         }
     }

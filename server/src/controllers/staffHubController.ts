@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -9,6 +11,20 @@ const prisma = new PrismaClient();
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
         const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason } = req.body;
+        const file = (req as any).file;
+
+        // Emergency leave requires a supporting document
+        if (type === 'EMERGENCY_LEAVE' && !file) {
+            return res.status(400).json({ error: 'A supporting document is required for emergency leave requests.' });
+        }
+
+        let attachmentUrl: string | null = null;
+        let attachmentName: string | null = null;
+        if (file) {
+            attachmentUrl = `/uploads/requests/${file.filename}`;
+            attachmentName = file.originalname;
+        }
+
         const request = await prisma.leaveRequest.create({
             data: {
                 employeeId,
@@ -19,6 +35,8 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 startTime,
                 endTime,
                 reason,
+                attachmentUrl,
+                attachmentName,
                 status: 'PENDING'
             }
         });
@@ -47,6 +65,7 @@ export const updateRequestStatus = async (req: Request, res: Response) => {
 
         if (status === 'APPROVED_BY_UNIT') updateData.unitApprovedById = userId;
         if (status === 'APPROVED_BY_DEPT') updateData.deptApprovedById = userId;
+        if (status === 'APPROVED_BY_DIVISION') updateData.divisionApprovedById = userId;
         if (status === 'APPROVED_BY_DIRECTOR' || status === 'COMPLETED') updateData.directorApprovedById = userId;
 
         const result = await prisma.$transaction(async (tx) => {
@@ -106,17 +125,18 @@ export const getRequestsByEmployee = async (req: Request, res: Response) => {
 
 export const getPendingRequests = async (req: Request, res: Response) => {
     try {
-        const { departmentId, groupId, unitId, status } = req.query;
+        const { departmentId, groupId, unitId, divisionId, status } = req.query;
         
         // Allow frontend to specify which statuses it considers pending, 
         // fallback to standard pending flow statuses.
-        const statusFilters = status ? String(status).split(',') : ['PENDING', 'APPROVED_BY_UNIT', 'APPROVED_BY_DEPT'];
+        const statusFilters = status ? String(status).split(',') : ['PENDING', 'APPROVED_BY_UNIT', 'APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION'];
         
         const where: any = { status: { in: statusFilters } };
         
         const employeeFilter: any = {};
         if (unitId) employeeFilter.unitId = String(unitId);
         if (departmentId) employeeFilter.departmentId = String(departmentId);
+        if (divisionId) employeeFilter.divisionId = String(divisionId);
         if (groupId) employeeFilter.groupId = String(groupId);
 
         if (Object.keys(employeeFilter).length > 0) {
@@ -125,10 +145,11 @@ export const getPendingRequests = async (req: Request, res: Response) => {
 
         const requests = await prisma.leaveRequest.findMany({
             where,
-            include: { 
+            include: {
                 employee: true,
                 unitApprovedBy: { select: { fullName: true } },
                 deptApprovedBy: { select: { fullName: true } },
+                divisionApprovedBy: { select: { fullName: true } },
                 directorApprovedBy: { select: { fullName: true } }
             },
             orderBy: { createdAt: 'desc' }
@@ -386,6 +407,14 @@ export const createAnnouncement = async (req: AuthRequest, res: Response) => {
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
             return res.status(403).json({ error: 'Only authorized managers can post announcements' });
         }
+
+        let attachmentUrl = null;
+        let attachmentName = null;
+        if (req.file) {
+            attachmentUrl = `/uploads/announcements/${req.file.filename}`;
+            attachmentName = req.file.originalname;
+        }
+
         const announcement = await prisma.announcement.create({
             data: {
                 authorId,
@@ -393,6 +422,8 @@ export const createAnnouncement = async (req: AuthRequest, res: Response) => {
                 targetId,
                 title,
                 content,
+                attachmentUrl,
+                attachmentName,
                 expiryDate: expiryDate ? new Date(expiryDate) : null
             }
         });
@@ -412,6 +443,14 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response) => {
 
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
             return res.status(403).json({ error: 'Unauthorized to delete announcements' });
+        }
+
+        const announcement = await prisma.announcement.findUnique({ where: { id } });
+        if (announcement?.attachmentUrl) {
+            const filePath = path.join(__dirname, '../../', announcement.attachmentUrl);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
         }
 
         await prisma.announcement.delete({ where: { id } });
@@ -434,6 +473,21 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ error: 'Unauthorized to update announcements' });
         }
 
+        const current = await prisma.announcement.findUnique({ where: { id } });
+        let attachmentUrl = current?.attachmentUrl;
+        let attachmentName = current?.attachmentName;
+
+        if (req.file) {
+            if (current?.attachmentUrl) {
+                const filePath = path.join(__dirname, '../../', current.attachmentUrl);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+            attachmentUrl = `/uploads/announcements/${req.file.filename}`;
+            attachmentName = req.file.originalname;
+        }
+
         const announcement = await prisma.announcement.update({
             where: { id },
             data: {
@@ -441,6 +495,8 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
                 targetId: targetType === 'GLOBAL' ? null : targetId,
                 title,
                 content,
+                attachmentUrl,
+                attachmentName,
                 expiryDate: expiryDate ? new Date(expiryDate) : null
             }
         });

@@ -12,12 +12,14 @@ import {
 } from '../../services/evaluationPeriodService';
 import type { Department, EvaluationPeriod, Employee } from '../../types';
 import { CheckCircle, XCircle, Calendar, Trash2, AlertTriangle, Search } from 'lucide-react';
+import { useConfirm } from '../../components/ConfirmDialog';
 
 type EvaluationType = 'HR' | 'DEPT' | 'DIRECTOR' | 'PERSONNEL';
 
 const EvaluationControl: React.FC = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
+    const confirm = useConfirm();
 
     // State
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -97,7 +99,7 @@ const EvaluationControl: React.FC = () => {
     };
 
     const handleDisable = async (periodId: string) => {
-        if (confirm(t('disable_period_confirm'))) {
+        if (await confirm({ message: t('disable_period_confirm'), danger: false })) {
             try {
                 await disableEvaluationPeriod(periodId);
                 const allPeriods = await getEvaluationPeriods();
@@ -109,7 +111,7 @@ const EvaluationControl: React.FC = () => {
     };
 
     const handleDeleteEvaluation = async (id: string, type: EvaluationType) => {
-        if (!window.confirm("Are you sure you want to DELETE this evaluation? This action cannot be undone.")) return;
+        if (!(await confirm({ message: "Are you sure you want to DELETE this evaluation? This action cannot be undone.", danger: true }))) return;
 
         try {
             if (type === 'HR') await evaluationService.deleteHREvaluation(id);

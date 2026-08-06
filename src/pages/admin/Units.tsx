@@ -5,10 +5,12 @@ import { unitService } from '../../services/unitService';
 import { departmentService } from '../../services/departmentService';
 import type { Unit, Department } from '../../types';
 import Modal from '../../components/Modal';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
 const UnitsPage: React.FC = () => {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [units, setUnits] = useState<Unit[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ const UnitsPage: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm(t('confirm_delete_unit', 'Are you sure you want to delete this unit?'))) {
+        if (await confirm({ message: t('confirm_delete_unit', 'Are you sure you want to delete this unit?'), danger: true })) {
             try {
                 await unitService.deleteUnit(id);
                 fetchData();

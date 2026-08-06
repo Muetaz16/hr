@@ -1,44 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { staffHubService } from '../services/staffHubService';
-import type { LeaveRequest, StaffTask } from '../services/staffHubService';
+import type { LeaveRequest } from '../services/staffHubService';
 import { employeeService } from '../services/employeeService';
 import { departmentService } from '../services/departmentService';
 import { 
-    Check, 
-    Send, 
+    Check,
     LayoutDashboard,
     Calendar,
-    UserPlus,
-    ClipboardList,
     Megaphone,
     XCircle,
     Archive,
-    Clock
+    Clock,
+    Paperclip,
+    Download,
+    Edit,
+    Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { SERVER_URL } from '../services/apiClient';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const Approvals: React.FC = () => {
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
+    const confirm = useConfirm();
     const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
     const [historyRequests, setHistoryRequests] = useState<LeaveRequest[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
     const [departments, setDepartments] = useState<any[]>([]);
-    const [scopedTasks, setScopedTasks] = useState<StaffTask[]>([]);
-    const [taskFilter, setTaskFilter] = useState('ALL');
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'requests' | 'history' | 'tasks' | 'announcements' | 'task-progress'>('requests');
-
-    // New Task State
-    const [newTask, setNewTask] = useState({
-        title: '',
-        content: '',
-        assigneeId: '',
-        departmentId: '',
-        deadline: '',
-        priority: 'NORMAL'
-    });
+    const [activeTab, setActiveTab] = useState<'requests' | 'history' | 'announcements'>('requests');
+    const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
     // New Announcement State
     const [newAnnounce, setNewAnnounce] = useState({
@@ -53,6 +50,21 @@ const Approvals: React.FC = () => {
         fetchData();
     }, [currentUser]);
 
+    useEffect(() => {
+        if (activeTab === 'announcements') {
+            loadAnnouncements();
+        }
+    }, [activeTab]);
+
+    const loadAnnouncements = async () => {
+        try {
+            const data = await staffHubService.getAllAnnouncements();
+            setAnnouncements(data);
+        } catch (error) {
+            console.error('Failed to load announcements', error);
+        }
+    };
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -61,36 +73,38 @@ const Approvals: React.FC = () => {
                 statusFilter = 'PENDING';
             } else if (currentUser?.role === 'HEAD_DEPARTMENT') {
                 statusFilter = 'PENDING,APPROVED_BY_UNIT';
-            } else if (currentUser?.role === 'HEAD_DIRECTOR') {
+            } else if (currentUser?.role === 'HEAD_DIVISION') {
                 statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT';
+            } else if (currentUser?.role === 'HEAD_DIRECTOR') {
+                statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION';
             } else if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER') {
-                statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIRECTOR';
+                statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
             }
 
-            const [reqs, hist, emps, depts, tasks] = await Promise.all([
-                staffHubService.getPendingRequests({ 
+            const [reqs, hist, emps, depts] = await Promise.all([
+                staffHubService.getPendingRequests({
                     departmentId: currentUser?.departmentId || undefined,
                     groupId: currentUser?.groupId || undefined,
                     unitId: currentUser?.unitId || undefined,
+                    divisionId: currentUser?.divisionId || undefined,
                     status: statusFilter
                 }),
-                staffHubService.getPendingRequests({ 
+                staffHubService.getPendingRequests({
                     departmentId: currentUser?.departmentId || undefined,
                     groupId: currentUser?.groupId || undefined,
                     unitId: currentUser?.unitId || undefined,
+                    divisionId: currentUser?.divisionId || undefined,
                     status: 'COMPLETED,REJECTED'
                 }),
                 employeeService.getAllEmployees(),
-                departmentService.getAllDepartments(),
-                staffHubService.getScopedTasks()
+                departmentService.getAllDepartments()
             ]);
             setPendingRequests(reqs);
             setHistoryRequests(hist);
             setEmployees(emps);
             setDepartments(depts);
-            setScopedTasks(tasks);
         } catch (error) {
-            toast.error('Failed to load data');
+            toast.error(t('failed_to_load_data'));
         } finally {
             setLoading(false);
         }
@@ -102,52 +116,73 @@ const Approvals: React.FC = () => {
             if (actionType === 'APPROVE') {
                 if (currentUser?.role === 'HEAD_UNIT') status = 'APPROVED_BY_UNIT';
                 else if (currentUser?.role === 'HEAD_DEPARTMENT') status = 'APPROVED_BY_DEPT';
+                else if (currentUser?.role === 'HEAD_DIVISION') status = 'APPROVED_BY_DIVISION';
                 else if (currentUser?.role === 'HEAD_DIRECTOR') status = 'APPROVED_BY_DIRECTOR';
                 else status = 'COMPLETED'; // Admins can fast-track
             }
 
             await staffHubService.updateRequestStatus(id, { status, managerNote });
-            toast.success(`Request ${status === 'REJECTED' ? 'Rejected' : 'Approved'}`);
+            toast.success(status === 'REJECTED' ? t('request_rejected') : t('request_approved'));
             fetchData();
         } catch (error) {
-            toast.error('Failed to update status');
-        }
-    };
-
-    const handleCreateTask = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            await staffHubService.createTask({
-                ...newTask,
-                authorId: currentUser?.id,
-                assigneeId: newTask.assigneeId || undefined,
-                departmentId: newTask.departmentId || undefined,
-                priority: newTask.priority as any
-            });
-            toast.success('Task assigned successfully');
-            setNewTask({ title: '', content: '', assigneeId: '', departmentId: '', deadline: '', priority: 'NORMAL' });
-        } catch (error) {
-            toast.error('Failed to assign task');
+            toast.error(t('failed_to_update_status'));
         }
     };
 
     const handleCreateAnnouncement = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await staffHubService.createAnnouncement({
-                ...newAnnounce,
-                authorId: currentUser?.id,
-                targetId: newAnnounce.targetId || undefined,
-                targetType: newAnnounce.targetType as any
-            });
-            toast.success('Announcement posted');
+            const formData = new FormData();
+            formData.append('title', newAnnounce.title);
+            formData.append('content', newAnnounce.content);
+            formData.append('targetType', newAnnounce.targetType);
+            if (newAnnounce.targetId) formData.append('targetId', newAnnounce.targetId);
+            if (newAnnounce.expiryDate) formData.append('expiryDate', newAnnounce.expiryDate);
+            if (attachmentFile) formData.append('attachment', attachmentFile);
+
+            if (editingAnnouncement) {
+                await staffHubService.updateAnnouncement(editingAnnouncement.id, formData);
+                toast.success(t('announcement_updated'));
+            } else {
+                await staffHubService.createAnnouncement(formData);
+                toast.success(t('announcement_posted'));
+            }
+            
             setNewAnnounce({ title: '', content: '', targetType: 'GLOBAL', targetId: '', expiryDate: '' });
+            setAttachmentFile(null);
+            setEditingAnnouncement(null);
+            loadAnnouncements();
         } catch (error) {
-            toast.error('Failed to post announcement');
+            toast.error(editingAnnouncement ? t('failed_to_update_announcement') : t('failed_to_post_announcement'));
         }
     };
 
-    if (loading) return <div className="p-8 text-center animate-pulse text-slate-500">Loading Approvals Dashboard...</div>;
+    const handleDeleteAnnouncement = async (id: string) => {
+        if (await confirm({ message: t('confirm_delete_announcement'), danger: true })) {
+            try {
+                await staffHubService.deleteAnnouncement(id);
+                toast.success(t('announcement_deleted'));
+                loadAnnouncements();
+            } catch (error) {
+                toast.error(t('failed_to_delete_announcement'));
+            }
+        }
+    };
+
+    const handleEditClick = (ann: any) => {
+        setEditingAnnouncement(ann);
+        setNewAnnounce({
+            title: ann.title,
+            content: ann.content,
+            targetType: ann.targetType,
+            targetId: ann.targetId || '',
+            expiryDate: ann.expiryDate ? new Date(ann.expiryDate).toISOString().split('T')[0] : ''
+        });
+        setAttachmentFile(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    if (loading) return <div className="p-8 text-center animate-pulse text-slate-500">{t('loading_approvals')}</div>;
 
     return (
         <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in slide-in-from-bottom-4 duration-500">
@@ -156,29 +191,17 @@ const Approvals: React.FC = () => {
                 <div className="absolute top-0 right-0 p-12 opacity-10 rotate-12">
                     <LayoutDashboard className="w-48 h-48" />
                 </div>
-                <h1 className="text-4xl font-bold tracking-tight mb-2">Manager Control Room</h1>
-                <p className="text-[#e3c4a2]/70 font-light text-lg">Manage approvals, delegate work, and broadcast news.</p>
+                <h1 className="text-4xl font-bold tracking-tight mb-2">{t('manager_control_room', { defaultValue: 'Manager Control Room' })}</h1>
+                <p className="text-[#e3c4a2]/70 font-light text-lg">{t('manage_approvals_desc')}</p>
                 
                 {/* Tabs */}
                 <div className="flex gap-4 mt-8 pb-2 overflow-x-auto">
                     {[
-                        { id: 'requests', label: 'Leave Requests', icon: Calendar, count: pendingRequests.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
-                        { id: 'history', label: 'Request History', icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
-                        { 
-                            id: 'tasks', 
-                            label: 'Assign Tasks', 
-                            icon: UserPlus,
-                            visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_tasks')
-                        },
-                        { 
-                            id: 'task-progress', 
-                            label: 'Task Progress', 
-                            icon: ClipboardList,
-                            visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_tasks')
-                        },
-                        { 
-                            id: 'announcements', 
-                            label: 'Broadcasting', 
+                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
+                        { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
+                        {
+                            id: 'announcements',
+                            label: t('broadcasting'), 
                             icon: Megaphone,
                             visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_announcements')
                         }
@@ -216,9 +239,9 @@ const Approvals: React.FC = () => {
                                          <span className="text-xl">{format(new Date(req.startDate), 'dd')}</span>
                                      </div>
                                      <div className="space-y-1">
-                                         <h3 className="text-xl font-bold text-white truncate">{(req as any).employee?.fullName || 'Unknown Staff'}</h3>
+                                         <h3 className="text-xl font-bold text-white truncate">{(req as any).employee?.fullName || t('unknown_staff')}</h3>
                                          <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                                             <span className="text-[#aa7a51]">{req.type.replace(/_/g, ' ')}</span>
+                                             <span className="text-[#aa7a51]">{t(req.type.toLowerCase())}</span>
                                              <span className="w-1 h-1 bg-[#e3c4a2]/20 rounded-full"></span>
                                              <span className="flex items-center gap-1 text-[#e3c4a2]/60">
                                                  <Clock className="w-3 h-3" />
@@ -231,24 +254,29 @@ const Approvals: React.FC = () => {
  
                                  <div className="flex-1 space-y-3">
                                      <div className="bg-[#541c2c]/30 p-4 rounded-2xl border border-[#e3c4a2]/10 italic text-sm text-stone-200">
-                                         "{req.reason || 'No specific reason provided'}"
+                                         "{req.reason || t('no_specific_reason')}"
                                      </div>
                                      
                                      {/* Approval Timeline */}
                                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider overflow-x-auto pb-1">
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${req.status !== 'PENDING' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${req.status !== 'PENDING' ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Unit: {(req as any).unitApprovedBy?.fullName || 'Pending'}
+                                             Unit: {(req as any).unitApprovedBy?.fullName || t('pending')}
                                          </div>
                                          <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
-                                         <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
-                                             <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Dept: {(req as any).deptApprovedBy?.fullName || 'Pending'}
+                                         <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
+                                             <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
+                                             Dept: {(req as any).deptApprovedBy?.fullName || t('pending')}
+                                         </div>
+                                         <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
+                                         <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
+                                             <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
+                                             Division: {(req as any).divisionApprovedBy?.fullName || t('pending')}
                                          </div>
                                          <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Director: {(req as any).directorApprovedBy?.fullName || 'Pending'}
+                                             Director: {(req as any).directorApprovedBy?.fullName || t('pending')}
                                          </div>
                                      </div>
                                  </div>
@@ -263,7 +291,7 @@ const Approvals: React.FC = () => {
                                      </button>
                                      <button 
                                          onClick={() => {
-                                             const note = prompt('Add rejection note (optional):');
+                                             const note = prompt(t('add_rejection_note'));
                                              handleRequestAction(req.id, 'REJECT', note || '');
                                          }}
                                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
@@ -276,8 +304,8 @@ const Approvals: React.FC = () => {
                         )) : (
                             <div className="text-center py-24 glass-card rounded-3xl animate-in zoom-in">
                                 <Archive className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                                <h3 className="text-2xl font-bold text-slate-800">Inbox Zero!</h3>
-                                <p className="text-slate-400">No pending leave requests to review.</p>
+                                <h3 className="text-2xl font-bold text-slate-800">{t('inbox_zero')}</h3>
+                                <p className="text-slate-400">{t('no_pending_leave_requests')}</p>
                             </div>
                         )}
                     </div>
@@ -287,8 +315,8 @@ const Approvals: React.FC = () => {
                 {activeTab === 'history' && (
                     <div className="space-y-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-2xl font-bold text-slate-800">Decision Archive</h2>
-                            <p className="text-slate-400 text-sm">{historyRequests.length} historical records</p>
+                            <h2 className="text-2xl font-bold text-slate-800">{t('decision_archive')}</h2>
+                            <p className="text-slate-400 text-sm">{historyRequests.length} {t('historical_records')}</p>
                         </div>
                         
                         <div className="grid gap-4">
@@ -301,303 +329,192 @@ const Approvals: React.FC = () => {
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white">{(req as any).employee?.fullName || 'Staff Member'}</span>
+                                            <span className="font-bold text-white">{(req as any).employee?.fullName || t('staff_member')}</span>
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                                                 req.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' : 'bg-red-950/40 text-red-400 border border-red-900/30'
                                             }`}>
                                                 {req.status}
                                             </span>
                                         </div>
-                                        <div className="text-[11px] text-[#e3c4a2]/60">{req.type.replace(/_/g, ' ')} • {format(new Date(req.startDate), 'PPP')}</div>
+                                        <div className="text-[11px] text-[#e3c4a2]/60">{t(req.type.toLowerCase())} • {format(new Date(req.startDate), 'PPP')}</div>
                                     </div>
 
                                     <div className="bg-[#541c2c]/30 p-3 rounded-xl flex-1 max-w-md italic text-xs text-[#e3c4a2]/60 border border-[#e3c4a2]/10">
-                                        "{req.reason || 'No specific note provided'}"
+                                        "{req.reason || t('no_specific_note')}"
                                     </div>
 
                                     {/* History Status Nodes */}
                                     <div className="flex items-center gap-2 text-[8px] font-bold uppercase text-slate-300">
                                         <div className="flex flex-col items-center gap-1">
                                             <div className={`w-2 h-2 rounded-full ${req.status !== 'PENDING' ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">Unit</span>
+                                            <span className="text-[#e3c4a2]/50">{t('unit_approval')}</span>
                                         </div>
                                         <div className="w-3 h-[1px] bg-[#e3c4a2]/15"></div>
                                         <div className="flex flex-col items-center gap-1">
                                             <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">Dept</span>
+                                            <span className="text-[#e3c4a2]/50">{t('dept_approval')}</span>
                                         </div>
                                         <div className="w-3 h-[1px] bg-[#e3c4a2]/15"></div>
                                         <div className="flex flex-col items-center gap-1">
                                             <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">Dir</span>
+                                            <span className="text-[#e3c4a2]/50">{t('dir_approval')}</span>
                                         </div>
                                     </div>
                                 </div>
                             ))}
 
                             {historyRequests.length === 0 && (
-                                <div className="py-20 text-center glass-card rounded-3xl text-slate-400 italic">No historical records found.</div>
+                                <div className="py-20 text-center glass-card rounded-3xl text-slate-400 italic">No {t('historical_records')} found.</div>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* Task Assignment Tab */}
-                {activeTab === 'tasks' && currentUser?.role === 'SUPER_ADMIN' && (
-                    <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
-                        <h2 className="text-2xl font-bold text-slate-800 mb-6 drop-shadow-sm">Assign New Task</h2>
-                        <form onSubmit={handleCreateTask} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="col-span-2 space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Task Headline</label>
+                {/* Announcement Tab */}
+                {activeTab === 'announcements' && (['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'].includes(currentUser?.role || '') || (currentUser?.permissions || []).includes('manage_announcements')) && (
+                    <div className="max-w-3xl mx-auto">
+                        <div className="glass-card p-10 rounded-[2.5rem] shadow-xl">
+                            <form onSubmit={handleCreateAnnouncement} className="space-y-8">
+                                <div className="space-y-3">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('broadcast_title')}</label>
                                     <input 
                                         type="text" 
-                                        placeholder="What needs to be done?"
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 text-lg font-medium focus:ring-2 focus-ring-indigo-500/20"
-                                        value={newTask.title}
-                                        onChange={e => setNewTask({...newTask, title: e.target.value})}
+                                        placeholder={t('important_office_policy')}
+                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 text-xl font-bold focus:ring-2 focus:ring-indigo-500/20"
+                                        value={newAnnounce.title}
+                                        onChange={e => setNewAnnounce({...newAnnounce, title: e.target.value})}
                                         required
                                     />
                                 </div>
 
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to Dept (Optional)</label>
-                                    <select 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium"
-                                        value={newTask.departmentId}
-                                        onChange={e => setNewTask({...newTask, departmentId: e.target.value, assigneeId: ''})}
-                                    >
-                                        <option value="">Select Department</option>
-                                        {departments.filter(d => {
-                                            if (currentUser?.role === 'HEAD_UNIT' || currentUser?.role === 'HEAD_DEPARTMENT') {
-                                                return d.id === currentUser.departmentId;
-                                            }
-                                            if (currentUser?.role === 'HEAD_DIRECTOR') {
-                                                return currentUser.departmentIds?.includes(d.id);
-                                            }
-                                            if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
-                                                return true;
-                                            }
-                                            return false;
-                                        }).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                    </select>
-
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to Individual</label>
-                                    <select 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium"
-                                        value={newTask.assigneeId}
-                                        onChange={e => setNewTask({...newTask, assigneeId: e.target.value, departmentId: ''})}
-                                    >
-                                        <option value="">Select Employee</option>
-                                        {employees.filter(e => {
-                                            if (!e.userId) return false;
-                                            if (currentUser?.role === 'HEAD_UNIT') {
-                                                return e.unitId === currentUser.unitId;
-                                            }
-                                            if (currentUser?.role === 'HEAD_DEPARTMENT') {
-                                                return e.departmentId === currentUser.departmentId;
-                                            }
-                                            if (currentUser?.role === 'HEAD_DIRECTOR') {
-                                                const isManagedDept = currentUser.departmentIds?.includes(e.departmentId);
-                                                const allowedRoles = ['HEAD_UNIT', 'HEAD_DEPARTMENT'];
-                                                return isManagedDept && allowedRoles.includes(e.role);
-                                            }
-                                            if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
-                                                return true;
-                                            }
-                                            return false;
-                                        }).map(e => <option key={e.id} value={e.userId}>{e.fullName} ({e.role.replace('_', ' ')})</option>)}
-                                    </select>
-
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Deadline Date</label>
-                                    <input 
-                                        type="date" 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium"
-                                        value={newTask.deadline}
-                                        onChange={e => setNewTask({...newTask, deadline: e.target.value})}
-                                    />
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Priority Level</label>
-                                    <select 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium"
-                                        value={newTask.priority}
-                                        onChange={e => setNewTask({...newTask, priority: e.target.value})}
-                                    >
-                                        <option value="LOW">Low</option>
-                                        <option value="NORMAL">Normal</option>
-                                        <option value="HIGH">High</option>
-                                        <option value="CRITICAL">Critical</option>
-                                    </select>
-                                </div>
-
-                                <div className="col-span-2 space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Instructions (Markdown Support)</label>
-                                    <textarea 
-                                        placeholder="Describe the task in detail..."
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 min-h-[150px] font-medium"
-                                        value={newTask.content}
-                                        onChange={e => setNewTask({...newTask, content: e.target.value})}
-                                    />
-                                </div>
-                            </div>
-                            <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-3xl font-bold shadow-2xl hover:bg-black hover:scale-[1.01] transition-all flex items-center justify-center gap-2 tracking-wide">
-                                <Send className="w-5 h-5" />
-                                Deploy Task
-                            </button>
-                        </form>
-                    </div>
-                )}
-
-                {/* Announcement Tab */}
-                {activeTab === 'announcements' && currentUser?.role === 'SUPER_ADMIN' && (
-                    <div className="max-w-3xl mx-auto glass-card p-10 rounded-[2.5rem] shadow-xl">
-                        <form onSubmit={handleCreateAnnouncement} className="space-y-8">
-                            <div className="space-y-3">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Broadcast Title</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Important: New Office Policy..."
-                                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-xl font-bold focus:ring-2 focus:ring-indigo-500/20"
-                                    value={newAnnounce.title}
-                                    onChange={e => setNewAnnounce({...newAnnounce, title: e.target.value})}
-                                    required
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Target Audience</label>
-                                    <select 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
-                                        value={newAnnounce.targetType}
-                                        onChange={e => setNewAnnounce({...newAnnounce, targetType: e.target.value, targetId: ''})}
-                                    >
-                                        <option value="GLOBAL">Global (Everyone)</option>
-                                        <option value="DEPARTMENT">Specific Department</option>
-                                        <option value="INDIVIDUAL">Private (One Individual)</option>
-                                    </select>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Select Target</label>
-                                    <select 
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
-                                        value={newAnnounce.targetId}
-                                        onChange={e => setNewAnnounce({...newAnnounce, targetId: e.target.value})}
-                                        disabled={newAnnounce.targetType === 'GLOBAL'}
-                                    >
-                                        <option value="">Choose Target...</option>
-                                        {newAnnounce.targetType === 'DEPARTMENT' 
-                                            ? departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)
-                                            : employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)
-                                        }
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Broadcast Message</label>
-                                <textarea 
-                                    placeholder="Type your announcement here..."
-                                    className="w-full bg-slate-50 border-none rounded-2xl p-6 min-h-[200px] font-medium leading-relaxed"
-                                    value={newAnnounce.content}
-                                    onChange={e => setNewAnnounce({...newAnnounce, content: e.target.value})}
-                                    required
-                                />
-                            </div>
-
-                            <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] transition-all flex items-center justify-center gap-2">
-                                <Megaphone className="w-5 h-5" />
-                                Broadcast Announcement
-                            </button>
-                        </form>
-                    </div>
-                )}
-                    {activeTab === 'task-progress' && currentUser?.role === 'SUPER_ADMIN' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-slate-800">Department Task Tracker</h2>
-                                    <p className="text-slate-400 text-sm">Monitoring workload and progress across your scope.</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    {['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'].map(s => (
-                                        <button 
-                                            key={s}
-                                            onClick={() => setTaskFilter(s)}
-                                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                                                taskFilter === s ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
-                                            }`}
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('target_audience')}</label>
+                                        <select 
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
+                                            value={newAnnounce.targetType}
+                                            onChange={e => setNewAnnounce({...newAnnounce, targetType: e.target.value, targetId: ''})}
                                         >
-                                            {s}
-                                        </button>
-                                    ))}
+                                            <option value="GLOBAL">{t('global_everyone')}</option>
+                                            <option value="DEPARTMENT">{t('specific_department')}</option>
+                                            <option value="INDIVIDUAL">{t('private_individual')}</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('select_target')}</label>
+                                        <select 
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
+                                            value={newAnnounce.targetId}
+                                            onChange={e => setNewAnnounce({...newAnnounce, targetId: e.target.value})}
+                                            disabled={newAnnounce.targetType === 'GLOBAL'}
+                                        >
+                                            <option value="">{t('choose_target')}</option>
+                                            {newAnnounce.targetType === 'DEPARTMENT' 
+                                                ? departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)
+                                                : employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)
+                                            }
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {scopedTasks.filter(t => (taskFilter === 'ALL' || t.status === taskFilter) && t.category === 'ASSIGNED').map(task => (
-                                    <div key={task.id} className="glass-card p-6 rounded-3xl border border-white/50 hover:shadow-xl transition-all flex flex-col gap-4 group">
-                                        <div className="flex justify-between items-start">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                                                task.priority === 'CRITICAL' ? 'bg-red-100 text-red-600' :
-                                                task.priority === 'HIGH' ? 'bg-orange-100 text-orange-600' :
-                                                'bg-slate-100 text-slate-600'
-                                            }`}>
-                                                {task.priority}
-                                            </span>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                                                task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' :
-                                                task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-600' :
-                                                'bg-amber-100 text-amber-600'
-                                            }`}>
-                                                {task.status.replace('_', ' ')}
-                                            </span>
-                                        </div>
-                                        
-                                        <div className="space-y-2">
-                                            <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors uppercase text-sm tracking-tight">{task.title}</h4>
-                                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{task.content}</p>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('expiry_date_optional')}</label>
+                                        <input 
+                                            type="date"
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-600"
+                                            value={newAnnounce.expiryDate}
+                                            onChange={e => setNewAnnounce({...newAnnounce, expiryDate: e.target.value})}
+                                        />
+                                    </div>
 
-                                        <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
-                                                    {task.assignee?.fullName?.charAt(0) || 'U'}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Assignee</span>
-                                                    <span className="text-[11px] font-bold text-slate-700">{task.assignee?.fullName || 'Unassigned'}</span>
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('attach_document')}</label>
+                                        <input 
+                                            type="file"
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-3 font-bold file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 text-sm text-slate-500"
+                                            onChange={e => setAttachmentFile(e.target.files?.[0] || null)}
+                                        />
+                                        {editingAnnouncement && editingAnnouncement.attachmentName && !attachmentFile && (
+                                            <div className="text-xs font-medium text-slate-500 ml-2">Current: {editingAnnouncement.attachmentName}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('broadcast_message')}</label>
+                                    <textarea 
+                                        placeholder={t('type_announcement_here')}
+                                        className="w-full bg-slate-50 border-none rounded-2xl p-6 min-h-[200px] font-medium leading-relaxed"
+                                        value={newAnnounce.content}
+                                        onChange={e => setNewAnnounce({...newAnnounce, content: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] transition-all flex items-center justify-center gap-2">
+                                    {editingAnnouncement ? <Edit className="w-5 h-5" /> : <Megaphone className="w-5 h-5" />}
+                                    {editingAnnouncement ? t('edit_announcement') : t('broadcast_announcement')}
+                                </button>
+                                {editingAnnouncement && (
+                                    <button type="button" onClick={() => { setEditingAnnouncement(null); setNewAnnounce({ title: '', content: '', targetType: 'GLOBAL', targetId: '', expiryDate: '' }); setAttachmentFile(null); }} className="w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold hover:bg-slate-200 transition-all mt-4">
+                                        {t('cancel')}
+                                    </button>
+                                )}
+                            </form>
+                        </div>
+
+                        <div className="mt-12 space-y-6">
+                            <h2 className="text-2xl font-bold text-slate-800 px-2">{t('posted_announcements')}</h2>
+                            {announcements.length === 0 ? (
+                                <div className="text-center p-12 glass-card rounded-3xl text-slate-500 font-medium">
+                                    {t('no_announcements_posted')}
+                                </div>
+                            ) : (
+                                announcements.map(ann => (
+                                    <div key={ann.id} className="glass-card p-6 rounded-3xl space-y-4 hover:shadow-xl transition-all border border-slate-100">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <div className="space-y-2 flex-1">
+                                                <h3 className="text-lg font-bold text-slate-800">{ann.title}</h3>
+                                                <div className="flex flex-wrap gap-2 text-xs font-bold">
+                                                    <span className={`px-2 py-1 rounded-md ${ann.targetType === 'GLOBAL' ? 'bg-blue-100 text-blue-700' : ann.targetType === 'DEPARTMENT' ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-700'}`}>
+                                                        {ann.targetType === 'GLOBAL' ? t('target_global') : ann.targetType === 'DEPARTMENT' ? t('target_dept') : t('target_individual')}
+                                                    </span>
+                                                    {ann.expiryDate && (
+                                                        <span className="bg-red-50 text-red-600 px-2 py-1 rounded-md flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            Exp: {new Date(ann.expiryDate).toLocaleDateString()}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                            {task.deadline && (
-                                                <div className="text-right">
-                                                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Deadline</span>
-                                                    <span className="text-[11px] font-bold text-slate-700">{format(new Date(task.deadline), 'MMM dd')}</span>
-                                                </div>
-                                            )}
+                                            <div className="flex gap-2 shrink-0">
+                                                <button onClick={() => handleEditClick(ann)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-indigo-100 hover:text-indigo-600 transition-all" title={t('edit')}>
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-red-100 hover:text-red-600 transition-all" title={t('delete')}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
+                                        <p className="text-slate-600 whitespace-pre-wrap text-sm leading-relaxed">{ann.content}</p>
+                                        
+                                        {ann.attachmentUrl && (
+                                            <div className="pt-4 border-t border-slate-100">
+                                                <a href={`${SERVER_URL}${ann.attachmentUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-all">
+                                                    <Paperclip className="w-4 h-4" />
+                                                    <span className="truncate max-w-[200px]">{ann.attachmentName || t('download_attachment')}</span>
+                                                    <Download className="w-4 h-4 ml-1 opacity-50" />
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
-                                ))}
-
-                                {scopedTasks.length === 0 && (
-                                    <div className="col-span-full py-20 text-center glass-card rounded-[2.5rem]">
-                                        <Archive className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                                        <h3 className="text-xl font-bold text-slate-800">No tasks found</h3>
-                                        <p className="text-slate-400 text-sm">Tasks assigned by you or within your scope will appear here.</p>
-                                    </div>
-                                )}
-                            </div>
+                                ))
+                            )}
                         </div>
-                    )}
+                    </div>
+                )}
                 </main>
             </div>
         );
