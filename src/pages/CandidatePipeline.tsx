@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { candidateService } from '../services/candidateService';
 import { recruitmentService } from '../services/recruitmentService';
-import { SERVER_URL } from '../services/apiClient';
+import api, { SERVER_URL } from '../services/apiClient';
 import type { Candidate, RecruitmentRequest } from '../types';
 import {
     UserPlus, Plus, Building2, Briefcase, Trash2, CheckCircle2, XCircle,
-    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText, Pencil
+    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText, Pencil, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -90,13 +90,23 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     const [note, setNote] = useState('');
     const [criteria, setCriteria] = useState<Record<string, number>>({});
     const [recommend, setRecommend] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
     const [schedAt, setSchedAt] = useState('');
     const [schedLoc, setSchedLoc] = useState('');
     const [editOfferForm, setEditOfferForm] = useState({
         residentStatus: '', salaryStructure: '', jobGrade: '', jobCategory: '', placeOfWork: '', contractMonths: 6 as number
     });
 
-    useEffect(() => { fetchData(); }, [view]);
+    useEffect(() => {
+        fetchData();
+        const interval = setInterval(fetchData, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        api.get('/salary-structures').then(res => setSalaryStructures(res.data)).catch(console.error);
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
@@ -116,8 +126,9 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
 
     const isRequester = (c: Candidate) => isAdmin || isMgmt || c.requisition?.requester?.id === currentUser?.id;
 
-    // Approved, unfilled hire requisitions this user can source candidates against.
-    const openReqs = requisitions.filter(r => r.type === 'HIRE' && r.status === 'FULLY_APPROVED' && !r.filled);
+    // Approved hire requisitions this user can source candidates against.
+    // Also include filled (closed) requisitions if they already have candidates submitted to them.
+    const openReqs = requisitions.filter(r => r.type === 'HIRE' && r.status === 'FULLY_APPROVED' && (!r.filled || candidates.some(c => c.requisitionId === r.id)));
 
     const cvUrl = (c: Candidate) => c.cvPath ? `${SERVER_URL}${c.cvPath}` : null;
 
@@ -369,7 +380,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     const onboardingCands = candidates.filter(c => (c.stage === 'OFFER' && c.offerDecision === 'ACCEPTED') || c.stage === 'HIRED');
 
     const header = {
-        screening: { title: t('nav_hiring_list', { defaultValue: 'Hiring List' }), sub: t('hiring_list_sub2', { defaultValue: 'Add candidates against an approved requisition; the requesting head accepts or rejects them.' }) },
+        screening: { title: t('nav_applicant_list', { defaultValue: 'Applicant List' }), sub: t('hiring_list_sub2', { defaultValue: 'Add candidates against an approved requisition; the requesting head accepts or rejects them.' }) },
         interview: { title: t('nav_interviews', { defaultValue: 'Interviews' }), sub: t('interviews_sub', { defaultValue: 'Schedule interviews, capture HR and technical evaluations, then decide.' }) },
         offer: { title: t('nav_job_offers', { defaultValue: 'Job Offers' }), sub: t('job_offers_sub', { defaultValue: 'Accepted candidates awaiting their job offer. HR issues the offer and records the response; once accepted they move to Onboarding.' }) },
         onboarding: { title: t('nav_onboarding', { defaultValue: 'Onboarding' }), sub: t('onboarding_sub', { defaultValue: 'Candidates who accepted their offer, ready to enroll as employees.' }) },
@@ -482,13 +493,38 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                 )}
             </div>
 
-            {/* ===================== SCREENING (Hiring List) ===================== */}
+            {/* ===================== SEARCH BAR ===================== */}
+            {view === 'screening' && (
+                <div className="relative mb-6">
+                    <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder={t('search_applicants', { defaultValue: 'Search by candidate name, job title, or department...' })}
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm placeholder:font-medium"
+                    />
+                </div>
+            )}
+
+            {/* ===================== SCREENING (Applicant List) ===================== */}
             {view === 'screening' && (
                 <div className="space-y-6">
                     {((isHR || isMgmt) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id))
+                        .filter(r => {
+                            const q = searchTerm.toLowerCase();
+                            const rMatch = (r.jobTitle || '').toLowerCase().includes(q) || (r.department?.name || '').toLowerCase().includes(q) || (r.division?.name || '').toLowerCase().includes(q);
+                            const cMatch = hiringListCands.filter(c => c.requisitionId === r.id).some(c => (c.fullName || '').toLowerCase().includes(q));
+                            return rMatch || cMatch;
+                        })
                         .filter(r => isHR || isMgmt || hiringListCands.some(c => c.requisitionId === r.id))
                         .map(req => {
-                            const reqCands = hiringListCands.filter(c => c.requisitionId === req.id);
+                            const reqCands = hiringListCands.filter(c => c.requisitionId === req.id).filter(c => {
+                                const q = searchTerm.toLowerCase();
+                                const rMatch = (req.jobTitle || '').toLowerCase().includes(q) || (req.department?.name || '').toLowerCase().includes(q) || (req.division?.name || '').toLowerCase().includes(q);
+                                return rMatch || (c.fullName || '').toLowerCase().includes(q);
+                            });
+                            if (reqCands.length === 0 && searchTerm) return null;
                             return (
                                 <div key={req.id} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
                                     <div className="flex items-center justify-between gap-4 p-6 bg-slate-50/60 border-b border-slate-100">
@@ -504,10 +540,15 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                                 <span className="text-indigo-500">{t('hiring_n', { defaultValue: 'hiring' })} {req.hiredCount ?? 0}/{req.quantity ?? 1}</span>
                                             </div>
                                         </div>
-                                        {isHR && (
+                                        {isHR && !req.filled && (
                                             <button onClick={() => openAdd(req.id)} className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-[10px] uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-all">
                                                 <Plus className="w-3.5 h-3.5" /> {t('add', { defaultValue: 'Add' })}
                                             </button>
+                                        )}
+                                        {req.filled && (
+                                            <span className="shrink-0 px-3 py-1.5 bg-rose-50 text-rose-600 rounded-xl font-black text-[10px] uppercase tracking-widest border border-rose-100">
+                                                {t('closed', { defaultValue: 'Closed' })}
+                                            </span>
                                         )}
                                     </div>
                                     <div className="p-4 md:p-6">
@@ -952,7 +993,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                 docUrl(c.portfolioPath) ? [t('view_portfolio', { defaultValue: 'Portfolio' }), docUrl(c.portfolioPath)!] as const : null,
                             ].filter(Boolean) as (readonly [string, string])[];
                             const timeline: [string, string | undefined][] = [
-                                [t('tl_added', { defaultValue: 'Added to hiring list' }), c.createdAt],
+                                [t('tl_added', { defaultValue: 'Added to applicant list' }), c.createdAt],
                                 [t('tl_screened', { defaultValue: 'Screened by head' }), c.screenAt],
                                 [t('tl_interview', { defaultValue: 'Interview scheduled' }), c.interviewAt],
                                 [t('tl_hr_eval', { defaultValue: 'HR evaluation' }), c.hrEvalAt],
@@ -1003,22 +1044,47 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
                                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4">{t('recruitment_timeline', { defaultValue: 'Recruitment Timeline' })}</p>
                                         <div>
-                                            {timeline.map(([label, iso], i) => {
-                                                const done = !!iso;
-                                                const last = i === timeline.length - 1;
-                                                return (
-                                                    <div key={label} className="flex gap-4">
-                                                        <div className="flex flex-col items-center">
-                                                            <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${done ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`} />
-                                                            {!last && <div className={`w-0.5 flex-1 min-h-[1.75rem] ${done ? 'bg-indigo-200' : 'bg-slate-100'}`} />}
+                                            {Array.isArray(c.events) && c.events.length > 0 ? (
+                                                c.events.map((evt: any, i: number) => {
+                                                    const last = i === c.events.length - 1;
+                                                    const label = t(`event_${evt.action.toLowerCase()}`, { defaultValue: evt.action.replace(/_/g, ' ') });
+                                                    return (
+                                                        <div key={i} className="flex gap-4">
+                                                            <div className="flex flex-col items-center">
+                                                                <div className="w-3.5 h-3.5 rounded-full border-2 shrink-0 bg-indigo-600 border-indigo-600" />
+                                                                {!last && <div className="w-0.5 flex-1 min-h-[1.75rem] bg-indigo-200" />}
+                                                            </div>
+                                                            <div className={`pb-5 -mt-1 flex-1 flex flex-col justify-center gap-1 ${last ? 'pb-0' : ''}`}>
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <span className="text-sm font-bold text-slate-700 capitalize">{label.toLowerCase()}</span>
+                                                                    <span className="text-xs font-black whitespace-nowrap text-slate-500">{fmtDateTime(evt.timestamp)}</span>
+                                                                </div>
+                                                                <div className="text-[11px] font-medium text-slate-400">
+                                                                    {t('by', { defaultValue: 'By' })} {evt.performedBy || 'Unknown User'}
+                                                                    {evt.note && <span className="italic ml-2">- {evt.note}</span>}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div className={`pb-5 -mt-1 flex-1 flex items-center justify-between gap-3 ${last ? 'pb-0' : ''}`}>
-                                                            <span className={`text-sm font-bold ${done ? 'text-slate-700' : 'text-slate-400'}`}>{label}</span>
-                                                            <span className={`text-xs font-black whitespace-nowrap ${done ? 'text-slate-500' : 'text-slate-300'}`}>{iso ? fmtDateTime(iso) : t('pending', { defaultValue: 'Pending' })}</span>
+                                                    );
+                                                })
+                                            ) : (
+                                                timeline.map(([label, iso], i) => {
+                                                    const done = !!iso;
+                                                    const last = i === timeline.length - 1;
+                                                    return (
+                                                        <div key={label} className="flex gap-4">
+                                                            <div className="flex flex-col items-center">
+                                                                <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${done ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`} />
+                                                                {!last && <div className={`w-0.5 flex-1 min-h-[1.75rem] ${done ? 'bg-indigo-200' : 'bg-slate-100'}`} />}
+                                                            </div>
+                                                            <div className={`pb-5 -mt-1 flex-1 flex items-center justify-between gap-3 ${last ? 'pb-0' : ''}`}>
+                                                                <span className={`text-sm font-bold ${done ? 'text-slate-700' : 'text-slate-400'}`}>{label}</span>
+                                                                <span className={`text-xs font-black whitespace-nowrap ${done ? 'text-slate-500' : 'text-slate-300'}`}>{iso ? fmtDateTime(iso) : t('pending', { defaultValue: 'Pending' })}</span>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1106,25 +1172,48 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('resident_status', { defaultValue: 'Resident Status' })}</label>
                                     <select value={editOfferForm.residentStatus} onChange={e => setEditOfferForm({ ...editOfferForm, residentStatus: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
                                         <option value="">{t('select', { defaultValue: 'Select...' })}</option>
-                                        <option value="Resident">{t('resident', { defaultValue: 'Resident' })}</option>
-                                        <option value="Non-Resident">{t('non_resident', { defaultValue: 'Non-Resident' })}</option>
+                                        <option value="RESDANT">{t('resident', { defaultValue: 'RESDANT' })}</option>
+                                        <option value="DIRCT NONE RESDANT">{t('dirct_non_resident', { defaultValue: 'DIRCT NONE RESDANT' })}</option>
+                                        <option value="NONE RESDANT">{t('non_resident', { defaultValue: 'NONE RESDANT' })}</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('job_category', { defaultValue: 'Job Category' })}</label>
-                                    <input value={editOfferForm.jobCategory} onChange={e => setEditOfferForm({ ...editOfferForm, jobCategory: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('job_category', { defaultValue: 'Job Category' })} />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('salary_structure', { defaultValue: 'Salary Structure' })}</label>
-                                    <input value={editOfferForm.salaryStructure} onChange={e => setEditOfferForm({ ...editOfferForm, salaryStructure: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('salary_structure', { defaultValue: 'Salary Structure' })} />
+                                    <select value={editOfferForm.jobCategory} onChange={e => setEditOfferForm({ ...editOfferForm, jobCategory: e.target.value, jobGrade: '', salaryStructure: '' })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        {(actCand?.requisition?.jobDescription?.jobCategories?.length ? actCand.requisition.jobDescription.jobCategories : Array.from(new Set(salaryStructures.map(s => s.jobCategory)))).map(cat => (
+                                            <option key={cat as string} value={cat as string}>{cat as string}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('job_grade', { defaultValue: 'Job Grade' })}</label>
-                                    <input value={editOfferForm.jobGrade} onChange={e => setEditOfferForm({ ...editOfferForm, jobGrade: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('job_grade', { defaultValue: 'Job Grade' })} />
+                                    <select value={editOfferForm.jobGrade} onChange={e => setEditOfferForm({ ...editOfferForm, jobGrade: e.target.value, salaryStructure: '' })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
+                                        <option value="">{t('select_experience', { defaultValue: '-- Select Experience --' })}</option>
+                                        {EXPERIENCE_LEVELS.map(l => (
+                                            <option key={l.grade} value={l.grade}>{l.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('salary_structure', { defaultValue: 'Salary Structure' })}</label>
+                                    <select value={editOfferForm.salaryStructure} onChange={e => setEditOfferForm({ ...editOfferForm, salaryStructure: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white" disabled={!editOfferForm.jobGrade}>
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        {Array.from(new Set(salaryStructures.filter(s => s.jobCategory === editOfferForm.jobCategory && s.jobGrade === editOfferForm.jobGrade).map(s => s.structureLevel)))
+                                            .filter(struct => editOfferForm.residentStatus === 'RESDANT' ? (struct as string).includes('SS-01') : true)
+                                            .map(struct => (
+                                                <option key={struct as string} value={struct as string}>{struct as string}</option>
+                                            ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('place_of_work', { defaultValue: 'Place of Work' })}</label>
-                                    <input value={editOfferForm.placeOfWork} onChange={e => setEditOfferForm({ ...editOfferForm, placeOfWork: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('place_of_work', { defaultValue: 'Place of Work' })} />
+                                    <select value={editOfferForm.placeOfWork} onChange={e => setEditOfferForm({ ...editOfferForm, placeOfWork: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        {(actCand?.requisition?.jobDescription?.workLocations?.length ? actCand.requisition.jobDescription.workLocations : ['OFFICE', 'SITE']).map(loc => (
+                                            <option key={loc as string} value={loc as string}>{loc as string}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700">{t('save_details', { defaultValue: 'Save Details' })}</button>
                             </form>

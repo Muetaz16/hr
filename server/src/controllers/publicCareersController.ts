@@ -100,11 +100,15 @@ const ONBOARDING_TEXT_FIELDS = [
     'personalPhone', 'personalEmail', 'emergencyContactNumber', 'residentialAddress',
     'workedBefore', 'hasRelativesInCompany', 'relativesNames',
     'bankName', 'bankBranchName', 'bankAccountNumber',
+    // New fields for Service Providers / Non-Residents
+    'serviceProviderCompany', 'employeeTravelDate', 'employeeStartDate',
+    'jobCategory', 'jobLevel', 'hourlyRate', 'currency'
 ];
 // Upload field name -> key stored in onboardingData (matches Employee's *Url columns).
 const ONBOARDING_DOC_MAP: Record<string, string> = {
     cv: 'cvUrl', degree: 'degreeUrl', birthCert: 'birthCertUrl', passportCopy: 'passportCopyUrl',
     bankCheck: 'bankCheckUrl', photo: 'photoUrl', idCard: 'idCardUrl', jobOffer: 'jobOfferUrl', healthCert: 'healthCertUrl',
+    ticket: 'ticketUrl', residencyDocument: 'residencyDocumentUrl', interviewEvaluation: 'interviewEvaluationUrl',
 };
 
 // GET /api/public/onboarding/:token — load the onboarding form (prefill + any saved data).
@@ -121,6 +125,9 @@ export const getOnboarding = async (req: Request, res: Response) => {
         res.json({
             status: candidate.onboardingStatus || 'PENDING',
             positionTitle: candidate.requisition?.jobTitle || null,
+            residentStatus: candidate.residentStatus || null,
+            jobCategory: candidate.jobCategory || null,
+            jobGrade: candidate.jobGrade || null,
             // Sensible prefill from what we already captured on the application.
             prefill: {
                 fullName: candidate.fullName || '',

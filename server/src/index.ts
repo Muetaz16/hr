@@ -14,7 +14,10 @@ const prisma = new PrismaClient();
 const SERVER_VERSION = "2026-03-17-V3"; // Updated to verify reload
 
 // Cross-Origin Resource Sharing
-app.use(helmet({ crossOriginResourcePolicy: false })); // Allow cross-origin static file serving
+app.use(helmet({ 
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+})); // Allow cross-origin static file serving and prevent HTTPS upgrades in dev
 app.use(compression());
 app.use(cors());
 app.use(express.json());

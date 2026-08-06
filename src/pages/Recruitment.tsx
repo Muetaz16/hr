@@ -255,7 +255,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
     const headerFor = {
         requests: { title: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), sub: t('prf_subtitle', { defaultValue: 'Request a hire against your staffing plan, or request a change to a Job Description' }) },
-        positions: { title: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), sub: t('positions_sub', { defaultValue: 'Approved hire requisitions. Source candidates from the Hiring List, or mark a position filled once staffed.' }) },
+        positions: { title: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), sub: t('positions_sub', { defaultValue: 'Approved hire requisitions. Source candidates from the Applicant List, or mark a position filled once staffed.' }) },
         approvals: { title: t('nav_recruitment_approvals', { defaultValue: 'Recruitment Approvals' }), sub: t('approvals_sub', { defaultValue: 'Requisitions awaiting your decision as Head of Division, HR, or GM' }) },
         create: { title: t('new_requisition', { defaultValue: 'New Requisition' }), sub: t('prf_subtitle', { defaultValue: 'Request a hire against your staffing plan, or request a change to a Job Description' }) },
     }[mode];

@@ -28,6 +28,12 @@ const candidateInclude = {
 const isHRRole = (role?: string) => role === 'HR_MANAGER' || role === 'SUPER_ADMIN';
 const isPrivileged = (role?: string) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(role || '');
 
+// Helper to append an event to the events array
+const appendEvent = (existingEvents: any, action: string, performedBy: string, note?: string) => {
+    const events = Array.isArray(existingEvents) ? [...existingEvents] : [];
+    events.push({ action, performedBy, timestamp: new Date().toISOString(), note });
+    return events;
+};
 // GET /candidates — HR/GM/Admin see all; heads see only candidates for requisitions they raised.
 export const getCandidates = async (req: Request, res: Response) => {
     try {
@@ -126,6 +132,7 @@ export const createCandidate = async (req: Request, res: Response) => {
                 residentStatus: cleanStr(residentStatus),
                 stage: 'SCREENING',
                 createdById: userId,
+                events: appendEvent([], 'ADDED_TO_LIST', (req as any).user?.fullName || 'Unknown User'),
             },
             include: candidateInclude,
         });
@@ -178,6 +185,7 @@ export const screenCandidate = async (req: Request, res: Response) => {
                 screenById: userId,
                 screenAt: new Date(),
                 stage: decision === 'ACCEPTED' ? 'INTERVIEW' : 'REJECTED',
+                events: appendEvent(candidate.events, 'SCREENED', (req as any).user?.fullName || 'Unknown User', `Decision: ${decision}`),
             },
             include: candidateInclude,
         });
@@ -207,6 +215,7 @@ export const scheduleInterview = async (req: Request, res: Response) => {
                 interviewAt: new Date(interviewAt),
                 interviewLocation: cleanStr(interviewLocation),
                 interviewNote: cleanStr(interviewNote),
+                events: appendEvent(candidate.events, 'INTERVIEW_SCHEDULED', (req as any).user?.fullName || 'Unknown User'),
             },
             include: candidateInclude,
         });
@@ -265,6 +274,7 @@ export const submitHrEvaluation = async (req: Request, res: Response) => {
                 hrNote: cleanStr(note),
                 hrEvalById: userId,
                 hrEvalAt: new Date(),
+                events: appendEvent(candidate.events, 'HR_EVALUATED', (req as any).user?.fullName || 'Unknown User', `Recommend: ${recommend}`),
             },
             include: candidateInclude,
         });
@@ -301,6 +311,7 @@ export const submitTechEvaluation = async (req: Request, res: Response) => {
                 techNote: cleanStr(note),
                 techEvalById: userId,
                 techEvalAt: new Date(),
+                events: appendEvent(candidate.events, 'TECH_EVALUATED', (req as any).user?.fullName || 'Unknown User', `Recommend: ${recommend}`),
             },
             include: candidateInclude,
         });
@@ -341,6 +352,7 @@ export const finalizeEvaluation = async (req: Request, res: Response) => {
                 finalDecision: decision,
                 finalNote: cleanStr(note),
                 stage: decision === 'ACCEPTED' ? 'OFFER' : 'REJECTED',
+                events: appendEvent(candidate.events, 'FINAL_DECISION', (req as any).user?.fullName || 'Unknown User', `Decision: ${decision}`),
             },
             include: candidateInclude,
         });
@@ -374,6 +386,7 @@ export const recordOffer = async (req: Request, res: Response) => {
                 offerAt: new Date(),
                 // Accepting keeps the candidate at OFFER (ready to enrol); declining withdraws them.
                 stage: decision === 'DECLINED' ? 'WITHDRAWN' : 'OFFER',
+                events: appendEvent(candidate.events, 'OFFER_RESPONSE', (req as any).user?.fullName || 'Unknown User', `Decision: ${decision}`),
             },
             include: candidateInclude,
         });
@@ -407,7 +420,7 @@ export const markHired = async (req: Request, res: Response) => {
         const result = await prisma.$transaction(async (tx) => {
             const updated = await tx.candidate.update({
                 where: { id },
-                data: { stage: 'HIRED', employeeId: cleanStr(employeeId), onboardingStatus: 'ENROLLED' } as any,
+                data: { stage: 'HIRED', employeeId: cleanStr(employeeId), onboardingStatus: 'ENROLLED', events: appendEvent(candidate.events, 'HIRED', (req as any).user?.fullName || 'Unknown User') } as any,
                 include: candidateInclude,
             });
             // Close the requisition only once the requested number of hires has been reached.
@@ -472,7 +485,7 @@ export const generateOffer = async (req: Request, res: Response) => {
         }
 
         // Record when the offer document was generated (surfaced in the Hiring List details).
-        await prisma.candidate.update({ where: { id }, data: { offerGeneratedAt: new Date() } });
+        await prisma.candidate.update({ where: { id }, data: { offerGeneratedAt: new Date(), events: appendEvent(candidate.events, 'OFFER_GENERATED', (req as any).user?.fullName || 'Unknown User') } as any });
 
         // Place of work: use what was chosen on the hiring list, otherwise fall back to the JD's
         // single location.
@@ -660,6 +673,8 @@ export const updateCandidateOfferDetails = async (req: Request, res: Response) =
 
         const { salaryStructure, jobGrade, jobCategory, placeOfWork, contractMonths, residentStatus, yearsExperience, salaryExpectation } = req.body;
         const data: any = {};
+        data.events = appendEvent(candidate.events, 'EDIT_OFFER_DETAILS', (req as any).user?.fullName || 'Unknown User', `Edited offer parameters`);
+
         if (salaryStructure !== undefined) data.salaryStructure = cleanStr(salaryStructure);
         if (jobGrade !== undefined) data.jobGrade = cleanStr(jobGrade);
         if (jobCategory !== undefined) data.jobCategory = cleanStr(jobCategory);
@@ -724,7 +739,7 @@ export const deleteCandidate = async (req: Request, res: Response) => {
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
         // HR (and Super Admin) manage the hiring list and can remove candidates at any stage.
         if (userRole !== 'HR_MANAGER' && userRole !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Only HR can remove candidates from the hiring list.' });
+            return res.status(403).json({ error: 'Only HR can remove candidates from the applicant list.' });
         }
 
         await prisma.candidate.delete({ where: { id } });

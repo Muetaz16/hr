@@ -336,7 +336,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             if (result.type === 'HIRE') {
                 await notifyRoles(['HR_MANAGER'], 'Position ready to source', `"${title}" is approved — you can start sourcing candidates.`, '/recruitment/hiring');
                 // Careers portal: the position is now live publicly. Let HR and the requesting head know.
-                await notifyRoles(['HR_MANAGER'], 'Position published to Careers', `"${title}" is now live on the public Careers page. Applications will appear in the hiring list.`, '/recruitment/hiring');
+                await notifyRoles(['HR_MANAGER'], 'Position published to Careers', `"${title}" is now live on the public Careers page. Applications will appear in the applicant list.`, '/recruitment/hiring');
                 await notify(result.requesterId, 'Position published to Careers', `"${title}" is now open for public applications on the Careers page.`, '/recruitment/hiring');
             }
         } else if (updateData.filled) {

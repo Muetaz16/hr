@@ -729,6 +729,8 @@ model Candidate {
   // Set once the accepted candidate is enrolled as an employee
   employeeId String?
 
+  events      Json?    @default("[]") // Array of event objects: { action, performedBy, timestamp, note }
+
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
