@@ -616,6 +616,10 @@ model RecruitmentRequest {
   quantity         Int        @default(1) // number of people to hire under this requisition
   filled           Boolean    @default(false)
   filledAt         DateTime?
+  // Careers portal: auto-published when a HIRE requisition is fully approved,
+  // auto-removed when the position is marked filled.
+  publishedToCareers Boolean  @default(false)
+  publishedAt        DateTime?
   status           String     @default("PENDING")
   hrNote           String?
   gmNote           String?
@@ -640,6 +644,7 @@ model RecruitmentRequest {
 
   @@index([status])
   @@index([type])
+  @@index([publishedToCareers, filled])
 }
 
 // A candidate sourced by HR against an approved HIRE requisition, moving through the hiring pipeline:
@@ -655,9 +660,11 @@ model Candidate {
 
   // Application profile captured when the candidate is added
   source            String?   // where the candidate came from (referral / agency / job board...)
+  appliedViaCareers Boolean   @default(false) // submitted through the public careers portal
   degreePath        String?   // uploaded degree certificate
   portfolioPath     String?   // uploaded portfolio (designers only)
-  speciality        String?   // graduation certificate name / speciality
+  speciality        String?   // graduation certificate name / speciality (degree course)
+  educationLevel    String?   // highest education level (High School / Bachelor's / Master's ...)
   yearsExperience   String?   // years of relevant work experience
   salaryExpectation String?   // salary expectations
   nationality       String?
@@ -665,6 +672,12 @@ model Candidate {
   placeOfLiving     String?
 
   stage         String    @default("SCREENING") // SCREENING | INTERVIEW | OFFER | HIRED | REJECTED | WITHDRAWN
+
+  // Self-service onboarding: HR generates a private link; the new hire fills their own data.
+  onboardingToken       String?   @unique // unguessable token embedded in the onboarding link
+  onboardingStatus      String?   // PENDING | SUBMITTED | ENROLLED
+  onboardingData        Json?     // the identity/bank/document data the hire submitted
+  onboardingSubmittedAt DateTime?
 
   // Screening — the requesting head accepts or rejects the candidate
   screenDecision String?  // ACCEPTED | REJECTED
@@ -705,6 +718,7 @@ model Candidate {
   // Job-offer parameters captured up front (on the hiring list) and reused to generate the offer
   salaryStructure String?  // e.g. SS-01-LYD
   jobGrade        String?  // experience-derived grade: Trainee | Intern | Junior | Lead | Senior
+  jobCategory     String?  // derived from Job Description
   placeOfWork     String?  // chosen from the job description's work locations
   contractMonths  Int?     // 3 or 6
   residentStatus  String?  // RESDANT | DIRCT NONE RESDANT | NONE RESDANT (maps to the employee contract type)

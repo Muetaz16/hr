@@ -22,6 +22,10 @@ app.use(express.json());
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Convenience: serve the public careers site locally at /careers for testing.
+// In production the careers site is deployed separately (its own subdomain).
+app.use('/careers', express.static(path.join(__dirname, '../../careers')));
+
 // Global Request Logger
 app.use((req, res, next) => {
     console.log(`[REQ][${SERVER_VERSION}] ${req.method} ${req.url}`);
@@ -52,6 +56,7 @@ import salaryStructureRoutes from './routes/salaryStructureRoutes';
 import jobDescriptionRoutes from './routes/jobDescriptionRoutes';
 import candidateRoutes from './routes/candidateRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import publicRoutes from './routes/publicRoutes';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -62,6 +67,9 @@ app.get('/api/health', async (req, res) => {
         res.status(500).json({ status: 'error', database: 'disconnected', error: String(error) });
     }
 });
+
+// Public careers portal — no authentication (its own CORS + rate limits).
+app.use('/api/public', publicRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);

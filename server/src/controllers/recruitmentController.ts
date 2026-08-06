@@ -243,6 +243,9 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
                 updateData.hrApprovedById = userId;
                 updateData.hrNote = note;
                 updateData.hrApprovedAt = new Date();
+                // Auto-publish this open position to the public careers portal.
+                updateData.publishedToCareers = true;
+                updateData.publishedAt = new Date();
             } else {
                 // A JD change is finalised by the General Manager — the Head of Directorate acts as GM here.
                 if (userRole !== 'GENERAL_MANAGER' && userRole !== 'HEAD_DIRECTOR' && !isAdmin) {
@@ -268,6 +271,8 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             delete updateData.status;
             updateData.filled = true;
             updateData.filledAt = new Date();
+            // Position is full — remove it from the public careers portal.
+            updateData.publishedToCareers = false;
         } else {
             return res.status(400).json({ error: 'Invalid status.' });
         }
@@ -330,7 +335,13 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             await notify(result.requesterId, 'Requisition approved', `Your requisition "${title}" is fully approved.`, '/recruitment/requests');
             if (result.type === 'HIRE') {
                 await notifyRoles(['HR_MANAGER'], 'Position ready to source', `"${title}" is approved — you can start sourcing candidates.`, '/recruitment/hiring');
+                // Careers portal: the position is now live publicly. Let HR and the requesting head know.
+                await notifyRoles(['HR_MANAGER'], 'Position published to Careers', `"${title}" is now live on the public Careers page. Applications will appear in the hiring list.`, '/recruitment/hiring');
+                await notify(result.requesterId, 'Position published to Careers', `"${title}" is now open for public applications on the Careers page.`, '/recruitment/hiring');
             }
+        } else if (updateData.filled) {
+            // Position was just marked filled → it has been removed from the Careers page.
+            await notify(result.requesterId, 'Position closed on Careers', `"${title}" is now filled and has been removed from the public Careers page.`, '/recruitment/requests');
         }
 
         res.json(result);

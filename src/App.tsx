@@ -100,7 +100,7 @@ function App() {
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>
                   <Route path="/recruitment" element={<Navigate to="/recruitment/requests" replace />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
                     <Route path="/recruitment/requests" element={<RecruitmentRequestsPage />} />
                     <Route path="/recruitment/new" element={<RecruitmentCreatePage />} />
                     <Route path="/recruitment/positions" element={<PositionsToFillPage />} />

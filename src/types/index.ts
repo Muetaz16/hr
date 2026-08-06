@@ -561,7 +561,14 @@ export interface Candidate {
     placeOfWork?: string;
     contractMonths?: number;
     residentStatus?: string; // RESDANT | DIRCT NONE RESDANT | NONE RESDANT
+    jobCategory?: string;
     offerGeneratedAt?: string;
+
+    // Self-service onboarding
+    onboardingToken?: string;
+    onboardingStatus?: 'PENDING' | 'SUBMITTED' | 'ENROLLED';
+    onboardingData?: Record<string, any>;
+    onboardingSubmittedAt?: string;
 
     employeeId?: string;
     createdById?: string;

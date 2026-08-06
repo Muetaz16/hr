@@ -75,6 +75,26 @@ export const candidateService = {
         return response.data;
     },
 
+    // Completes the offer parameters (salary structure, grade, residency, place of work, contract length).
+    updateOfferDetails: async (id: string, data: {
+        salaryStructure?: string; jobGrade?: string; placeOfWork?: string;
+        contractMonths?: number; residentStatus?: string; yearsExperience?: string; salaryExpectation?: string; jobCategory?: string;
+    }): Promise<Candidate> => {
+        const response = await api.patch(`/candidates/${id}/offer-details`, data);
+        return response.data;
+    },
+
+    getCandidateById: async (id: string): Promise<Candidate> => {
+        const response = await api.get(`/candidates/${id}`);
+        return response.data;
+    },
+
+    // Generates (or re-fetches) the private onboarding link token for a candidate.
+    generateOnboardingLink: async (id: string): Promise<{ token: string; status: string }> => {
+        const response = await api.post(`/candidates/${id}/onboarding-link`);
+        return response.data;
+    },
+
     deleteCandidate: async (id: string): Promise<void> => {
         await api.delete(`/candidates/${id}`);
     },

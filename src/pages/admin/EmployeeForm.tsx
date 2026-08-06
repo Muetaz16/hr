@@ -320,6 +320,27 @@ const EmployeeForm: React.FC = () => {
         }
     }, [isEditMode, searchParams]);
 
+    // When enrolling from onboarding, pull whatever the new hire submitted (identity, bank, documents)
+    // and pre-fill the form so HR just reviews it and adds the org/contract details.
+    useEffect(() => {
+        if (isEditMode || !candidateId) return;
+        candidateService.getCandidateById(candidateId).then((c) => {
+            const data = (c as any).onboardingData;
+            if (data && typeof data === 'object' && Object.keys(data).length) {
+                setFormData(prev => {
+                    const merged: any = { ...prev };
+                    // Only fill blanks so any requisition-driven prefill (position/dates) is preserved.
+                    for (const [k, v] of Object.entries(data)) {
+                        if (v !== null && v !== '' && (merged[k] === undefined || merged[k] === '' || merged[k] === null)) {
+                            merged[k] = v;
+                        }
+                    }
+                    return merged;
+                });
+            }
+        }).catch(() => { /* onboarding data is optional */ });
+    }, [isEditMode, candidateId]);
+
     // Sync category / place of work from the selected Job Description during onboarding (when the JD
     // only offers one option, it is fixed automatically).
     useEffect(() => {

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 import { generateJobOfferDocx } from '../utils/jobOffer';
 import { generateEvaluationDocx } from '../utils/jobEvaluation';
 
@@ -25,7 +26,7 @@ const candidateInclude = {
 } as const;
 
 const isHRRole = (role?: string) => role === 'HR_MANAGER' || role === 'SUPER_ADMIN';
-const isPrivileged = (role?: string) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER'].includes(role || '');
+const isPrivileged = (role?: string) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(role || '');
 
 // GET /candidates — HR/GM/Admin see all; heads see only candidates for requisitions they raised.
 export const getCandidates = async (req: Request, res: Response) => {
@@ -51,6 +52,21 @@ export const getCandidates = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching candidates:', error);
         res.status(500).json({ error: 'Failed to fetch candidates' });
+    }
+};
+
+// GET /candidates/:id — a single candidate (used by the enrollment form to pull onboarding data).
+export const getCandidateById = async (req: Request, res: Response) => {
+    try {
+        const candidate = await prisma.candidate.findUnique({
+            where: { id: req.params.id },
+            include: candidateInclude,
+        });
+        if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
+        res.json(candidate);
+    } catch (error) {
+        console.error('Error fetching candidate:', error);
+        res.status(500).json({ error: 'Failed to fetch candidate' });
     }
 };
 
@@ -120,12 +136,15 @@ export const createCandidate = async (req: Request, res: Response) => {
     }
 };
 
-// Helper: load a candidate with its requisition and enforce that the actor is the requesting head (or admin).
-const loadForHead = async (id: string, userId: string, userRole?: string) => {
+// Helper: load a candidate with its requisition and enforce that the actor is the requesting head
+// (or Super Admin). `extraAllowedRoles` lets specific actions (e.g. accepting a candidate) also
+// permit higher management — HR is never granted access through this helper.
+const loadForHead = async (id: string, userId: string, userRole?: string, extraAllowedRoles: string[] = []) => {
     const candidate = await prisma.candidate.findUnique({ where: { id }, include: { requisition: true } });
     if (!candidate) return { error: 'notfound' as const };
     const isRequester = candidate.requisition.requesterId === userId;
-    if (!isRequester && userRole !== 'SUPER_ADMIN') return { error: 'forbidden' as const, candidate };
+    const isAllowedRole = userRole === 'SUPER_ADMIN' || extraAllowedRoles.includes(userRole || '');
+    if (!isRequester && !isAllowedRole) return { error: 'forbidden' as const, candidate };
     return { candidate };
 };
 
@@ -137,9 +156,11 @@ export const screenCandidate = async (req: Request, res: Response) => {
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
 
-        const loaded = await loadForHead(id, userId, userRole);
+        // Accepting/rejecting a candidate is a hiring-manager decision: the head who raised the
+        // requisition, or higher management (GM / Chairman). HR cannot accept candidates.
+        const loaded = await loadForHead(id, userId, userRole, ['GENERAL_MANAGER', 'CHAIRMAN']);
         if (loaded.error === 'notfound') return res.status(404).json({ error: 'Candidate not found.' });
-        if (loaded.error === 'forbidden') return res.status(403).json({ error: 'Only the head who raised this requisition can screen its candidates.' });
+        if (loaded.error === 'forbidden') return res.status(403).json({ error: 'Only the requesting head or the General Manager can accept or reject this candidate.' });
         const candidate = loaded.candidate!;
 
         if (candidate.stage !== 'SCREENING') {
@@ -386,7 +407,7 @@ export const markHired = async (req: Request, res: Response) => {
         const result = await prisma.$transaction(async (tx) => {
             const updated = await tx.candidate.update({
                 where: { id },
-                data: { stage: 'HIRED', employeeId: cleanStr(employeeId) },
+                data: { stage: 'HIRED', employeeId: cleanStr(employeeId), onboardingStatus: 'ENROLLED' } as any,
                 include: candidateInclude,
             });
             // Close the requisition only once the requested number of hires has been reached.
@@ -394,7 +415,8 @@ export const markHired = async (req: Request, res: Response) => {
             if (hiredNow >= quantity) {
                 await tx.recruitmentRequest.update({
                     where: { id: candidate.requisitionId },
-                    data: { filled: true, filledAt: new Date() },
+                    // Filling the position also removes it from the public careers page.
+                    data: { filled: true, filledAt: new Date(), publishedToCareers: false } as any,
                 });
             }
             return updated;
@@ -480,7 +502,7 @@ export const generateOffer = async (req: Request, res: Response) => {
         // Look up the hourly / monthly rate for (job category × grade × structure). If the
         // combination isn't in the salary table we still produce the offer, just with those
         // cells left blank for finance to complete — we never invent a figure.
-        const jobCategory = jd?.jobCategories?.[0] || '';
+        const jobCategory = candidate.jobCategory || jd?.jobCategories?.[0] || '';
         let hourlyRate = '';
         let basicSalary = '';
         let basicNum = 0;
@@ -624,6 +646,74 @@ export const generateEvaluation = async (req: Request, res: Response) => {
 };
 
 // DELETE /candidates/:id — HR/admin or whoever added the candidate.
+// PATCH /candidates/:id/offer-details — HR completes the offer parameters (salary structure,
+// experience level/grade, residency, place of work, contract length) so an offer can be generated.
+// Needed for candidates that came in via the careers portal without these fields.
+export const updateCandidateOfferDetails = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userRole = (req as any).user?.role;
+        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can edit offer details.' });
+
+        const candidate = await prisma.candidate.findUnique({ where: { id } });
+        if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
+
+        const { salaryStructure, jobGrade, jobCategory, placeOfWork, contractMonths, residentStatus, yearsExperience, salaryExpectation } = req.body;
+        const data: any = {};
+        if (salaryStructure !== undefined) data.salaryStructure = cleanStr(salaryStructure);
+        if (jobGrade !== undefined) data.jobGrade = cleanStr(jobGrade);
+        if (jobCategory !== undefined) data.jobCategory = cleanStr(jobCategory);
+        if (placeOfWork !== undefined) data.placeOfWork = cleanStr(placeOfWork);
+        if (residentStatus !== undefined) data.residentStatus = cleanStr(residentStatus);
+        if (yearsExperience !== undefined) data.yearsExperience = cleanStr(yearsExperience);
+        if (salaryExpectation !== undefined) data.salaryExpectation = cleanStr(salaryExpectation);
+        if (contractMonths !== undefined) {
+            data.contractMonths = String(contractMonths) === '3' ? 3 : String(contractMonths) === '6' ? 6 : null;
+        }
+
+        const updated = await prisma.candidate.update({ where: { id }, data, include: candidateInclude });
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating offer details:', error);
+        res.status(500).json({ error: 'Failed to update offer details' });
+    }
+};
+
+// POST /candidates/:id/onboarding-link — HR generates (or re-fetches) the private onboarding
+// link for a candidate whose offer has been accepted. Returns an unguessable token.
+export const generateOnboardingLink = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userRole = (req as any).user?.role;
+        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can generate onboarding links.' });
+
+        const candidate = await prisma.candidate.findUnique({ where: { id } });
+        if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
+
+        const c: any = candidate;
+        if (c.onboardingStatus === 'ENROLLED') {
+            return res.status(400).json({ error: 'This candidate has already been enrolled.' });
+        }
+        // Offer must be accepted (candidate is in the onboarding stage).
+        if (!(c.stage === 'OFFER' && c.offerDecision === 'ACCEPTED')) {
+            return res.status(400).json({ error: 'An onboarding link can only be generated once the offer is accepted.' });
+        }
+
+        let token = c.onboardingToken;
+        if (!token) {
+            token = crypto.randomBytes(24).toString('hex');
+            await prisma.candidate.update({
+                where: { id },
+                data: { onboardingToken: token, onboardingStatus: c.onboardingStatus || 'PENDING' } as any,
+            });
+        }
+        res.json({ token, status: c.onboardingStatus || 'PENDING' });
+    } catch (error) {
+        console.error('Error generating onboarding link:', error);
+        res.status(500).json({ error: 'Failed to generate onboarding link' });
+    }
+};
+
 export const deleteCandidate = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
@@ -632,9 +722,9 @@ export const deleteCandidate = async (req: Request, res: Response) => {
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
-        // Only Super Admin can delete a candidate, at any stage.
-        if (userRole !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: 'Only Super Admin can delete candidates.' });
+        // HR (and Super Admin) manage the hiring list and can remove candidates at any stage.
+        if (userRole !== 'HR_MANAGER' && userRole !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Only HR can remove candidates from the hiring list.' });
         }
 
         await prisma.candidate.delete({ where: { id } });

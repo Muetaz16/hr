@@ -7,7 +7,7 @@ import { SERVER_URL } from '../services/apiClient';
 import type { Candidate, RecruitmentRequest } from '../types';
 import {
     UserPlus, Plus, Building2, Briefcase, Trash2, CheckCircle2, XCircle,
-    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText
+    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 
 type View = 'screening' | 'interview' | 'offer' | 'onboarding';
-type ActionType = 'screen' | 'schedule' | 'hrEval' | 'techEval' | 'finalize' | 'offer' | 'details';
+type ActionType = 'screen' | 'schedule' | 'hrEval' | 'techEval' | 'finalize' | 'offer' | 'details' | 'editOffer';
 
 const fmtDateTime = (iso?: string) => {
     if (!iso) return '—';
@@ -68,6 +68,8 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
 
     const isHR = currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'SUPER_ADMIN';
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
+    // Higher management can accept/reject candidates as an override (in addition to the owning head).
+    const isMgmt = currentUser?.role === 'GENERAL_MANAGER' || currentUser?.role === 'CHAIRMAN';
 
     // Add-candidate modal (screening view)
     const emptyAddForm = {
@@ -90,6 +92,9 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     const [recommend, setRecommend] = useState(true);
     const [schedAt, setSchedAt] = useState('');
     const [schedLoc, setSchedLoc] = useState('');
+    const [editOfferForm, setEditOfferForm] = useState({
+        residentStatus: '', salaryStructure: '', jobGrade: '', jobCategory: '', placeOfWork: '', contractMonths: 6 as number
+    });
 
     useEffect(() => { fetchData(); }, [view]);
 
@@ -109,7 +114,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         }
     };
 
-    const isRequester = (c: Candidate) => isAdmin || c.requisition?.requester?.id === currentUser?.id;
+    const isRequester = (c: Candidate) => isAdmin || isMgmt || c.requisition?.requester?.id === currentUser?.id;
 
     // Approved, unfilled hire requisitions this user can source candidates against.
     const openReqs = requisitions.filter(r => r.type === 'HIRE' && r.status === 'FULLY_APPROVED' && !r.filled);
@@ -146,6 +151,16 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         const existing = (type === 'hrEval' ? c.hrCriteria : type === 'techEval' ? c.techCriteria : undefined) as Record<string, number> | undefined;
         setCriteria(Object.fromEntries(defs.map(d => [d.key, existing?.[d.key] ?? 3])));
         setSchedAt(toLocalInput(c.interviewAt)); setSchedLoc(c.interviewLocation || '');
+        if (type === 'editOffer') {
+            setEditOfferForm({
+                residentStatus: c.residentStatus || '',
+                salaryStructure: c.salaryStructure || '',
+                jobGrade: c.jobGrade || '',
+                jobCategory: c.jobCategory || c.requisition?.jobDescription?.jobCategories?.[0] || '',
+                placeOfWork: c.placeOfWork || (c.requisition?.jobDescription?.workLocations?.length === 1 ? c.requisition.jobDescription.workLocations[0] : ''),
+                contractMonths: c.contractMonths || 6
+            });
+        }
     };
     const closeAction = () => { setActCand(null); setActType(null); };
 
@@ -190,6 +205,16 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         try {
             await candidateService.finalize(actCand.id, decision, note);
             toast.success(decision === 'ACCEPTED' ? t('cand_to_offer', { defaultValue: 'Accepted — moved to onboarding.' }) : t('cand_rejected', { defaultValue: 'Candidate rejected.' }));
+            closeAction(); fetchData();
+        } catch (err: any) { toast.error(err.response?.data?.error || t('err_action', { defaultValue: 'Action failed.' })); }
+    };
+
+    const runEditOffer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!actCand) return;
+        try {
+            await candidateService.updateOfferDetails(actCand.id, editOfferForm);
+            toast.success(t('offer_details_updated', { defaultValue: 'Offer details updated.' }));
             closeAction(); fetchData();
         } catch (err: any) { toast.error(err.response?.data?.error || t('err_action', { defaultValue: 'Action failed.' })); }
     };
@@ -314,6 +339,23 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         if (c.contractMonths) p.set('contractMonths', String(c.contractMonths));
         p.set('candidateId', c.id);
         navigate(`/employees/new?${p.toString()}`);
+    };
+
+    // Generate (or re-fetch) the private onboarding link and copy it for the hire.
+    const copyOnboardingLink = async (c: Candidate) => {
+        try {
+            const { token } = await candidateService.generateOnboardingLink(c.id);
+            const link = `${SERVER_URL}/careers/onboard.html?token=${token}`;
+            try {
+                await navigator.clipboard.writeText(link);
+                toast.success(t('onboarding_link_copied', { defaultValue: 'Onboarding link copied — send it to the new hire.' }));
+            } catch {
+                window.prompt(t('onboarding_link_prompt', { defaultValue: 'Copy this onboarding link:' }), link);
+            }
+            fetchData();
+        } catch (e: any) {
+            toast.error(e?.response?.data?.error || t('onboarding_link_failed', { defaultValue: 'Failed to generate the onboarding link.' }));
+        }
     };
 
     // ---- view-specific candidate sets ----
@@ -443,8 +485,8 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
             {/* ===================== SCREENING (Hiring List) ===================== */}
             {view === 'screening' && (
                 <div className="space-y-6">
-                    {(isHR ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id))
-                        .filter(r => isHR || hiringListCands.some(c => c.requisitionId === r.id))
+                    {((isHR || isMgmt) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id))
+                        .filter(r => isHR || isMgmt || hiringListCands.some(c => c.requisitionId === r.id))
                         .map(req => {
                             const reqCands = hiringListCands.filter(c => c.requisitionId === req.id);
                             return (
@@ -483,7 +525,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                                             </div>
                                                             <div className="flex items-center gap-2 shrink-0">
                                                                 {c.stage !== 'SCREENING' && stageBadge(c)}
-                                                                {isAdmin && (
+                                                                {isHR && (
                                                                     <button onClick={() => handleDelete(c)} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                                                 )}
                                                             </div>
@@ -512,7 +554,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                 </div>
                             );
                         })}
-                    {(isHR ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id)).filter(r => isHR || hiringListCands.some(c => c.requisitionId === r.id)).length === 0 && (
+                    {((isHR || isMgmt) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id)).filter(r => isHR || isMgmt || hiringListCands.some(c => c.requisitionId === r.id)).length === 0 && (
                         <EmptyState icon={UserPlus} text={isHR ? t('no_open_reqs_add', { defaultValue: 'No approved requisitions to source candidates for.' }) : t('no_cands_for_you', { defaultValue: 'No candidates awaiting your review.' })} />
                     )}
                 </div>
@@ -537,7 +579,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         {scheduled ? badge(t('scheduled', { defaultValue: 'Scheduled' }), 'bg-blue-50 text-blue-600 border-blue-100') : badge(t('pending_interview', { defaultValue: 'Pending Interview' }), 'bg-amber-50 text-amber-600 border-amber-100')}
-                                        {isAdmin && (
+                                        {isHR && (
                                             <button onClick={() => handleDelete(c)} title={t('remove_candidate', { defaultValue: 'Remove candidate' })} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                         )}
                                     </div>
@@ -608,7 +650,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     {c.stage === 'WITHDRAWN'
                                         ? badge(t('declined', { defaultValue: 'Declined' }), 'bg-rose-50 text-rose-600 border-rose-100')
                                         : badge(t('offer_pending', { defaultValue: 'Offer Pending' }), 'bg-amber-50 text-amber-600 border-amber-100')}
-                                    {isAdmin && (
+                                    {isHR && (
                                         <button onClick={() => handleDelete(c)} title={t('remove_candidate', { defaultValue: 'Remove candidate' })} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                     )}
                                 </div>
@@ -618,6 +660,10 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                 <p className="text-xs font-medium text-slate-500 italic">{t('candidate_declined_offer', { defaultValue: 'The candidate declined the offer.' })}</p>
                             ) : isHR ? (
                                 <div className="flex flex-col gap-2 pt-1">
+                                    <button onClick={() => openAction(c, 'editOffer')}
+                                        className="w-full py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all inline-flex items-center justify-center gap-2">
+                                        {t('edit_offer_details', { defaultValue: 'Edit Offer Details' })}
+                                    </button>
                                     <button onClick={() => generateOffer(c)} disabled={offerBusy === c.id}
                                         className="w-full py-2.5 bg-white border-2 border-indigo-200 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:border-indigo-400 hover:bg-indigo-50 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-60">
                                         <FileText className="w-4 h-4" />
@@ -653,7 +699,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                         : c.stage === 'WITHDRAWN' ? badge(t('declined', { defaultValue: 'Declined' }), 'bg-rose-50 text-rose-600 border-rose-100')
                                         : c.offerDecision === 'ACCEPTED' ? badge(t('offer_accepted_b', { defaultValue: 'Offer Accepted' }), 'bg-blue-50 text-blue-600 border-blue-100')
                                         : badge(t('offer_pending', { defaultValue: 'Offer Pending' }), 'bg-amber-50 text-amber-600 border-amber-100')}
-                                    {isAdmin && (
+                                    {isHR && (
                                         <button onClick={() => handleDelete(c)} title={t('remove_candidate', { defaultValue: 'Remove candidate' })} className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                     )}
                                 </div>
@@ -667,10 +713,28 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                             )}
                             {c.stage === 'OFFER' && (
                                 <div className="flex flex-col gap-2 pt-1">
+                                    {/* Onboarding status badge */}
+                                    {c.onboardingStatus === 'SUBMITTED' ? (
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl">
+                                            <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                                            <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">{t('onboarding_submitted', { defaultValue: 'Onboarding submitted' })}</span>
+                                        </div>
+                                    ) : c.onboardingStatus === 'PENDING' ? (
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-xl">
+                                            <ArrowRight className="w-4 h-4 text-amber-600" />
+                                            <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">{t('onboarding_link_sent', { defaultValue: 'Link sent — awaiting the hire' })}</span>
+                                        </div>
+                                    ) : null}
+
                                     {isHR ? (
-                                        <button onClick={() => enroll(c)} className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all inline-flex items-center justify-center gap-2">
-                                            {t('enroll_employee', { defaultValue: 'Enroll Employee' })} <ArrowRight className="w-3.5 h-3.5" />
-                                        </button>
+                                        <>
+                                            <button onClick={() => copyOnboardingLink(c)} className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all inline-flex items-center justify-center gap-2">
+                                                {c.onboardingToken ? t('copy_onboarding_link', { defaultValue: 'Copy Onboarding Link' }) : t('generate_onboarding_link', { defaultValue: 'Generate Onboarding Link' })}
+                                            </button>
+                                            <button onClick={() => enroll(c)} className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all inline-flex items-center justify-center gap-2">
+                                                {c.onboardingStatus === 'SUBMITTED' ? t('review_and_enroll', { defaultValue: 'Review & Enroll' }) : t('enroll_employee', { defaultValue: 'Enroll Employee' })} <ArrowRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        </>
                                     ) : (
                                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t('awaiting_enrollment', { defaultValue: 'Awaiting enrollment by HR' })}</p>
                                     )}
@@ -1033,6 +1097,37 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     <button onClick={() => runOffer('ACCEPTED')} className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700">{t('accepted_offer', { defaultValue: 'Accepted Offer' })}</button>
                                 </div>
                             </>
+                        )}
+
+                        {/* Edit Offer Details */}
+                        {actType === 'editOffer' && (
+                            <form onSubmit={runEditOffer} className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('resident_status', { defaultValue: 'Resident Status' })}</label>
+                                    <select value={editOfferForm.residentStatus} onChange={e => setEditOfferForm({ ...editOfferForm, residentStatus: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        <option value="Resident">{t('resident', { defaultValue: 'Resident' })}</option>
+                                        <option value="Non-Resident">{t('non_resident', { defaultValue: 'Non-Resident' })}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('job_category', { defaultValue: 'Job Category' })}</label>
+                                    <input value={editOfferForm.jobCategory} onChange={e => setEditOfferForm({ ...editOfferForm, jobCategory: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('job_category', { defaultValue: 'Job Category' })} />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('salary_structure', { defaultValue: 'Salary Structure' })}</label>
+                                    <input value={editOfferForm.salaryStructure} onChange={e => setEditOfferForm({ ...editOfferForm, salaryStructure: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('salary_structure', { defaultValue: 'Salary Structure' })} />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('job_grade', { defaultValue: 'Job Grade' })}</label>
+                                    <input value={editOfferForm.jobGrade} onChange={e => setEditOfferForm({ ...editOfferForm, jobGrade: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('job_grade', { defaultValue: 'Job Grade' })} />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('place_of_work', { defaultValue: 'Place of Work' })}</label>
+                                    <input value={editOfferForm.placeOfWork} onChange={e => setEditOfferForm({ ...editOfferForm, placeOfWork: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('place_of_work', { defaultValue: 'Place of Work' })} />
+                                </div>
+                                <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700">{t('save_details', { defaultValue: 'Save Details' })}</button>
+                            </form>
                         )}
                     </div>
                 )}

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import {
     getCandidates,
+    getCandidateById,
     createCandidate,
     screenCandidate,
     scheduleInterview,
@@ -14,6 +15,8 @@ import {
     markHired,
     generateOffer,
     generateEvaluation,
+    generateOnboardingLink,
+    updateCandidateOfferDetails,
     deleteCandidate,
 } from '../controllers/candidateController';
 import { authenticateToken } from '../middleware/auth';
@@ -37,6 +40,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.get('/', getCandidates);
+router.get('/:id', getCandidateById);
 router.post('/', upload.fields([{ name: 'cv', maxCount: 1 }, { name: 'degree', maxCount: 1 }, { name: 'portfolio', maxCount: 1 }]), createCandidate);
 router.post('/:id/screen', screenCandidate);
 router.post('/:id/interview', scheduleInterview);
@@ -47,6 +51,8 @@ router.post('/:id/offer', recordOffer);
 router.get('/:id/offer', generateOffer);
 router.get('/:id/evaluation', generateEvaluation);
 router.post('/:id/hire', markHired);
+router.patch('/:id/offer-details', updateCandidateOfferDetails);
+router.post('/:id/onboarding-link', generateOnboardingLink);
 router.delete('/:id', deleteCandidate);
 
 export default router;
