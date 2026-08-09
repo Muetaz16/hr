@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userService } from '../../services/userService';
-import { groupService, departmentService, divisionService } from '../../services/departmentService';
+import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { employeeService } from '../../services/employeeService';
-import type { User, UserRole, Group, Department, Unit, Employee, Division } from '../../types';
+import type { User, UserRole, Department, Unit, Employee, Division } from '../../types';
 import {
     ArrowLeft,
     Mail,
@@ -150,7 +150,6 @@ const UserForm: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const isEditMode = Boolean(id);
 
-    const [groups, setGroups] = useState<Group[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [units, setUnits] = useState<Unit[]>([]);
     const [divisions, setDivisions] = useState<Division[]>([]);
@@ -178,15 +177,13 @@ const UserForm: React.FC = () => {
         (async () => {
             setLoading(true);
             try {
-                const [groupsData, deptsData, unitsData, empsData, divsData, usersData] = await Promise.all([
-                    groupService.getAllGroups(),
+                const [deptsData, unitsData, empsData, divsData, usersData] = await Promise.all([
                     departmentService.getAllDepartments(),
                     unitService.getAllUnits(),
                     employeeService.getAllEmployees(),
                     divisionService.getAllDivisions().catch(() => []),
                     isEditMode ? userService.getAllUsers() : Promise.resolve([] as User[]),
                 ]);
-                setGroups(groupsData);
                 setDepartments(deptsData);
                 setUnits(unitsData);
                 setEmployees(empsData);

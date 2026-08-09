@@ -92,17 +92,21 @@ const verifyCaptcha = async (token: string | null, ip?: string): Promise<boolean
 // The identity text fields the new hire fills (keys match the Employee model so
 // enrollment can map them 1:1). Documents are handled separately below.
 const ONBOARDING_TEXT_FIELDS = [
-    'fullName', 'fullNameArabic', 'dateOfBirth', 'placeOfBirth', 'gender', 'bloodType',
-    'nationality', 'nationalId', 'academicQualification',
-    'idCardNumber', 'idPlaceOfIssue', 'idIssueDate',
-    'passportNumber', 'passportPlaceOfIssue', 'passportExpiryDate',
-    'drivingLicenseType', 'drivingLicenseNumber', 'drivingLicenseExpiry', 'drivingLicensePlaceOfIssue',
-    'personalPhone', 'personalEmail', 'emergencyContactNumber', 'residentialAddress',
-    'workedBefore', 'hasRelativesInCompany', 'relativesNames',
-    'bankName', 'bankBranchName', 'bankAccountNumber',
+    'fullName', 'fullNameArabic', 'dateOfBirth', 'placeOfBirth', 'placeOfBirthArabic', 'gender', 'bloodType',
+    'nationality', 'nationalityArabic', 'nationalId', 'academicQualification', 'academicQualificationArabic',
+    'idCardNumber', 'idPlaceOfIssue', 'idPlaceOfIssueArabic', 'idIssueDate',
+    'passportNumber', 'passportPlaceOfIssue', 'passportPlaceOfIssueArabic', 'passportExpiryDate',
+    'drivingLicenseType', 'drivingLicenseTypeArabic', 'drivingLicenseNumber', 'drivingLicenseExpiry',
+    'drivingLicensePlaceOfIssue', 'drivingLicensePlaceOfIssueArabic',
+    'personalPhone', 'personalEmail', 'emergencyContactNumber', 'residentialAddress', 'residentialAddressArabic',
+    'workedBefore', 'hasRelativesInCompany', 'relativesNames', 'relativesNamesArabic',
+    'bankName', 'bankNameArabic', 'bankBranchName', 'bankBranchNameArabic', 'bankAccountNumber',
     // New fields for Service Providers / Non-Residents
-    'serviceProviderCompany', 'employeeTravelDate', 'employeeStartDate',
-    'jobCategory', 'jobLevel', 'hourlyRate', 'currency'
+    // NOTE: department, job category/level and hourly rate are deliberately NOT collected here —
+    // they're assigned by the recruitment team (on the Candidate) after the interview, before the
+    // offer is generated, and department comes from the candidate's linked requisition. Letting the
+    // onboarding form re-ask for them would let the hire overwrite what recruitment already decided.
+    'serviceProviderCompany', 'employeeTravelDate', 'employeeStartDate'
 ];
 // Upload field name -> key stored in onboardingData (matches Employee's *Url columns).
 const ONBOARDING_DOC_MAP: Record<string, string> = {
@@ -128,12 +132,17 @@ export const getOnboarding = async (req: Request, res: Response) => {
             residentStatus: candidate.residentStatus || null,
             jobCategory: candidate.jobCategory || null,
             jobGrade: candidate.jobGrade || null,
-            // Sensible prefill from what we already captured on the application.
+            // Sensible prefill from what we already captured on the application — no point
+            // asking the candidate to re-type what they already told us when applying.
             prefill: {
                 fullName: candidate.fullName || '',
                 personalEmail: candidate.email || '',
                 personalPhone: candidate.phone || '',
                 nationality: candidate.nationality || '',
+                dateOfBirth: candidate.dateOfBirth ? candidate.dateOfBirth.toISOString().split('T')[0] : '',
+                // No single "academic qualification" field is captured at application — combine
+                // the education level (e.g. Bachelor's) with the degree course/speciality instead.
+                academicQualification: [candidate.educationLevel, candidate.speciality].filter(Boolean).join(' - '),
             },
             data: candidate.onboardingData || {},
         });

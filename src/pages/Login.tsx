@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/apiClient'; // Import API client
-import { User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 

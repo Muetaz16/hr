@@ -6,7 +6,7 @@ import { departmentService, divisionService } from '../services/departmentServic
 import { directorateService } from '../services/directorateService';
 import { jobDescriptionService } from '../services/jobDescriptionService';
 import {
-    Users, Landmark, Building2, Crown, ArrowRight, Briefcase, LayoutGrid, Building, FileText
+    Users, Building2, Crown, Briefcase, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Modal from '../components/Modal';
@@ -56,12 +56,14 @@ const Organization: React.FC = () => {
                 // Default selection
                 if (me.departmentId) {
                     const myDept = depts.find((d: any) => d.id === me.departmentId);
-                    if (myDept?.isOffice) {
-                        setSelectedEntity({ id: myDept.id, type: 'OFFICE' });
-                    } else if (myDept?.divisionId) {
-                        setSelectedEntity({ id: myDept.divisionId, type: 'DIVISION' });
-                    } else {
-                        setSelectedEntity({ id: myDept.id, type: 'DEPARTMENT' });
+                    if (myDept) {
+                        if (myDept.isOffice) {
+                            setSelectedEntity({ id: myDept.id, type: 'OFFICE' });
+                        } else if (myDept.divisionId) {
+                            setSelectedEntity({ id: myDept.divisionId, type: 'DIVISION' });
+                        } else {
+                            setSelectedEntity({ id: myDept.id, type: 'DEPARTMENT' });
+                        }
                     }
                 }
             }
@@ -76,7 +78,6 @@ const Organization: React.FC = () => {
     if (!myRecord) return <div className="p-12 text-center text-slate-400">Unable to load your profile record.</div>;
 
     const offices = allDepts.filter(d => d.isOffice);
-    const topLevelDepts = allDepts.filter(d => !d.isOffice && !d.divisionId); // Legacy fallback
 
     // Leadership lookups
     const gm = allEmployees.find((e: any) => e.role === 'GENERAL_MANAGER');
@@ -131,7 +132,7 @@ const Organization: React.FC = () => {
             </div>
 
             {/* Tree Section */}
-            <section className="relative overflow-hidden bg-white py-12 px-4 rounded-xl border-2 border-[#511d29]/10 shadow-sm">
+            <section className="relative overflow-x-auto custom-scrollbar bg-white py-12 px-4 rounded-xl border-2 border-[#511d29]/10 shadow-sm">
 
                 <div className="relative flex flex-col items-center max-w-[1200px] mx-auto">
 
@@ -139,19 +140,19 @@ const Organization: React.FC = () => {
                     <div className="relative z-10 w-full flex justify-center">
                         <button
                             onClick={() => topLeader && setSelectedEmployee(topLeader)}
-                            className={`w-80 flex flex-row items-stretch border-2 border-[#511d29] shadow-md transition-all ${topLeader ? 'hover:-translate-y-1 hover:shadow-lg cursor-pointer' : 'cursor-default'}`}
+                            className={`w-64 sm:w-72 flex flex-row items-stretch border-2 border-[#511d29] shadow-md transition-all ${topLeader ? 'hover:-translate-y-1 hover:shadow-lg cursor-pointer' : 'cursor-default'}`}
                             style={{ backgroundColor: '#f5ebd9' }}
                         >
-                            <div className="w-14 flex items-center justify-center bg-[#511d29] text-white">
-                                <Crown className="w-6 h-6" />
+                            <div className="w-10 md:w-12 flex items-center justify-center bg-[#511d29] text-white flex-shrink-0">
+                                <Crown className="w-5 h-5" />
                             </div>
-                            <div className="flex-1 p-4 text-left">
-                                <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">Top Leadership</p>
-                                <h4 className="text-md font-black text-[#511d29] tracking-tight leading-tight">
+                            <div className="flex-1 p-3 text-left">
+                                <p className="text-[8px] sm:text-[9px] md:text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">Top Leadership</p>
+                                <h4 className="text-xs sm:text-sm font-black text-[#511d29] tracking-tight leading-tight">
                                     {topLeader ? topLeader.fullName : 'Chairman & General Manager'}
                                 </h4>
                                 {topLeader && (
-                                    <p className="text-[10px] font-bold text-[#511d29]/60 uppercase tracking-widest mt-0.5">
+                                    <p className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-[#511d29]/60 uppercase tracking-widest mt-0.5">
                                         {topLeader.role === 'CHAIRMAN' ? 'Chairman' : 'General Manager'}
                                     </p>
                                 )}
@@ -168,8 +169,8 @@ const Organization: React.FC = () => {
                             const leftOffice = offices[i * 2];
                             const rightOffice = offices[i * 2 + 1];
                             return (
-                                <div key={`office-row-${i}`} className="flex items-center justify-center w-full max-w-[800px] my-3 relative z-10">
-                                    <div className="w-[380px] flex justify-end pr-8 relative">
+                                <div key={`office-row-${i}`} className="flex items-center justify-center w-full max-w-[800px] my-3 relative z-10 px-2 sm:px-4">
+                                    <div className="w-[130px] sm:w-[210px] md:w-[280px] flex justify-end pr-3 sm:pr-8 relative">
                                         {leftOffice && (
                                             <>
                                                 <TreeNode
@@ -179,15 +180,15 @@ const Organization: React.FC = () => {
                                                     isSelected={selectedEntity?.id === leftOffice.id && selectedEntity?.type === 'OFFICE'}
                                                     onClick={() => setSelectedEntity({ id: leftOffice.id, type: 'OFFICE' })}
                                                 />
-                                                <div className="absolute right-0 top-1/2 w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
+                                                <div className="absolute right-0 top-1/2 w-3 sm:w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
                                             </>
                                         )}
                                     </div>
-                                    <div className="w-[40px]"></div> {/* space for trunk */}
-                                    <div className="w-[380px] flex justify-start pl-8 relative">
+                                    <div className="w-[20px] sm:w-[40px]"></div> {/* space for trunk */}
+                                    <div className="w-[130px] sm:w-[210px] md:w-[280px] flex justify-start pl-3 sm:pl-8 relative">
                                         {rightOffice && (
                                             <>
-                                                <div className="absolute left-0 top-1/2 w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
+                                                <div className="absolute left-0 top-1/2 w-3 sm:w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
                                                 <TreeNode
                                                     title={rightOffice.name}
                                                     subtitle="Direct Office"
@@ -218,7 +219,7 @@ const Organization: React.FC = () => {
                                     const assignedDivisions = allDivisions.filter(d => d.directorateId === dir.id);
 
                                     return (
-                                        <div key={`dir-${dir.id}`} className="flex flex-col items-center relative min-w-[18rem]">
+                                        <div key={`dir-${dir.id}`} className="flex flex-col items-center relative min-w-[12rem] sm:min-w-[14rem] md:min-w-[16rem]">
                                             <div className="absolute top-[-16px] w-[2px] h-[16px] bg-[#511d29]"></div>
                                             <TreeNode
                                                 title={dir.name}
@@ -235,12 +236,12 @@ const Organization: React.FC = () => {
                                                         onClick={(ev) => { ev.stopPropagation(); setSelectedEmployee(headDir); }}
                                                         className="w-full flex items-center gap-2 px-3 py-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left mt-1"
                                                     >
-                                                        <div className="w-6 h-6 flex items-center justify-center text-[10px] font-black bg-[#511d29] text-white flex-shrink-0">
+                                                        <div className="w-5 h-5 sm:w-6 h-6 flex items-center justify-center text-[8px] sm:text-[10px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                             {headDir.fullName[0].toUpperCase()}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Directorate</p>
-                                                            <p className="text-xs font-bold text-[#511d29] truncate">{headDir.fullName}</p>
+                                                            <p className="text-[8px] sm:text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Directorate</p>
+                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headDir.fullName}</p>
                                                         </div>
                                                     </button>
                                                 );
@@ -261,7 +262,7 @@ const Organization: React.FC = () => {
                                                             return (
                                                                 <div key={`div-${div.id}`} className="flex flex-col items-center relative">
                                                                     <div className="absolute top-[-16px] w-[2px] h-[16px] bg-[#511d29]"></div>
-                                                                    <div className="w-64 flex flex-col gap-2">
+                                                                    <div className="w-48 sm:w-56 flex flex-col gap-2">
                                                                         <TreeNode
                                                                             title={div.name}
                                                                             subtitle="Division"
@@ -273,13 +274,13 @@ const Organization: React.FC = () => {
                                                                             const headOfDivision = allEmployees.find(e => e.divisionId === div.id && e.role === 'HEAD_DIVISION');
                                                                             if (headOfDivision) {
                                                                                 return (
-                                                                                    <button onClick={() => setSelectedEmployee(headOfDivision)} className="w-full flex items-center gap-2 p-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left">
-                                                                                        <div className="w-6 h-6 flex items-center justify-center text-[10px] font-black bg-[#511d29] text-white">
+                                                                                    <button onClick={() => setSelectedEmployee(headOfDivision)} className="w-full flex items-center gap-2 p-1.5 sm:p-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left">
+                                                                                        <div className="w-5 h-5 sm:w-6 h-6 flex items-center justify-center text-[8px] sm:text-[10px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                                                             {headOfDivision.fullName[0].toUpperCase()}
                                                                                         </div>
                                                                                         <div className="flex-1 min-w-0">
-                                                                                            <p className="text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Division</p>
-                                                                                            <p className="text-xs font-bold text-[#511d29] truncate">{headOfDivision.fullName}</p>
+                                                                                            <p className="text-[8px] sm:text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Division</p>
+                                                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headOfDivision.fullName}</p>
                                                                                         </div>
                                                                                     </button>
                                                                                 );
@@ -374,7 +375,7 @@ const Organization: React.FC = () => {
                                                                     if (headOfDept) {
                                                                         return (
                                                                             <button onClick={() => setSelectedEmployee(headOfDept)} className="flex items-center gap-2 px-3 py-1.5 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left">
-                                                                                <div className="w-5 h-5 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white">
+                                                                                <div className="w-5 h-5 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                                                     {headOfDept.fullName[0].toUpperCase()}
                                                                                 </div>
                                                                                 <div className="min-w-0">
@@ -452,15 +453,15 @@ const Organization: React.FC = () => {
 const TreeNode = ({ title, subtitle, badge, isSelected, onClick }: any) => (
     <button
         onClick={onClick}
-        className={`w-full flex flex-row items-stretch border-2 transition-all text-left group ${isSelected ? 'border-[#511d29] shadow-lg scale-[1.02]' : 'border-[#511d29]/40 hover:border-[#511d29] hover:shadow-md hover:-translate-y-1'}`}
+        className={`w-full flex flex-row items-stretch border transition-all text-left group ${isSelected ? 'border-[#511d29] shadow-md scale-[1.01]' : 'border-[#511d29]/30 hover:border-[#511d29] hover:shadow-sm'}`}
         style={{ backgroundColor: '#f5ebd9' }}
     >
-        <div className={`w-12 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#511d29] text-[#f5ebd9]' : 'bg-[#511d29]/90 text-white group-hover:bg-[#511d29]'}`}>
-            <span className="font-bold text-sm tracking-tighter">{badge}</span>
+        <div className={`w-8 md:w-10 flex items-center justify-center transition-colors flex-shrink-0 ${isSelected ? 'bg-[#511d29] text-[#f5ebd9]' : 'bg-[#511d29]/90 text-white group-hover:bg-[#511d29]'}`}>
+            <span className="font-bold text-xs md:text-sm tracking-tighter">{badge}</span>
         </div>
-        <div className="flex-1 p-3">
-            <p className="text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest mb-1">{subtitle}</p>
-            <h5 className="text-sm font-bold text-[#511d29] leading-tight pr-2">{title}</h5>
+        <div className="flex-1 p-1.5 md:p-2 min-w-0">
+            <p className="text-[7px] md:text-[8px] font-black text-[#511d29]/60 uppercase tracking-widest mb-0.5 leading-none">{subtitle}</p>
+            <h5 className="text-[11px] md:text-xs font-bold text-[#511d29] leading-tight truncate pr-1" title={title}>{title}</h5>
         </div>
     </button>
 );
@@ -486,7 +487,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                         <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
                             {unitMates.map((c: any) => (
                                 <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-white/60 transition-all text-left">
-                                    <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white">
+                                    <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                         {c.fullName[0].toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -507,7 +508,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                     <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
                         {directEmployees.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-[#f5ebd9]/50 transition-all text-left">
-                                <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white">
+                                <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                     {c.fullName[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">

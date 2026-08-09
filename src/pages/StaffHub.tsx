@@ -177,7 +177,7 @@ const StaffHub: React.FC = () => {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t(req.type.toLowerCase())}</span>
                                 <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${req.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' :
                                         req.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
-                                            req.status === 'APPROVED_BY_MANAGER' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                            req.status.startsWith('APPROVED_BY_') ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
                                     }`}>
                                     {t(req.status.toLowerCase())}
                                 </div>

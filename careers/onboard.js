@@ -48,6 +48,14 @@ function input(name, label, type = 'text', opts = {}) {
             ${opts.rtl ? 'dir="rtl"' : ''} placeholder="${esc(opts.ph || '')}" />
     </div>`;
 }
+// A free-text field split into two separate inputs — one for the English/Latin value,
+// one for the Arabic value — instead of asking for both in a single "A / ب" field.
+// The Arabic side is always optional since not every hire (e.g. foreign, non-Arabic-speaking
+// candidates on the Non-Resident form) has an Arabic value to give.
+function bilingual(name, labelEn, labelAr, opts = {}) {
+    return input(name, labelEn, 'text', { required: opts.required, full: opts.full, ph: opts.phEn }) +
+        input(name + 'Arabic', labelAr, 'text', { full: opts.full, rtl: true, ph: opts.phAr });
+}
 function select(name, label, options, opts = {}) {
     const cur = val(name);
     const o = ['<option value="">— Select —</option>']
@@ -90,8 +98,10 @@ async function load() {
 
 function renderForm(info) {
     const status = info.residentStatus || 'RESDANT'; // default to RESDANT if not set
-    const isServiceProv = status === 'DIRCT NONE RESDANT';
-    const isNonRes = status === 'NONE RESDANT';
+    // NONE RESDANT (no "direct") = hired via a service-provider company → Service Provider form.
+    // DIRCT NONE RESDANT = hired directly by IPH, just not resident → plain Non-Resident form.
+    const isServiceProv = status === 'NONE RESDANT';
+    const isNonRes = status === 'DIRCT NONE RESDANT';
     const isRes = status === 'RESDANT';
 
     let intro = info.positionTitle
@@ -104,10 +114,6 @@ function renderForm(info) {
     // SERVICE PROVIDER FORM
     // ==========================================
     if (isServiceProv) {
-        // Pre-fill some fields if available from candidate record
-        if (!VALUES.jobCategory && info.jobCategory) VALUES.jobCategory = info.jobCategory;
-        if (!VALUES.jobLevel && info.jobGrade) VALUES.jobLevel = info.jobGrade;
-
         formHTML += card('Company Information / معلومات الشركة',
             input('serviceProviderCompany', 'Service provider company name / اسم الشركة المزودة للخدمة', 'text', { required: true, full: true }) +
             fileField('interviewEvaluation', 'Attach the Interview evaluation form / إرفاق نموذج تقييم المقابلة', 'interviewEvaluationUrl') +
@@ -141,28 +147,24 @@ function renderForm(info) {
 
         formHTML += card('Employment Details / تفاصيل التوظيف',
             input('employeeTravelDate', 'What date the employee is traveling? / تاريخ سفر الموظف', 'date') +
-            input('employeeStartDate', 'When the employee can start work in the company? / متى يمكن للموظف أن يبدأ العمل في الشركة؟', 'date', { required: true }) +
-            input('departmentName', 'Department name employee has been accepted for (in the Job offer) / اسم القسم الذي تم قبول الموظف فيه (في عرض العمل)', 'text', { full: true }) +
-            select('jobCategory', 'Job category in the job offer assigned for the employee / الفئة الوظيفية في عرض العمل المخصص للموظف', ['Engineer', 'Financial Officer', 'Operation Officer', 'Administrative Officer', 'Supervisor', 'Technicians', 'Support Officer']) +
-            select('jobLevel', 'Job category in the job offer assigned for you / الفئة الوظيفية في عرض العمل المخصص لك', ['Trainee', 'Intern', 'Junior', 'Lead', 'Senior Associate', 'Consultant', 'Lead Consultant']) +
-            input('hourlyRate', 'Hourly rate in the job offer and the currency / معدل الأجر بالساعة والعملة', 'text')
+            input('employeeStartDate', 'When the employee can start work in the company? / متى يمكن للموظف أن يبدأ العمل في الشركة؟', 'date', { required: true })
         );
-    } 
+    }
     // ==========================================
     // NON-RESIDENT FORM
     // ==========================================
     else if (isNonRes) {
         formHTML += card('Personal Information / المعلومات الشخصية',
-            input('fullName', 'Full name in English (like passport) / الاسم الرباعي', 'text', { required: true }) +
+            bilingual('fullName', 'Full name in English (like passport)', 'الاسم الرباعي', { required: true }) +
             input('dateOfBirth', 'Date of birth / تاريخ الميلاد', 'date', { required: true }) +
-            input('placeOfBirth', 'Place of birth / مكان الميلاد', 'text') +
-            input('nationality', 'Nationality / الجنسية', 'text', { required: true }) +
-            input('academicQualification', 'Academic qualification / المؤهل العلمي', 'text', { full: true })
+            bilingual('placeOfBirth', 'Place of birth', 'مكان الميلاد') +
+            bilingual('nationality', 'Nationality', 'الجنسية', { required: true }) +
+            bilingual('academicQualification', 'Academic qualification', 'المؤهل العلمي', { full: true })
         );
 
         formHTML += card('Identification Documents / وثائق إثبات الشخصية',
             input('passportNumber', 'Passport Number / رقم جواز السفر', 'text') +
-            input('passportPlaceOfIssue', 'Place of Passport Issue / مكان اصدار جواز السفر', 'text') +
+            bilingual('passportPlaceOfIssue', 'Place of Passport Issue', 'مكان اصدار جواز السفر') +
             input('passportExpiryDate', 'Expiration passport date / تاريخ انتهاء صلاحية جواز السفر', 'date') +
             select('bloodType', 'Blood type / فصيلة الدم', BLOOD_TYPES)
         );
@@ -171,12 +173,11 @@ function renderForm(info) {
             input('personalPhone', 'Personal phone number / رقم الهاتف الشخصي', 'tel', { required: true }) +
             input('personalEmail', 'Email / البريد الالكتروني', 'email', { required: true }) +
             input('emergencyContactNumber', 'Emergency contact number / جهة الاتصال في حال الطوارىء', 'tel') +
-            input('residentialAddress', 'Residential Address / عنوان السكن', 'text', { full: true })
+            bilingual('residentialAddress', 'Residential Address', 'عنوان السكن', { full: true })
         );
 
         formHTML += card('Employment / التوظيف',
             select('workedBefore', 'Have you worked in this company before? / هل عملت في هذه الشركة من قبل؟', YES_NO) +
-            input('departmentName', 'Department name you have been accepted for / اسم القسم الذي تم قبولك فيه', 'text', { full: true }) +
             input('employeeStartDate', 'When you can start working in the company? (Arrival date) / متى يمكنك البدء في العمل بالشركة؟', 'date')
         );
 
@@ -196,26 +197,26 @@ function renderForm(info) {
     // ==========================================
     else {
         formHTML += card('Personal Information / المعلومات الشخصية',
-            input('fullName', 'Full name in English (like passport) / الاسم الرباعي كما في شهادة الميلاد', 'text', { required: true }) +
+            bilingual('fullName', 'Full name in English (like passport)', 'الاسم الرباعي كما في شهادة الميلاد', { required: true }) +
             select('gender', 'Gender / الجنس', GENDERS, { required: true }) +
             input('dateOfBirth', 'Date of birth / تاريخ الميلاد', 'date', { required: true }) +
-            input('placeOfBirth', 'Place of birth / مكان الميلاد', 'text') +
+            bilingual('placeOfBirth', 'Place of birth', 'مكان الميلاد') +
             input('nationalId', 'National ID / الرقم الوطني', 'text') +
-            input('nationality', 'Nationality / الجنسية', 'text', { required: true }) +
-            input('academicQualification', 'Academic qualification / المؤهل العلمي', 'text', { full: true })
+            bilingual('nationality', 'Nationality', 'الجنسية', { required: true }) +
+            bilingual('academicQualification', 'Academic qualification', 'المؤهل العلمي', { full: true })
         );
 
         formHTML += card('Identification Documents / وثائق إثبات الشخصية',
             input('idCardNumber', 'ID Number / رقم البطاقة الشخصية', 'text') +
-            input('idPlaceOfIssue', 'Place of issue / مكان الاصدار', 'text') +
+            bilingual('idPlaceOfIssue', 'Place of issue', 'مكان الاصدار') +
             input('idIssueDate', 'Date of ID issue / تاريخ اصدار البطاقة', 'date') +
             input('passportNumber', 'Passport Number / رقم جواز السفر', 'text') +
-            input('passportPlaceOfIssue', 'Place of Passport Issue / مكان اصدار جواز السفر', 'text') +
+            bilingual('passportPlaceOfIssue', 'Place of Passport Issue', 'مكان اصدار جواز السفر') +
             input('passportExpiryDate', 'Expiration passport date / تاريخ انتهاء الجواز', 'date') +
-            input('drivingLicenseType', 'Driving license type / نوع رخصة القيادة', 'text') +
+            bilingual('drivingLicenseType', 'Driving license type', 'نوع رخصة القيادة') +
             input('drivingLicenseNumber', 'Driving license number / رقم رخصة القيادة', 'text') +
             input('drivingLicenseExpiry', 'License expiration date / تاريخ انتهاء الرخصة', 'date') +
-            input('drivingLicensePlaceOfIssue', 'Place of issuance of the license / مكان اصدار الرخصة', 'text') +
+            bilingual('drivingLicensePlaceOfIssue', 'Place of issuance of the license', 'مكان اصدار الرخصة') +
             select('bloodType', 'Blood type / فصيلة الدم', BLOOD_TYPES)
         );
 
@@ -223,23 +224,22 @@ function renderForm(info) {
             input('personalPhone', 'Personal phone number / رقم الهاتف الشخصي', 'tel', { required: true }) +
             input('personalEmail', 'Email / البريد الالكتروني', 'email', { required: true }) +
             input('emergencyContactNumber', 'Emergency contact number / جهة الاتصال في حال الطوارىء', 'tel') +
-            input('residentialAddress', 'Residential Address / عنوان السكن', 'text', { full: true })
+            bilingual('residentialAddress', 'Residential Address', 'عنوان السكن', { full: true })
         );
 
         formHTML += card('Employment & Relations / التوظيف والأقارب',
             select('workedBefore', 'Have you worked in this company before? / هل عملت في هذه الشركة من قبل؟', YES_NO) +
             select('hasRelativesInCompany', 'Do you have relatives in the company? / هل لديك أقارب في الشركة؟', YES_NO) +
-            input('relativesNames', "If yes, please mention the names / اذا كانت الاجابة نعم، اذكر الأسماء", 'text', { full: true })
+            bilingual('relativesNames', 'If yes, please mention the names', 'اذا كانت الاجابة نعم، اذكر الأسماء', { full: true })
         );
 
         formHTML += card('Banking Information / المعلومات البنكية',
-            input('bankName', 'Bank name / اسم المصرف', 'text') +
-            input('bankBranchName', 'Bank Branch Name / اسم فرع المصرف', 'text') +
+            bilingual('bankName', 'Bank name', 'اسم المصرف') +
+            bilingual('bankBranchName', 'Bank Branch Name', 'اسم فرع المصرف') +
             input('bankAccountNumber', 'Bank Account Number / رقم الحساب المصرفي', 'text', { full: true })
         );
 
         formHTML += card('Job Details / تفاصيل الوظيفة',
-            input('departmentName', 'Department name you have been accepted for / اسم القسم الذي تم قبولك فيه', 'text') +
             input('employeeStartDate', 'When can you start working in the company? / متى يمكنك البدء في العمل بالشركة؟', 'date')
         );
 

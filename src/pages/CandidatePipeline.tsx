@@ -7,7 +7,7 @@ import api, { SERVER_URL } from '../services/apiClient';
 import type { Candidate, RecruitmentRequest } from '../types';
 import {
     UserPlus, Plus, Building2, Briefcase, Trash2, CheckCircle2, XCircle,
-    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText, Pencil, Search
+    CalendarDays, Star, Mail, Phone, Paperclip, ThumbsUp, ThumbsDown, ArrowRight, ArrowLeft, FileText, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -1046,7 +1046,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                         <div>
                                             {Array.isArray(c.events) && c.events.length > 0 ? (
                                                 c.events.map((evt: any, i: number) => {
-                                                    const last = i === c.events.length - 1;
+                                                    const last = i === (c.events || []).length - 1;
                                                     const label = t(`event_${evt.action.toLowerCase()}`, { defaultValue: evt.action.replace(/_/g, ' ') });
                                                     return (
                                                         <div key={i} className="flex gap-4">

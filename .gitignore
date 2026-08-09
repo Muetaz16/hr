@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 
 .env
+
+# Visual Studio cache/options directory
+.vs/
+
+# Backup archives
+*.zip
+
+# Database backups
+*.sql
+
+# User uploads
+server/uploads/
+

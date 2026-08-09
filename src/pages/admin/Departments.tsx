@@ -377,7 +377,7 @@ const DepartmentsPage: React.FC = () => {
                         <label className="block text-sm font-bold text-gray-700 mb-1">Directorate Name</label>
                         <input
                             type="text" required value={dirFormData.name}
-                            onChange={(e) => setDirFormData({ name: e.target.value })}
+                            onChange={(e) => setDirFormData({ ...dirFormData, name: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                     </div>

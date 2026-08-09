@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { employeeService } from '../../services/employeeService';
-import api from '../../services/apiClient';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { toast } from 'sonner';
-import { JOB_CATEGORIES, JOB_GRADES } from '../../types';
-import type { Employee, Department, Group, Unit, Division } from '../../types';
 import {
     Edit,
     Trash2,
@@ -16,14 +13,10 @@ import {
     X,
     Calendar,
     Download,
-    DollarSign,
     UserPlus,
     AlertTriangle,
     ChevronDown,
-    Check,
-    Lock,
-    Key,
-    Sparkles
+    Check
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { evaluationService } from '../../services/evaluationService';
@@ -35,12 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { roleThemes } from '../../config/roleThemes';
 import type { UserRole } from '../../types';
 import Skeleton from '../../components/Skeleton';
-import { 
-    POSITION_FACTORS, 
-    SKILL_FACTORS, 
-    SITE_FACTORS, 
-    LANGUAGE_FACTORS
-} from '../../constants/factors';
+
 import { useConfirm } from '../../components/ConfirmDialog';
 
 const getCurrencySymbol = (type?: string | null) => {
@@ -112,8 +100,6 @@ const EmployeesPage: React.FC = () => {
     const employees = data?.employees || [];
     const departments = data?.departments || [];
     const units = data?.units || [];
-    const divisions = data?.divisions || [];
-    const payrollRecords = data?.payrollRecords || {};
     const dirEvals = data?.dirEvals || {};
 
 

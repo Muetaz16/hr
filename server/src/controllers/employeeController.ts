@@ -176,7 +176,16 @@ export const createEmployee = async (req: Request, res: Response) => {
             personalPhone, personalEmail, emergencyContactNumber, residentialAddress,
             workedBefore, hasRelativesInCompany, relativesNames,
             bankName, bankBranchName, bankAccountNumber, arrivalDate,
-            cvUrl, degreeUrl, birthCertUrl, passportCopyUrl, bankCheckUrl, photoUrl, idCardUrl, jobOfferUrl, healthCertUrl
+            cvUrl, degreeUrl, birthCertUrl, passportCopyUrl, bankCheckUrl, photoUrl, idCardUrl, jobOfferUrl, healthCertUrl,
+            // Arabic counterparts of the bilingual onboarding fields
+            placeOfBirthArabic, nationalityArabic, academicQualificationArabic, idPlaceOfIssueArabic,
+            passportPlaceOfIssueArabic, drivingLicenseTypeArabic, drivingLicensePlaceOfIssueArabic,
+            residentialAddressArabic, relativesNamesArabic, bankNameArabic, bankBranchNameArabic,
+            // Onboarding-only fields (self-service onboarding form) — department and job
+            // category/level/rate are deliberately NOT accepted here; they come from the
+            // candidate's requisition/offer, assigned by the recruitment team.
+            serviceProviderCompany,
+            employeeTravelDate, employeeStartDate, ticketUrl, residencyDocumentUrl, interviewEvaluationUrl
         } = req.body;
 
         // Sanitization of foreign keys
@@ -384,7 +393,26 @@ export const createEmployee = async (req: Request, res: Response) => {
                 photoUrl: photoUrl || null,
                 idCardUrl: idCardUrl || null,
                 jobOfferUrl: jobOfferUrl || null,
-                healthCertUrl: healthCertUrl || null
+                healthCertUrl: healthCertUrl || null,
+                // Arabic counterparts of the bilingual onboarding fields
+                placeOfBirthArabic: placeOfBirthArabic || null,
+                nationalityArabic: nationalityArabic || null,
+                academicQualificationArabic: academicQualificationArabic || null,
+                idPlaceOfIssueArabic: idPlaceOfIssueArabic || null,
+                passportPlaceOfIssueArabic: passportPlaceOfIssueArabic || null,
+                drivingLicenseTypeArabic: drivingLicenseTypeArabic || null,
+                drivingLicensePlaceOfIssueArabic: drivingLicensePlaceOfIssueArabic || null,
+                residentialAddressArabic: residentialAddressArabic || null,
+                relativesNamesArabic: relativesNamesArabic || null,
+                bankNameArabic: bankNameArabic || null,
+                bankBranchNameArabic: bankBranchNameArabic || null,
+                // Onboarding-only fields (self-service onboarding form)
+                serviceProviderCompany: serviceProviderCompany || null,
+                employeeTravelDate: parseDate(employeeTravelDate),
+                employeeStartDate: parseDate(employeeStartDate),
+                ticketUrl: ticketUrl || null,
+                residencyDocumentUrl: residencyDocumentUrl || null,
+                interviewEvaluationUrl: interviewEvaluationUrl || null
             };
 
             // Enforce Exclusivity: Position Factor OR Skill Factor
@@ -611,6 +639,27 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.idCardUrl !== undefined) data.idCardUrl = body.idCardUrl || null;
         if (body.jobOfferUrl !== undefined) data.jobOfferUrl = body.jobOfferUrl || null;
         if (body.healthCertUrl !== undefined) data.healthCertUrl = body.healthCertUrl || null;
+
+        // --- Arabic counterparts of the bilingual onboarding fields ---
+        if (body.placeOfBirthArabic !== undefined) data.placeOfBirthArabic = body.placeOfBirthArabic || null;
+        if (body.nationalityArabic !== undefined) data.nationalityArabic = body.nationalityArabic || null;
+        if (body.academicQualificationArabic !== undefined) data.academicQualificationArabic = body.academicQualificationArabic || null;
+        if (body.idPlaceOfIssueArabic !== undefined) data.idPlaceOfIssueArabic = body.idPlaceOfIssueArabic || null;
+        if (body.passportPlaceOfIssueArabic !== undefined) data.passportPlaceOfIssueArabic = body.passportPlaceOfIssueArabic || null;
+        if (body.drivingLicenseTypeArabic !== undefined) data.drivingLicenseTypeArabic = body.drivingLicenseTypeArabic || null;
+        if (body.drivingLicensePlaceOfIssueArabic !== undefined) data.drivingLicensePlaceOfIssueArabic = body.drivingLicensePlaceOfIssueArabic || null;
+        if (body.residentialAddressArabic !== undefined) data.residentialAddressArabic = body.residentialAddressArabic || null;
+        if (body.relativesNamesArabic !== undefined) data.relativesNamesArabic = body.relativesNamesArabic || null;
+        if (body.bankNameArabic !== undefined) data.bankNameArabic = body.bankNameArabic || null;
+        if (body.bankBranchNameArabic !== undefined) data.bankBranchNameArabic = body.bankBranchNameArabic || null;
+
+        // --- Onboarding-only fields (self-service onboarding form) ---
+        if (body.serviceProviderCompany !== undefined) data.serviceProviderCompany = body.serviceProviderCompany || null;
+        if (body.employeeTravelDate !== undefined) data.employeeTravelDate = parseDate(body.employeeTravelDate);
+        if (body.employeeStartDate !== undefined) data.employeeStartDate = parseDate(body.employeeStartDate);
+        if (body.ticketUrl !== undefined) data.ticketUrl = body.ticketUrl || null;
+        if (body.residencyDocumentUrl !== undefined) data.residencyDocumentUrl = body.residencyDocumentUrl || null;
+        if (body.interviewEvaluationUrl !== undefined) data.interviewEvaluationUrl = body.interviewEvaluationUrl || null;
 
         // Fetch current values to check exclusivity against updates
         const currentEmp = await prisma.employee.findUnique({ where: { id } });

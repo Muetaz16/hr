@@ -31,6 +31,7 @@ const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
 const AnnouncementsFeedPage = lazy(() => import('./pages/AnnouncementsFeed'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
+const PersonnelRelationsPage = lazy(() => import('./pages/personnel-relations/PersonnelRelations'));
 const ApprovalsPage = lazy(() => import('./pages/Approvals'));
 const LifecycleControlPage = lazy(() => import('./pages/hr/LifecycleControl'));
 const PositionsToFillPage = lazy(() => import('./pages/Recruitment').then(m => ({ default: () => <m.default mode="positions" /> })));
@@ -96,6 +97,7 @@ function App() {
                   <Route path="/staff-hub" element={<StaffHubPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
+                  <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>

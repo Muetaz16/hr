@@ -24,14 +24,14 @@ import {
     Key,
     Eye,
     EyeOff,
-    Megaphone
+    Megaphone,
+    HeartHandshake
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
 import type { UserRole } from '../types';
 import { useQuery } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
-import { userService } from '../services/userService';
 import { notificationService } from '../services/notificationService';
 import type { AppNotification } from '../services/notificationService';
 import api from '../services/apiClient';
@@ -210,6 +210,20 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_contracts', 'manage_contract_management'] },
                         { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                    ]
+                },
+                {
+                    label: 'Personnel Relations Department',
+                    icon: HeartHandshake,
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'],
+                    children: [
+                        { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Performance Evaluation', path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] }
                     ]
                 }
             ]

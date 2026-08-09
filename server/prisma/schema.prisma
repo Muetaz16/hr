@@ -211,6 +211,27 @@ model Employee {
   idCardUrl                  String?
   jobOfferUrl                String?
   healthCertUrl              String?
+  // --- Arabic counterparts of the bilingual onboarding fields ---
+  placeOfBirthArabic               String?
+  nationalityArabic                String?
+  academicQualificationArabic      String?
+  idPlaceOfIssueArabic             String?
+  passportPlaceOfIssueArabic       String?
+  drivingLicenseTypeArabic         String?
+  drivingLicensePlaceOfIssueArabic String?
+  residentialAddressArabic         String?
+  relativesNamesArabic             String?
+  bankNameArabic                   String?
+  bankBranchNameArabic             String?
+  // --- Onboarding-only fields (self-service onboarding form) ---
+  // NOTE: department, job category/level and hourly rate are NOT stored here — they're assigned
+  // by the recruitment team on the Candidate (before the offer), not self-reported by the hire.
+  serviceProviderCompany String? // Service Provider onboarding: the supplying company's name
+  employeeTravelDate    DateTime? // Service Provider onboarding: travel date
+  employeeStartDate     DateTime? // date the hire indicates they can start (from onboarding)
+  ticketUrl             String? // Non-Resident / Service Provider onboarding: airplane ticket
+  residencyDocumentUrl  String? // Non-Resident / Service Provider onboarding: residency document
+  interviewEvaluationUrl String? // Service Provider onboarding: interview evaluation form
   jobDescriptionId       String?
   jobDescription         JobDescription?        @relation(fields: [jobDescriptionId], references: [id])
   assetRequests          AssetRequest[]

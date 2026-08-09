@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { employeeService } from '../../services/employeeService';
@@ -33,11 +32,11 @@ import {
     Paperclip,
     IdCard,
     Car,
-    Upload
+    Upload,
+    Globe2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
-    POSITION_FACTORS,
     SKILL_FACTORS,
     SITE_FACTORS,
     LANGUAGE_FACTORS
@@ -60,7 +59,9 @@ const EmployeeForm: React.FC = () => {
     const [formData, setFormData] = useState<Partial<Employee & { password?: string }>>({
         fullName: '',
         email: '',
-        password: '',
+        // Default system password — shown explicitly rather than left blank so it's clear what
+        // the new hire will log in with; HR can still override it before saving.
+        password: id ? '' : '123456',
         directorateId: '',
         divisionId: '',
         departmentId: '',
@@ -127,7 +128,26 @@ const EmployeeForm: React.FC = () => {
         photoUrl: '',
         idCardUrl: '',
         jobOfferUrl: '',
-        healthCertUrl: ''
+        healthCertUrl: '',
+        // Arabic counterparts of the bilingual onboarding fields
+        placeOfBirthArabic: '',
+        nationalityArabic: '',
+        academicQualificationArabic: '',
+        idPlaceOfIssueArabic: '',
+        passportPlaceOfIssueArabic: '',
+        drivingLicenseTypeArabic: '',
+        drivingLicensePlaceOfIssueArabic: '',
+        residentialAddressArabic: '',
+        relativesNamesArabic: '',
+        bankNameArabic: '',
+        bankBranchNameArabic: '',
+        // Onboarding-only fields (self-service onboarding form)
+        serviceProviderCompany: '',
+        employeeTravelDate: '',
+        employeeStartDate: '',
+        ticketUrl: '',
+        residencyDocumentUrl: '',
+        interviewEvaluationUrl: ''
     });
 
     const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
@@ -189,21 +209,57 @@ const EmployeeForm: React.FC = () => {
         return !isFull || jd.id === formData.jobDescriptionId;
     });
 
-    // ---- Onboarding locks: when enrolling a hired candidate (arriving with a candidateId),
-    // job category, position title and place of work are driven by the Job Description and locked.
+    // ---- Onboarding locks: when enrolling a hired candidate (arriving with a candidateId), the
+    // entire Employment Details section (position, nationality, job category/grade, place of work,
+    // evaluation index) was already decided in earlier recruitment steps (job description, offer
+    // details) — so it's shown read-only here rather than re-editable during the review step.
     const fromOnboarding = Boolean(searchParams.get('candidateId'));
     const selectedJd = jobDescriptions.find(jd => jd.id === formData.jobDescriptionId);
     const jdCategories = selectedJd?.jobCategories || [];
     const jdLocations = selectedJd?.workLocations || [];
-    // Category is locked to the JD unless the JD offers two categories (then HR picks one).
-    const categoryLocked = fromOnboarding && jdCategories.length === 1;
-    const categoryChoice = fromOnboarding && jdCategories.length >= 2;
-    // Position title is always locked to the JD title during onboarding.
-    const positionLocked = fromOnboarding && !!selectedJd;
-    // Place of work is locked to the JD unless it lists both Office and Site (then HR picks one).
-    const placeLocked = fromOnboarding && jdLocations.length === 1;
-    const placeChoice = fromOnboarding && jdLocations.length >= 2;
+    const employmentLocked = fromOnboarding;
+    const categoryLocked = employmentLocked;
+    const categoryChoice = !employmentLocked && jdCategories.length >= 2;
+    const positionLocked = employmentLocked;
+    const placeLocked = employmentLocked;
     const placeOptions = fromOnboarding && jdLocations.length ? jdLocations : ['OFFICE', 'SITE'];
+
+    // ---- Onboarding-type field visibility: each of the 3 self-service onboarding forms
+    // (Resident / Direct Non-Resident / Service Provider) collects a different set of fields.
+    // When reviewing a hire that came through onboarding, only show the fields that type's form
+    // actually asked for — fields it never collected are hidden rather than shown empty/irrelevant.
+    // Manual admin creation/editing (no candidateId) always shows every field.
+    const onboardingType = (fromOnboarding && ['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT'].includes(formData.contractType || ''))
+        ? formData.contractType
+        : null;
+
+    const RESIDENT_ONLY_FIELDS = new Set([
+        'gender', 'nationalId', 'idCardNumber', 'idPlaceOfIssue', 'idPlaceOfIssueArabic', 'idIssueDate',
+        'drivingLicenseType', 'drivingLicenseTypeArabic', 'drivingLicenseNumber', 'drivingLicenseExpiry',
+        'drivingLicensePlaceOfIssue', 'drivingLicensePlaceOfIssueArabic',
+        'hasRelativesInCompany', 'relativesNames', 'relativesNamesArabic',
+        'bankName', 'bankNameArabic', 'bankBranchName', 'bankBranchNameArabic', 'bankAccountNumber',
+        'healthCertUrl', 'bankCheckUrl', 'idCardUrl',
+    ]);
+    const RESIDENT_AND_DIRECT_FIELDS = new Set([
+        'fullNameArabic', 'placeOfBirthArabic', 'nationalityArabic', 'academicQualificationArabic',
+        'passportPlaceOfIssue', 'passportPlaceOfIssueArabic', 'residentialAddressArabic', 'birthCertUrl',
+    ]);
+    const DIRECT_AND_SERVICE_FIELDS = new Set(['ticketUrl', 'residencyDocumentUrl']);
+    const SERVICE_ONLY_FIELDS = new Set(['interviewEvaluationUrl', 'serviceProviderCompany', 'employeeTravelDate']);
+
+    const showField = (key: string): boolean => {
+        if (!onboardingType) return true; // manual creation/edit — show everything
+        if (RESIDENT_ONLY_FIELDS.has(key)) return onboardingType === 'RESDANT';
+        if (RESIDENT_AND_DIRECT_FIELDS.has(key)) return onboardingType === 'RESDANT' || onboardingType === 'DIRCT NONE RESDANT';
+        if (DIRECT_AND_SERVICE_FIELDS.has(key)) return onboardingType === 'DIRCT NONE RESDANT' || onboardingType === 'NONE RESDANT';
+        if (SERVICE_ONLY_FIELDS.has(key)) return onboardingType === 'NONE RESDANT';
+        return true; // not a type-varying field — always shown
+    };
+    const onboardingTypeLabel = onboardingType === 'RESDANT' ? t('rs_resident', { defaultValue: 'Resident' })
+        : onboardingType === 'DIRCT NONE RESDANT' ? t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })
+        : onboardingType === 'NONE RESDANT' ? t('rs_service_provider', { defaultValue: 'Service Provider' })
+        : '';
 
     useEffect(() => {
         if (isEditMode && id) {
@@ -266,7 +322,26 @@ const EmployeeForm: React.FC = () => {
                     photoUrl: emp.photoUrl || '',
                     idCardUrl: emp.idCardUrl || '',
                     jobOfferUrl: emp.jobOfferUrl || '',
-                    healthCertUrl: emp.healthCertUrl || ''
+                    healthCertUrl: emp.healthCertUrl || '',
+                    // Arabic counterparts of the bilingual onboarding fields
+                    placeOfBirthArabic: emp.placeOfBirthArabic || '',
+                    nationalityArabic: emp.nationalityArabic || '',
+                    academicQualificationArabic: emp.academicQualificationArabic || '',
+                    idPlaceOfIssueArabic: emp.idPlaceOfIssueArabic || '',
+                    passportPlaceOfIssueArabic: emp.passportPlaceOfIssueArabic || '',
+                    drivingLicenseTypeArabic: emp.drivingLicenseTypeArabic || '',
+                    drivingLicensePlaceOfIssueArabic: emp.drivingLicensePlaceOfIssueArabic || '',
+                    residentialAddressArabic: emp.residentialAddressArabic || '',
+                    relativesNamesArabic: emp.relativesNamesArabic || '',
+                    bankNameArabic: emp.bankNameArabic || '',
+                    bankBranchNameArabic: emp.bankBranchNameArabic || '',
+                    // Onboarding-only fields
+                    serviceProviderCompany: emp.serviceProviderCompany || '',
+                    employeeTravelDate: formatDate(emp.employeeTravelDate),
+                    employeeStartDate: formatDate(emp.employeeStartDate),
+                    ticketUrl: emp.ticketUrl || '',
+                    residencyDocumentUrl: emp.residencyDocumentUrl || '',
+                    interviewEvaluationUrl: emp.interviewEvaluationUrl || ''
                 });
             }).catch(err => {
                 console.error("Error loading employee", err);
@@ -401,6 +476,16 @@ const EmployeeForm: React.FC = () => {
         return `${cleanFirst}.${cleanLast}@iph.com`;
     };
 
+    // Auto-fill the Login Email as soon as a full name becomes available (e.g. prefilled from a
+    // requisition or the candidate's onboarding submission) — not just when HR types it manually,
+    // which is the only case the fullName input's own onChange handler covers.
+    useEffect(() => {
+        if (isEditMode) return;
+        if (formData.fullName && !formData.email) {
+            setFormData(prev => ({ ...prev, email: generateEmailFromFullName(prev.fullName || '') }));
+        }
+    }, [isEditMode, formData.fullName, formData.email]);
+
     useEffect(() => {
         if (formData.jobCategory && formData.jobGrade && formData.salaryStructureType) {
             api.get(`/salary-structures/lookup?jobCategory=${encodeURIComponent(formData.jobCategory)}&jobGrade=${encodeURIComponent(formData.jobGrade)}&structureLevel=${encodeURIComponent(formData.salaryStructureType)}`)
@@ -525,15 +610,16 @@ const EmployeeForm: React.FC = () => {
     const setField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
     const fieldClass = "w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-bold text-slate-800 shadow-sm";
 
-    const renderText = (key: string, label: string, opts: { placeholder?: string; dir?: 'rtl' | 'ltr'; type?: string } = {}) => (
+    const renderText = (key: string, label: string, opts: { placeholder?: string; dir?: 'rtl' | 'ltr'; type?: string; disabled?: boolean } = {}) => (
         <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{label}</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{label} {opts.disabled && <Lock size={12} className="text-slate-400" />}</label>
             <input
                 type={opts.type || 'text'}
                 dir={opts.dir}
                 value={(formData as any)[key] || ''}
                 onChange={(e) => setField(key, e.target.value)}
-                className={`${fieldClass} ${opts.dir === 'rtl' ? 'text-right' : ''}`}
+                disabled={opts.disabled}
+                className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-bold shadow-sm ${opts.dir === 'rtl' ? 'text-right' : ''} ${opts.disabled ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200 text-slate-800'}`}
                 placeholder={opts.placeholder || ''}
             />
         </div>
@@ -635,6 +721,14 @@ const EmployeeForm: React.FC = () => {
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
 
                 <form onSubmit={handleSubmit} className="px-2 lg:px-0 space-y-8">
+                    {onboardingType && (
+                        <div className="flex items-center gap-3 px-6 py-4 bg-cyan-50 border border-cyan-100 rounded-2xl">
+                            <Globe2 size={18} className="text-cyan-600 shrink-0" />
+                            <p className="text-xs font-bold text-cyan-800">
+                                {t('reviewing_onboarding_type', { defaultValue: 'Reviewing a {{type}} onboarding submission — only the fields that form collects are shown below.', type: onboardingTypeLabel })}
+                            </p>
+                        </div>
+                    )}
                     {/* 1. Identity Details */}
                     <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/50 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-8 text-indigo-500/10">
@@ -665,17 +759,19 @@ const EmployeeForm: React.FC = () => {
                                     placeholder={t('full_legal_name')}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('full_name_arabic', { defaultValue: 'Full Name (Arabic)' })}</label>
-                                <input
-                                    type="text"
-                                    value={formData.fullNameArabic || ''}
-                                    onChange={(e) => setFormData({ ...formData, fullNameArabic: e.target.value })}
-                                    dir="rtl"
-                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-bold text-slate-800 text-lg text-right shadow-sm"
-                                    placeholder={t('name_arabic_placeholder', { defaultValue: 'الاسم الكامل باللغة العربية' })}
-                                />
-                            </div>
+                            {showField('fullNameArabic') && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('full_name_arabic', { defaultValue: 'Full Name (Arabic)' })}</label>
+                                    <input
+                                        type="text"
+                                        value={formData.fullNameArabic || ''}
+                                        onChange={(e) => setFormData({ ...formData, fullNameArabic: e.target.value })}
+                                        dir="rtl"
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-bold text-slate-800 text-lg text-right shadow-sm"
+                                        placeholder={t('name_arabic_placeholder', { defaultValue: 'الاسم الكامل باللغة العربية' })}
+                                    />
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('staff_id_code')}</label>
                                 <div className="flex gap-2">
@@ -711,10 +807,12 @@ const EmployeeForm: React.FC = () => {
 
                             {renderDate('dateOfBirth', t('date_of_birth', { defaultValue: 'Date of Birth' }))}
                             {renderText('placeOfBirth', t('place_of_birth', { defaultValue: 'Place of Birth' }), { placeholder: t('place_of_birth', { defaultValue: 'Place of Birth' }) })}
-                            {renderText('nationalId', t('national_id', { defaultValue: 'National ID (الرقم الوطني)' }), { placeholder: t('national_id', { defaultValue: 'National ID' }) })}
-                            {renderSelect('gender', t('gender', { defaultValue: 'Gender' }), ['Male', 'Female'], t('select', { defaultValue: 'Select…' }))}
+                            {showField('placeOfBirthArabic') && renderText('placeOfBirthArabic', t('place_of_birth_arabic', { defaultValue: 'Place of Birth (Arabic)' }), { dir: 'rtl', placeholder: 'مكان الميلاد' })}
+                            {showField('nationalId') && renderText('nationalId', t('national_id', { defaultValue: 'National ID (الرقم الوطني)' }), { placeholder: t('national_id', { defaultValue: 'National ID' }) })}
+                            {showField('gender') && renderSelect('gender', t('gender', { defaultValue: 'Gender' }), ['Male', 'Female'], t('select', { defaultValue: 'Select…' }))}
                             {renderSelect('bloodType', t('blood_type', { defaultValue: 'Blood Type' }), ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], t('select', { defaultValue: 'Select…' }))}
                             {renderText('academicQualification', t('academic_qualification', { defaultValue: 'Academic Qualification (المؤهل العلمي)' }), { placeholder: t('academic_qualification', { defaultValue: 'e.g. Bachelor of Engineering' }) })}
+                            {showField('academicQualificationArabic') && renderText('academicQualificationArabic', t('academic_qualification_arabic', { defaultValue: 'Academic Qualification (Arabic)' }), { dir: 'rtl', placeholder: 'المؤهل العلمي' })}
                         </div>
                     </section>
 
@@ -730,18 +828,24 @@ const EmployeeForm: React.FC = () => {
                             <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('official_documents', { defaultValue: 'ID, Passport & License' })}</h2>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                            {renderText('idCardNumber', t('id_card_number', { defaultValue: 'ID Card Number (رقم البطاقة الشخصية)' }), { placeholder: t('id_card_number', { defaultValue: 'ID Card Number' }) })}
-                            {renderText('idPlaceOfIssue', t('id_place_of_issue', { defaultValue: 'ID Place of Issue (مكان الاصدار)' }), { placeholder: t('id_place_of_issue', { defaultValue: 'Place of Issue' }) })}
-                            {renderDate('idIssueDate', t('id_issue_date', { defaultValue: 'ID Issue Date' }))}
-                            {renderText('passportPlaceOfIssue', t('passport_place_of_issue', { defaultValue: 'Passport Place of Issue' }), { placeholder: t('passport_place_of_issue', { defaultValue: 'Place of Issue' }) })}
+                            {showField('idCardNumber') && renderText('idCardNumber', t('id_card_number', { defaultValue: 'ID Card Number (رقم البطاقة الشخصية)' }), { placeholder: t('id_card_number', { defaultValue: 'ID Card Number' }) })}
+                            {showField('idPlaceOfIssue') && renderText('idPlaceOfIssue', t('id_place_of_issue', { defaultValue: 'ID Place of Issue (مكان الاصدار)' }), { placeholder: t('id_place_of_issue', { defaultValue: 'Place of Issue' }) })}
+                            {showField('idPlaceOfIssueArabic') && renderText('idPlaceOfIssueArabic', t('id_place_of_issue_arabic', { defaultValue: 'ID Place of Issue (Arabic)' }), { dir: 'rtl', placeholder: 'مكان اصدار البطاقة' })}
+                            {showField('idIssueDate') && renderDate('idIssueDate', t('id_issue_date', { defaultValue: 'ID Issue Date' }))}
+                            {showField('passportPlaceOfIssue') && renderText('passportPlaceOfIssue', t('passport_place_of_issue', { defaultValue: 'Passport Place of Issue' }), { placeholder: t('passport_place_of_issue', { defaultValue: 'Place of Issue' }) })}
+                            {showField('passportPlaceOfIssueArabic') && renderText('passportPlaceOfIssueArabic', t('passport_place_of_issue_arabic', { defaultValue: 'Passport Place of Issue (Arabic)' }), { dir: 'rtl', placeholder: 'مكان اصدار جواز السفر' })}
                             {renderDate('passportExpiryDate', t('passport_expiry_date', { defaultValue: 'Passport Expiry Date' }))}
-                            <div className="md:col-span-2 border-t border-dashed border-slate-200 pt-6 flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                                <Car size={14} /> {t('driving_license', { defaultValue: 'Driving License' })}
-                            </div>
-                            {renderText('drivingLicenseType', t('driving_license_type', { defaultValue: 'Driving License Type' }), { placeholder: t('driving_license_type', { defaultValue: 'e.g. B / Heavy' }) })}
-                            {renderText('drivingLicenseNumber', t('driving_license_number', { defaultValue: 'Driving License Number' }), { placeholder: t('driving_license_number', { defaultValue: 'License Number' }) })}
-                            {renderDate('drivingLicenseExpiry', t('driving_license_expiry', { defaultValue: 'License Expiration Date' }))}
-                            {renderText('drivingLicensePlaceOfIssue', t('driving_license_place_of_issue', { defaultValue: 'License Place of Issue' }), { placeholder: t('driving_license_place_of_issue', { defaultValue: 'Place of Issue' }) })}
+                            {showField('drivingLicenseType') && (
+                                <div className="md:col-span-2 border-t border-dashed border-slate-200 pt-6 flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
+                                    <Car size={14} /> {t('driving_license', { defaultValue: 'Driving License' })}
+                                </div>
+                            )}
+                            {showField('drivingLicenseType') && renderText('drivingLicenseType', t('driving_license_type', { defaultValue: 'Driving License Type' }), { placeholder: t('driving_license_type', { defaultValue: 'e.g. B / Heavy' }) })}
+                            {showField('drivingLicenseTypeArabic') && renderText('drivingLicenseTypeArabic', t('driving_license_type_arabic', { defaultValue: 'Driving License Type (Arabic)' }), { dir: 'rtl', placeholder: 'نوع رخصة القيادة' })}
+                            {showField('drivingLicenseNumber') && renderText('drivingLicenseNumber', t('driving_license_number', { defaultValue: 'Driving License Number' }), { placeholder: t('driving_license_number', { defaultValue: 'License Number' }) })}
+                            {showField('drivingLicenseExpiry') && renderDate('drivingLicenseExpiry', t('driving_license_expiry', { defaultValue: 'License Expiration Date' }))}
+                            {showField('drivingLicensePlaceOfIssue') && renderText('drivingLicensePlaceOfIssue', t('driving_license_place_of_issue', { defaultValue: 'License Place of Issue' }), { placeholder: t('driving_license_place_of_issue', { defaultValue: 'Place of Issue' }) })}
+                            {showField('drivingLicensePlaceOfIssueArabic') && renderText('drivingLicensePlaceOfIssueArabic', t('driving_license_place_of_issue_arabic', { defaultValue: 'License Place of Issue (Arabic)' }), { dir: 'rtl', placeholder: 'مكان اصدار الرخصة' })}
                         </div>
                     </section>
 
@@ -770,6 +874,7 @@ const EmployeeForm: React.FC = () => {
                                     placeholder={t('residential_address', { defaultValue: 'Residential Address' })}
                                 />
                             </div>
+                            {showField('residentialAddressArabic') && renderText('residentialAddressArabic', t('residential_address_arabic', { defaultValue: 'Residential Address (Arabic)' }), { dir: 'rtl', placeholder: 'عنوان السكن' })}
                         </div>
                     </section>
 
@@ -786,19 +891,36 @@ const EmployeeForm: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                             {renderSelect('workedBefore', t('worked_before', { defaultValue: 'Worked in this company before?' }), ['Yes', 'No'], t('select', { defaultValue: 'Select…' }))}
-                            {renderSelect('hasRelativesInCompany', t('has_relatives', { defaultValue: 'Relatives in the company?' }), ['Yes', 'No'], t('select', { defaultValue: 'Select…' }))}
-                            {formData.hasRelativesInCompany === 'Yes' && (
-                                <div className="md:col-span-2">
+                            {showField('hasRelativesInCompany') && renderSelect('hasRelativesInCompany', t('has_relatives', { defaultValue: 'Relatives in the company?' }), ['Yes', 'No'], t('select', { defaultValue: 'Select…' }))}
+                            {showField('hasRelativesInCompany') && formData.hasRelativesInCompany === 'Yes' && (
+                                <>
                                     {renderText('relativesNames', t('relatives_names', { defaultValue: "Relatives' Names" }), { placeholder: t('relatives_names', { defaultValue: 'Names of relatives' }) })}
-                                </div>
+                                    {renderText('relativesNamesArabic', t('relatives_names_arabic', { defaultValue: "Relatives' Names (Arabic)" }), { dir: 'rtl', placeholder: 'اسماء الاقارب' })}
+                                </>
                             )}
                             {renderDate('arrivalDate', t('arrival_date', { defaultValue: 'Arrival / Start Date' }))}
-                            <div className="md:col-span-2 border-t border-dashed border-slate-200 pt-6 flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                                <Landmark size={14} /> {t('bank_details', { defaultValue: 'Bank Details' })}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                                    {t('employee_start_date', { defaultValue: 'Start Date (as submitted during onboarding)' })}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={formData.employeeStartDate || ''}
+                                    onChange={(e) => setField('employeeStartDate', e.target.value)}
+                                    className={fieldClass}
+                                />
+                                <p className="text-[10px] text-slate-400 font-medium">{t('employee_start_date_hint', { defaultValue: "The date the hire indicated they could start, as filled on their onboarding form — compare against Arrival / Start Date above." })}</p>
                             </div>
-                            {renderText('bankName', t('bank_name', { defaultValue: 'Bank Name' }), { placeholder: t('bank_name', { defaultValue: 'Bank Name' }) })}
-                            {renderText('bankBranchName', t('bank_branch', { defaultValue: 'Bank Branch Name' }), { placeholder: t('bank_branch', { defaultValue: 'Branch Name' }) })}
-                            {renderText('bankAccountNumber', t('bank_account_number', { defaultValue: 'Bank Account Number (IBAN)' }), { placeholder: t('bank_account_number', { defaultValue: 'Account Number' }) })}
+                            {showField('bankName') && (
+                                <div className="md:col-span-2 border-t border-dashed border-slate-200 pt-6 flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
+                                    <Landmark size={14} /> {t('bank_details', { defaultValue: 'Bank Details' })}
+                                </div>
+                            )}
+                            {showField('bankName') && renderText('bankName', t('bank_name', { defaultValue: 'Bank Name' }), { placeholder: t('bank_name', { defaultValue: 'Bank Name' }) })}
+                            {showField('bankNameArabic') && renderText('bankNameArabic', t('bank_name_arabic', { defaultValue: 'Bank Name (Arabic)' }), { dir: 'rtl', placeholder: 'اسم المصرف' })}
+                            {showField('bankBranchName') && renderText('bankBranchName', t('bank_branch', { defaultValue: 'Bank Branch Name' }), { placeholder: t('bank_branch', { defaultValue: 'Branch Name' }) })}
+                            {showField('bankBranchNameArabic') && renderText('bankBranchNameArabic', t('bank_branch_arabic', { defaultValue: 'Bank Branch Name (Arabic)' }), { dir: 'rtl', placeholder: 'اسم فرع المصرف' })}
+                            {showField('bankAccountNumber') && renderText('bankAccountNumber', t('bank_account_number', { defaultValue: 'Bank Account Number (IBAN)' }), { placeholder: t('bank_account_number', { defaultValue: 'Account Number' }) })}
                         </div>
                     </section>
 
@@ -817,15 +939,38 @@ const EmployeeForm: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                             {renderFile('cvUrl', t('doc_cv', { defaultValue: 'CV / Resume' }))}
                             {renderFile('degreeUrl', t('doc_degree', { defaultValue: 'University Degree' }))}
-                            {renderFile('birthCertUrl', t('doc_birth_cert', { defaultValue: 'Birth Certificate' }))}
+                            {showField('birthCertUrl') && renderFile('birthCertUrl', t('doc_birth_cert', { defaultValue: 'Birth Certificate' }))}
                             {renderFile('passportCopyUrl', t('doc_passport_copy', { defaultValue: 'Passport Copy' }))}
-                            {renderFile('bankCheckUrl', t('doc_bank_check', { defaultValue: 'Cancelled Bank Check' }))}
+                            {showField('bankCheckUrl') && renderFile('bankCheckUrl', t('doc_bank_check', { defaultValue: 'Cancelled Bank Check' }))}
                             {renderFile('photoUrl', t('doc_photo', { defaultValue: 'Photo (white background)' }))}
-                            {renderFile('idCardUrl', t('doc_id_card', { defaultValue: 'ID & Driving Card' }))}
+                            {showField('idCardUrl') && renderFile('idCardUrl', t('doc_id_card', { defaultValue: 'ID & Driving Card' }))}
                             {renderFile('jobOfferUrl', t('doc_job_offer', { defaultValue: 'Signed Job Offer' }))}
-                            {renderFile('healthCertUrl', t('doc_health_cert', { defaultValue: 'Health Certificate' }))}
+                            {showField('healthCertUrl') && renderFile('healthCertUrl', t('doc_health_cert', { defaultValue: 'Health Certificate' }))}
+                            {showField('ticketUrl') && renderFile('ticketUrl', t('doc_ticket', { defaultValue: 'Airplane Ticket (Non-Resident)' }))}
+                            {showField('residencyDocumentUrl') && renderFile('residencyDocumentUrl', t('doc_residency', { defaultValue: 'Residency Document (Non-Resident)' }))}
+                            {showField('interviewEvaluationUrl') && renderFile('interviewEvaluationUrl', t('doc_interview_eval', { defaultValue: 'Interview Evaluation (Service Provider)' }))}
                         </div>
                     </section>
+
+                    {/* 1f. Onboarding Submission Details — only meaningful for Service Provider hires */}
+                    {(showField('serviceProviderCompany') || showField('employeeTravelDate')) && (
+                        <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/50 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-8 text-cyan-500/10">
+                                <Globe2 size={120} />
+                            </div>
+                            <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4 relative z-10">
+                                <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center shadow-sm">
+                                    <Globe2 size={20} />
+                                </div>
+                                <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('onboarding_submission_details', { defaultValue: 'Onboarding Submission Details' })}</h2>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-medium mb-6 relative z-10">{t('onboarding_submission_hint', { defaultValue: 'Only present for Service Provider hires — as submitted on the self-service onboarding form. Department, job category/grade and compensation come from the candidate\'s offer, assigned by recruitment.' })}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                                {renderText('serviceProviderCompany', t('service_provider_company', { defaultValue: 'Service Provider Company' }), { placeholder: 'اسم الشركة المزودة للخدمة' })}
+                                {renderDate('employeeTravelDate', t('employee_travel_date', { defaultValue: 'Travel Date (Service Provider)' }))}
+                            </div>
+                        </section>
+                    )}
 
                     {/* 2. Organizational Units */}
                     <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/50 relative z-20">
@@ -1071,15 +1216,17 @@ const EmployeeForm: React.FC = () => {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('nationality', { defaultValue: 'Nationality' })}</label>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('nationality', { defaultValue: 'Nationality' })} {employmentLocked && <Lock size={12} className="text-slate-400" />}</label>
                                 <input
                                     type="text"
                                     value={formData.nationality || ''}
                                     onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800 shadow-sm"
+                                    disabled={employmentLocked}
+                                    className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold shadow-sm ${employmentLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200 text-slate-800'}`}
                                     placeholder="Libyan"
                                 />
                             </div>
+                            {showField('nationalityArabic') && renderText('nationalityArabic', t('nationality_arabic', { defaultValue: 'Nationality (Arabic)' }), { dir: 'rtl', placeholder: 'ليبي', disabled: employmentLocked })}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('job_category', { defaultValue: 'Job Category' })} {categoryLocked && <Lock size={12} className="text-slate-400" />}</label>
                                 {categoryLocked ? (
@@ -1115,26 +1262,31 @@ const EmployeeForm: React.FC = () => {
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('job_grade', { defaultValue: 'Job Grade' })}</label>
-                                <select
-                                    value={formData.jobGrade || ''}
-                                    onChange={(e) => setFormData({ ...formData, jobGrade: e.target.value })}
-                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
-                                >
-                                    <option value="">Select Grade</option>
-                                    {JOB_GRADES.map(grade => (
-                                        <option key={grade} value={grade}>{grade}</option>
-                                    ))}
-                                </select>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('job_grade', { defaultValue: 'Job Grade' })} {employmentLocked && <Lock size={12} className="text-slate-400" />}</label>
+                                {employmentLocked ? (
+                                    <div className="w-full px-5 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 shadow-sm">{formData.jobGrade || '—'}</div>
+                                ) : (
+                                    <select
+                                        value={formData.jobGrade || ''}
+                                        onChange={(e) => setFormData({ ...formData, jobGrade: e.target.value })}
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
+                                    >
+                                        <option value="">Select Grade</option>
+                                        {JOB_GRADES.map(grade => (
+                                            <option key={grade} value={grade}>{grade}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider block">Evaluation Index</label>
+                                <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider items-center gap-1.5 flex">Evaluation Index {employmentLocked && <Lock size={12} className="text-emerald-400" />}</label>
                                 <input
                                     type="number"
                                     step="0.01"
                                     value={formData.evaluationPoints || 0}
                                     onChange={(e) => setFormData({ ...formData, evaluationPoints: Number(e.target.value) })}
-                                    className="w-full px-5 py-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl focus:ring-4 focus:ring-emerald-100 focus:bg-white transition-all font-bold text-slate-800 shadow-sm"
+                                    disabled={employmentLocked}
+                                    className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-100 transition-all font-bold shadow-sm ${employmentLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-emerald-50/50 border-emerald-100 focus:bg-white text-slate-800'}`}
                                     placeholder="0"
                                 />
                             </div>

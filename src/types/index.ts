@@ -184,6 +184,28 @@ export interface Employee {
     idCardUrl?: string;
     jobOfferUrl?: string;
     healthCertUrl?: string;
+
+    // Arabic counterparts of the bilingual onboarding fields
+    placeOfBirthArabic?: string;
+    nationalityArabic?: string;
+    academicQualificationArabic?: string;
+    idPlaceOfIssueArabic?: string;
+    passportPlaceOfIssueArabic?: string;
+    drivingLicenseTypeArabic?: string;
+    drivingLicensePlaceOfIssueArabic?: string;
+    residentialAddressArabic?: string;
+    relativesNamesArabic?: string;
+    bankNameArabic?: string;
+    bankBranchNameArabic?: string;
+
+    // Onboarding-only fields (self-service onboarding form)
+    serviceProviderCompany?: string;
+    employeeTravelDate?: string;
+    employeeStartDate?: string;
+    ticketUrl?: string;
+    residencyDocumentUrl?: string;
+    interviewEvaluationUrl?: string;
+
     jobCategory?: string;
     jobGrade?: string;
     salaryStructureType?: string;
@@ -571,6 +593,12 @@ export interface Candidate {
     onboardingSubmittedAt?: string;
 
     employeeId?: string;
+    events?: Array<{
+        action: string;
+        performedBy: string;
+        timestamp: string;
+        note?: string;
+    }>;
     createdById?: string;
     createdAt: string;
     updatedAt: string;
