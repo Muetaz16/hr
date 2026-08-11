@@ -3,11 +3,41 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { presetForRole } from '../utils/rolePresets';
+import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
 
 const prisma = new PrismaClient();
 
-const calculateHolidayMetrics = (contractStartDateStr: string | Date | null, holidaysUsed: number, bonusHolidays: number = 0) => {
-    if (!contractStartDateStr) return { accruedHolidays: 0, earnedHolidays: 0, remainingHolidays: 0 };
+// BioTime has exactly 4 fixed positions (no lookup endpoint — discovered by inspecting its live
+// roster): Resident=4, Non-Resident=5, Exception=6, Higher-Management=7. Exception and
+// Higher-Management are never auto-assigned — attendance staff reclassify manually via the
+// Attendance page's Employees tab when needed.
+const BIOTIME_POSITION_BY_CONTRACT_TYPE: Record<string, number> = {
+    'RESDANT': 4,
+    'DIRCT NONE RESDANT': 5,
+    'NONE RESDANT': 5,
+};
+
+// Fixed per-contract allowances — reset to these values at hire and at every renewal (see
+// renewContract below), never accrued mid-contract, only decremented as leave is taken.
+const EMERGENCY_LEAVE_ALLOWANCE = 3;
+const UNPAID_LEAVE_ALLOWANCE = 14;
+// Cap applied to paid leave carried into a new contract at renewal (see renewContract below).
+const PAID_LEAVE_CARRYOVER_CAP = 14;
+
+export const calculateHolidayMetrics = (
+    contractStartDateStr: string | Date | null,
+    holidaysUsed: number,
+    bonusHolidays: number = 0,
+    emergencyHolidaysUsed: number = 0,
+    unpaidHolidaysUsed: number = 0
+) => {
+    if (!contractStartDateStr) {
+        return {
+            accruedHolidays: 0, earnedHolidays: 0, remainingHolidays: 0,
+            remainingEmergencyHolidays: EMERGENCY_LEAVE_ALLOWANCE - (emergencyHolidaysUsed || 0),
+            remainingUnpaidHolidays: UNPAID_LEAVE_ALLOWANCE - (unpaidHolidaysUsed || 0),
+        };
+    }
     const contractStartDate = new Date(contractStartDateStr);
     const now = new Date();
     const diffTime = Math.max(0, now.getTime() - contractStartDate.getTime());
@@ -15,7 +45,11 @@ const calculateHolidayMetrics = (contractStartDateStr: string | Date | null, hol
     const accruedHolidays = Math.floor(diffDays / 12);
     const earnedHolidays = accruedHolidays + (bonusHolidays || 0);
     const remainingHolidays = earnedHolidays - (holidaysUsed || 0);
-    return { accruedHolidays, earnedHolidays, remainingHolidays };
+    return {
+        accruedHolidays, earnedHolidays, remainingHolidays,
+        remainingEmergencyHolidays: EMERGENCY_LEAVE_ALLOWANCE - (emergencyHolidaysUsed || 0),
+        remainingUnpaidHolidays: UNPAID_LEAVE_ALLOWANCE - (unpaidHolidaysUsed || 0),
+    };
 };
 
 export const getAllEmployees = async (req: AuthRequest, res: Response) => {
@@ -42,7 +76,7 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
             const data: any = {
                 ...emp,
                 permissions: (emp as any).user?.permissions || [],
-                ...calculateHolidayMetrics(emp.contractStartDate, (emp as any).holidaysUsed, (emp as any).bonusHolidays)
+                ...calculateHolidayMetrics(emp.contractStartDate, (emp as any).holidaysUsed, (emp as any).bonusHolidays, (emp as any).emergencyHolidaysUsed, (emp as any).unpaidHolidaysUsed)
             };
 
             // Prune sensitive data for non-administrative roles or other people's records
@@ -84,7 +118,7 @@ export const getEmployeeById = async (req: Request, res: Response) => {
         res.json({
             ...employee,
             permissions: (employee as any).user?.permissions || [],
-            ...calculateHolidayMetrics(employee.contractStartDate, (employee as any).holidaysUsed, (employee as any).bonusHolidays)
+            ...calculateHolidayMetrics(employee.contractStartDate, (employee as any).holidaysUsed, (employee as any).bonusHolidays, (employee as any).emergencyHolidaysUsed, (employee as any).unpaidHolidaysUsed)
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employee' });
@@ -102,6 +136,66 @@ export const uploadEmployeeDocument = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error uploading employee document:', error);
         res.status(500).json({ error: 'Failed to upload document' });
+    }
+};
+
+// --- Free-form employee documents (beyond the fixed CV/degree/etc. slots on Employee itself) ---
+// The file is uploaded separately via POST /employees/upload-document (same endpoint the fixed
+// slots use); these endpoints just attach the resulting URL to the employee under a custom name.
+
+// GET /employees/:id/documents
+export const getEmployeeDocuments = async (req: Request, res: Response) => {
+    try {
+        const documents = await prisma.employeeDocument.findMany({
+            where: { employeeId: req.params.id },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(documents);
+    } catch (error) {
+        console.error('Error fetching employee documents:', error);
+        res.status(500).json({ error: 'Failed to fetch employee documents' });
+    }
+};
+
+// POST /employees/:id/documents — body: { name, fileUrl, fileName }
+export const addEmployeeDocument = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, fileUrl, fileName } = req.body;
+        if (!name || !String(name).trim()) return res.status(400).json({ error: 'A document name is required.' });
+        if (!fileUrl) return res.status(400).json({ error: 'No file was uploaded.' });
+
+        const employee = await prisma.employee.findUnique({ where: { id }, select: { id: true } });
+        if (!employee) return res.status(404).json({ error: 'Employee not found.' });
+
+        const document = await prisma.employeeDocument.create({
+            data: {
+                employeeId: id,
+                name: String(name).trim(),
+                fileUrl,
+                fileName: fileName || null,
+                uploadedByName: (req as AuthRequest).user?.fullName || null,
+            },
+        });
+        res.status(201).json(document);
+    } catch (error) {
+        console.error('Error adding employee document:', error);
+        res.status(500).json({ error: 'Failed to add employee document' });
+    }
+};
+
+// DELETE /employees/:id/documents/:docId
+export const deleteEmployeeDocument = async (req: Request, res: Response) => {
+    try {
+        const { id, docId } = req.params;
+        const document = await prisma.employeeDocument.findUnique({ where: { id: docId } });
+        if (!document || document.employeeId !== id) return res.status(404).json({ error: 'Document not found.' });
+
+        await prisma.employeeDocument.delete({ where: { id: docId } });
+        res.json({ message: 'Document removed successfully.' });
+    } catch (error) {
+        console.error('Error deleting employee document:', error);
+        res.status(500).json({ error: 'Failed to delete employee document' });
     }
 };
 
@@ -483,7 +577,42 @@ export const createEmployee = async (req: Request, res: Response) => {
             return employee;
         });
 
-        res.json(result);
+        // Best-effort attendance-system provisioning — happens after the DB transaction commits
+        // (external HTTP call, must never roll back or block the employee record itself). The
+        // "already registered" case is expected and common (the existing employee population
+        // already has real BioTime accounts predating this system), so it must resolve into a
+        // link, not a failure: we always attempt the roster lookup by empCode after the create
+        // attempt, regardless of whether that create call itself reported success.
+        let attendanceSync: { status: 'skipped' | 'created' | 'linked' | 'failed'; message?: string } = { status: 'skipped' };
+        const positionId = result.contractType ? BIOTIME_POSITION_BY_CONTRACT_TYPE[result.contractType] : undefined;
+
+        try {
+            if (!result.staffId) {
+                attendanceSync = { status: 'skipped', message: 'No Staff ID set.' };
+            } else if (!positionId) {
+                attendanceSync = { status: 'skipped', message: `Unrecognized contract type "${result.contractType}".` };
+            } else {
+                const created = await createBioTimeEmployeeRecord({ empCode: result.staffId, firstName: result.fullName, positionId });
+                if (!created.success) {
+                    console.warn(`[BioTime] Create did not succeed for ${result.staffId} (likely already registered) — attempting to link instead:`, created.message);
+                }
+
+                const bioId = await findBioTimeEmpIdByCode(result.staffId);
+                if (bioId != null) {
+                    await prisma.employee.update({ where: { id: result.id }, data: { bioId } });
+                    (result as any).bioId = bioId;
+                    attendanceSync = { status: created.success ? 'created' : 'linked' };
+                } else {
+                    console.error(`[BioTime] Could not create or find a matching record for ${result.staffId}:`, created.message);
+                    attendanceSync = { status: 'failed', message: created.message || 'Could not create or find a matching BioTime record.' };
+                }
+            }
+        } catch (e: any) {
+            console.error('[BioTime] Unexpected error during attendance provisioning:', e);
+            attendanceSync = { status: 'failed', message: e?.message };
+        }
+
+        res.json({ ...result, _attendanceSync: attendanceSync });
     } catch (error: any) {
         console.error("Error creating employee:", error);
         // Business-rule failures thrown inside the transaction (duplicate account email,
@@ -814,7 +943,7 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
                 });
                 return res.json({
                     ...updated,
-                    ...calculateHolidayMetrics(updated.contractStartDate, updated.holidaysUsed, updated.bonusHolidays)
+                    ...calculateHolidayMetrics(updated.contractStartDate, updated.holidaysUsed, updated.bonusHolidays, updated.emergencyHolidaysUsed, updated.unpaidHolidaysUsed)
                 });
             }
 
@@ -844,7 +973,7 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
 
         res.json({
             ...employee,
-            ...calculateHolidayMetrics(employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays)
+            ...calculateHolidayMetrics(employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays, employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed)
         });
     } catch (error) {
         console.error('Error fetching my employee record:', error);
@@ -861,6 +990,14 @@ export const renewContract = async (req: Request, res: Response) => {
             // 1. Fetch current employee data for snapshot
             const employee = await tx.employee.findUnique({ where: { id } });
             if (!employee) throw new Error('Employee not found');
+
+            // Paid leave carries into the new contract capped at 14 days — compute it from the
+            // OLD contract's numbers before anything gets reset. Emergency/unpaid do NOT carry
+            // over; they reset to a fresh 3/14-day allowance every contract (existing reset below).
+            const { remainingHolidays: oldRemainingHolidays } = calculateHolidayMetrics(
+                employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays
+            );
+            const carriedOverHolidays = Math.max(0, Math.min(oldRemainingHolidays, PAID_LEAVE_CARRYOVER_CAP));
 
             // 2. Archive current ACTIVE contracts with SNAPSHOT data
             await tx.contract.updateMany({
@@ -902,6 +1039,7 @@ export const renewContract = async (req: Request, res: Response) => {
                     baseSalary: parseFloatSafe(salary),
                     contractStatus: 'Active',
                     holidaysUsed: 0,
+                    bonusHolidays: carriedOverHolidays,
                     emergencyHolidaysUsed: 0,
                     unpaidHolidaysUsed: 0
                 }

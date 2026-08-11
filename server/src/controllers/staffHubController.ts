@@ -3,8 +3,30 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
+import { calculateHolidayMetrics } from './employeeController';
+import { resolveApprovalChain, STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
+import { createBioTimeLeaveRecord } from '../utils/attendanceApiProxy';
+import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 
 const prisma = new PrismaClient();
+
+// The 3 leave types that go through balance/date validation and the new org-based approval
+// chain (LeaveApprovalStep). LATE_COMING/EARLY_LEAVING/HOURS_LEAVE keep using the old
+// status/updateRequestStatus flow untouched — their dedicated workflow is a separate future step.
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
+
+// Inclusive day count — same formula already used below in updateRequestStatus's balance
+// increment, kept identical so submission-time validation and approval-time accounting agree.
+const countLeaveDays = (startDate: Date, endDate: Date) => {
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
+
+const REMAINING_BALANCE_FIELD: Record<string, 'remainingHolidays' | 'remainingEmergencyHolidays' | 'remainingUnpaidHolidays'> = {
+    PAID_HOLIDAY: 'remainingHolidays',
+    EMERGENCY_LEAVE: 'remainingEmergencyHolidays',
+    UNPAID_LEAVE: 'remainingUnpaidHolidays',
+};
 
 // --- Leave & Permission Requests ---
 
@@ -25,6 +47,76 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             attachmentName = file.originalname;
         }
 
+        const isChainType = CHAIN_LEAVE_TYPES.includes(type);
+        let employee: Awaited<ReturnType<typeof prisma.employee.findUnique>> = null;
+
+        if (isChainType) {
+            employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+            if (!employee) {
+                return res.status(404).json({ error: 'Employee not found.' });
+            }
+
+            const start = new Date(startDate);
+            const end = endDate ? new Date(endDate) : start;
+            const dayCount = countLeaveDays(start, end);
+
+            // Balance check
+            const metrics = calculateHolidayMetrics(
+                employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays,
+                employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed
+            );
+            const remainingField = REMAINING_BALANCE_FIELD[type];
+            const remaining = metrics[remainingField];
+            if (dayCount > remaining) {
+                return res.status(400).json({ error: `This request exceeds your remaining balance (${remaining} day(s) left).` });
+            }
+
+            // 14-day advance-notice rule — PAID_HOLIDAY/UNPAID_LEAVE only, EMERGENCY_LEAVE exempt
+            // (it may even be backdated).
+            if (type === 'PAID_HOLIDAY' || type === 'UNPAID_LEAVE') {
+                const minStart = new Date();
+                minStart.setDate(minStart.getDate() + 14);
+                minStart.setHours(0, 0, 0, 0);
+                if (start < minStart) {
+                    return res.status(400).json({ error: 'This leave type must be requested at least 14 days before the start date.' });
+                }
+            }
+        }
+
+        if (isChainType && employee) {
+            const { steps, blockedStage } = await resolveApprovalChain(prisma, employee);
+            if (blockedStage) {
+                return res.status(400).json({ error: `No ${blockedStage.replace('_', ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
+            }
+            if (steps.length === 0) {
+                return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
+            }
+
+            const request = await prisma.$transaction(async (tx) => {
+                const created = await tx.leaveRequest.create({
+                    data: {
+                        employeeId, userId, type,
+                        startDate: new Date(startDate),
+                        endDate: endDate ? new Date(endDate) : null,
+                        startTime, endTime, reason, attachmentUrl, attachmentName,
+                        status: 'PENDING'
+                    }
+                });
+                await tx.leaveApprovalStep.createMany({
+                    data: steps.map(s => ({
+                        leaveRequestId: created.id,
+                        sequence: STAGE_SEQUENCE[s.stage],
+                        stage: s.stage,
+                        approverUserId: s.approverUserId,
+                        status: 'PENDING',
+                    })),
+                });
+                return created;
+            });
+            return res.json(request);
+        }
+
+        // Non-chain request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) — unchanged behavior.
         const request = await prisma.leaveRequest.create({
             data: {
                 employeeId,
@@ -42,6 +134,7 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
         });
         res.json(request);
     } catch (error) {
+        console.error('Error creating leave request:', error);
         res.status(500).json({ error: 'Failed to create leave request' });
     }
 };
@@ -107,6 +200,141 @@ export const updateRequestStatus = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating request status:', error);
         res.status(500).json({ error: 'Failed to update request status' });
+    }
+};
+
+// PATCH /staff-hub/requests/:requestId/steps/:stepId/decision — the new, server-authorized
+// decision endpoint for the org-based approval chain (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE
+// only). Unlike updateRequestStatus above, this verifies the caller is actually the step's
+// assigned approver and that it's genuinely their turn — closing the gap where any authenticated
+// user could previously PATCH any request to any status.
+export const decideApprovalStep = async (req: Request, res: Response) => {
+    try {
+        const { requestId, stepId } = req.params;
+        const { decision, note } = req.body;
+        const approverId = (req as AuthRequest).user?.id;
+        if (!approverId) return res.status(401).json({ error: 'Not authenticated' });
+        if (decision !== 'APPROVE' && decision !== 'REJECT') {
+            return res.status(400).json({ error: 'decision must be APPROVE or REJECT.' });
+        }
+
+        const step = await prisma.leaveApprovalStep.findUnique({
+            where: { id: stepId },
+            include: { leaveRequest: { include: { employee: true } } },
+        });
+        if (!step || step.leaveRequestId !== requestId) {
+            return res.status(404).json({ error: 'Approval step not found.' });
+        }
+        if (step.status !== 'PENDING' || step.leaveRequest.status !== 'PENDING') {
+            return res.status(400).json({ error: 'This step is no longer awaiting approval.' });
+        }
+        if (step.approverUserId !== approverId) {
+            return res.status(403).json({ error: 'You are not the assigned approver for this step.' });
+        }
+
+        const lowestPending = await prisma.leaveApprovalStep.findFirst({
+            where: { leaveRequestId: requestId, status: 'PENDING' },
+            orderBy: { sequence: 'asc' },
+        });
+        if (!lowestPending || lowestPending.sequence !== step.sequence) {
+            return res.status(400).json({ error: 'An earlier approval stage is still pending.' });
+        }
+
+        let becameCompleted = false;
+
+        await prisma.$transaction(async (tx) => {
+            if (decision === 'REJECT') {
+                await tx.leaveApprovalStep.update({ where: { id: stepId }, data: { status: 'REJECTED', note, decidedAt: new Date() } });
+                await tx.leaveApprovalStep.updateMany({
+                    where: { leaveRequestId: requestId, status: 'PENDING' },
+                    data: { status: 'SKIPPED' },
+                });
+                await tx.leaveRequest.update({ where: { id: requestId }, data: { status: 'REJECTED' } });
+                return;
+            }
+
+            await tx.leaveApprovalStep.update({ where: { id: stepId }, data: { status: 'APPROVED', note, decidedAt: new Date() } });
+
+            // Read the remaining-pending count from inside this same transaction — not a
+            // pre-transaction snapshot — so two rows in the same stage approved near-simultaneously
+            // can't both think they're "the last one" and double-fire completion.
+            const remainingPending = await tx.leaveApprovalStep.count({ where: { leaveRequestId: requestId, status: 'PENDING' } });
+            if (remainingPending > 0) return;
+
+            becameCompleted = true;
+            const start = new Date(step.leaveRequest.startDate);
+            const end = step.leaveRequest.endDate ? new Date(step.leaveRequest.endDate) : start;
+            const dayCount = countLeaveDays(start, end);
+
+            const employeeUpdate: any = {};
+            if (step.leaveRequest.type === 'PAID_HOLIDAY') employeeUpdate.holidaysUsed = { increment: dayCount };
+            else if (step.leaveRequest.type === 'EMERGENCY_LEAVE') employeeUpdate.emergencyHolidaysUsed = { increment: dayCount };
+            else if (step.leaveRequest.type === 'UNPAID_LEAVE') employeeUpdate.unpaidHolidaysUsed = { increment: dayCount };
+
+            await tx.leaveRequest.update({ where: { id: requestId }, data: { status: 'COMPLETED' } });
+            if (Object.keys(employeeUpdate).length > 0) {
+                await tx.employee.update({ where: { id: step.leaveRequest.employeeId }, data: employeeUpdate });
+            }
+        });
+
+        // Fired after the transaction commits (never inside it) — an external HTTP call must
+        // not hold a DB transaction open, nor be able to roll it back. Fail-soft: logs and
+        // continues, never fails the approval response over a BioTime hiccup.
+        if (becameCompleted && step.leaveRequest.employee.staffId) {
+            const leaveTypeId = LEAVE_TYPE_ID_MAP[step.leaveRequest.type];
+            if (leaveTypeId) {
+                const result = await createBioTimeLeaveRecord({
+                    empCode: step.leaveRequest.employee.staffId,
+                    leaveTypeId,
+                    startDate: step.leaveRequest.startDate,
+                    endDate: step.leaveRequest.endDate ?? step.leaveRequest.startDate,
+                    notes: step.leaveRequest.reason ?? undefined,
+                });
+                if (!result.success) {
+                    console.warn('[BioTime] Leave write-back failed (non-fatal):', result.message);
+                }
+            }
+        }
+
+        const updatedStep = await prisma.leaveApprovalStep.findUnique({ where: { id: stepId } });
+        res.json(updatedStep);
+    } catch (error) {
+        console.error('Error deciding approval step:', error);
+        res.status(500).json({ error: 'Failed to record the approval decision.' });
+    }
+};
+
+// GET /staff-hub/requests/my-pending-steps — every step currently awaiting THIS user's decision.
+// Scoped entirely to req.user.id server-side (the fix for the pre-existing authorization gap) —
+// the frontend doesn't need to know or replicate any role/org logic to show the right inbox.
+export const getMyPendingSteps = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+        const myPending = await prisma.leaveApprovalStep.findMany({
+            where: { approverUserId: userId, status: 'PENDING', leaveRequest: { status: 'PENDING' } },
+            include: { leaveRequest: { include: { employee: true } } },
+            orderBy: { createdAt: 'asc' },
+        });
+        if (myPending.length === 0) return res.json([]);
+
+        // A later stage's rows exist from request-creation time but aren't actionable until every
+        // earlier stage is fully approved — keep only rows matching the lowest still-pending
+        // sequence for their own request.
+        const requestIds = Array.from(new Set(myPending.map(s => s.leaveRequestId)));
+        const lowestPendingByRequest = await prisma.leaveApprovalStep.groupBy({
+            by: ['leaveRequestId'],
+            where: { leaveRequestId: { in: requestIds }, status: 'PENDING' },
+            _min: { sequence: true },
+        });
+        const lowestMap = new Map(lowestPendingByRequest.map(g => [g.leaveRequestId, g._min.sequence]));
+
+        const current = myPending.filter(s => lowestMap.get(s.leaveRequestId) === s.sequence);
+        res.json(current);
+    } catch (error) {
+        console.error('Error fetching my pending approval steps:', error);
+        res.status(500).json({ error: 'Failed to fetch pending approvals' });
     }
 };
 

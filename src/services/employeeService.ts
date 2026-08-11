@@ -1,5 +1,5 @@
 import api from './apiClient';
-import type { Employee } from '../types';
+import type { Employee, EmployeeDocument } from '../types';
 
 export const employeeService = {
     async getAllEmployees(): Promise<Employee[]> {
@@ -89,5 +89,20 @@ export const employeeService = {
     async terminateEmployee(id: string, data: any) {
         const response = await api.post(`/employees/${id}/terminate`, data);
         return response.data;
+    },
+
+    // Free-form documents attached to an employee beyond the fixed CV/degree/etc. slots.
+    async getEmployeeDocuments(employeeId: string): Promise<EmployeeDocument[]> {
+        const response = await api.get(`/employees/${employeeId}/documents`);
+        return response.data;
+    },
+
+    async addEmployeeDocument(employeeId: string, name: string, fileUrl: string, fileName?: string): Promise<EmployeeDocument> {
+        const response = await api.post(`/employees/${employeeId}/documents`, { name, fileUrl, fileName });
+        return response.data;
+    },
+
+    async deleteEmployeeDocument(employeeId: string, docId: string) {
+        await api.delete(`/employees/${employeeId}/documents/${docId}`);
     }
 };

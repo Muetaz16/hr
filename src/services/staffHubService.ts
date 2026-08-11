@@ -14,8 +14,27 @@ export interface LeaveRequest {
     attachmentName?: string;
     managerNote?: string;
     hrNote?: string;
+    // PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only ever use PENDING/COMPLETED/REJECTED going
+    // forward (see LeaveApprovalStep below for their per-stage chain); the APPROVED_BY_* values
+    // remain valid for the other request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) and older history.
     status: 'PENDING' | 'APPROVED_BY_UNIT' | 'APPROVED_BY_DEPT' | 'APPROVED_BY_DIVISION' | 'APPROVED_BY_DIRECTOR' | 'REJECTED' | 'COMPLETED';
     createdAt: string;
+}
+
+// One (stage, required approver) row in a leave request's org-based approval chain — see
+// resolveApprovalChain on the backend for how the chain is derived.
+export interface LeaveApprovalStep {
+    id: string;
+    leaveRequestId: string;
+    sequence: number;
+    stage: 'UNIT_HEAD' | 'DEPT_HEAD' | 'DIVISION_HEAD' | 'HR_MANAGER' | 'ADMIN_DIRECTOR' | 'GENERAL_MANAGER';
+    approverUserId: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
+    note?: string;
+    decidedAt?: string;
+    createdAt: string;
+    leaveRequest?: LeaveRequest & { employee?: { fullName: string; staffId?: string } };
+    approver?: { fullName: string };
 }
 
 export interface StaffTask {
@@ -68,6 +87,17 @@ export const staffHubService = {
     },
     async getPendingRequests(filters: { departmentId?: string; groupId?: string; unitId?: string; divisionId?: string; status?: string }) {
         const response = await api.get('/staff-hub/requests/pending', { params: filters });
+        return response.data;
+    },
+
+    // New org-chain approval steps (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only) — identity-
+    // scoped server-side, no role/org filtering needed client-side.
+    async getMyPendingSteps(): Promise<LeaveApprovalStep[]> {
+        const response = await api.get('/staff-hub/requests/my-pending-steps');
+        return response.data;
+    },
+    async decideApprovalStep(requestId: string, stepId: string, decision: 'APPROVE' | 'REJECT', note?: string) {
+        const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, { decision, note });
         return response.data;
     },
 

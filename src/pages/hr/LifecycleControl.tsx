@@ -439,11 +439,14 @@ const LifecycleControl: React.FC = () => {
 
                                 const dataRows = filteredEmployees.map((e, idx) => {
                                     const rowStyle = idx % 2 === 0 ? baseStyle : zebraStyle;
-                                    const paidAccrued = e.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(e.contractStartDate)) / 12) : 0;
+                                    // accruedHolidays/remainingHolidays come from the API (calculateHolidayMetrics
+                                    // server-side) — recomputing paidBal from contractStartDate alone used to
+                                    // ignore bonusHolidays entirely, which now also holds any renewal carry-over.
+                                    const paidAccrued = (e as any).accruedHolidays || 0;
                                     const paidTaken = e.holidaysUsed || 0;
                                     const unpaidTaken = e.unpaidHolidaysUsed || 0;
                                     const emergTaken = e.emergencyHolidaysUsed || 0;
-                                    const paidBal = paidAccrued - paidTaken;
+                                    const paidBal = (e as any).remainingHolidays || 0;
                                     const unpaidBal = 14 - unpaidTaken;
                                     const emergBal = 3 - emergTaken;
 
@@ -583,6 +586,9 @@ const LifecycleControl: React.FC = () => {
                     const fmt = (d?: string) => d ? format(parseISO(d), 'dd MMM yyyy') : '—';
                     const num = (x: any) => Number(x) || 0;
                     const paidAccrued = src.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(src.contractStartDate)) / 12) : 0;
+                    // Includes bonusHolidays (which now also holds any renewal carry-over) — the
+                    // old formula ignored it entirely, understating the balance for anyone renewed.
+                    const paidBonus = num(src.bonusHolidays);
                     const paidTaken = num(src.holidaysUsed);
                     const unpaidTaken = num(src.unpaidHolidaysUsed);
                     const emergTaken = num(src.emergencyHolidaysUsed);
@@ -747,7 +753,7 @@ const LifecycleControl: React.FC = () => {
                                 <Section icon={CalendarDays} title={t('leave_balances', { defaultValue: 'Leave Balances' })} color="bg-amber-50 text-amber-600">
                                     <Row label="Paid Accrued" value={paidAccrued} />
                                     <Field label="Paid Taken" k="holidaysUsed" type="number" />
-                                    <Row label="Paid Balance" value={paidAccrued - paidTaken} />
+                                    <Row label="Paid Balance" value={paidAccrued + paidBonus - paidTaken} />
                                     <Field label="Unpaid Taken" k="unpaidHolidaysUsed" type="number" />
                                     <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
                                     <Field label="Emergency Taken" k="emergencyHolidaysUsed" type="number" />

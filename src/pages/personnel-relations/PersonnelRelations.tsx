@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { directorateService } from '../../services/directorateService';
 import { SERVER_URL } from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
 import {
     Users,
     Clock,
@@ -27,17 +28,24 @@ import {
     Briefcase,
     CalendarDays,
     ExternalLink,
+    Trash2,
     FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { toast } from 'sonner';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import Modal from '../../components/Modal';
-import type { Employee } from '../../types';
+import type { Employee, EmployeeDocument } from '../../types';
+import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
 
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
     const currentPath = location.pathname;
+    const queryClient = useQueryClient();
+    const { currentUser } = useAuth();
+    // Document control (add/replace/delete) is HR-only — everyone else who can see this screen
+    // (heads, plain employees) stays view-only, same as the rest of the detail modal.
+    const isHRRole = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser?.role || '');
 
     // Determine active tab from route path
     const getActiveTab = () => {
@@ -66,6 +74,72 @@ const PersonnelRelations: React.FC = () => {
     const [lifecycleSearch, setLifecycleSearch] = useState('');
     const [lifecycleFilterType, setLifecycleFilterType] = useState('All');
     const [detailEmp, setDetailEmp] = useState<Employee | null>(null);
+    const [uploadingDocKey, setUploadingDocKey] = useState<string | null>(null);
+    const [newDocName, setNewDocName] = useState('');
+    const [newDocFile, setNewDocFile] = useState<File | null>(null);
+    const [addingDoc, setAddingDoc] = useState(false);
+    // The "Add Document" name+file form lives in its own popup (not inline in the detail view)
+    // because the detail view's Section/Row/Field helpers are re-created on every render, which
+    // would remount the inline inputs on every keystroke and kick focus/scroll around.
+    const [addDocModalOpen, setAddDocModalOpen] = useState(false);
+
+    // Additional (free-form) documents for the employee currently open in the detail modal.
+    const { data: employeeDocuments = [] } = useQuery({
+        queryKey: ['employee-documents', detailEmp?.id],
+        queryFn: () => employeeService.getEmployeeDocuments(detailEmp!.id),
+        enabled: !!detailEmp && isHRRole,
+    });
+
+    // Replace/upload one of the fixed document slots (CV, degree, etc.) directly from this screen.
+    const handleFixedDocUpload = async (empId: string, key: string, file?: File) => {
+        if (!file) return;
+        setUploadingDocKey(key);
+        try {
+            const { url } = await employeeService.uploadDocument(file);
+            await employeeService.updateEmployee(empId, { [key]: url } as Partial<Employee>);
+            setDetailEmp(prev => (prev && prev.id === empId ? ({ ...prev, [key]: url } as Employee) : prev));
+            queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
+            toast.success('Document updated.');
+        } catch (err) {
+            console.error('Failed to upload document', err);
+            toast.error('Failed to upload document.');
+        } finally {
+            setUploadingDocKey(null);
+        }
+    };
+
+    // Add a brand-new, custom-named document (e.g. a new certificate) for the employee.
+    const handleAddDocument = async (empId: string) => {
+        if (!newDocName.trim()) { toast.error('Enter a name for the document.'); return; }
+        if (!newDocFile) { toast.error('Choose a file to upload.'); return; }
+        setAddingDoc(true);
+        try {
+            const { url, name: fileName } = await employeeService.uploadDocument(newDocFile);
+            await employeeService.addEmployeeDocument(empId, newDocName.trim(), url, fileName);
+            setNewDocName('');
+            setNewDocFile(null);
+            setAddDocModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['employee-documents', empId] });
+            toast.success('Document added.');
+        } catch (err) {
+            console.error('Failed to add document', err);
+            toast.error('Failed to add document.');
+        } finally {
+            setAddingDoc(false);
+        }
+    };
+
+    const handleDeleteDocument = async (empId: string, docId: string) => {
+        if (!window.confirm('Remove this document? This cannot be undone.')) return;
+        try {
+            await employeeService.deleteEmployeeDocument(empId, docId);
+            queryClient.invalidateQueries({ queryKey: ['employee-documents', empId] });
+            toast.success('Document removed.');
+        } catch (err) {
+            console.error('Failed to delete document', err);
+            toast.error('Failed to delete document.');
+        }
+    };
 
     // Queries
     const { data: employees = [], isLoading: isLoadingEmps } = useQuery({
@@ -75,6 +149,14 @@ const PersonnelRelations: React.FC = () => {
             return emps;
         }
     });
+
+    // Contract Renewals — only employees whose contract ends within 30 days (or has already
+    // lapsed and hasn't been renewed yet), not every employee who merely has an end date on file.
+    const contractsNeedingRenewal = employees
+        .filter((e: any) => e.contractEndDate && e.contractStatus !== 'Terminated' && e.contractStatus !== 'Inactive')
+        .map((e: any) => ({ ...e, daysLeft: differenceInDays(parseISO(e.contractEndDate), new Date()) }))
+        .filter((e: any) => e.daysLeft <= 30)
+        .sort((a: any, b: any) => a.daysLeft - b.daysLeft);
 
     const { data: departments = [] } = useQuery({
         queryKey: ['relations-departments'],
@@ -389,7 +471,8 @@ const PersonnelRelations: React.FC = () => {
 
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Upcoming Contract Expirations</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Contracts Expiring Within 30 Days</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{contractsNeedingRenewal.length} {contractsNeedingRenewal.length === 1 ? 'Employee' : 'Employees'}</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
@@ -403,26 +486,26 @@ const PersonnelRelations: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
-                                    {employees.filter(e => e.contractEndDate).map((emp: any) => {
-                                        const daysLeft = differenceInDays(parseISO(emp.contractEndDate), new Date());
-                                        const isCritical = daysLeft <= 30;
+                                    {contractsNeedingRenewal.map((emp) => {
+                                        const isOverdue = emp.daysLeft < 0;
+                                        const isUrgent = emp.daysLeft <= 7;
                                         return (
                                             <tr key={emp.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4">
                                                     <p className="font-bold text-slate-800">{emp.fullName}</p>
                                                     <p className="text-[10px] text-slate-500">{emp.position || 'Standard Staff'}</p>
                                                 </td>
-                                                <td className="p-4 font-bold">{emp.contractEndDate}</td>
+                                                <td className="p-4 font-bold">{format(parseISO(emp.contractEndDate), 'dd MMM yyyy')}</td>
                                                 <td className="p-4">
-                                                    <span className={`font-bold ${isCritical ? 'text-red-600 font-black animate-pulse' : 'text-slate-600'}`}>
-                                                        {daysLeft} days
+                                                    <span className={`font-bold ${isUrgent ? 'text-red-600 font-black animate-pulse' : 'text-amber-600'}`}>
+                                                        {isOverdue ? `${Math.abs(emp.daysLeft)} days overdue` : `${emp.daysLeft} days`}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${
-                                                        isCritical ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'
+                                                        isOverdue ? 'bg-red-100 text-red-800' : isUrgent ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                                                     }`}>
-                                                        {isCritical ? 'Action Required' : 'OK'}
+                                                        {isOverdue ? 'Overdue' : isUrgent ? 'Urgent' : 'Action Required'}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-right">
@@ -436,6 +519,11 @@ const PersonnelRelations: React.FC = () => {
                                             </tr>
                                         );
                                     })}
+                                    {contractsNeedingRenewal.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">No contracts are nearing expiration.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -967,13 +1055,25 @@ const PersonnelRelations: React.FC = () => {
                     const emp = detailEmp;
                     const fmt = (d?: string) => d ? format(parseISO(d), 'dd MMM yyyy') : '—';
                     const num = (x: any) => Number(x) || 0;
-                    const paidAccrued = emp.contractStartDate ? Math.floor(differenceInDays(new Date(), parseISO(emp.contractStartDate)) / 12) : 0;
+                    // accruedHolidays/remainingHolidays come straight from the API (calculateHolidayMetrics
+                    // server-side) — recomputing them here from contractStartDate alone used to ignore
+                    // bonusHolidays entirely, which now also holds any renewal carry-over.
+                    const paidAccrued = num((emp as any).accruedHolidays);
+                    const paidRemaining = num((emp as any).remainingHolidays);
                     const paidTaken = num(emp.holidaysUsed);
                     const unpaidTaken = num(emp.unpaidHolidaysUsed);
                     const emergTaken = num(emp.emergencyHolidaysUsed);
+                    // Only show the identity/contact/bank/document fields this employee's contract
+                    // type actually collects — same Resident / Direct Non-Resident / Service Provider
+                    // split used on the onboarding review screen.
+                    const showField = makeFieldVisibility(emp.contractType);
 
+                    // Cards sit in a CSS-columns (masonry) flow rather than a row-based grid, so a
+                    // short card (e.g. Service Provider's sparse Identity section) never leaves a
+                    // tall dead gap next to/under a taller neighbour — each card just packs into
+                    // whichever column has room, sized to its own content.
                     const Section = ({ icon: Icon, title, color, wide, children }: any) => (
-                        <div className={`rounded-2xl border border-slate-100 bg-white p-6 shadow-sm ${wide ? 'xl:col-span-2' : ''}`}>
+                        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm mb-6 break-inside-avoid">
                             <div className="flex items-center gap-2.5 mb-5">
                                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}><Icon className="w-4 h-4" /></div>
                                 <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.2em]">{title}</h4>
@@ -1006,7 +1106,10 @@ const PersonnelRelations: React.FC = () => {
                         { label: 'ID & Driving Card', k: 'idCardUrl' },
                         { label: 'Signed Job Offer', k: 'jobOfferUrl' },
                         { label: 'Health Certificate', k: 'healthCertUrl' },
-                    ];
+                        { label: 'Airplane Ticket', k: 'ticketUrl' },
+                        { label: 'Residency Document', k: 'residencyDocumentUrl' },
+                        { label: 'Interview Evaluation', k: 'interviewEvaluationUrl' },
+                    ].filter(d => showField(d.k));
 
                     return (
                         <div className="space-y-6">
@@ -1044,29 +1147,36 @@ const PersonnelRelations: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Section grid */}
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                            {/* Section cards — masonry flow (see Section component note above) */}
+                            <div className="columns-1 xl:columns-2 gap-6">
                                 <Section icon={User} title="Identity Details" color="bg-indigo-50 text-indigo-600">
-                                    <Field label="Gender" k="gender" />
+                                    {showField('gender') && <Field label="Gender" k="gender" />}
                                     <Field label="Date of Birth" k="dateOfBirth" type="date" />
                                     <Field label="Place of Birth" k="placeOfBirth" />
+                                    {showField('placeOfBirthArabic') && <Field label="Place of Birth (Arabic)" k="placeOfBirthArabic" dir="rtl" />}
                                     <Field label="Nationality" k="nationality" />
-                                    <Field label="National ID" k="nationalId" />
+                                    {showField('nationalityArabic') && <Field label="Nationality (Arabic)" k="nationalityArabic" dir="rtl" />}
+                                    {showField('nationalId') && <Field label="National ID" k="nationalId" />}
                                     <Field label="Blood Type" k="bloodType" />
                                     <Field label="Academic Qualification" k="academicQualification" />
+                                    {showField('academicQualificationArabic') && <Field label="Academic Qualification (Arabic)" k="academicQualificationArabic" dir="rtl" />}
                                 </Section>
 
                                 <Section icon={CreditCard} title="ID, Passport & License" color="bg-teal-50 text-teal-600">
-                                    <Field label="ID Card Number" k="idCardNumber" />
-                                    <Field label="ID Place of Issue" k="idPlaceOfIssue" />
-                                    <Field label="ID Issue Date" k="idIssueDate" type="date" />
+                                    {showField('idCardNumber') && <Field label="ID Card Number" k="idCardNumber" />}
+                                    {showField('idPlaceOfIssue') && <Field label="ID Place of Issue" k="idPlaceOfIssue" />}
+                                    {showField('idPlaceOfIssueArabic') && <Field label="ID Place of Issue (Arabic)" k="idPlaceOfIssueArabic" dir="rtl" />}
+                                    {showField('idIssueDate') && <Field label="ID Issue Date" k="idIssueDate" type="date" />}
                                     <Field label="Passport Number" k="passportNumber" />
-                                    <Field label="Passport Place of Issue" k="passportPlaceOfIssue" />
+                                    {showField('passportPlaceOfIssue') && <Field label="Passport Place of Issue" k="passportPlaceOfIssue" />}
+                                    {showField('passportPlaceOfIssueArabic') && <Field label="Passport Place of Issue (Arabic)" k="passportPlaceOfIssueArabic" dir="rtl" />}
                                     <Field label="Passport Expiry" k="passportExpiryDate" type="date" />
-                                    <Field label="License Type" k="drivingLicenseType" />
-                                    <Field label="License Number" k="drivingLicenseNumber" />
-                                    <Field label="License Expiry" k="drivingLicenseExpiry" type="date" />
-                                    <Field label="License Place of Issue" k="drivingLicensePlaceOfIssue" />
+                                    {showField('drivingLicenseType') && <Field label="License Type" k="drivingLicenseType" />}
+                                    {showField('drivingLicenseTypeArabic') && <Field label="License Type (Arabic)" k="drivingLicenseTypeArabic" dir="rtl" />}
+                                    {showField('drivingLicenseNumber') && <Field label="License Number" k="drivingLicenseNumber" />}
+                                    {showField('drivingLicenseExpiry') && <Field label="License Expiry" k="drivingLicenseExpiry" type="date" />}
+                                    {showField('drivingLicensePlaceOfIssue') && <Field label="License Place of Issue" k="drivingLicensePlaceOfIssue" />}
+                                    {showField('drivingLicensePlaceOfIssueArabic') && <Field label="License Place of Issue (Arabic)" k="drivingLicensePlaceOfIssueArabic" dir="rtl" />}
                                 </Section>
 
                                 <Section icon={Phone} title="Contact & Address" color="bg-emerald-50 text-emerald-600">
@@ -1075,6 +1185,7 @@ const PersonnelRelations: React.FC = () => {
                                     <Field label="Login Email" k="email" />
                                     <Field label="Emergency Contact" k="emergencyContactNumber" />
                                     <Field label="Residential Address" k="residentialAddress" />
+                                    {showField('residentialAddressArabic') && <Field label="Residential Address (Arabic)" k="residentialAddressArabic" dir="rtl" />}
                                 </Section>
 
                                 <Section icon={Briefcase} title="Employment Details" color="bg-blue-50 text-blue-600">
@@ -1091,46 +1202,169 @@ const PersonnelRelations: React.FC = () => {
                                     <Field label="Contract Start" k="contractStartDate" type="date" />
                                     <Field label="Contract End" k="contractEndDate" type="date" />
                                     <Field label="Worked Before?" k="workedBefore" />
-                                    <Field label="Relatives in Company?" k="hasRelativesInCompany" />
-                                    <Field label="Relatives' Names" k="relativesNames" />
+                                    {showField('hasRelativesInCompany') && <Field label="Relatives in Company?" k="hasRelativesInCompany" />}
+                                    {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && <Field label="Relatives' Names" k="relativesNames" />}
+                                    {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && showField('relativesNamesArabic') && <Field label="Relatives' Names (Arabic)" k="relativesNamesArabic" dir="rtl" />}
                                 </Section>
+
+                                {(showField('serviceProviderCompany') || showField('employeeTravelDate')) && (emp.serviceProviderCompany || emp.employeeTravelDate) && (
+                                    <Section icon={Building2} title="Onboarding Submission Details" color="bg-cyan-50 text-cyan-600">
+                                        <Field label="Service Provider Company" k="serviceProviderCompany" />
+                                        <Field label="Travel Date" k="employeeTravelDate" type="date" />
+                                    </Section>
+                                )}
 
                                 <Section icon={CalendarDays} title="Leave Balances" color="bg-amber-50 text-amber-600">
                                     <Row label="Paid Accrued" value={paidAccrued} />
                                     <Row label="Paid Taken" value={paidTaken} />
-                                    <Row label="Paid Balance" value={paidAccrued - paidTaken} />
+                                    <Row label="Paid Balance" value={paidRemaining} />
                                     <Row label="Unpaid Taken" value={unpaidTaken} />
                                     <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
                                     <Row label="Emergency Taken" value={emergTaken} />
                                     <Row label="Emergency Balance (3)" value={3 - emergTaken} />
                                 </Section>
 
-                                <Section icon={Landmark} title="Bank Details" color="bg-slate-100 text-slate-600">
-                                    <Field label="Bank Name" k="bankName" />
-                                    <Field label="Bank Branch" k="bankBranchName" />
-                                    <Field label="Account Number" k="bankAccountNumber" />
-                                </Section>
+                                {showField('bankName') && (
+                                    <Section icon={Landmark} title="Bank Details" color="bg-slate-100 text-slate-600">
+                                        <Field label="Bank Name" k="bankName" />
+                                        <Field label="Bank Name (Arabic)" k="bankNameArabic" dir="rtl" />
+                                        <Field label="Bank Branch" k="bankBranchName" />
+                                        <Field label="Bank Branch (Arabic)" k="bankBranchNameArabic" dir="rtl" />
+                                        <Field label="Account Number" k="bankAccountNumber" />
+                                    </Section>
+                                )}
 
-                                <Section icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" wide>
-                                    {docs.map(d => {
-                                        const raw = emp[d.k as keyof Employee] as string | undefined;
-                                        const href = raw ? (raw.startsWith('http') ? raw : `${SERVER_URL}${raw}`) : '';
-                                        return (
-                                            <div key={d.k} className="flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                                <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
-                                                {raw ? (
-                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                            </div>
+
+                            {/* Documents live outside the masonry flow — always full width */}
+                            <Section icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" wide>
+                                {docs.map(d => {
+                                    const raw = emp[d.k as keyof Employee] as string | undefined;
+                                    const href = raw ? (raw.startsWith('http') ? raw : `${SERVER_URL}${raw}`) : '';
+                                    const busy = uploadingDocKey === d.k;
+                                    return (
+                                        <div key={d.k} className="flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                            <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {raw && (
+                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
                                                         View <ExternalLink className="w-3 h-3" />
                                                     </a>
-                                                ) : <span className="shrink-0 text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
+                                                )}
+                                                {!raw && !isHRRole && <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
+                                                {isHRRole && (
+                                                    <label className={`cursor-pointer text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border transition-all ${busy ? 'text-slate-300 border-slate-100' : 'text-[#511d29] border-[#511d29]/20 hover:bg-[#511d29]/5'}`}>
+                                                        <input
+                                                            type="file"
+                                                            className="hidden"
+                                                            disabled={busy}
+                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                                            onChange={e => handleFixedDocUpload(emp.id, d.k, e.target.files?.[0])}
+                                                        />
+                                                        {busy ? 'Uploading…' : (raw ? 'Replace' : 'Upload')}
+                                                    </label>
+                                                )}
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                    );
+                                })}
+                            </Section>
+
+                            {/* Free-form documents beyond the fixed slots above — HR can add/remove; everyone else views. */}
+                            {(isHRRole || employeeDocuments.length > 0) && (
+                                <Section icon={FileText} title="Additional Documents" color="bg-cyan-50 text-cyan-600" wide>
+                                    <div className="sm:col-span-2 lg:col-span-3 space-y-3">
+                                        {employeeDocuments.length === 0 && (
+                                            <p className="text-xs text-slate-400 font-medium">No additional documents on file.</p>
+                                        )}
+                                        {employeeDocuments.map((doc: EmployeeDocument) => {
+                                            const href = doc.fileUrl.startsWith('http') ? doc.fileUrl : `${SERVER_URL}${doc.fileUrl}`;
+                                            return (
+                                                <div key={doc.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-slate-700 truncate">{doc.name}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium truncate">
+                                                            {[doc.fileName, doc.uploadedByName ? `by ${doc.uploadedByName}` : '', format(parseISO(doc.createdAt), 'dd MMM yyyy')].filter(Boolean).join(' · ')}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 shrink-0">
+                                                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                            View <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                        {isHRRole && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteDocument(emp.id, doc.id)}
+                                                                className="text-slate-400 hover:text-rose-600 transition-colors"
+                                                                title="Remove document"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {isHRRole && (
+                                            <div className="pt-3 mt-1 border-t border-dashed border-slate-200">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAddDocModalOpen(true)}
+                                                    className="px-4 py-2.5 bg-[#511d29] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2"
+                                                >
+                                                    <FileText className="w-3.5 h-3.5" /> Add Document
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </Section>
-                            </div>
+                            )}
                         </div>
                     );
                 })()}
+            </Modal>
+
+            {/* Add Document popup — kept separate from the detail view above so typing the name
+                doesn't trigger a remount of the field (see addDocModalOpen declaration). */}
+            <Modal
+                isOpen={addDocModalOpen}
+                onClose={() => { setAddDocModalOpen(false); setNewDocName(''); setNewDocFile(null); }}
+                title="Add Document"
+                maxWidth="max-w-md"
+            >
+                <div className="space-y-4">
+                    <p className="text-xs text-slate-500 font-medium">
+                        Attach a new document for <span className="font-black text-[#511d29]">{detailEmp?.fullName}</span>.
+                    </p>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Document Name</label>
+                        <input
+                            type="text"
+                            value={newDocName}
+                            onChange={e => setNewDocName(e.target.value)}
+                            placeholder="e.g. Training Certificate"
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#511d29]/10 focus:border-[#511d29] transition-all"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File</label>
+                        <input
+                            type="file"
+                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                            onChange={e => setNewDocFile(e.target.files?.[0] || null)}
+                            className="w-full text-xs font-medium text-slate-500 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-[#511d29]/5 file:text-[#511d29] file:text-[10px] file:font-black file:uppercase"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => detailEmp && handleAddDocument(detailEmp.id)}
+                        disabled={addingDoc}
+                        className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50"
+                    >
+                        {addingDoc ? 'Adding…' : 'Add Document'}
+                    </button>
+                </div>
             </Modal>
         </div>
     );

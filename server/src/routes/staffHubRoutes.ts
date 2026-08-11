@@ -33,6 +33,11 @@ router.patch('/requests/:id/status', staffHubController.updateRequestStatus);
 router.get('/requests/employee/:employeeId', staffHubController.getRequestsByEmployee);
 router.get('/requests/pending', staffHubController.getPendingRequests);
 
+// New org-chain approval steps (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only) — server-verified,
+// separate from the legacy status-based flow above which the other request types still use.
+router.get('/requests/my-pending-steps', staffHubController.getMyPendingSteps);
+router.patch('/requests/:requestId/steps/:stepId/decision', staffHubController.decideApprovalStep);
+
 // Tasks
 router.post('/tasks', staffHubController.createTask);
 router.patch('/tasks/:id/status', staffHubController.updateTaskStatus);

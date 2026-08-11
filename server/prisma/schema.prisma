@@ -34,6 +34,7 @@ model User {
   leaveDirApprovals        LeaveRequest[]         @relation("LeaveDirApprovals")
   leaveUnitApprovals       LeaveRequest[]         @relation("LeaveUnitApprovals")
   leaveRequests            LeaveRequest[]
+  leaveApprovalSteps       LeaveApprovalStep[]    @relation("LeaveApprovalStepApprover")
   notifications            Notification[]
   personnelEvaluations     PersonnelEvaluation[]  @relation("PersonnelEvaluationsSubmittedBy")
   deptRecruitmentApprovals RecruitmentRequest[]   @relation("RecruitmentDeptApproval")
@@ -145,6 +146,7 @@ model Employee {
   baseSalary             Float                  @default(0)
   joinDate               DateTime
   staffId                String?
+  bioId                  Int?
   contractEndDate        DateTime?
   contractStartDate      DateTime?
   contractStatus         String?
@@ -236,6 +238,7 @@ model Employee {
   jobDescription         JobDescription?        @relation(fields: [jobDescriptionId], references: [id])
   assetRequests          AssetRequest[]
   contracts              Contract[]
+  documents              EmployeeDocument[]
   departmentEvaluations  DepartmentEvaluation[]
   directorEvaluations    DirectorEvaluation[]
   divisionEvaluations    DivisionEvaluation[]
@@ -260,6 +263,24 @@ model Employee {
   @@index([unitId])
   @@index([groupId])
   @@index([jobDescriptionId])
+  @@index([bioId])
+}
+
+// Free-form documents attached to an employee beyond the fixed onboarding slots (CV, degree,
+// etc.) — e.g. a new certificate, a promotion letter, or any other file HR wants on file. Also
+// used to log an update to one of the fixed slots, but those are still stored on Employee itself.
+model EmployeeDocument {
+  id             String   @id @default(uuid())
+  employeeId     String
+  name           String // HR-chosen label, e.g. "Training Certificate"
+  fileUrl        String
+  fileName       String? // original uploaded filename, for display
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
 }
 
 model Contract {
@@ -529,10 +550,35 @@ model LeaveRequest {
   employee             Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   unitApprovedBy       User?     @relation("LeaveUnitApprovals", fields: [unitApprovedById], references: [id])
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvalSteps        LeaveApprovalStep[]
 
   @@index([employeeId])
   @@index([userId])
   @@index([status])
+}
+
+// Per-approver-per-stage tracking for the leave-request approval chain (Unit head -> Department/
+// Office head -> Division head -> HR Manager -> Administrative Director -> General Manager,
+// skipping whichever org levels don't apply to a given employee). Only used for PAID_HOLIDAY/
+// UNPAID_LEAVE/EMERGENCY_LEAVE requests on LeaveRequest — the old fixed approver columns above
+// stay in use for the other request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE).
+model LeaveApprovalStep {
+  id             String    @id @default(uuid())
+  leaveRequestId String
+  sequence       Int       // shared by every row belonging to the same logical stage
+  stage          String    // UNIT_HEAD | DEPT_HEAD | DIVISION_HEAD | HR_MANAGER | ADMIN_DIRECTOR | GENERAL_MANAGER
+  approverUserId String
+  status         String    @default("PENDING") // PENDING | APPROVED | REJECTED | SKIPPED
+  note           String?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approver     User         @relation("LeaveApprovalStepApprover", fields: [approverUserId], references: [id])
+
+  @@index([leaveRequestId])
+  @@index([approverUserId, status])
+  @@unique([leaveRequestId, sequence, approverUserId])
 }
 
 model StaffTask {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, uploadEmployeeDocument } from '../controllers/employeeController';
+import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument } from '../controllers/employeeController';
 import { authenticateToken, authorizeRoles, authorizePermissions, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
@@ -37,5 +37,10 @@ router.delete('/:id', authorizeAccess(['HR_MANAGER'], ['edit_employees']), delet
 // Contract Lifecycle
 router.post('/:id/renew', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), renewContract);
 router.post('/:id/terminate', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), terminateEmployee);
+
+// Free-form employee documents (additional certificates, etc. beyond the fixed CV/degree/etc. slots)
+router.get('/:id/documents', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), getEmployeeDocuments);
+router.post('/:id/documents', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), addEmployeeDocument);
+router.delete('/:id/documents/:docId', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), deleteEmployeeDocument);
 
 export default router;

@@ -11,6 +11,7 @@ import { candidateService } from '../../services/candidateService';
 import { toast } from 'sonner';
 import { JOB_CATEGORIES, JOB_GRADES } from '../../types';
 import type { Employee } from '../../types';
+import { makeFieldVisibility, KNOWN_CONTRACT_TYPES, type ResidentContractType } from '../../utils/employeeFieldVisibility';
 import {
     Search,
     Key,
@@ -229,33 +230,10 @@ const EmployeeForm: React.FC = () => {
     // When reviewing a hire that came through onboarding, only show the fields that type's form
     // actually asked for — fields it never collected are hidden rather than shown empty/irrelevant.
     // Manual admin creation/editing (no candidateId) always shows every field.
-    const onboardingType = (fromOnboarding && ['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT'].includes(formData.contractType || ''))
-        ? formData.contractType
+    const onboardingType = (fromOnboarding && (KNOWN_CONTRACT_TYPES as readonly string[]).includes(formData.contractType || ''))
+        ? (formData.contractType as ResidentContractType)
         : null;
-
-    const RESIDENT_ONLY_FIELDS = new Set([
-        'gender', 'nationalId', 'idCardNumber', 'idPlaceOfIssue', 'idPlaceOfIssueArabic', 'idIssueDate',
-        'drivingLicenseType', 'drivingLicenseTypeArabic', 'drivingLicenseNumber', 'drivingLicenseExpiry',
-        'drivingLicensePlaceOfIssue', 'drivingLicensePlaceOfIssueArabic',
-        'hasRelativesInCompany', 'relativesNames', 'relativesNamesArabic',
-        'bankName', 'bankNameArabic', 'bankBranchName', 'bankBranchNameArabic', 'bankAccountNumber',
-        'healthCertUrl', 'bankCheckUrl', 'idCardUrl',
-    ]);
-    const RESIDENT_AND_DIRECT_FIELDS = new Set([
-        'fullNameArabic', 'placeOfBirthArabic', 'nationalityArabic', 'academicQualificationArabic',
-        'passportPlaceOfIssue', 'passportPlaceOfIssueArabic', 'residentialAddressArabic', 'birthCertUrl',
-    ]);
-    const DIRECT_AND_SERVICE_FIELDS = new Set(['ticketUrl', 'residencyDocumentUrl']);
-    const SERVICE_ONLY_FIELDS = new Set(['interviewEvaluationUrl', 'serviceProviderCompany', 'employeeTravelDate']);
-
-    const showField = (key: string): boolean => {
-        if (!onboardingType) return true; // manual creation/edit — show everything
-        if (RESIDENT_ONLY_FIELDS.has(key)) return onboardingType === 'RESDANT';
-        if (RESIDENT_AND_DIRECT_FIELDS.has(key)) return onboardingType === 'RESDANT' || onboardingType === 'DIRCT NONE RESDANT';
-        if (DIRECT_AND_SERVICE_FIELDS.has(key)) return onboardingType === 'DIRCT NONE RESDANT' || onboardingType === 'NONE RESDANT';
-        if (SERVICE_ONLY_FIELDS.has(key)) return onboardingType === 'NONE RESDANT';
-        return true; // not a type-varying field — always shown
-    };
+    const showField = makeFieldVisibility(formData.contractType, fromOnboarding);
     const onboardingTypeLabel = onboardingType === 'RESDANT' ? t('rs_resident', { defaultValue: 'Resident' })
         : onboardingType === 'DIRCT NONE RESDANT' ? t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })
         : onboardingType === 'NONE RESDANT' ? t('rs_service_provider', { defaultValue: 'Service Provider' })
@@ -582,6 +560,11 @@ const EmployeeForm: React.FC = () => {
                         console.error('Failed to link candidate after enrollment', linkErr);
                         toast.error(t('candidate_link_failed', { defaultValue: 'Employee created, but linking the candidate failed. Update the candidate manually.' }));
                     }
+                }
+                if ((created as any)?._attendanceSync?.status === 'failed') {
+                    toast.warning(t('attendance_sync_failed', {
+                        defaultValue: 'Employee created, but the attendance system account could not be set up automatically. Add it manually from the Attendance page.',
+                    }), { duration: 8000 });
                 }
                 toast.success(t('employee_created'));
             }

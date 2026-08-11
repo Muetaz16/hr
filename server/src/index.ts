@@ -60,6 +60,8 @@ import jobDescriptionRoutes from './routes/jobDescriptionRoutes';
 import candidateRoutes from './routes/candidateRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import publicRoutes from './routes/publicRoutes';
+import attendanceIntegrationRoutes from './routes/attendanceIntegrationRoutes';
+import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -88,6 +90,8 @@ app.use('/api/salary-structures', salaryStructureRoutes);
 app.use('/api/job-descriptions', jobDescriptionRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/attendance-integration', attendanceIntegrationRoutes);
+app.use('/api/attendance-settings', attendanceSettingsRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

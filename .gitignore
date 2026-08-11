@@ -33,6 +33,10 @@ dist-ssr
 
 # Database backups
 *.sql
+# ...but not Prisma migrations — those must stay tracked (the *.sql rule above was silently
+# excluding server/prisma/migrations/**/migration.sql from git for every migration since it was
+# added, including some already-applied ones).
+!server/prisma/migrations/**/*.sql
 
 # User uploads
 server/uploads/

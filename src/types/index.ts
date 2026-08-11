@@ -141,6 +141,7 @@ export interface Employee {
     baseSalary: number;
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
+    bioId?: number; // BioTime attendance system's own numeric employee id, once auto-provisioned
     position?: string;
     placeOfWork?: string; // Office / Site — locked from the job description at onboarding
     fullNameArabic?: string;
@@ -234,6 +235,17 @@ export interface Employee {
     contracts?: Contract[];
     jobDescriptionId?: string;
     jobDescription?: JobDescription;
+}
+
+// A free-form document attached to an employee beyond the fixed onboarding slots (CV, degree...).
+export interface EmployeeDocument {
+    id: string;
+    employeeId: string;
+    name: string;
+    fileUrl: string;
+    fileName?: string;
+    uploadedByName?: string;
+    createdAt: string;
 }
 
 export interface Contract {

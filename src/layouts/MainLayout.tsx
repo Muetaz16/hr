@@ -25,7 +25,8 @@ import {
     Eye,
     EyeOff,
     Megaphone,
-    HeartHandshake
+    HeartHandshake,
+    Clock
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -172,6 +173,7 @@ const MainLayout: React.FC = () => {
             items: [
                 { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }), path: '/staff-hub', icon: Zap, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 {
                     label: t('nav_recruitment', { defaultValue: 'Recruitment' }),
@@ -210,6 +212,18 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_contracts', 'manage_contract_management'] },
                         { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                    ]
+                },
+                {
+                    label: 'Attendance & Leave Requests',
+                    icon: Clock,
+                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    children: [
+                        { label: 'Overview', path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'] },
+                        { label: 'Exceptions', path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'] },
+                        { label: 'Daily Logging', path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'] },
+                        { label: 'Employees', path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'] },
+                        { label: 'Settings', path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
                     ]
                 },
                 {

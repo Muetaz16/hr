@@ -2,7 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { staffHubService } from '../services/staffHubService';
-import type { LeaveRequest } from '../services/staffHubService';
+import type { LeaveRequest, LeaveApprovalStep } from '../services/staffHubService';
+
+// PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE now flow through the org-based approval-step chain
+// (fetched separately via getMyPendingSteps) instead of the legacy status-based flow below —
+// exclude them from the old pending-requests list so the old Approve/Reject buttons (which write
+// directly to LeaveRequest.status) can't bypass the new per-step chain.
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
+const STAGE_LABELS: Record<string, string> = {
+    UNIT_HEAD: 'Unit Head',
+    DEPT_HEAD: 'Department/Office Head',
+    DIVISION_HEAD: 'Division Head',
+    HR_MANAGER: 'HR Manager',
+    ADMIN_DIRECTOR: 'Administrative Director',
+    GENERAL_MANAGER: 'General Manager',
+};
 import { employeeService } from '../services/employeeService';
 import { departmentService } from '../services/departmentService';
 import { 
@@ -29,6 +43,7 @@ const Approvals: React.FC = () => {
     const confirm = useConfirm();
     const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
     const [historyRequests, setHistoryRequests] = useState<LeaveRequest[]>([]);
+    const [pendingSteps, setPendingSteps] = useState<LeaveApprovalStep[]>([]);
     const [employees, setEmployees] = useState<any[]>([]);
     const [departments, setDepartments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -81,7 +96,7 @@ const Approvals: React.FC = () => {
                 statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
             }
 
-            const [reqs, hist, emps, depts] = await Promise.all([
+            const [reqs, hist, emps, depts, steps] = await Promise.all([
                 staffHubService.getPendingRequests({
                     departmentId: currentUser?.departmentId || undefined,
                     groupId: currentUser?.groupId || undefined,
@@ -97,12 +112,17 @@ const Approvals: React.FC = () => {
                     status: 'COMPLETED,REJECTED'
                 }),
                 employeeService.getAllEmployees(),
-                departmentService.getAllDepartments()
+                departmentService.getAllDepartments(),
+                staffHubService.getMyPendingSteps().catch(() => [] as LeaveApprovalStep[])
             ]);
-            setPendingRequests(reqs);
+            // PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE now progress via pendingSteps (identity-
+            // scoped server-side) — drop them from the legacy org-scoped list so its Approve/
+            // Reject buttons can't bypass the new per-step chain.
+            setPendingRequests(reqs.filter((r: LeaveRequest) => !CHAIN_LEAVE_TYPES.includes(r.type)));
             setHistoryRequests(hist);
             setEmployees(emps);
             setDepartments(depts);
+            setPendingSteps(steps);
         } catch (error) {
             toast.error(t('failed_to_load_data'));
         } finally {
@@ -126,6 +146,19 @@ const Approvals: React.FC = () => {
             fetchData();
         } catch (error) {
             toast.error(t('failed_to_update_status'));
+        }
+    };
+
+    // For the new org-based approval chain — the server verifies this user is actually the
+    // step's assigned approver and that it's genuinely their turn; the client just sends the
+    // decision, no role/status guessing needed.
+    const handleStepDecision = async (step: LeaveApprovalStep, decision: 'APPROVE' | 'REJECT', note: string = '') => {
+        try {
+            await staffHubService.decideApprovalStep(step.leaveRequestId, step.id, decision, note);
+            toast.success(decision === 'REJECT' ? t('request_rejected') : t('request_approved'));
+            fetchData();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || t('failed_to_update_status'));
         }
     };
 
@@ -197,7 +230,7 @@ const Approvals: React.FC = () => {
                 {/* Tabs */}
                 <div className="flex gap-4 mt-8 pb-2 overflow-x-auto">
                     {[
-                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
+                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length + pendingSteps.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
                         { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
                         {
                             id: 'announcements',
@@ -230,6 +263,70 @@ const Approvals: React.FC = () => {
             <main>
                 {/* Pending Requests Tab */}
                 {activeTab === 'requests' && (
+                    <div className="space-y-8">
+                    {/* Leave requests (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE) — org-based
+                        approval chain, one card per step currently awaiting this user. */}
+                    {pendingSteps.length > 0 && (
+                        <div className="grid grid-cols-1 gap-6">
+                            {pendingSteps.map(step => {
+                                const req = step.leaveRequest;
+                                if (!req) return null;
+                                return (
+                                    <div key={step.id} className="glass-card p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-2xl transition-all border border-[#e3c4a2]/15 group">
+                                        <div className="flex items-center gap-6 w-full md:w-auto">
+                                            <div className="w-16 h-16 rounded-2xl bg-[#e3c4a2]/15 flex flex-col items-center justify-center font-bold text-[#e3c4a2] border border-[#e3c4a2]/20 shadow-inner">
+                                                <span className="text-[10px] uppercase font-bold text-[#aa7a51]">{format(new Date(req.startDate), 'MMM')}</span>
+                                                <span className="text-xl">{format(new Date(req.startDate), 'dd')}</span>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h3 className="text-xl font-bold text-white truncate">{(req as any).employee?.fullName || t('unknown_staff')}</h3>
+                                                <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                                    <span className="text-[#aa7a51]">{t(req.type.toLowerCase())}</span>
+                                                    <span className="w-1 h-1 bg-[#e3c4a2]/20 rounded-full"></span>
+                                                    <span className="flex items-center gap-1 text-[#e3c4a2]/60">
+                                                        <Clock className="w-3 h-3" />
+                                                        {format(new Date(req.startDate), 'MMM dd')}
+                                                        {req.endDate && ` → ${format(new Date(req.endDate), 'MMM dd')}`}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 space-y-3">
+                                            <div className="bg-[#541c2c]/30 p-4 rounded-2xl border border-[#e3c4a2]/10 italic text-sm text-stone-200">
+                                                "{req.reason || t('no_specific_reason')}"
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#e3c4a2]/60">
+                                                <div className="w-2 h-2 rounded-full bg-[#aa7a51] animate-pulse"></div>
+                                                Awaiting your approval as {STAGE_LABELS[step.stage] || step.stage}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 w-full md:w-auto">
+                                            <button
+                                                onClick={() => handleStepDecision(step, 'APPROVE')}
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-900/30 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all"
+                                            >
+                                                <Check className="w-5 h-5" />
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const note = prompt(t('add_rejection_note'));
+                                                    handleStepDecision(step, 'REJECT', note || '');
+                                                }}
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
+                                            >
+                                                <XCircle className="w-5 h-5" />
+                                                Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-6">
                         {pendingRequests.length > 0 ? pendingRequests.map(req => (
                              <div key={req.id} className="glass-card p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-2xl transition-all border border-[#e3c4a2]/15 group">
@@ -301,13 +398,14 @@ const Approvals: React.FC = () => {
                                      </button>
                                  </div>
                              </div>
-                        )) : (
+                        )) : (pendingSteps.length === 0 && (
                             <div className="text-center py-24 glass-card rounded-3xl animate-in zoom-in">
                                 <Archive className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                                 <h3 className="text-2xl font-bold text-slate-800">{t('inbox_zero')}</h3>
                                 <p className="text-slate-400">{t('no_pending_leave_requests')}</p>
                             </div>
-                        )}
+                        ))}
+                    </div>
                     </div>
                 )}
 
