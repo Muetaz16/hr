@@ -3,9 +3,13 @@ import {
     getHREvaluation, getHREvaluationsByMonth, saveHREvaluation,
     getUnitEvaluation, getUnitEvaluationsByMonth, saveUnitEvaluation,
     getDeptEvaluation, getDeptEvaluationsByMonth, saveDeptEvaluation,
+    getDivisionEvaluation, getDivisionEvaluationsByMonth, saveDivisionEvaluation,
     getDirectorEvaluation, getDirectorEvaluationsByMonth, saveDirectorEvaluation, lockEvaluation,
+    getGMEvaluation, getGMEvaluationsByMonth, saveGMEvaluation,
+    getChairmanEvaluation, getChairmanEvaluationsByMonth, saveChairmanEvaluation,
     getPersonnelEvaluation, getPersonnelEvaluationsByMonth, savePersonnelEvaluation,
-    deleteHREvaluation, deleteUnitEvaluation, deleteDeptEvaluation, deleteDirectorEvaluation, deletePersonnelEvaluation
+    deleteHREvaluation, deleteUnitEvaluation, deleteDeptEvaluation, deleteDivisionEvaluation,
+    deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation
 } from '../controllers/evaluationController';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 
@@ -28,11 +32,26 @@ router.get('/dept', getDeptEvaluation);
 router.get('/dept/month/:month', getDeptEvaluationsByMonth);
 router.post('/dept', saveDeptEvaluation);
 
+// Division
+router.get('/division', getDivisionEvaluation);
+router.get('/division/month/:month', getDivisionEvaluationsByMonth);
+router.post('/division', saveDivisionEvaluation);
+
 // Director
 router.get('/director', getDirectorEvaluation);
 router.get('/director/month/:month', getDirectorEvaluationsByMonth);
 router.post('/director', saveDirectorEvaluation);
 router.post('/director/lock', lockEvaluation);
+
+// GM
+router.get('/gm', getGMEvaluation);
+router.get('/gm/month/:month', getGMEvaluationsByMonth);
+router.post('/gm', saveGMEvaluation);
+
+// Chairman
+router.get('/chairman', getChairmanEvaluation);
+router.get('/chairman/month/:month', getChairmanEvaluationsByMonth);
+router.post('/chairman', saveChairmanEvaluation);
 
 // Personnel
 router.get('/personnel', getPersonnelEvaluation);
@@ -43,7 +62,10 @@ router.post('/personnel', savePersonnelEvaluation);
 router.delete('/hr/:id', authorizeRoles('SUPER_ADMIN'), deleteHREvaluation);
 router.delete('/unit/:id', authorizeRoles('SUPER_ADMIN'), deleteUnitEvaluation);
 router.delete('/dept/:id', authorizeRoles('SUPER_ADMIN'), deleteDeptEvaluation);
+router.delete('/division/:id', authorizeRoles('SUPER_ADMIN'), deleteDivisionEvaluation);
 router.delete('/director/:id', authorizeRoles('SUPER_ADMIN'), deleteDirectorEvaluation);
+router.delete('/gm/:id', authorizeRoles('SUPER_ADMIN'), deleteGMEvaluation);
+router.delete('/chairman/:id', authorizeRoles('SUPER_ADMIN'), deleteChairmanEvaluation);
 router.delete('/personnel/:id', authorizeRoles('SUPER_ADMIN'), deletePersonnelEvaluation);
 
 export default router;

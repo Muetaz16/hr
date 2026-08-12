@@ -45,6 +45,8 @@ export const PERMISSION_GROUPS: PermGroup[] = [
             { id: 'view_recruitment', labelKey: 'perm_view_recruitment', labelDefault: 'View Recruitment' },
             { id: 'manage_recruitment', labelKey: 'perm_manage_recruitment', labelDefault: 'Manage Requests & Hiring' },
             { id: 'recruitment_approvals', labelKey: 'perm_recruitment_approvals', labelDefault: 'Approve Recruitment' },
+            { id: 'approve_hr_manager', labelKey: 'perm_approve_hr_manager', labelDefault: 'Approve as Head of HR' },
+            { id: 'approve_hr_recruitment', labelKey: 'perm_approve_hr_recruitment', labelDefault: 'Approve as Head of Recruitment' },
         ]
     },
     {
@@ -108,7 +110,7 @@ export const ROLE_PRESETS: Record<string, string[]> = {
     HEAD_DIRECTOR: ['view_directory', 'view_employees', 'view_contracts', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
     GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
-    HR_MANAGER: ['view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control', 'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking', 'manage_leaves', 'manage_announcements', 'view_evaluations', 'view_hr_evaluations', 'manage_evaluation_control', 'manage_onboarding', 'manage_job_descriptions'],
+    HR_MANAGER: ['view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager', 'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control', 'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking', 'manage_leaves', 'manage_announcements', 'view_evaluations', 'view_hr_evaluations', 'manage_evaluation_control', 'manage_onboarding', 'manage_job_descriptions'],
     PERSONNEL: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'view_lifecycle', 'manage_onboarding', 'manage_it_issues'],
     SUPER_ADMIN: ALL_PERMISSION_IDS,
 };

@@ -16,7 +16,8 @@ import {
     UserPlus,
     AlertTriangle,
     ChevronDown,
-    Check
+    Check,
+    Hash
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { evaluationService } from '../../services/evaluationService';
@@ -101,6 +102,26 @@ const EmployeesPage: React.FC = () => {
     const departments = data?.departments || [];
     const units = data?.units || [];
     const dirEvals = data?.dirEvals || {};
+
+    // Bulk-regenerate every Staff ID in the new IPH-0<digit><YY>-<seq> format.
+    const [regenBusy, setRegenBusy] = useState(false);
+    const handleRegenerateStaffIds = async () => {
+        const ok = await confirm({
+            message: t('confirm_regen_staff_ids', { defaultValue: 'Regenerate Staff IDs for ALL employees in the new IPH-0126 format? Existing codes will be replaced.' }),
+            danger: true,
+        });
+        if (!ok) return;
+        setRegenBusy(true);
+        try {
+            const res = await employeeService.regenerateAllStaffIds();
+            toast.success(res.message || t('staff_ids_generated', { defaultValue: 'Staff IDs generated.' }));
+            fetchData();
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || t('err_regen_staff_ids', { defaultValue: 'Failed to generate Staff IDs.' }));
+        } finally {
+            setRegenBusy(false);
+        }
+    };
 
 
 
@@ -312,6 +333,17 @@ const EmployeesPage: React.FC = () => {
                         <Download size={18} className="mr-2" />
                         {t('export_payroll')}
                     </button>
+                    {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('register_employees')) && (
+                        <button
+                            onClick={handleRegenerateStaffIds}
+                            disabled={regenBusy}
+                            title={t('generate_all_staff_ids', { defaultValue: 'Regenerate Staff IDs for all employees' })}
+                            className="flex items-center px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold shadow-sm hover:bg-slate-50 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Hash size={18} className="mr-2" />
+                            {regenBusy ? t('generating', { defaultValue: 'Generating…' }) : t('generate_all_codes', { defaultValue: 'Generate Codes' })}
+                        </button>
+                    )}
                     {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('register_employees')) && (
                         <button
                             onClick={() => navigate('/employees/new')}

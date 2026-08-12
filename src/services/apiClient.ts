@@ -14,6 +14,13 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        // For file uploads, drop the default JSON content-type so the browser sets
+        // multipart/form-data with the correct boundary (otherwise multer sees no file).
+        if (config.data instanceof FormData) {
+            const h: any = config.headers;
+            if (h && typeof h.delete === 'function') h.delete('Content-Type');
+            else if (h) delete h['Content-Type'];
+        }
         return config;
     },
     (error) => {

@@ -19,5 +19,15 @@ export const jobDescriptionService = {
 
     async deleteJobDescription(id: string): Promise<void> {
         await api.delete(`/job-descriptions/${id}`);
+    },
+
+    // Downloads the filled bilingual Job Description .docx. variant: 'general' (with approval
+    // signatures) or 'emp' (employee copy with acknowledgment).
+    async generateDocument(id: string, variant: 'general' | 'emp'): Promise<Blob> {
+        const response = await api.get(`/job-descriptions/${id}/document`, {
+            params: { variant },
+            responseType: 'blob',
+        });
+        return response.data;
     }
 };

@@ -19,6 +19,7 @@ model User {
   departmentIds            String[]               @default([])
   unitId                   String?
   permissions              String[]               @default([])
+  signature                String?
   announcements            Announcement[]
   requestedAssets          AssetRequest[]         @relation("AssetRequester")
   deptEvaluations          DepartmentEvaluation[] @relation("DeptEvaluationsSubmittedBy")
@@ -141,6 +142,10 @@ model Employee {
   fullName               String
   email                  String?                @unique
   role                   String                 @default("EMPLOYEE")
+  // "ACTIVE" for fully-enrolled employees; "PENDING_ENROLLMENT" for stubs imported from BioTime
+  // that still need a Job Description / role / department (and a login account) assigned by HR.
+  // Pending employees are excluded from payroll and evaluation lists until enrollment completes.
+  enrollmentStatus       String                 @default("ACTIVE")
   departmentId           String?
   groupId                String?
   baseSalary             Float                  @default(0)
@@ -699,6 +704,14 @@ model RecruitmentRequest {
   deptApprovedAt   DateTime?
   hrApprovedAt     DateTime?
   gmApprovedAt     DateTime?
+  // Personnel Requisition Form (PRF) extra fields captured on a HIRE request.
+  reportsTo        String?   // reports-to, written by the requester
+  employmentType   String?   // نوع التعيين — e.g. Full-time / Part-time / Contract
+  typeOfRequest    String?   // نوع الطلب — e.g. New Position / Replacement
+  languageEn       String?   // English language requirement level
+  languageAr       String?   // Arabic language requirement level
+  // Snapshot of each PRF approval stage: { deptHead|divHead|hrManager|hrRecruitment|gm: { byId, byName, signature, at, note } }
+  prfApprovals     Json?
   department       Department?     @relation(fields: [departmentId], references: [id])
   division         Division?       @relation(fields: [divisionId], references: [id])
   jobDescription   JobDescription? @relation(fields: [jobDescriptionId], references: [id])

@@ -15,6 +15,7 @@ import {
     markHired,
     generateOffer,
     generateEvaluation,
+    generateHiringLetter,
     generateOnboardingLink,
     updateCandidateOfferDetails,
     deleteCandidate,
@@ -50,6 +51,7 @@ router.post('/:id/finalize', finalizeEvaluation);
 router.post('/:id/offer', recordOffer);
 router.get('/:id/offer', generateOffer);
 router.get('/:id/evaluation', generateEvaluation);
+router.get('/:id/hiring-letter', generateHiringLetter);
 router.post('/:id/hire', markHired);
 router.patch('/:id/offer-details', updateCandidateOfferDetails);
 router.post('/:id/onboarding-link', generateOnboardingLink);

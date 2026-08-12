@@ -11,7 +11,7 @@ import { JOB_CATEGORIES } from '../../types';
 import { ArrowLeft, Save, Building2, MapPin } from 'lucide-react';
 
 type ScopeLevel = 'DIRECTORATE' | 'DIVISION' | 'DEPARTMENT' | 'UNIT';
-type SectionKey = keyof JobDescriptionDetails;
+type SectionKey = Exclude<keyof JobDescriptionDetails, 'reportsTo'>;
 
 const JD_SECTIONS: { key: SectionKey; labelEn: string; labelAr: string }[] = [
     { key: 'jobPurpose', labelEn: 'Job Purpose', labelAr: 'الغرض من الوظيفة' },
@@ -38,6 +38,7 @@ const emptyDetails = (): JobDescriptionDetails => ({
     skills: { en: '', ar: '' },
     trainingLicenses: { en: '', ar: '' },
     workingConditions: { en: '', ar: '' },
+    reportsTo: '',
 });
 
 const emptyForm = {
@@ -232,6 +233,16 @@ const JobDescriptionForm: React.FC = () => {
                             rows={3}
                             placeholder={t('job_description_text_placeholder', { defaultValue: 'Short overview of this position. Assigned employees will be able to read this.' })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y bg-white"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-gray-400 font-normal" dir="rtl">/ يقدم تقاريره إلى</span></label>
+                        <input
+                            type="text" value={formData.details.reportsTo || ''}
+                            onChange={(e) => setFormData({ ...formData, details: { ...formData.details, reportsTo: e.target.value } })}
+                            placeholder="e.g. Head of Finance"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                         />
                     </div>
 

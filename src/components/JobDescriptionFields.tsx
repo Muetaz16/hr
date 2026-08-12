@@ -3,7 +3,8 @@ import { JOB_CATEGORIES } from '../types';
 import type { JobDescriptionDetails } from '../types';
 import { Building2, MapPin } from 'lucide-react';
 
-export type SectionKey = keyof JobDescriptionDetails;
+// The bilingual document sections only — excludes scalar fields like reportsTo.
+export type SectionKey = Exclude<keyof JobDescriptionDetails, 'reportsTo'>;
 
 export const JD_SECTIONS: { key: SectionKey; labelEn: string; labelAr: string }[] = [
     { key: 'jobPurpose', labelEn: 'Job Purpose', labelAr: 'الغرض من الوظيفة' },
@@ -30,6 +31,7 @@ export const emptyJDDetails = (): JobDescriptionDetails => ({
     skills: { en: '', ar: '' },
     trainingLicenses: { en: '', ar: '' },
     workingConditions: { en: '', ar: '' },
+    reportsTo: '',
 });
 
 export interface JDFormValue {
@@ -117,6 +119,16 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
                         })}
                     </div>
                 </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Reports To <span className="text-gray-400 font-normal">/ يقدم تقاريره إلى</span></label>
+                <input
+                    type="text" value={value.details.reportsTo || ''}
+                    onChange={(e) => set({ details: { ...value.details, reportsTo: e.target.value } })}
+                    placeholder="e.g. Head of Finance"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                />
             </div>
 
             <div>

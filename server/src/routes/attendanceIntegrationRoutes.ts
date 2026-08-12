@@ -24,6 +24,7 @@ import {
     createBioTimeEmployee,
     updateBioTimeEmployee,
     deleteBioTimeEmployee,
+    syncEmployeesFromBioTime,
     getMyMonthlyReport,
 } from '../controllers/attendanceIntegrationController';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
@@ -64,5 +65,8 @@ router.get('/biotime-employees', getBioTimeEmployees);
 router.post('/biotime-employees', createBioTimeEmployee);
 router.patch('/biotime-employees/:id', updateBioTimeEmployee);
 router.delete('/biotime-employees/:id', deleteBioTimeEmployee);
+
+// Bulk import: pull the whole BioTime roster into HR as linked employees (pending enrolment).
+router.post('/sync-employees', syncEmployeesFromBioTime);
 
 export default router;

@@ -90,3 +90,39 @@ export const changePassword = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to update password' });
     }
 };
+
+// Save (or clear) the signed-in user's own signature. The signature is a PNG
+// data URL produced by the drawing pad on the client. Passing null/empty clears it.
+export const saveSignature = async (req: Request, res: Response) => {
+    try {
+        const { signature } = req.body as { signature?: string | null };
+        const userId = (req as any).user?.id;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // Normalise empty values to null (clears the stored signature).
+        const value = signature && signature.trim() ? signature.trim() : null;
+
+        if (value !== null) {
+            if (!value.startsWith('data:image/')) {
+                return res.status(400).json({ error: 'Signature must be a valid image data URL' });
+            }
+            // Guard against oversized payloads (~1MB of base64 is plenty for a signature).
+            if (value.length > 1_500_000) {
+                return res.status(413).json({ error: 'Signature image is too large' });
+            }
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { signature: value },
+        });
+
+        res.json({ message: 'Signature saved', signature: value });
+    } catch (error: any) {
+        console.error('[AUTH] ERROR saving signature:', error.message);
+        res.status(500).json({ error: 'Failed to save signature' });
+    }
+};

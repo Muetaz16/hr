@@ -17,9 +17,15 @@ export const employeeService = {
         return response.data;
     },
 
-    // Auto Staff ID: IPH-<residencyDigit><YY>-<SEQ> (e.g. IPH-126-001 for a 2026 resident).
+    // Auto Staff ID: IPH-0<residencyDigit><YY>-<SEQ> (e.g. IPH-0126-001 for a 2026 resident).
     async getNextStaffId(residentStatus: string, year?: string | number): Promise<{ prefix: string; nextSeq: number; staffId: string }> {
         const response = await api.get('/employees/next-staff-id', { params: { residentStatus, year } });
+        return response.data;
+    },
+
+    // Bulk-regenerate a Staff ID for every employee (new IPH-0<digit><YY>-<seq> format).
+    async regenerateAllStaffIds(): Promise<{ message: string; count: number }> {
+        const response = await api.post('/employees/regenerate-staff-ids');
         return response.data;
     },
 

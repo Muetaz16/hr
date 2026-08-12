@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { jobDescriptionService } from '../../services/jobDescriptionService';
 import type { JobDescription } from '../../types';
 import { useConfirm } from '../../components/ConfirmDialog';
-import { Plus, Edit, Trash2, Crown, Users, BarChart3 } from 'lucide-react';
+import { Plus, Edit, Trash2, Crown, Users, BarChart3, FileText, FileUser } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -40,6 +40,31 @@ const JobDescriptionsPage: React.FC = () => {
         if (jd.division) return { level: 'Division', name: jd.division.name };
         if (jd.directorate) return { level: 'Directorate', name: jd.directorate.name };
         return { level: '-', name: 'Unassigned' };
+    };
+
+    const [docBusy, setDocBusy] = useState<string | null>(null);
+    const downloadDocument = async (jd: JobDescription, variant: 'general' | 'emp') => {
+        setDocBusy(`${jd.id}:${variant}`);
+        try {
+            const blob = await jobDescriptionService.generateDocument(jd.id, variant);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const suffix = variant === 'emp' ? 'Employee' : 'General';
+            a.download = `Job_Description_${suffix}_${(jd.title || 'jd').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success(t('jd_doc_generated', { defaultValue: 'Job description document generated.' }));
+        } catch (error: any) {
+            console.error('Error generating JD document:', error);
+            let msg = t('err_generate_jd_doc', { defaultValue: 'Failed to generate the document.' });
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setDocBusy(null);
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -173,6 +198,16 @@ const JobDescriptionsPage: React.FC = () => {
                                         {isFull && <span className="ml-2 text-[10px] font-black text-red-500 uppercase">{t('full', { defaultValue: 'Full' })}</span>}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button onClick={() => downloadDocument(jd, 'general')} disabled={docBusy === `${jd.id}:general`}
+                                            title={t('jd_doc_general', { defaultValue: 'Download Job Description (General)' })}
+                                            className="text-slate-600 hover:text-slate-900 mr-2 p-1 rounded hover:bg-slate-100 disabled:opacity-50">
+                                            <FileText size={16} />
+                                        </button>
+                                        <button onClick={() => downloadDocument(jd, 'emp')} disabled={docBusy === `${jd.id}:emp`}
+                                            title={t('jd_doc_emp', { defaultValue: 'Download Job Description (Employee copy)' })}
+                                            className="text-emerald-600 hover:text-emerald-800 mr-4 p-1 rounded hover:bg-emerald-50 disabled:opacity-50">
+                                            <FileUser size={16} />
+                                        </button>
                                         <button onClick={() => navigate(`/job-descriptions/${jd.id}/edit`)} className="text-indigo-600 hover:text-indigo-900 mr-4 p-1 rounded hover:bg-indigo-50">
                                             <Edit size={16} />
                                         </button>

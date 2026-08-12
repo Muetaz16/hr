@@ -27,6 +27,27 @@ export const recruitmentService = {
         return response.data;
     },
 
+    // Advance the current stage of a HIRE requisition's PRF approval flow. The GM's final
+    // approval must include the signed document (sent as multipart).
+    prfApprove: async (id: string, decision: 'approve' | 'reject', note?: string, file?: File | null): Promise<RecruitmentRequest> => {
+        if (file) {
+            const fd = new FormData();
+            fd.append('decision', decision);
+            if (note) fd.append('note', note);
+            fd.append('document', file);
+            const response = await api.post(`/recruitment/${id}/prf-approve`, fd);
+            return response.data;
+        }
+        const response = await api.post(`/recruitment/${id}/prf-approve`, { decision, note });
+        return response.data;
+    },
+
+    // Download the Personnel Requisition Form (.docx) for a requisition.
+    generatePrf: async (id: string): Promise<Blob> => {
+        const response = await api.get(`/recruitment/${id}/prf`, { responseType: 'blob' });
+        return response.data;
+    },
+
     deleteRequest: async (id: string): Promise<void> => {
         await api.delete(`/recruitment/${id}`);
     }

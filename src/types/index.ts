@@ -48,6 +48,7 @@ export interface User {
     fullName: string;
     employeeId?: string; // Link to HR record
     permissions?: string[]; // Granular access permissions
+    signature?: string | null; // Drawn signature stored as a PNG data URL
 }
 
 export interface Unit {
@@ -102,6 +103,7 @@ export interface JobDescriptionDetails {
     skills?: JDSection;
     trainingLicenses?: JDSection;
     workingConditions?: JDSection;
+    reportsTo?: string; // "Reports To" — written by whoever requests/creates the JD
 }
 
 export interface JobDescription {
@@ -142,6 +144,7 @@ export interface Employee {
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
     bioId?: number; // BioTime attendance system's own numeric employee id, once auto-provisioned
+    enrollmentStatus?: string; // "ACTIVE" | "PENDING_ENROLLMENT" (BioTime-imported stub awaiting enrolment)
     position?: string;
     placeOfWork?: string; // Office / Site — locked from the job description at onboarding
     fullNameArabic?: string;
@@ -511,7 +514,13 @@ export interface RecruitmentRequest {
     hiredCount?: number;
     filled?: boolean;
     filledAt?: string;
-    status: 'PENDING' | 'DEPT_APPROVED' | 'HR_APPROVED' | 'FULLY_APPROVED' | 'REJECTED';
+    status: 'PENDING' | 'DEPT_APPROVED' | 'DIV_APPROVED' | 'HRMGR_APPROVED' | 'HRREC_APPROVED' | 'HR_APPROVED' | 'FULLY_APPROVED' | 'REJECTED';
+    // PRF (Personnel Requisition Form) fields — HIRE requisitions
+    employmentType?: string;
+    typeOfRequest?: string;
+    languageEn?: string;
+    languageAr?: string;
+    prfApprovals?: Record<string, { byId?: string; byName?: string; signature?: string | null; at?: string; note?: string | null; rejected?: boolean }>;
     deptNote?: string;
     hrNote?: string;
     gmNote?: string;

@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { generateJobOfferDocx } from '../utils/jobOffer';
 import { generateEvaluationDocx } from '../utils/jobEvaluation';
+import { generateHiringLetterDocx } from '../utils/hiringLetter';
 
 const prisma = new PrismaClient();
 
@@ -461,12 +462,20 @@ export const generateOffer = async (req: Request, res: Response) => {
                         jobDescription: { select: { title: true, jobCategories: true, workLocations: true, isHead: true } },
                     },
                 },
+                techEvalBy: { select: { fullName: true } },
             },
         });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
 
         const allowed = isHRRole(userRole);
         if (!allowed) return res.status(403).json({ error: 'Only HR or Super Admin can generate the job offer.' });
+
+        // The HR user generating the offer is the "Job Offer Preparer" — their saved signature
+        // is dropped into the preparer signature box. Other approval signatures are hand-signed.
+        const preparer = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { fullName: true, signature: true },
+        });
 
         if (candidate.hrEvalById == null || candidate.techEvalById == null) {
             return res.status(400).json({ error: 'Both the HR and technical evaluations must be completed before generating an offer.' });
@@ -561,6 +570,9 @@ export const generateOffer = async (req: Request, res: Response) => {
             requiredShift: '9 to 5',
             contractMonths,
             dateSent: `${pad(now.getDate())} / ${pad(now.getMonth() + 1)} / ${now.getFullYear()}`,
+            preparerName: preparer?.fullName || (req as any).user?.fullName || '',
+            technicalInterviewer: candidate.techEvalBy?.fullName || '',
+            preparerSignature: preparer?.signature || null,
         });
 
         const safeName = (candidate.fullName || 'candidate').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'candidate';
@@ -592,8 +604,8 @@ export const generateEvaluation = async (req: Request, res: Response) => {
                         jobDescription: { select: { title: true, jobCategories: true } },
                     },
                 },
-                hrEvalBy: { select: { fullName: true } },
-                techEvalBy: { select: { fullName: true } },
+                hrEvalBy: { select: { fullName: true, signature: true } },
+                techEvalBy: { select: { fullName: true, signature: true } },
             },
         });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -646,6 +658,11 @@ export const generateEvaluation = async (req: Request, res: Response) => {
             decisionPosition: decision === 'ACCEPTED' ? (jd?.title || req_.jobTitle || '') : '',
             rejectionReason: decision === 'REJECTED' ? (candidate.finalNote || '') : '',
             recommendedOther: '',
+            // Signatures pulled from the evaluators' saved signatures. HR evaluator signs the HR
+            // Interviewer + Head of HR boxes; technical evaluator signs Technical Interviewer +
+            // Head of nominated department. Missing signatures leave their box blank.
+            hrInterviewerSignature: candidate.hrEvalBy?.signature || null,
+            techInterviewerSignature: candidate.techEvalBy?.signature || null,
         });
 
         const safeName = (candidate.fullName || 'candidate').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'candidate';
@@ -655,6 +672,80 @@ export const generateEvaluation = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Error generating evaluation form:', error);
         res.status(500).json({ error: error.message || 'Failed to generate evaluation form' });
+    }
+};
+
+// GET /candidates/:id/hiring-letter — build the bilingual Hiring Letter (.docx) for an enrolled
+// candidate, filled from the linked employee record (Employee ID = the staff ID entered at
+// enrolment). Approval signatures are left blank for hand-signing. HR / Super Admin only.
+export const generateHiringLetter = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userRole = (req as any).user?.role;
+        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR or Super Admin can generate the hiring letter.' });
+
+        const candidate = await prisma.candidate.findUnique({
+            where: { id },
+            include: { requisition: { include: { requester: { select: { fullName: true } } } } },
+        });
+        if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
+        if (!candidate.employeeId) {
+            return res.status(400).json({ error: 'This candidate has not been enrolled as an employee yet.' });
+        }
+
+        const emp = await prisma.employee.findUnique({
+            where: { id: candidate.employeeId },
+            include: { department: { select: { name: true } }, unit: { select: { name: true } } },
+        });
+        if (!emp) return res.status(404).json({ error: 'Linked employee record not found.' });
+
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const fmtDate = (d: Date | null | undefined) => d ? `${pad(d.getDate())} / ${pad(d.getMonth() + 1)} / ${d.getFullYear()}` : '';
+        // Factors are shown as real percentages (a 1.10 multiplier → "10%", default 1.0 → "0%").
+        const pctFactor = (n: number | null | undefined) => `${Math.round(((n ?? 1) - 1) * 100)}%`;
+        // The frontline/location factor is 10% for on-site roles. Prefer the stored siteFactor,
+        // but fall back to the place of work so a SITE hire always shows 10% even if it wasn't stored.
+        const isSite = (emp.placeOfWork || '').toUpperCase() === 'SITE';
+        const locationPct = (emp.siteFactor && emp.siteFactor > 1) ? pctFactor(emp.siteFactor) : (isSite ? '10%' : '0%');
+        const now = new Date();
+
+        const buffer = generateHiringLetterDocx({
+            letterDate: fmtDate(now),
+            employeeId: emp.staffId || '',
+            employeeName: emp.fullName || '',
+            nationality: emp.nationality || '',
+            contractType: emp.contractType || '',
+            gender: emp.gender || '',
+            dateOfBirth: fmtDate(emp.dateOfBirth),
+            birthplace: emp.placeOfBirth || '',
+            bloodType: emp.bloodType || '',
+            email: emp.email || emp.personalEmail || '',
+            contactNumber: emp.personalPhone || emp.emergencyContactNumber || '',
+            degree: emp.academicQualification || '',
+            nationalId: emp.nationalId || '',
+            passportNumber: emp.passportNumber || '',
+            department: emp.department?.name || '',
+            unit: emp.unit?.name || '',
+            jobPosition: emp.position || '',
+            reportsTo: candidate.requisition?.requester?.fullName || '',
+            jobCategory: emp.jobCategory || '',
+            jobGrade: emp.jobGrade || '',
+            contractStartDate: fmtDate(emp.contractStartDate),
+            contractEndDate: fmtDate(emp.contractEndDate),
+            placeOfWork: emp.placeOfWork || '',
+            positionFactor: pctFactor(emp.positionFactor),
+            locationFactor: locationPct,
+            skillFactor: pctFactor(emp.skillFactor),
+            englishFactor: pctFactor(emp.languageFactor),
+        });
+
+        const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'employee';
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="Hiring_Letter_${safeName}.docx"`);
+        res.send(buffer);
+    } catch (error: any) {
+        console.error('Error generating hiring letter:', error);
+        res.status(500).json({ error: error.message || 'Failed to generate hiring letter' });
     }
 };
 

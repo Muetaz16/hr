@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, changePassword } from '../controllers/authController';
+import { login, changePassword, saveSignature } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import type { Response } from 'express';
@@ -11,6 +11,7 @@ const prisma = new PrismaClient();
 
 router.post('/login', login);
 router.post('/change-password', authenticateToken, changePassword);
+router.post('/signature', authenticateToken, saveSignature);
 
 // Token validation endpoint
 router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -27,6 +28,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
                 departmentIds: true,
                 groupId: true,
                 permissions: true,
+                signature: true,
                 createdAt: true
             }
         });

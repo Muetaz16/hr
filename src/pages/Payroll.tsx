@@ -20,6 +20,20 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../components/ConfirmDialog';
 import type { Employee, PayrollResult, TimeRecord } from '../types';
+import { getRequiredLevels, type EvalLevel, type OrgPlacement } from '../utils/evaluationHierarchy';
+
+// Only these levels store the 16 competency metrics used for the category breakdown.
+const METRIC_LEVELS: EvalLevel[] = ['UNIT', 'DEPARTMENT', 'DIVISION', 'DIRECTOR'];
+const getEvalForLevel = (level: EvalLevel, empId: string, month: string) => {
+    switch (level) {
+        case 'UNIT': return evaluationService.getUnitEvaluation(empId, month);
+        case 'DEPARTMENT': return evaluationService.getDeptEvaluation(empId, month);
+        case 'DIVISION': return evaluationService.getDivisionEvaluation(empId, month);
+        case 'DIRECTOR': return evaluationService.getDirectorEvaluation(empId, month);
+        case 'GM': return evaluationService.getGMEvaluation(empId, month);
+        case 'CHAIRMAN': return evaluationService.getChairmanEvaluation(empId, month);
+    }
+};
 
 const PayrollPage: React.FC = () => {
     const { currentUser } = useAuth();
@@ -80,12 +94,19 @@ const PayrollPage: React.FC = () => {
 
             // 2. Process each employee
             const promises = emps.map(async (emp) => {
-                // Fetch evaluations
-                const [deptEval, dirEval, persEval] = await Promise.all([
-                    evaluationService.getDeptEvaluation(emp.id, selectedMonth),
-                    evaluationService.getDirectorEvaluation(emp.id, selectedMonth),
+                // The two evaluators required for THIS employee (skip-level rule).
+                const requiredLevels = getRequiredLevels(emp as OrgPlacement);
+                const [lvlA, lvlB] = [requiredLevels[0], requiredLevels[1]];
+                const [evalARaw, evalBRaw, persEval] = await Promise.all([
+                    lvlA ? getEvalForLevel(lvlA, emp.id, selectedMonth) : Promise.resolve(null),
+                    lvlB ? getEvalForLevel(lvlB, emp.id, selectedMonth) : Promise.resolve(null),
                     evaluationService.getPersonnelEvaluation(emp.id, selectedMonth)
                 ]);
+                // Only metric-based levels feed the category breakdown; the two
+                // evaluations are averaged exactly as before (Dept + Director became
+                // "required level A" + "required level B").
+                const deptEval: any = (lvlA && METRIC_LEVELS.includes(lvlA)) ? evalARaw : null;
+                const dirEval: any = (lvlB && METRIC_LEVELS.includes(lvlB)) ? evalBRaw : null;
 
                 // Time data
                 const empTime = timeRecords.find((t: TimeRecord) => t.employeeId === emp.id) || {
@@ -243,7 +264,7 @@ const PayrollPage: React.FC = () => {
                     departmentScore: deptEval?.totalScore || 0, // Using totalScore for the main metric
                     directorLeadership: 0, // Deprecated details
                     directorImpact: 0,
-                    directorScore: dirEval?.finalScore || 0,
+                    directorScore: dirEval?.finalScore ?? dirEval?.totalScore ?? 0,
 
                     // Personnel Metrics
                     personnelScore: persScore, // Kept but not in finalScore

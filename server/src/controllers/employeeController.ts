@@ -236,16 +236,20 @@ export const getNextStaffId = async (req: Request, res: Response) => {
         // Two-digit year: use the value passed in, else the current year.
         const rawYear = String(req.query.year || '').replace(/\D/g, '');
         const yy = rawYear ? rawYear.slice(-2).padStart(2, '0') : String(new Date().getFullYear()).slice(-2);
-        const prefix = `IPH-${digit}${yy}-`;
+        // New format: residency is two digits (01/02/03) → IPH-0126-001.
+        const prefix = `IPH-0${digit}${yy}-`;
+        // Legacy single-digit prefix (IPH-126-001) so the sequence keeps counting up.
+        const legacyPrefix = `IPH-${digit}${yy}-`;
 
         const existing = await prisma.employee.findMany({
-            where: { staffId: { startsWith: prefix } },
+            where: { OR: [{ staffId: { startsWith: prefix } }, { staffId: { startsWith: legacyPrefix } }] },
             select: { staffId: true },
         });
         let maxSeq = 0;
         for (const e of existing) {
-            const suffix = (e.staffId || '').slice(prefix.length);
-            const n = parseInt(suffix, 10);
+            // The sequence is always the final dash-delimited segment.
+            const seg = (e.staffId || '').split('-').pop() || '';
+            const n = parseInt(seg, 10);
             if (!isNaN(n) && n > maxSeq) maxSeq = n;
         }
         const nextSeq = maxSeq + 1;
@@ -253,6 +257,56 @@ export const getNextStaffId = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error generating next staff ID:', error);
         res.status(500).json({ error: 'Failed to generate the next Staff ID' });
+    }
+};
+
+// POST /employees/regenerate-staff-ids
+// Regenerates the Staff ID for EVERY employee in the new IPH-0<digit><YY>-<seq>
+// format, renumbering sequentially within each residency + join-year group.
+// Refuses to run (changing nothing) if any employee lacks a resident /
+// non-resident contract type, so no one is left without a residency digit.
+export const regenerateAllStaffIds = async (req: Request, res: Response) => {
+    try {
+        const employees = await prisma.employee.findMany({
+            select: { id: true, fullName: true, contractType: true, joinDate: true },
+        });
+
+        // Guard: every employee must have a residency-bearing contract type.
+        const invalid = employees.filter(e => !residencyDigit(e.contractType || undefined));
+        if (invalid.length > 0) {
+            return res.status(400).json({
+                error: `Cannot generate Staff IDs: ${invalid.length} employee(s) have no resident / non-resident contract type set. Set their contract type first.`,
+                invalidCount: invalid.length,
+                invalidNames: invalid.slice(0, 25).map(e => e.fullName),
+            });
+        }
+
+        // Deterministic order: earliest joiners get the lowest sequence numbers.
+        const sorted = [...employees].sort((a, b) => {
+            const ja = a.joinDate ? new Date(a.joinDate).getTime() : 0;
+            const jb = b.joinDate ? new Date(b.joinDate).getTime() : 0;
+            if (ja !== jb) return ja - jb;
+            return (a.fullName || '').localeCompare(b.fullName || '');
+        });
+
+        const seqByPrefix: Record<string, number> = {};
+        const updates = sorted.map(e => {
+            const digit = residencyDigit(e.contractType || undefined)!;
+            const yy = e.joinDate
+                ? String(new Date(e.joinDate).getFullYear()).slice(-2)
+                : String(new Date().getFullYear()).slice(-2);
+            const prefix = `IPH-0${digit}${yy}-`;
+            const next = (seqByPrefix[prefix] || 0) + 1;
+            seqByPrefix[prefix] = next;
+            const staffId = `${prefix}${String(next).padStart(3, '0')}`;
+            return prisma.employee.update({ where: { id: e.id }, data: { staffId } });
+        });
+
+        await prisma.$transaction(updates);
+        res.json({ message: `Generated ${updates.length} Staff IDs.`, count: updates.length });
+    } catch (error) {
+        console.error('Error regenerating staff IDs:', error);
+        res.status(500).json({ error: 'Failed to regenerate Staff IDs' });
     }
 };
 
@@ -839,6 +893,59 @@ export const updateEmployee = async (req: Request, res: Response) => {
                 if (!data.directorateId && dept.division?.directorateId) data.directorateId = dept.division.directorateId;
             }
         }
+
+        // --- Complete enrolment of a BioTime-imported stub ---------------------------------------
+        // A PENDING_ENROLLMENT employee becomes ACTIVE only through this guarded path, triggered by
+        // the request explicitly setting enrollmentStatus=ACTIVE (the "Complete Enrolment" action).
+        // This is where the deferred login account/email is finally created. Ordinary edits of an
+        // already-active employee never reach this branch, so they can't accidentally spawn accounts.
+        const isCompletingEnrolment =
+            currentEmp?.enrollmentStatus === 'PENDING_ENROLLMENT' && body.enrollmentStatus === 'ACTIVE';
+
+        if (isCompletingEnrolment) {
+            const finalRole = data.role || currentEmp?.role || 'EMPLOYEE';
+            const globalScopeRoles = ['GENERAL_MANAGER', 'CHAIRMAN'];
+            const finalJD = data.jobDescriptionId !== undefined ? data.jobDescriptionId : currentEmp?.jobDescriptionId;
+            if (!globalScopeRoles.includes(finalRole) && !finalJD) {
+                return res.status(400).json({ error: 'A Job Description must be assigned to complete enrolment.' });
+            }
+
+            const finalDept = data.departmentId !== undefined ? data.departmentId : currentEmp?.departmentId;
+            const rolesRequiringDept = ['EMPLOYEE', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HEAD_OFFICE'];
+            if (rolesRequiringDept.includes(finalRole) && !finalDept) {
+                return res.status(400).json({ error: `A Department is required to complete enrolment for the ${String(finalRole).replace(/_/g, ' ').toLowerCase()} role.` });
+            }
+
+            // Create the login account now — the first time this imported person gets one.
+            if (!currentEmp?.userId) {
+                const emailForAccount = data.email !== undefined ? data.email : currentEmp?.email;
+                if (!emailForAccount) {
+                    return res.status(400).json({ error: 'An email address is required to create the login account when completing enrolment.' });
+                }
+                const existingUser = await prisma.user.findFirst({ where: { email: { equals: emailForAccount, mode: 'insensitive' } } });
+                if (existingUser) {
+                    return res.status(400).json({ error: 'A system account with this email already exists.' });
+                }
+                const hashedPassword = await bcrypt.hash(body.password || '123456', 10);
+                const seededPermissions = (body.permissions && body.permissions.length) ? body.permissions : presetForRole(finalRole);
+                const newUser = await prisma.user.create({
+                    data: {
+                        email: emailForAccount,
+                        password: hashedPassword,
+                        fullName: data.fullName || currentEmp?.fullName || emailForAccount,
+                        role: finalRole,
+                        departmentId: finalDept || null,
+                        unitId: (data.unitId !== undefined ? data.unitId : currentEmp?.unitId) || null,
+                        groupId: (data.groupId !== undefined ? data.groupId : currentEmp?.groupId) || null,
+                        permissions: seededPermissions,
+                    },
+                });
+                data.userId = newUser.id;
+            }
+
+            data.enrollmentStatus = 'ACTIVE';
+        }
+        // -----------------------------------------------------------------------------------------
 
         const employee = await prisma.employee.update({
             where: { id },

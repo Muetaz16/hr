@@ -26,7 +26,8 @@ import {
     EyeOff,
     Megaphone,
     HeartHandshake,
-    Clock
+    Clock,
+    PenTool
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -38,6 +39,7 @@ import type { AppNotification } from '../services/notificationService';
 import api from '../services/apiClient';
 import { toast } from 'sonner';
 import Modal from '../components/Modal';
+import SignaturePad from '../components/SignaturePad';
 
 interface NavItemBase {
     label: string;
@@ -71,7 +73,7 @@ interface NavGroup {
 }
 
 const MainLayout: React.FC = () => {
-    const { currentUser, logout } = useAuth();
+    const { currentUser, logout, updateCurrentUser } = useAuth();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
@@ -102,6 +104,8 @@ const MainLayout: React.FC = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPasswords, setShowPasswords] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [isSavingSignature, setIsSavingSignature] = useState(false);
 
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
         const saved = localStorage.getItem('iph-theme');
@@ -152,6 +156,28 @@ const MainLayout: React.FC = () => {
             toast.error(msg);
         } finally {
             setIsChangingPassword(false);
+        }
+    };
+
+    // Roles that approve forms and therefore need a saved signature.
+    const SIGNATURE_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER', 'CHAIRMAN', 'HR_MANAGER', 'SUPER_ADMIN'];
+    const canManageSignature = SIGNATURE_ROLES.includes(currentUser?.role || '');
+
+    const handleSaveSignature = async (dataUrl: string | null) => {
+        setIsSavingSignature(true);
+        try {
+            const res = await api.post('/auth/signature', { signature: dataUrl });
+            updateCurrentUser({ signature: res.data?.signature ?? dataUrl ?? null });
+            toast.success(dataUrl
+                ? t('signature_saved_success', { defaultValue: 'Signature saved successfully!' })
+                : t('signature_removed_success', { defaultValue: 'Signature removed.' }));
+            setIsSignatureModalOpen(false);
+        } catch (error: any) {
+            console.error('Error saving signature:', error);
+            const msg = error.response?.data?.error || t('error_saving_signature', { defaultValue: 'Failed to save signature.' });
+            toast.error(msg);
+        } finally {
+            setIsSavingSignature(false);
         }
     };
 
@@ -641,6 +667,21 @@ const MainLayout: React.FC = () => {
                                             <Key className="w-4 h-4" />
                                             {t('change_password', { defaultValue: 'Change Password' })}
                                         </button>
+                                        {canManageSignature && (
+                                            <button
+                                                onClick={() => {
+                                                    setIsProfileDropdownOpen(false);
+                                                    setIsSignatureModalOpen(true);
+                                                }}
+                                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors
+                                                    ${themeMode === 'dark'
+                                                        ? 'text-[#e3c4a2]/80 hover:bg-[#541c2c]/40 hover:text-white'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}`}
+                                            >
+                                                <PenTool className="w-4 h-4" />
+                                                {t('my_signature', { defaultValue: 'My Signature' })}
+                                            </button>
+                                        )}
                                         <div className={`h-px w-full my-1 ${themeMode === 'dark' ? 'bg-[#e3c4a2]/10' : 'bg-slate-100'}`}></div>
                                         <button 
                                             onClick={handleLogout}
@@ -743,6 +784,20 @@ const MainLayout: React.FC = () => {
                         </button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* My Signature Modal */}
+            <Modal
+                isOpen={isSignatureModalOpen}
+                onClose={() => setIsSignatureModalOpen(false)}
+                title={t('my_signature', { defaultValue: 'My Signature' })}
+            >
+                <SignaturePad
+                    initialValue={currentUser?.signature ?? null}
+                    onSave={handleSaveSignature}
+                    onCancel={() => setIsSignatureModalOpen(false)}
+                    saving={isSavingSignature}
+                />
             </Modal>
         </div>
     );

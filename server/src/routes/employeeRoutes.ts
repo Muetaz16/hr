@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument } from '../controllers/employeeController';
+import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, regenerateAllStaffIds, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument } from '../controllers/employeeController';
 import { authenticateToken, authorizeRoles, authorizePermissions, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
@@ -28,6 +28,7 @@ router.post('/upload-document', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['r
 router.get('/contracts/expiring', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_contracts']), getExpiringContracts);
 router.get('/me', getMyEmployeeRecord);
 router.get('/next-staff-id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), getNextStaffId);
+router.post('/regenerate-staff-ids', authorizeAccess(['HR_MANAGER'], ['register_employees', 'edit_employees']), regenerateAllStaffIds);
 router.get('/', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HEAD_OFFICE', 'CHAIRMAN', 'GENERAL_MANAGER', 'EMPLOYEE'), getAllEmployees);
 router.get('/:id', getEmployeeById);
 router.post('/', authorizeAccess(['HR_MANAGER'], ['register_employees']), createEmployee);

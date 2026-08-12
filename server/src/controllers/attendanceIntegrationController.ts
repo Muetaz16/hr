@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
-import { ATTENDANCE_API_BASE, proxy, jsonPost, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
+import { ATTENDANCE_API_BASE, proxy, jsonPost, findBioTimeEmpIdByCode, fetchBioTimeRoster } from '../utils/attendanceApiProxy';
 
 const prisma = new PrismaClient();
 
@@ -356,3 +356,79 @@ export const updateBioTimeEmployee = (req: Request, res: Response) => {
 // DELETE /api/attendance-integration/biotime-employees/:id
 export const deleteBioTimeEmployee = (req: Request, res: Response) =>
     proxy(res, `/api/attendance/employees/${encodeURIComponent(req.params.id)}`, { method: 'DELETE' });
+
+// POST /api/attendance-integration/sync-employees
+// Pulls the full BioTime roster into our HR system as linked employee records. This is the
+// reverse of the per-hire HR -> BioTime push in employeeController.createEmployee: here the
+// employees already exist in BioTime (the biometric devices are the source of truth for the
+// real staff), and we backfill them into HR so Payroll/Evaluations/etc. can reference them.
+//
+// Matching is by BioTime numeric id (Employee.bioId) first, then by staff code
+// (Employee.staffId == emp_code). The operation is idempotent and safe to re-run:
+//   - already-linked employees are left untouched (only a missing bioId is backfilled),
+//   - new BioTime employees are created as PENDING_ENROLLMENT stubs with NO login account and
+//     NO Job Description — HR completes their enrolment later (which is when the account/email
+//     and JD/role/department are assigned). Pending stubs are kept out of payroll/eval lists.
+export const syncEmployeesFromBioTime = async (req: Request, res: Response) => {
+    try {
+        const roster = await fetchBioTimeRoster();
+        if (roster.length === 0) {
+            return res.status(502).json({ error: 'Could not read any employees from the attendance system. Is it running?' });
+        }
+
+        // Load existing HR employees once so matching is in-memory rather than a query per row.
+        const existing = await prisma.employee.findMany({
+            select: { id: true, staffId: true, bioId: true },
+        });
+        const byBioId = new Map<number, { id: string; bioId: number | null }>();
+        const byStaffId = new Map<string, { id: string; bioId: number | null }>();
+        for (const e of existing) {
+            if (e.bioId != null) byBioId.set(e.bioId, e);
+            if (e.staffId) byStaffId.set(e.staffId, e);
+        }
+
+        const result = { created: 0, linked: 0, unchanged: 0, createdNames: [] as string[] };
+
+        for (const emp of roster) {
+            const match = byBioId.get(emp.id) || byStaffId.get(emp.empCode);
+
+            if (match) {
+                // Existing HR employee — backfill the BioTime id if it isn't linked yet, otherwise
+                // leave the record exactly as HR maintains it.
+                if (match.bioId == null) {
+                    await prisma.employee.update({ where: { id: match.id }, data: { bioId: emp.id } });
+                    result.linked++;
+                } else {
+                    result.unchanged++;
+                }
+                continue;
+            }
+
+            // New person from BioTime — create an identity-only pending stub. No User account and
+            // no Job Description: those are created when HR completes the enrolment.
+            await prisma.employee.create({
+                data: {
+                    fullName: emp.firstName || emp.empCode,
+                    staffId: emp.empCode,
+                    bioId: emp.id,
+                    position: emp.positionName,
+                    role: 'EMPLOYEE',
+                    enrollmentStatus: 'PENDING_ENROLLMENT',
+                    joinDate: new Date(),
+                    contractStatus: 'Pending',
+                },
+            });
+            result.created++;
+            if (result.createdNames.length < 50) result.createdNames.push(emp.firstName || emp.empCode);
+        }
+
+        return res.json({
+            message: `Imported ${result.created} new employee(s), linked ${result.linked}, ${result.unchanged} already up to date.`,
+            rosterCount: roster.length,
+            ...result,
+        });
+    } catch (error: any) {
+        console.error('[BioTime] Employee sync failed:', error);
+        return res.status(500).json({ error: error?.message || 'Failed to sync employees from the attendance system.' });
+    }
+};

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { recruitmentService } from '../services/recruitmentService';
+import { SERVER_URL } from '../services/apiClient';
 import { departmentService } from '../services/departmentService';
 import { unitService } from '../services/unitService';
 import { jobDescriptionService } from '../services/jobDescriptionService';
@@ -30,9 +31,12 @@ const InfoCell: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
 );
 
 const STATUS_LABELS: Record<string, string> = {
-    PENDING: 'Pending — Head of Division',
-    DEPT_APPROVED: 'Awaiting HR',
-    HR_APPROVED: 'Awaiting GM',
+    PENDING: 'Pending',
+    DEPT_APPROVED: 'Dept Approved',
+    DIV_APPROVED: 'Division Approved',
+    HRMGR_APPROVED: 'HR Manager Approved',
+    HRREC_APPROVED: 'Recruitment Approved',
+    HR_APPROVED: 'Awaiting Directorate',
     FULLY_APPROVED: 'Fully Approved',
     REJECTED: 'Rejected',
 };
@@ -59,12 +63,20 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const [reason, setReason] = useState('');
     const [selectedJdId, setSelectedJdId] = useState('');       // HIRE target JD, or JD_CHANGE edit target
     const [hireQuantity, setHireQuantity] = useState(1);        // HIRE: how many people to request
+    // HIRE / PRF extra fields
+    const [employmentType, setEmploymentType] = useState('');
+    const [typeOfRequest, setTypeOfRequest] = useState('');
+    const [languageEn, setLanguageEn] = useState('');
+    const [languageAr, setLanguageAr] = useState('');
+    const [reportsTo, setReportsTo] = useState('');
+    const [gmDoc, setGmDoc] = useState<File | null>(null); // GM's signed document at final approval
     const [jdMode, setJdMode] = useState<'edit' | 'new'>('new'); // JD_CHANGE mode
     const [jdForm, setJdForm] = useState<JDFormValue>(emptyJDForm());
 
     const isHR = currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'SUPER_ADMIN';
     // The Head of Directorate acts as the GM for final approval.
-    const isGM = currentUser?.role === 'GENERAL_MANAGER' || currentUser?.role === 'HEAD_DIRECTOR' || currentUser?.role === 'SUPER_ADMIN';
+    // JD changes are finalised by the Head of Directorate (not the GM).
+    const isDirector = currentUser?.role === 'HEAD_DIRECTOR' || currentUser?.role === 'SUPER_ADMIN';
     const isDivisionHead = currentUser?.role === 'HEAD_DIVISION' || currentUser?.role === 'SUPER_ADMIN';
     const canRequest = ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'SUPER_ADMIN'].includes(currentUser?.role || '');
 
@@ -129,6 +141,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
         setFormDeptId(defaultDept);
         setFormUnitId('');
         setReason(''); setSelectedJdId(''); setHireQuantity(1); setJdMode('new'); setJdForm(emptyJDForm());
+        setEmploymentType(''); setTypeOfRequest(''); setLanguageEn(''); setLanguageAr(''); setReportsTo('');
     };
 
     // When choosing an existing JD to edit in JD_CHANGE mode, prefill the JD form
@@ -157,7 +170,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
             if (reqType === 'HIRE') {
                 if (!selectedJdId) { toast.error(t('select_jd_required', { defaultValue: 'Select a position (Job Description) with an open slot.' })); return; }
-                await recruitmentService.createRequest({ type: 'HIRE', jobDescriptionId: selectedJdId, quantity: hireQuantity, reason, ...scopeIds });
+                await recruitmentService.createRequest({ type: 'HIRE', jobDescriptionId: selectedJdId, quantity: hireQuantity, reason, reportsTo, employmentType, typeOfRequest, languageEn, languageAr, ...scopeIds } as any);
             } else {
                 if (!jdForm.title) { toast.error(t('jd_title_required', { defaultValue: 'A position title is required.' })); return; }
                 const payload = {
@@ -235,14 +248,86 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     // The division a requisition belongs to (its own division, or its department's division).
     const reqDivisionId = (r: RecruitmentRequest) => r.divisionId || departments.find(d => d.id === r.departmentId)?.divisionId || null;
 
+    // ---- HIRE requisition: staged Personnel Requisition Form (PRF) approval flow ----
+    const PRF_STAGES = ['deptHead', 'divHead', 'hrManager', 'hrRecruitment', 'gm'] as const;
+    const PRF_STAGE_LABEL: Record<string, string> = {
+        deptHead: 'Head of Department', divHead: 'Head of Division/Office', hrManager: 'Head of HR',
+        hrRecruitment: 'Head of Hiring Unit', gm: 'General Manager',
+    };
+    const prfNextStage = (r: RecruitmentRequest): string | null => {
+        const a: any = (r as any).prfApprovals || {};
+        return PRF_STAGES.find(s => !a[s]) || null;
+    };
+    const canActPrfStage = (stage: string): boolean => {
+        const role = currentUser?.role;
+        const perms = currentUser?.permissions || [];
+        if (role === 'SUPER_ADMIN') return true;
+        switch (stage) {
+            case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE';
+            case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE';
+            case 'hrManager': return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
+            case 'hrRecruitment': return perms.includes('approve_hr_recruitment');
+            case 'gm': return role === 'GENERAL_MANAGER';
+            default: return false;
+        }
+    };
+
     // Can the current user act on this requisition right now?
     const canActOn = (r: RecruitmentRequest) => {
         if (r.status === 'REJECTED' || r.status === 'FULLY_APPROVED') return false;
-        // First stage: the Head of Division of the requisition's division.
+        if (r.type === 'HIRE') {
+            const stage = prfNextStage(r);
+            return stage ? canActPrfStage(stage) : false;
+        }
+        // JD_CHANGE: Division head → HR → Directorate.
         if (r.status === 'PENDING') return currentUser?.role === 'SUPER_ADMIN' || (isDivisionHead && reqDivisionId(r) === myDivisionId);
         if (r.status === 'DEPT_APPROVED') return isHR;
-        if (r.status === 'HR_APPROVED') return isGM && r.type === 'JD_CHANGE';
+        if (r.status === 'HR_APPROVED') return isDirector;
         return false;
+    };
+
+    const handlePrfDecision = async (decision: 'approve' | 'reject') => {
+        if (!selectedRequest) return;
+        const stage = prfNextStage(selectedRequest);
+        // The GM must upload the signed document to grant final approval.
+        if (decision === 'approve' && stage === 'gm' && !gmDoc) {
+            toast.error(t('gm_doc_required', { defaultValue: 'Upload the signed requisition document to approve as GM.' }));
+            return;
+        }
+        try {
+            const file = decision === 'approve' && stage === 'gm' ? gmDoc : undefined;
+            await recruitmentService.prfApprove(selectedRequest.id, decision, approvalNote, file);
+            toast.success(decision === 'approve' ? t('approval_recorded', { defaultValue: 'Approval recorded.' }) : t('req_rejected', { defaultValue: 'Requisition rejected.' }));
+            setSelectedRequest(null);
+            setApprovalNote('');
+            setGmDoc(null);
+            fetchData();
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || t('err_update_status', { defaultValue: 'Failed to update.' }));
+        }
+    };
+
+    const [prfBusy, setPrfBusy] = useState<string | null>(null);
+    const downloadPrf = async (r: RecruitmentRequest) => {
+        setPrfBusy(r.id);
+        try {
+            const blob = await recruitmentService.generatePrf(r.id);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Personnel_Requisition_${(r.jobTitle || 'requisition').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success(t('prf_generated', { defaultValue: 'Personnel Requisition Form generated.' }));
+        } catch (error: any) {
+            let msg = t('err_generate_prf', { defaultValue: 'Failed to generate the form.' });
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setPrfBusy(null);
+        }
     };
 
     // Mode-specific list
@@ -256,7 +341,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const headerFor = {
         requests: { title: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), sub: t('prf_subtitle', { defaultValue: 'Request a hire against your staffing plan, or request a change to a Job Description' }) },
         positions: { title: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), sub: t('positions_sub', { defaultValue: 'Approved hire requisitions. Source candidates from the Applicant List, or mark a position filled once staffed.' }) },
-        approvals: { title: t('nav_recruitment_approvals', { defaultValue: 'Recruitment Approvals' }), sub: t('approvals_sub', { defaultValue: 'Requisitions awaiting your decision as Head of Division, HR, or GM' }) },
+        approvals: { title: t('nav_recruitment_approvals', { defaultValue: 'Recruitment Approvals' }), sub: t('approvals_sub', { defaultValue: 'Requisitions awaiting your decision as Head of Division, HR, or Directorate' }) },
         create: { title: t('new_requisition', { defaultValue: 'New Requisition' }), sub: t('prf_subtitle', { defaultValue: 'Request a hire against your staffing plan, or request a change to a Job Description' }) },
     }[mode];
 
@@ -360,14 +445,27 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* Approval timeline */}
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                            {selectedRequest.type === 'JD_CHANGE' ? 'Approval Workflow — Division → HR → GM' : 'Approval Workflow — Division → HR'}
+                            {selectedRequest.type === 'JD_CHANGE' ? 'Approval Workflow — Division → HR → Directorate' : 'Approval Workflow — Dept → Division → HR → Recruitment → GM'}
                         </p>
                         <div className="p-5 bg-white border border-slate-100 rounded-3xl">
-                            {[
-                                { label: 'Head of Division', person: selectedRequest.deptApprovedBy, note: selectedRequest.deptNote, date: selectedRequest.deptApprovedAt, done: !!selectedRequest.deptApprovedById, color: 'bg-amber-500' },
-                                { label: selectedRequest.type === 'HIRE' ? 'HR Final Approval' : 'HR Review', person: selectedRequest.hrApprovedBy, note: selectedRequest.hrNote, date: selectedRequest.hrApprovedAt, done: !!selectedRequest.hrApprovedById || (selectedRequest.type === 'HIRE' && selectedRequest.status === 'FULLY_APPROVED'), color: selectedRequest.type === 'HIRE' ? 'bg-emerald-500' : 'bg-blue-500' },
-                                ...(selectedRequest.type === 'JD_CHANGE' ? [{ label: 'General Manager / Directorate Head', person: selectedRequest.gmApprovedBy, note: selectedRequest.gmNote, date: selectedRequest.gmApprovedAt, done: selectedRequest.status === 'FULLY_APPROVED', color: 'bg-emerald-500' }] : []),
-                            ].map((stage, i, arr) => (
+                            {(selectedRequest.type === 'HIRE'
+                                ? (() => {
+                                    const a: any = (selectedRequest as any).prfApprovals || {};
+                                    const mk = (key: string, label: string, color: string) => ({ label, person: a[key]?.byName ? { fullName: a[key].byName } : null, note: a[key]?.note, date: a[key]?.at, done: !!a[key], color, document: a[key]?.document || null });
+                                    return [
+                                        mk('deptHead', 'Head of Department', 'bg-amber-500'),
+                                        mk('divHead', 'Head of Division/Office', 'bg-amber-500'),
+                                        mk('hrManager', 'Head of HR', 'bg-blue-500'),
+                                        mk('hrRecruitment', 'Head of Hiring Unit', 'bg-blue-500'),
+                                        mk('gm', 'General Manager', 'bg-emerald-500'),
+                                    ];
+                                })()
+                                : [
+                                    { label: 'Head of Division', person: selectedRequest.deptApprovedBy, note: selectedRequest.deptNote, date: selectedRequest.deptApprovedAt, done: !!selectedRequest.deptApprovedById, color: 'bg-amber-500' },
+                                    { label: 'HR Review', person: selectedRequest.hrApprovedBy, note: selectedRequest.hrNote, date: selectedRequest.hrApprovedAt, done: !!selectedRequest.hrApprovedById, color: 'bg-blue-500' },
+                                    { label: 'Head of Directorate', person: selectedRequest.gmApprovedBy, note: selectedRequest.gmNote, date: selectedRequest.gmApprovedAt, done: selectedRequest.status === 'FULLY_APPROVED', color: 'bg-emerald-500' },
+                                ]
+                            ).map((stage: any, i: number, arr: any[]) => (
                                 <div key={i} className={`relative pl-8 ${i < arr.length - 1 ? 'pb-8 border-l-2 border-dashed border-slate-100' : ''}`}>
                                     <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm ${stage.done ? stage.color : 'bg-slate-200'}`} />
                                     <p className="text-[11px] font-black text-slate-800 uppercase tracking-wider">{stage.label}</p>
@@ -376,8 +474,14 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                             <p className={`text-[9px] font-black uppercase tracking-widest ${selectedRequest.status === 'REJECTED' ? 'text-rose-500' : 'text-emerald-600'}`}>
                                                 {selectedRequest.status === 'REJECTED' ? t('decision_by', { defaultValue: 'Decision by' }) : `✓ ${t('accepted_by', { defaultValue: 'Accepted by' })}`}
                                             </p>
-                                            <p className="text-xs font-bold text-indigo-600">{stage.person.fullName}{stage.date ? <span className="text-slate-400 font-medium"> · {new Date(stage.date).toLocaleDateString()}</span> : null}</p>
+                                            <p className="text-xs font-bold text-indigo-600">{stage.person.fullName}{stage.date ? <span className="text-slate-400 font-medium"> · {new Date(stage.date).toLocaleString()}</span> : null}</p>
                                             {stage.note && <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 italic">"{stage.note}"</p>}
+                                            {(stage as any).document && (
+                                                <a href={`${SERVER_URL}${(stage as any).document}`} target="_blank" rel="noreferrer"
+                                                    className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 mt-1">
+                                                    <FileText className="w-3.5 h-3.5" />{t('view_uploaded_document', { defaultValue: 'View uploaded document' })}
+                                                </a>
+                                            )}
                                         </div>
                                     ) : <p className="text-[10px] text-slate-400 italic mt-1">Awaiting</p>}
                                 </div>
@@ -391,23 +495,42 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Provide Decision</p>
                             <textarea value={approvalNote} onChange={(e) => setApprovalNote(e.target.value)} placeholder="Add a comment (optional)"
                                 className="w-full px-4 py-3 bg-white border border-indigo-200 rounded-xl outline-none font-medium text-slate-600 text-sm" />
-                            <div className="flex gap-3">
-                                <button onClick={() => handleUpdateStatus('REJECTED')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">Reject</button>
-                                <button onClick={() => {
-                                    if (selectedRequest.status === 'PENDING') handleUpdateStatus('DEPT_APPROVED');
-                                    else if (selectedRequest.status === 'DEPT_APPROVED') {
-                                        handleUpdateStatus(selectedRequest.type === 'HIRE' ? 'FULLY_APPROVED' : 'HR_APPROVED');
-                                    }
-                                    else handleUpdateStatus('FULLY_APPROVED');
-                                }} className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700">
-                                    {selectedRequest.status === 'PENDING'
-                                        ? 'Approve (Head of Division)'
-                                        : selectedRequest.status === 'DEPT_APPROVED'
-                                            ? (selectedRequest.type === 'HIRE' ? 'Approve (HR — Final)' : 'Approve (HR)')
-                                            : 'Grant Final Approval (GM)'}
-                                </button>
-                            </div>
+                            {selectedRequest.type === 'HIRE' ? (
+                                <>
+                                    {prfNextStage(selectedRequest) === 'gm' && (
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest">{t('upload_signed_document', { defaultValue: 'Upload signed document (required)' })}</label>
+                                            <input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setGmDoc(e.target.files?.[0] || null)}
+                                                className="w-full text-xs text-slate-600 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-600 file:font-bold" />
+                                        </div>
+                                    )}
+                                    <div className="flex gap-3">
+                                        <button onClick={() => handlePrfDecision('reject')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">Reject</button>
+                                        <button onClick={() => handlePrfDecision('approve')} className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700">
+                                            {(() => { const s = prfNextStage(selectedRequest); return s ? `Approve (${PRF_STAGE_LABEL[s]})` : 'Approve'; })()}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex gap-3">
+                                    <button onClick={() => handleUpdateStatus('REJECTED')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">Reject</button>
+                                    <button onClick={() => {
+                                        if (selectedRequest.status === 'PENDING') handleUpdateStatus('DEPT_APPROVED');
+                                        else if (selectedRequest.status === 'DEPT_APPROVED') handleUpdateStatus('HR_APPROVED');
+                                        else handleUpdateStatus('FULLY_APPROVED');
+                                    }} className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700">
+                                        {selectedRequest.status === 'PENDING' ? 'Approve (Head of Division)' : selectedRequest.status === 'DEPT_APPROVED' ? 'Approve (HR)' : 'Grant Final Approval (Directorate)'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
+                    )}
+
+                    {selectedRequest.type === 'HIRE' && (
+                        <button onClick={() => downloadPrf(selectedRequest)} disabled={prfBusy === selectedRequest.id}
+                            className="w-full py-3.5 bg-white border-2 border-indigo-200 text-indigo-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:border-indigo-400 hover:bg-indigo-50 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                            <FileText className="w-4 h-4" />{prfBusy === selectedRequest.id ? t('generating', { defaultValue: 'Generating…' }) : t('download_prf', { defaultValue: 'Personnel Requisition Form' })}
+                        </button>
                     )}
 
                     <button onClick={() => { setSelectedRequest(null); setApprovalNote(''); }} className="w-full py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-50 transition-all">
@@ -657,6 +780,43 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                     <p className="text-[11px] font-medium text-slate-400 mt-1">{t('quantity_hint', { defaultValue: 'Request only the number you need — you don\'t have to fill all open slots at once.' })}</p>
                                 </div>
                             )}
+
+                            {/* Personnel Requisition Form details */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                                <div className="sm:col-span-2">
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-slate-400" dir="rtl">/ يقدم تقاريره إلى</span></label>
+                                    <input type="text" value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} placeholder="e.g. Head of Finance"
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('employment_type', { defaultValue: 'Employment Type' })}</label>
+                                    <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        <option value="Full-time">Full-time / دوام كامل</option>
+                                        <option value="Part-time">Part-time / دوام جزئي</option>
+                                        <option value="Contract">Contract / عقد</option>
+                                        <option value="Temporary">Temporary / مؤقت</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('type_of_request', { defaultValue: 'Type of Request' })}</label>
+                                    <select value={typeOfRequest} onChange={(e) => setTypeOfRequest(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        <option value="New Position">New Position / وظيفة جديدة</option>
+                                        <option value="Replacement">Replacement / إحلال</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('english_language', { defaultValue: 'English Language' })}</label>
+                                    <input type="text" value={languageEn} onChange={(e) => setLanguageEn(e.target.value)} placeholder="e.g. Fluent / Good / Basic"
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('arabic_language', { defaultValue: 'Arabic Language' })}</label>
+                                    <input type="text" value={languageAr} onChange={(e) => setLanguageAr(e.target.value)} placeholder="e.g. Native / Fluent"
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                </div>
+                            </div>
                         </div>
                             );
                         })()

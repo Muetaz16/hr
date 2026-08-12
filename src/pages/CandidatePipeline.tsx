@@ -87,6 +87,8 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     // Generic action modal
     const [actCand, setActCand] = useState<Candidate | null>(null);
     const [actType, setActType] = useState<ActionType | null>(null);
+    const [linkModalOpen, setLinkModalOpen] = useState(false);
+    const [generatedLink, setGeneratedLink] = useState('');
     const [note, setNote] = useState('');
     const [criteria, setCriteria] = useState<Record<string, number>>({});
     const [recommend, setRecommend] = useState(true);
@@ -269,6 +271,16 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     // One-click generation using the details captured when the candidate was added.
     const [offerBusy, setOfferBusy] = useState<string | null>(null);
     const generateOffer = async (c: Candidate) => {
+        // The offer can't be built without the salary structure / experience level. Rather than
+        // hit the backend and surface a confusing "re-add the candidate" error, guide HR straight
+        // to the Edit Offer Details form.
+        if (!c.salaryStructure || !c.jobGrade) {
+            toast.warning(t('offer_details_required', {
+                defaultValue: 'Please add the offer details (salary structure & experience level) first.'
+            }));
+            openAction(c, 'editOffer');
+            return;
+        }
         setOfferBusy(c.id);
         try {
             const blob = await candidateService.generateOffer(c.id);
@@ -320,6 +332,45 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         }
     };
 
+    const [letterBusy, setLetterBusy] = useState<string | null>(null);
+    const generateHiringLetter = async (c: Candidate) => {
+        setLetterBusy(c.id);
+        try {
+            const blob = await candidateService.generateHiringLetter(c.id);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Hiring_Letter_${(c.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success(t('hiring_letter_generated', { defaultValue: 'Hiring letter generated.' }));
+        } catch (err: any) {
+            let msg = t('err_generate_hiring_letter', { defaultValue: 'Failed to generate the hiring letter.' });
+            const data = err.response?.data;
+            if (data instanceof Blob) {
+                try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep fallback */ }
+            } else if (data?.error) {
+                msg = data.error;
+            }
+            toast.error(msg);
+        } finally {
+            setLetterBusy(null);
+        }
+    };
+
+    // Show what the new hire submitted through their onboarding link.
+    const [onbCand, setOnbCand] = useState<any | null>(null);
+    const [onbLoading, setOnbLoading] = useState(false);
+    const viewOnboarding = async (c: Candidate) => {
+        setOnbCand(c);
+        setOnbLoading(true);
+        try {
+            const full = await candidateService.getCandidateById(c.id);
+            setOnbCand(full);
+        } catch { /* fall back to the list record */ }
+        finally { setOnbLoading(false); }
+    };
+
     const handleDelete = async (c: Candidate) => {
         if (!(await confirm({ message: t('confirm_delete_cand', { defaultValue: 'Remove this candidate?' }), danger: true }))) return;
         try {
@@ -331,6 +382,17 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
 
     const enroll = (c: Candidate) => {
         const r = c.requisition;
+        // Guard: don't start an enrolment the requisition can't accept. Otherwise the employee
+        // record gets created but the "hire" step is rejected (position already full), leaving an
+        // orphan employee and a candidate stuck at OFFER.
+        const quantity = r?.quantity ?? 1;
+        const hiredCount = candidates.filter(x => x.requisitionId === c.requisitionId && x.stage === 'HIRED').length;
+        if (r?.filled || hiredCount >= quantity) {
+            toast.error(t('position_already_filled', {
+                defaultValue: `This position has already been filled (${hiredCount}/${quantity}). Increase the requisition quantity or remove the existing hire before enrolling another candidate.`
+            }));
+            return;
+        }
         const p = new URLSearchParams();
         if (r?.departmentId) p.set('departmentId', r.departmentId);
         if (r?.unitId) p.set('unitId', r.unitId);
@@ -361,7 +423,8 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                 await navigator.clipboard.writeText(link);
                 toast.success(t('onboarding_link_copied', { defaultValue: 'Onboarding link copied — send it to the new hire.' }));
             } catch {
-                window.prompt(t('onboarding_link_prompt', { defaultValue: 'Copy this onboarding link:' }), link);
+                setGeneratedLink(link);
+                setLinkModalOpen(true);
             }
             fetchData();
         } catch (e: any) {
@@ -747,9 +810,23 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                             </div>
 
                             {c.stage === 'HIRED' && (
-                                <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{t('enrolled_as_employee', { defaultValue: 'Enrolled as employee' })}</span>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{t('enrolled_as_employee', { defaultValue: 'Enrolled as employee' })}</span>
+                                    </div>
+                                    <div className="flex gap-2 pt-1">
+                                        <button onClick={() => viewOnboarding(c)}
+                                            className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all inline-flex items-center justify-center gap-1.5">
+                                            <FileText className="w-3.5 h-3.5" />{t('see_details', { defaultValue: 'See Details' })}
+                                        </button>
+                                        {isHR && (
+                                            <button onClick={() => generateHiringLetter(c)} disabled={letterBusy === c.id}
+                                                className="flex-1 py-2.5 bg-white border-2 border-emerald-200 text-emerald-700 rounded-xl font-black text-[10px] uppercase tracking-widest hover:border-emerald-400 hover:bg-emerald-50 transition-all inline-flex items-center justify-center gap-1.5 disabled:opacity-60">
+                                                <FileText className="w-3.5 h-3.5" />{letterBusy === c.id ? t('generating', { defaultValue: 'Generating…' }) : t('hiring_letter', { defaultValue: 'Hiring Letter' })}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             {c.stage === 'OFFER' && (
@@ -1222,9 +1299,117 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                 )}
             </Modal>
 
+            {/* Onboarding Link Modal */}
+            <Modal isOpen={linkModalOpen} onClose={() => setLinkModalOpen(false)} title={t('onboarding_link_title', { defaultValue: 'Onboarding Link' })} maxWidth="max-w-md">
+                <div className="space-y-4 py-2">
+                    <p className="text-sm text-slate-600">{t('onboarding_link_prompt', { defaultValue: 'Copy this onboarding link:' })}</p>
+                    <div className="flex items-center gap-2">
+                        <input type="text" readOnly value={generatedLink} className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 bg-slate-50 focus:outline-none" />
+                        <button onClick={() => {
+                            const copyFallback = () => {
+                                const textArea = document.createElement("textarea");
+                                textArea.value = generatedLink;
+                                textArea.style.position = "fixed";
+                                document.body.appendChild(textArea);
+                                textArea.focus();
+                                textArea.select();
+                                try {
+                                    document.execCommand('copy');
+                                    toast.success(t('onboarding_link_copied', { defaultValue: 'Onboarding link copied — send it to the new hire.' }));
+                                    setLinkModalOpen(false);
+                                } catch (err) {
+                                    toast.error('Failed to copy. Please select the link and copy manually.');
+                                }
+                                document.body.removeChild(textArea);
+                            };
+
+                            if (navigator.clipboard && window.isSecureContext) {
+                                navigator.clipboard.writeText(generatedLink).then(() => {
+                                    toast.success(t('onboarding_link_copied', { defaultValue: 'Onboarding link copied — send it to the new hire.' }));
+                                    setLinkModalOpen(false);
+                                }).catch(() => copyFallback());
+                            } else {
+                                copyFallback();
+                            }
+                        }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700">
+                            {t('copy', { defaultValue: 'Copy' })}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Onboarding Submission Details — what the new hire filled in via their onboarding link */}
+            <Modal isOpen={!!onbCand} onClose={() => setOnbCand(null)} title={t('onboarding_details', { defaultValue: 'Onboarding Details' })} maxWidth="max-w-2xl">
+                {onbLoading ? (
+                    <p className="text-sm text-slate-500 py-4">{t('loading', { defaultValue: 'Loading…' })}</p>
+                ) : (() => {
+                    const d = (onbCand?.onboardingData) || {};
+                    const textEntries = ONB_FIELD_LABELS.filter(([k]) => d[k] !== undefined && d[k] !== null && String(d[k]).trim() !== '');
+                    const docEntries = ONB_DOC_LABELS.filter(([k]) => d[k]);
+                    if (!textEntries.length && !docEntries.length) {
+                        return <p className="text-sm text-slate-500 py-4">{t('no_onboarding_data', { defaultValue: 'The new hire has not submitted any onboarding details.' })}</p>;
+                    }
+                    return (
+                        <div className="space-y-6 py-1">
+                            {onbCand?.onboardingSubmittedAt && (
+                                <p className="text-xs text-slate-400 font-medium">
+                                    {t('submitted_on', { defaultValue: 'Submitted' })} {new Date(onbCand.onboardingSubmittedAt).toLocaleString()}
+                                </p>
+                            )}
+                            {textEntries.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                                    {textEntries.map(([k, label]) => (
+                                        <div key={k}>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                            <p className="text-sm font-semibold text-slate-700 break-words">{String(d[k])}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {docEntries.length > 0 && (
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t('documents', { defaultValue: 'Documents' })}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {docEntries.map(([k, label]) => (
+                                            <a key={k} href={`${SERVER_URL}${d[k]}`} target="_blank" rel="noreferrer"
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-indigo-600 hover:bg-slate-100 transition-all">
+                                                <Paperclip className="w-3.5 h-3.5" />{label}
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
+            </Modal>
+
         </div>
     );
 };
+
+// Labels for the self-service onboarding data the new hire submits (keys match what the
+// public onboarding form stores on the candidate).
+const ONB_FIELD_LABELS: [string, string][] = [
+    ['fullName', 'Full Name'], ['fullNameArabic', 'Full Name (Arabic)'],
+    ['dateOfBirth', 'Date of Birth'], ['placeOfBirth', 'Place of Birth'], ['placeOfBirthArabic', 'Place of Birth (Arabic)'],
+    ['gender', 'Gender'], ['bloodType', 'Blood Type'],
+    ['nationality', 'Nationality'], ['nationalityArabic', 'Nationality (Arabic)'], ['nationalId', 'National ID'],
+    ['academicQualification', 'Academic Qualification'], ['academicQualificationArabic', 'Academic Qualification (Arabic)'],
+    ['idCardNumber', 'ID Card Number'], ['idPlaceOfIssue', 'ID Place of Issue'], ['idPlaceOfIssueArabic', 'ID Place of Issue (Arabic)'], ['idIssueDate', 'ID Issue Date'],
+    ['passportNumber', 'Passport Number'], ['passportPlaceOfIssue', 'Passport Place of Issue'], ['passportPlaceOfIssueArabic', 'Passport Place of Issue (Arabic)'], ['passportExpiryDate', 'Passport Expiry'],
+    ['drivingLicenseType', 'Driving License Type'], ['drivingLicenseNumber', 'Driving License Number'], ['drivingLicenseExpiry', 'Driving License Expiry'], ['drivingLicensePlaceOfIssue', 'Driving License Place of Issue'],
+    ['personalPhone', 'Phone'], ['personalEmail', 'Email'], ['emergencyContactNumber', 'Emergency Contact'],
+    ['residentialAddress', 'Address'], ['residentialAddressArabic', 'Address (Arabic)'],
+    ['workedBefore', 'Worked Before'], ['hasRelativesInCompany', 'Has Relatives in Company'], ['relativesNames', 'Relatives Names'], ['relativesNamesArabic', 'Relatives Names (Arabic)'],
+    ['bankName', 'Bank Name'], ['bankBranchName', 'Bank Branch'], ['bankAccountNumber', 'Bank Account Number'],
+    ['serviceProviderCompany', 'Service Provider Company'], ['employeeTravelDate', 'Travel Date'], ['employeeStartDate', 'Start Date'],
+];
+const ONB_DOC_LABELS: [string, string][] = [
+    ['cvUrl', 'CV'], ['degreeUrl', 'Degree'], ['birthCertUrl', 'Birth Certificate'], ['passportCopyUrl', 'Passport Copy'],
+    ['bankCheckUrl', 'Bank Check'], ['photoUrl', 'Photo'], ['idCardUrl', 'ID Card'], ['jobOfferUrl', 'Job Offer'],
+    ['healthCertUrl', 'Health Certificate'], ['ticketUrl', 'Ticket'], ['residencyDocumentUrl', 'Residency Document'], ['interviewEvaluationUrl', 'Interview Evaluation'],
+];
 
 const EmptyState: React.FC<{ icon: React.ElementType; text: string }> = ({ icon: Icon, text }) => (
     <div className="py-20 text-center space-y-4 bg-white/40 rounded-[2.5rem] border border-slate-100">

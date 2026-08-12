@@ -9,6 +9,7 @@ interface AuthContextType {
     isAdmin: boolean;
     login: (token: string, user: User) => void;
     logout: () => void;
+    updateCurrentUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -16,7 +17,8 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     isAdmin: false,
     login: () => { },
-    logout: () => { }
+    logout: () => { },
+    updateCurrentUser: () => { }
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -80,10 +82,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.location.href = '/login';
     };
 
+    // Merge a partial update into the current user and persist it (e.g. after
+    // saving a signature) so the change is reflected without a re-login.
+    const updateCurrentUser = (patch: Partial<User>) => {
+        setCurrentUser(prev => {
+            if (!prev) return prev;
+            const next = { ...prev, ...patch };
+            localStorage.setItem('user', JSON.stringify(next));
+            return next;
+        });
+    };
+
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
 
     return (
-        <AuthContext.Provider value={{ currentUser, loading, isAdmin, login, logout }}>
+        <AuthContext.Provider value={{ currentUser, loading, isAdmin, login, logout, updateCurrentUser }}>
             {children}
         </AuthContext.Provider>
     );

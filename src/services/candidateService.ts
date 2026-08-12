@@ -75,6 +75,12 @@ export const candidateService = {
         return response.data;
     },
 
+    // Downloads the pre-filled bilingual Hiring Letter .docx for an enrolled employee.
+    generateHiringLetter: async (id: string): Promise<Blob> => {
+        const response = await api.get(`/candidates/${id}/hiring-letter`, { responseType: 'blob' });
+        return response.data;
+    },
+
     // Completes the offer parameters (salary structure, grade, residency, place of work, contract length).
     updateOfferDetails: async (id: string, data: {
         salaryStructure?: string; jobGrade?: string; placeOfWork?: string;

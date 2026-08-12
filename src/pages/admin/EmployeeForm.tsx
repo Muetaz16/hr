@@ -34,7 +34,8 @@ import {
     IdCard,
     Car,
     Upload,
-    Globe2
+    Globe2,
+    UserPlus
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -190,6 +191,12 @@ const EmployeeForm: React.FC = () => {
     const jobDescriptions = orgData?.jobDescriptions || [];
 
     const isGlobalScopeRole = ['GENERAL_MANAGER', 'CHAIRMAN'].includes(formData.role || '');
+
+    // A BioTime-imported stub that hasn't been enrolled yet. Editing one of these is the
+    // "Complete Enrolment" flow: on save we require a Job Description + login email, flip the
+    // record to ACTIVE, and the backend creates the login account (which then appears in Access
+    // Management). Ordinary edits of already-active employees are unaffected.
+    const isPendingEnrollment = isEditMode && (formData as any).enrollmentStatus === 'PENDING_ENROLLMENT';
 
     // Every enrolled person now gets a login account created right here from their email — no matter
     // the role (standard Employee, any Head, GM, HR, Personnel, etc.).
@@ -458,11 +465,13 @@ const EmployeeForm: React.FC = () => {
     // requisition or the candidate's onboarding submission) — not just when HR types it manually,
     // which is the only case the fullName input's own onChange handler covers.
     useEffect(() => {
-        if (isEditMode) return;
+        // Skip for ordinary edits of active employees (keep their existing email), but DO suggest an
+        // address when completing a pending BioTime import, which arrives with no email of its own.
+        if (isEditMode && !isPendingEnrollment) return;
         if (formData.fullName && !formData.email) {
             setFormData(prev => ({ ...prev, email: generateEmailFromFullName(prev.fullName || '') }));
         }
-    }, [isEditMode, formData.fullName, formData.email]);
+    }, [isEditMode, isPendingEnrollment, formData.fullName, formData.email]);
 
     useEffect(() => {
         if (formData.jobCategory && formData.jobGrade && formData.salaryStructureType) {
@@ -536,8 +545,16 @@ const EmployeeForm: React.FC = () => {
             return;
         }
 
-        if (!isEditMode && !isGlobalScopeRole && !formData.jobDescriptionId) {
+        // A Job Description is required both for brand-new employees and when completing a pending
+        // BioTime import (ordinary edits of active employees are exempt — they may already have one).
+        if ((!isEditMode || isPendingEnrollment) && !isGlobalScopeRole && !formData.jobDescriptionId) {
             toast.error(t('job_description_required', { defaultValue: 'A Job Description must be selected. New employees cannot be added without an assigned Job Description (Staffing Plan slot).' }));
+            return;
+        }
+
+        // Completing enrolment creates the login account, so an email is mandatory here.
+        if (isPendingEnrollment && !formData.email) {
+            toast.error(t('login_email_required', { defaultValue: 'A login email is required to create the account and complete enrolment.' }));
             return;
         }
 
@@ -548,8 +565,14 @@ const EmployeeForm: React.FC = () => {
 
         try {
             if (isEditMode && id) {
-                await employeeService.updateEmployee(id, formData);
-                toast.success(t('employee_updated'));
+                // Completing a pending BioTime import: flip to ACTIVE so the backend creates the
+                // login account (visible afterwards in Access Management).
+                const payload: any = { ...formData };
+                if (isPendingEnrollment) payload.enrollmentStatus = 'ACTIVE';
+                await employeeService.updateEmployee(id, payload);
+                toast.success(isPendingEnrollment
+                    ? t('enrolment_completed', { defaultValue: 'Enrolment completed — login account created and available in Access Management.' })
+                    : t('employee_updated'));
             } else {
                 const created = await employeeService.createEmployee(formData as any);
                 // If enrolling a hired candidate, close them out and mark the requisition filled.
@@ -704,6 +727,14 @@ const EmployeeForm: React.FC = () => {
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
 
                 <form onSubmit={handleSubmit} className="px-2 lg:px-0 space-y-8">
+                    {isPendingEnrollment && (
+                        <div className="flex items-start gap-3 px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                            <UserPlus size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                            <p className="text-xs font-bold text-amber-800">
+                                {t('pending_enrolment_notice', { defaultValue: 'This person was imported from the attendance system and is awaiting enrolment. Assign a Job Description, role and department, then save — a login account will be created and they will appear in Access Management.' })}
+                            </p>
+                        </div>
+                    )}
                     {onboardingType && (
                         <div className="flex items-center gap-3 px-6 py-4 bg-cyan-50 border border-cyan-100 rounded-2xl">
                             <Globe2 size={18} className="text-cyan-600 shrink-0" />
@@ -763,7 +794,7 @@ const EmployeeForm: React.FC = () => {
                                         value={formData.staffId || ''}
                                         onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
                                         className="flex-1 min-w-0 px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-bold text-slate-800 shadow-sm"
-                                        placeholder="IPH-126-001"
+                                        placeholder="IPH-0126-001"
                                     />
                                     <button
                                         type="button"
@@ -775,7 +806,7 @@ const EmployeeForm: React.FC = () => {
                                         <Sparkles size={14} />{staffIdBusy ? t('generating', { defaultValue: 'Generating…' }) : t('auto', { defaultValue: 'Auto' })}
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-slate-400 font-medium">{t('staff_id_hint', { defaultValue: 'IPH-<1 resident / 2 direct non-resident / 3 non-resident><year>-<seq>. Auto-generate or type the sequence yourself.' })}</p>
+                                <p className="text-[10px] text-slate-400 font-medium">{t('staff_id_hint', { defaultValue: 'IPH-0<1 resident / 2 direct non-resident / 3 non-resident><year>-<seq> (e.g. IPH-0126-001). Auto-generate or type the sequence yourself.' })}</p>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('passport_number', { defaultValue: 'Passport Number' })}</label>
@@ -1633,7 +1664,9 @@ const EmployeeForm: React.FC = () => {
                             className="flex-1 sm:flex-none px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
                         >
                             <Save size={16} className="group-hover:rotate-12 transition-transform" />
-                            {isEditMode ? t('commit_changes') : t('confirm_enrollment')}
+                            {isPendingEnrollment
+                                ? t('complete_enrolment_create_account', { defaultValue: 'Complete Enrolment & Create Account' })
+                                : (isEditMode ? t('commit_changes') : t('confirm_enrollment'))}
                         </button>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { roleThemes } from '../config/roleThemes';
@@ -16,7 +16,8 @@ import {
     Briefcase,
     BarChart3,
     Plane,
-    ShieldCheck
+    ShieldCheck,
+    PenTool
 } from 'lucide-react';
 import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
@@ -34,12 +35,40 @@ import EvaluationAnalytics from '../components/EvaluationAnalytics';
 import ContractNotifications from '../components/ContractNotifications';
 import Skeleton from '../components/Skeleton';
 import JobDescriptionView from '../components/JobDescriptionView';
+import Modal from '../components/Modal';
+import SignaturePad from '../components/SignaturePad';
+import api from '../services/apiClient';
+import { toast } from 'sonner';
 
 const Dashboard: React.FC = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, updateCurrentUser } = useAuth();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
+
+    // Signature card state (heads/approvers can view & manage their signature here).
+    const SIGNATURE_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER', 'CHAIRMAN', 'HR_MANAGER', 'SUPER_ADMIN'];
+    const canManageSignature = SIGNATURE_ROLES.includes(currentUser?.role || '');
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [isSavingSignature, setIsSavingSignature] = useState(false);
+
+    const handleSaveSignature = async (dataUrl: string | null) => {
+        setIsSavingSignature(true);
+        try {
+            const res = await api.post('/auth/signature', { signature: dataUrl });
+            updateCurrentUser({ signature: res.data?.signature ?? dataUrl ?? null });
+            toast.success(dataUrl
+                ? t('signature_saved_success', { defaultValue: 'Signature saved successfully!' })
+                : t('signature_removed_success', { defaultValue: 'Signature removed.' }));
+            setIsSignatureModalOpen(false);
+        } catch (error: any) {
+            console.error('Error saving signature:', error);
+            const msg = error.response?.data?.error || t('error_saving_signature', { defaultValue: 'Failed to save signature.' });
+            toast.error(msg);
+        } finally {
+            setIsSavingSignature(false);
+        }
+    };
 
     const { data, isLoading } = useQuery({
         queryKey: ['dashboard', currentUser?.id, currentUser?.role],
@@ -425,6 +454,46 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
+            {/* My Signature Section */}
+            {canManageSignature && (
+                <div className="glass-card p-8 rounded-[32px] relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="flex items-start gap-4">
+                            <div className="p-4 rounded-2xl bg-primary-50 text-primary-600 shadow-lg shrink-0">
+                                <PenTool className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-outfit font-black text-slate-800 tracking-tight">{t('my_signature', { defaultValue: 'My Signature' })}</h2>
+                                <p className="text-slate-500 text-sm font-medium mt-1 max-w-md">
+                                    {t('my_signature_dashboard_subtitle', { defaultValue: 'Your signature is used on approval forms. Draw it once and it will be applied when you approve.' })}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-6 shrink-0">
+                            {currentUser?.signature ? (
+                                <div className="flex items-center justify-center h-28 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-inner">
+                                    <img src={currentUser.signature} alt={t('my_signature', { defaultValue: 'My Signature' })} className="max-h-full max-w-full object-contain" />
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center h-28 w-56 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 text-slate-300 font-bold uppercase tracking-widest text-[11px]">
+                                    {t('no_signature_yet', { defaultValue: 'No signature yet' })}
+                                </div>
+                            )}
+                            <button
+                                onClick={() => setIsSignatureModalOpen(true)}
+                                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#541c2c] text-white font-black text-sm uppercase tracking-wider hover:bg-[#3d1420] transition-all hover:scale-[1.03] active:scale-95 shadow-lg"
+                            >
+                                <PenTool className="w-4 h-4" />
+                                {currentUser?.signature
+                                    ? t('edit_signature', { defaultValue: 'Edit Signature' })
+                                    : t('create_signature', { defaultValue: 'Create Signature' })}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* My Lifecycle Data Section */}
             {myEmployeeData && (
                 <div className="space-y-6">
@@ -646,6 +715,20 @@ const Dashboard: React.FC = () => {
                     <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-primary-500/10 blur-[100px] rounded-full group-hover:bg-primary-500/20 transition-colors duration-1000"></div>
                 </section>
             </div>
+
+            {/* My Signature Modal */}
+            <Modal
+                isOpen={isSignatureModalOpen}
+                onClose={() => setIsSignatureModalOpen(false)}
+                title={t('my_signature', { defaultValue: 'My Signature' })}
+            >
+                <SignaturePad
+                    initialValue={currentUser?.signature ?? null}
+                    onSave={handleSaveSignature}
+                    onCancel={() => setIsSignatureModalOpen(false)}
+                    saving={isSavingSignature}
+                />
+            </Modal>
         </div>
     );
 };

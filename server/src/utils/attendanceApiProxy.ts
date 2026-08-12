@@ -73,6 +73,38 @@ export async function findBioTimeEmpIdByCode(empCode: string): Promise<number | 
     }
 }
 
+// One employee as returned by BioTime's roster endpoint (GET /api/attendance).
+export interface BioTimeRosterEmployee {
+    id: number;            // BioTime's own numeric id -> our Employee.bioId
+    empCode: string;       // staff code -> our Employee.staffId
+    firstName: string;     // -> our Employee.fullName
+    positionName: string | null; // -> our Employee.position (free text)
+}
+
+// Fetches the full employee roster from BioTime (GET /api/attendance). Normalises BioTime's
+// snake_case DTO ({ id, emp_code, first_name, position: { position_name } }) into the camelCase
+// shape above. Returns [] and never throws if BioTime is unreachable or the payload is malformed —
+// callers (the bulk sync) decide how to treat an empty roster.
+export async function fetchBioTimeRoster(): Promise<BioTimeRosterEmployee[]> {
+    try {
+        const response = await fetch(new URL('/api/attendance', ATTENDANCE_API_BASE).toString());
+        if (!response.ok) return [];
+        const data: any = await response.json();
+        const rows: any[] = Array.isArray(data?.employees) ? data.employees : [];
+        return rows
+            .map((e) => ({
+                id: Number(e?.id),
+                empCode: String(e?.emp_code ?? '').trim(),
+                firstName: String(e?.first_name ?? '').trim(),
+                positionName: e?.position?.position_name ?? null,
+            }))
+            .filter((e) => Number.isFinite(e.id) && e.empCode.length > 0);
+    } catch (error) {
+        console.error('[BioTime] Failed to fetch roster:', error);
+        return [];
+    }
+}
+
 // Registers a leave in BioTime once a leave request's approval chain fully completes. Never
 // throws — this is a fail-soft side effect (mirrors createBioTimeEmployeeRecord above), called
 // after the completing approval's DB transaction has already committed.
