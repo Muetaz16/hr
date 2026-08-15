@@ -8,13 +8,16 @@ import type { LeaveRequest, LeaveApprovalStep } from '../services/staffHubServic
 // (fetched separately via getMyPendingSteps) instead of the legacy status-based flow below —
 // exclude them from the old pending-requests list so the old Approve/Reject buttons (which write
 // directly to LeaveRequest.status) can't bypass the new per-step chain.
-const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'];
 const STAGE_LABELS: Record<string, string> = {
+    HEAD_ATTENDANCE: 'Head of Attendance & Payroll',
+    DIRECT_SUPERVISOR: 'Direct Supervisor',
+    HEAD_DEPT_DIVISION: 'Head of Department / Division',
     UNIT_HEAD: 'Unit Head',
     DEPT_HEAD: 'Department/Office Head',
     DIVISION_HEAD: 'Division Head',
     HR_MANAGER: 'HR Manager',
-    ADMIN_DIRECTOR: 'Administrative Director',
+    DIRECTORATE: 'Directorate',
     GENERAL_MANAGER: 'General Manager',
 };
 import { employeeService } from '../services/employeeService';
@@ -51,6 +54,8 @@ const Approvals: React.FC = () => {
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    // The document the General Manager must upload to grant the final approval, keyed by step id.
+    const [gmDocs, setGmDocs] = useState<Record<string, File | null>>({});
 
     // New Announcement State
     const [newAnnounce, setNewAnnounce] = useState({
@@ -153,9 +158,17 @@ const Approvals: React.FC = () => {
     // step's assigned approver and that it's genuinely their turn; the client just sends the
     // decision, no role/status guessing needed.
     const handleStepDecision = async (step: LeaveApprovalStep, decision: 'APPROVE' | 'REJECT', note: string = '') => {
+        // The General Manager must attach a document before their (final) approval.
+        const isGM = step.stage === 'GENERAL_MANAGER';
+        const doc = gmDocs[step.id] || null;
+        if (isGM && decision === 'APPROVE' && !doc) {
+            toast.error(t('gm_document_required', { defaultValue: 'Please upload a supporting document before approving.' }));
+            return;
+        }
         try {
-            await staffHubService.decideApprovalStep(step.leaveRequestId, step.id, decision, note);
+            await staffHubService.decideApprovalStep(step.leaveRequestId, step.id, decision, note, isGM ? doc : null);
             toast.success(decision === 'REJECT' ? t('request_rejected') : t('request_approved'));
+            setGmDocs(prev => { const n = { ...prev }; delete n[step.id]; return n; });
             fetchData();
         } catch (error: any) {
             toast.error(error?.response?.data?.error || t('failed_to_update_status'));
@@ -230,8 +243,8 @@ const Approvals: React.FC = () => {
                 {/* Tabs */}
                 <div className="flex gap-4 mt-8 pb-2 overflow-x-auto">
                     {[
-                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length + pendingSteps.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
-                        { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') },
+                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length + pendingSteps.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') },
+                        { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') },
                         {
                             id: 'announcements',
                             label: t('broadcasting'), 
@@ -272,18 +285,18 @@ const Approvals: React.FC = () => {
                                 const req = step.leaveRequest;
                                 if (!req) return null;
                                 return (
-                                    <div key={step.id} className="glass-card p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-2xl transition-all border border-[#e3c4a2]/15 group">
+                                    <div key={step.id} className="bg-white p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:shadow-lg transition-all border border-slate-100 group">
                                         <div className="flex items-center gap-6 w-full md:w-auto">
-                                            <div className="w-16 h-16 rounded-2xl bg-[#e3c4a2]/15 flex flex-col items-center justify-center font-bold text-[#e3c4a2] border border-[#e3c4a2]/20 shadow-inner">
-                                                <span className="text-[10px] uppercase font-bold text-[#aa7a51]">{format(new Date(req.startDate), 'MMM')}</span>
-                                                <span className="text-xl">{format(new Date(req.startDate), 'dd')}</span>
+                                            <div className="w-16 h-16 rounded-2xl bg-[#511d29]/5 flex flex-col items-center justify-center font-bold text-[#511d29] border border-[#511d29]/10 shadow-inner">
+                                                <span className="text-[10px] uppercase font-bold">{format(new Date(req.startDate), 'MMM')}</span>
+                                                <span className="text-xl font-black">{format(new Date(req.startDate), 'dd')}</span>
                                             </div>
                                             <div className="space-y-1">
-                                                <h3 className="text-xl font-bold text-white truncate">{(req as any).employee?.fullName || t('unknown_staff')}</h3>
-                                                <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                                                    <span className="text-[#aa7a51]">{t(req.type.toLowerCase())}</span>
-                                                    <span className="w-1 h-1 bg-[#e3c4a2]/20 rounded-full"></span>
-                                                    <span className="flex items-center gap-1 text-[#e3c4a2]/60">
+                                                <h3 className="text-xl font-bold text-slate-800 truncate">{(req as any).employee?.fullName || t('unknown_staff')}</h3>
+                                                <div className="flex items-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                                    <span className="text-amber-700">{t(req.type.toLowerCase())}</span>
+                                                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                                    <span className="flex items-center gap-1 text-slate-400">
                                                         <Clock className="w-3 h-3" />
                                                         {format(new Date(req.startDate), 'MMM dd')}
                                                         {req.endDate && ` → ${format(new Date(req.endDate), 'MMM dd')}`}
@@ -293,33 +306,56 @@ const Approvals: React.FC = () => {
                                         </div>
 
                                         <div className="flex-1 space-y-3">
-                                            <div className="bg-[#541c2c]/30 p-4 rounded-2xl border border-[#e3c4a2]/10 italic text-sm text-stone-200">
+                                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 italic text-sm text-slate-600">
                                                 "{req.reason || t('no_specific_reason')}"
                                             </div>
-                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[#e3c4a2]/60">
-                                                <div className="w-2 h-2 rounded-full bg-[#aa7a51] animate-pulse"></div>
-                                                Awaiting your approval as {STAGE_LABELS[step.stage] || step.stage}
+                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                                                {(() => {
+                                                    // Smart signature: a single approval can fill several printed rows
+                                                    // (e.g. you are both the direct manager and the division head).
+                                                    const roles = (step.coversStages && step.coversStages.length > 0)
+                                                        ? step.coversStages.map(s => STAGE_LABELS[s] || s)
+                                                        : [STAGE_LABELS[step.stage] || step.stage];
+                                                    return `Awaiting your approval as ${roles.join(' + ')}`;
+                                                })()}
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-3 w-full md:w-auto">
-                                            <button
-                                                onClick={() => handleStepDecision(step, 'APPROVE')}
-                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-900/30 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all"
-                                            >
-                                                <Check className="w-5 h-5" />
-                                                Approve
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const note = prompt(t('add_rejection_note'));
-                                                    handleStepDecision(step, 'REJECT', note || '');
-                                                }}
-                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
-                                            >
-                                                <XCircle className="w-5 h-5" />
-                                                Reject
-                                            </button>
+                                        <div className="flex flex-col gap-3 w-full md:w-auto">
+                                            {step.stage === 'GENERAL_MANAGER' && (
+                                                <label className="flex items-center gap-2 text-xs font-bold text-[#e3c4a2] bg-[#300a15]/50 border border-[#e3c4a2]/25 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-[#300a15]/70 transition-colors">
+                                                    <Paperclip className="w-4 h-4 shrink-0" />
+                                                    <span className="truncate max-w-[180px]">
+                                                        {gmDocs[step.id]?.name || t('upload_document_required', { defaultValue: 'Upload document (required)' })}
+                                                    </span>
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
+                                                        onChange={e => setGmDocs(prev => ({ ...prev, [step.id]: e.target.files?.[0] || null }))}
+                                                    />
+                                                </label>
+                                            )}
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => handleStepDecision(step, 'APPROVE')}
+                                                    disabled={step.stage === 'GENERAL_MANAGER' && !gmDocs[step.id]}
+                                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-900/30 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                                >
+                                                    <Check className="w-5 h-5" />
+                                                    Approve
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const note = prompt(t('add_rejection_note'));
+                                                        handleStepDecision(step, 'REJECT', note || '');
+                                                    }}
+                                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
+                                                >
+                                                    <XCircle className="w-5 h-5" />
+                                                    Reject
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -419,43 +455,43 @@ const Approvals: React.FC = () => {
                         
                         <div className="grid gap-4">
                             {historyRequests.map(req => (
-                                <div key={req.id} className="glass-card rounded-3xl p-6 border border-[#e3c4a2]/15 flex flex-col md:flex-row items-center gap-6 opacity-80 hover:opacity-100 transition-opacity">
-                                    <div className="w-14 h-14 rounded-2xl bg-[#e3c4a2]/15 flex flex-col items-center justify-center text-[#e3c4a2] border border-[#e3c4a2]/20">
+                                <div key={req.id} className="bg-white rounded-3xl p-6 border border-slate-100 flex flex-col md:flex-row items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="w-14 h-14 rounded-2xl bg-[#511d29]/5 flex flex-col items-center justify-center text-[#511d29] border border-[#511d29]/10">
                                         <span className="text-[8px] font-bold uppercase">{format(new Date(req.startDate), 'MMM')}</span>
-                                        <span className="text-lg font-bold">{format(new Date(req.startDate), 'dd')}</span>
+                                        <span className="text-lg font-black">{format(new Date(req.startDate), 'dd')}</span>
                                     </div>
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white">{(req as any).employee?.fullName || t('staff_member')}</span>
+                                            <span className="font-bold text-slate-800">{(req as any).employee?.fullName || t('staff_member')}</span>
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                req.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' : 'bg-red-950/40 text-red-400 border border-red-900/30'
+                                                req.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'
                                             }`}>
                                                 {req.status}
                                             </span>
                                         </div>
-                                        <div className="text-[11px] text-[#e3c4a2]/60">{t(req.type.toLowerCase())} • {format(new Date(req.startDate), 'PPP')}</div>
+                                        <div className="text-[11px] text-slate-500 font-medium">{t(req.type.toLowerCase())} • {format(new Date(req.startDate), 'PPP')}</div>
                                     </div>
 
-                                    <div className="bg-[#541c2c]/30 p-3 rounded-xl flex-1 max-w-md italic text-xs text-[#e3c4a2]/60 border border-[#e3c4a2]/10">
+                                    <div className="bg-slate-50 p-3 rounded-xl flex-1 max-w-md italic text-xs text-slate-500 border border-slate-100">
                                         "{req.reason || t('no_specific_note')}"
                                     </div>
 
                                     {/* History Status Nodes */}
-                                    <div className="flex items-center gap-2 text-[8px] font-bold uppercase text-slate-300">
+                                    <div className="flex items-center gap-2 text-[8px] font-bold uppercase text-slate-400">
                                         <div className="flex flex-col items-center gap-1">
-                                            <div className={`w-2 h-2 rounded-full ${req.status !== 'PENDING' ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">{t('unit_approval')}</span>
+                                            <div className={`w-2 h-2 rounded-full ${req.status !== 'PENDING' ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                            <span className="text-slate-400">{t('unit_approval')}</span>
                                         </div>
-                                        <div className="w-3 h-[1px] bg-[#e3c4a2]/15"></div>
+                                        <div className="w-3 h-[1px] bg-slate-200"></div>
                                         <div className="flex flex-col items-center gap-1">
-                                            <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">{t('dept_approval')}</span>
+                                            <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                            <span className="text-slate-400">{t('dept_approval')}</span>
                                         </div>
-                                        <div className="w-3 h-[1px] bg-[#e3c4a2]/15"></div>
+                                        <div className="w-3 h-[1px] bg-slate-200"></div>
                                         <div className="flex flex-col items-center gap-1">
-                                            <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-400' : 'bg-[#aa7a51]/50'}`}></div>
-                                            <span className="text-[#e3c4a2]/50">{t('dir_approval')}</span>
+                                            <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                            <span className="text-slate-400">{t('dir_approval')}</span>
                                         </div>
                                     </div>
                                 </div>

@@ -4,9 +4,11 @@ import type { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
-import { resolveApprovalChain, STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
-import { createBioTimeLeaveRecord } from '../utils/attendanceApiProxy';
+import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
+import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
+import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
+import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +16,11 @@ const prisma = new PrismaClient();
 // chain (LeaveApprovalStep). LATE_COMING/EARLY_LEAVING/HOURS_LEAVE keep using the old
 // status/updateRequestStatus flow untouched — their dedicated workflow is a separate future step.
 const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
+
+// Short attendance-permission types — routed through the 3-stage permission chain
+// (Direct Supervisor -> Head of Department -> Head of Attendance & Payroll) and, on final
+// approval, pushed to BioTime as an excused late / excused early-out.
+const PERMISSION_TYPES = ['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'];
 
 // Inclusive day count — same formula already used below in updateRequestStatus's balance
 // increment, kept identical so submission-time validation and approval-time accounting agree.
@@ -27,6 +34,39 @@ const REMAINING_BALANCE_FIELD: Record<string, 'remainingHolidays' | 'remainingEm
     EMERGENCY_LEAVE: 'remainingEmergencyHolidays',
     UNPAID_LEAVE: 'remainingUnpaidHolidays',
 };
+
+// Human-friendly leave-type label for notification copy.
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+    PAID_HOLIDAY: 'Paid Leave',
+    EMERGENCY_LEAVE: 'Emergency Leave',
+    UNPAID_LEAVE: 'Unpaid Leave',
+    LATE_COMING: 'Late Coming',
+    EARLY_LEAVING: 'Early Leaving',
+    HOURS_LEAVE: 'Hours Leave',
+};
+const leaveTypeLabel = (type: string) => LEAVE_TYPE_LABEL[type] || String(type).replace(/_/g, ' ');
+
+const fmtRange = (start: Date | string, end: Date | string | null) => {
+    const s = new Date(start).toISOString().split('T')[0];
+    if (!end) return s;
+    const e = new Date(end).toISOString().split('T')[0];
+    return s === e ? s : `${s} → ${e}`;
+};
+
+// Fan-out notification writer. Dedupes and drops null/empty userIds. Never throws — a
+// notification failure must never fail the leave action that triggered it (same fail-soft
+// contract as the BioTime write-back).
+async function notifyUsers(userIds: (string | null | undefined)[], title: string, content: string, link?: string) {
+    try {
+        const unique = Array.from(new Set(userIds.filter((u): u is string => !!u)));
+        if (unique.length === 0) return;
+        await prisma.notification.createMany({
+            data: unique.map(userId => ({ userId, title, content, link: link || null })),
+        });
+    } catch (e) {
+        console.error('[Notify] Failed to write leave notifications (non-fatal):', e);
+    }
+}
 
 // --- Leave & Permission Requests ---
 
@@ -108,15 +148,75 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         sequence: STAGE_SEQUENCE[s.stage],
                         stage: s.stage,
                         approverUserId: s.approverUserId,
+                        coversStages: s.coversStages,
                         status: 'PENDING',
                     })),
                 });
                 return created;
             });
+
+            // Notify the first-stage approver(s) that a request now awaits their decision.
+            const minSeq = Math.min(...steps.map(s => STAGE_SEQUENCE[s.stage]));
+            const firstApprovers = steps.filter(s => STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
+            await notifyUsers(
+                firstApprovers,
+                'New leave request to review',
+                `${employee.fullName} submitted a ${leaveTypeLabel(type)} request (${fmtRange(startDate, endDate || null)}).`,
+                '/approvals',
+            );
+
             return res.json(request);
         }
 
-        // Non-chain request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) — unchanged behavior.
+        // Attendance-permission types — the short 3-stage chain (Direct Supervisor -> Head of
+        // Department -> Head of Attendance & Payroll), matching the Early Departure Request Form.
+        if (PERMISSION_TYPES.includes(type)) {
+            const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+            if (!employee) return res.status(404).json({ error: 'Employee not found.' });
+
+            const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee);
+            if (blockedStage) {
+                return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
+            }
+            if (steps.length === 0) {
+                return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
+            }
+
+            const request = await prisma.$transaction(async (tx) => {
+                const created = await tx.leaveRequest.create({
+                    data: {
+                        employeeId, userId, type,
+                        startDate: new Date(startDate),
+                        endDate: endDate ? new Date(endDate) : null,
+                        startTime, endTime, reason, attachmentUrl, attachmentName,
+                        status: 'PENDING',
+                    },
+                });
+                await tx.leaveApprovalStep.createMany({
+                    data: steps.map(s => ({
+                        leaveRequestId: created.id,
+                        sequence: PERMISSION_STAGE_SEQUENCE[s.stage],
+                        stage: s.stage,
+                        approverUserId: s.approverUserId,
+                        coversStages: s.coversStages,
+                        status: 'PENDING',
+                    })),
+                });
+                return created;
+            });
+
+            const minSeq = Math.min(...steps.map(s => PERMISSION_STAGE_SEQUENCE[s.stage]));
+            const firstApprovers = steps.filter(s => PERMISSION_STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
+            await notifyUsers(
+                firstApprovers,
+                'New permission request to review',
+                `${employee.fullName} submitted a ${leaveTypeLabel(type)} request.`,
+                '/approvals',
+            );
+            return res.json(request);
+        }
+
+        // Any remaining non-chain request types — plain PENDING record.
         const request = await prisma.leaveRequest.create({
             data: {
                 employeeId,
@@ -232,6 +332,15 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'You are not the assigned approver for this step.' });
         }
 
+        // The General Manager must attach a supporting document to grant the final approval.
+        const file = (req as any).file;
+        if (step.stage === 'GENERAL_MANAGER' && decision === 'APPROVE' && !file && !step.leaveRequest.finalDocumentUrl) {
+            return res.status(400).json({ error: 'The General Manager must upload a supporting document before granting the final approval.' });
+        }
+        const finalDoc = file
+            ? { finalDocumentUrl: `/uploads/requests/${file.filename}`, finalDocumentName: file.originalname }
+            : null;
+
         const lowestPending = await prisma.leaveApprovalStep.findFirst({
             where: { leaveRequestId: requestId, status: 'PENDING' },
             orderBy: { sequence: 'asc' },
@@ -254,6 +363,11 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
             }
 
             await tx.leaveApprovalStep.update({ where: { id: stepId }, data: { status: 'APPROVED', note, decidedAt: new Date() } });
+
+            // Persist the GM's uploaded document (if any) onto the request.
+            if (finalDoc) {
+                await tx.leaveRequest.update({ where: { id: requestId }, data: finalDoc });
+            }
 
             // Read the remaining-pending count from inside this same transaction — not a
             // pre-transaction snapshot — so two rows in the same stage approved near-simultaneously
@@ -281,18 +395,72 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
         // not hold a DB transaction open, nor be able to roll it back. Fail-soft: logs and
         // continues, never fails the approval response over a BioTime hiccup.
         if (becameCompleted && step.leaveRequest.employee.staffId) {
-            const leaveTypeId = LEAVE_TYPE_ID_MAP[step.leaveRequest.type];
-            if (leaveTypeId) {
-                const result = await createBioTimeLeaveRecord({
-                    empCode: step.leaveRequest.employee.staffId,
-                    leaveTypeId,
-                    startDate: step.leaveRequest.startDate,
-                    endDate: step.leaveRequest.endDate ?? step.leaveRequest.startDate,
-                    notes: step.leaveRequest.reason ?? undefined,
-                });
-                if (!result.success) {
-                    console.warn('[BioTime] Leave write-back failed (non-fatal):', result.message);
+            const empCode = step.leaveRequest.employee.staffId;
+            const lrq = step.leaveRequest;
+            if (PERMISSION_TYPES.includes(lrq.type)) {
+                // Attendance permission — register an excused late / early-out so the employee's
+                // score isn't penalised. Minutes come from the requested start/end time window.
+                const toMin = (tm?: string | null) => {
+                    const m = tm && /^(\d{1,2}):(\d{2})/.exec(tm);
+                    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+                };
+                const s = toMin(lrq.startTime), e = toMin(lrq.endTime);
+                const excusedMinutes = (s != null && e != null && e > s) ? e - s : 60; // default 1h
+                const params = { empCode, date: lrq.startDate, excusedMinutes, reason: lrq.reason ?? undefined };
+                const result = lrq.type === 'LATE_COMING'
+                    ? await createBioTimeExcusedLate(params)
+                    : await createBioTimeExcusedEarlyOut(params);
+                if (!result.success) console.warn('[BioTime] Excused write-back failed (non-fatal):', result.message);
+            } else {
+                const leaveTypeId = LEAVE_TYPE_ID_MAP[lrq.type];
+                if (leaveTypeId) {
+                    const result = await createBioTimeLeaveRecord({
+                        empCode, leaveTypeId,
+                        startDate: lrq.startDate,
+                        endDate: lrq.endDate ?? lrq.startDate,
+                        notes: lrq.reason ?? undefined,
+                    });
+                    if (!result.success) console.warn('[BioTime] Leave write-back failed (non-fatal):', result.message);
                 }
+            }
+        }
+
+        // Notifications (after commit, fail-soft): tell the employee the outcome, or nudge the
+        // next-stage approver(s) that it's now their turn.
+        const lr = step.leaveRequest;
+        const employeeUserIds = [(lr as any).employee?.userId, lr.userId];
+        const rangeLabel = fmtRange(lr.startDate, lr.endDate);
+        if (decision === 'REJECT') {
+            await notifyUsers(
+                employeeUserIds,
+                'Leave request rejected',
+                `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) was rejected${note ? `: ${note}` : '.'}`,
+                '/staff-hub',
+            );
+        } else if (becameCompleted) {
+            await notifyUsers(
+                employeeUserIds,
+                'Leave request approved',
+                `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) has been fully approved.`,
+                '/staff-hub',
+            );
+        } else {
+            // Approved this stage, but more remain — notify whoever is now at the front of the queue.
+            const nextPending = await prisma.leaveApprovalStep.findFirst({
+                where: { leaveRequestId: requestId, status: 'PENDING' },
+                orderBy: { sequence: 'asc' },
+            });
+            if (nextPending) {
+                const nextApprovers = await prisma.leaveApprovalStep.findMany({
+                    where: { leaveRequestId: requestId, status: 'PENDING', sequence: nextPending.sequence },
+                    select: { approverUserId: true },
+                });
+                await notifyUsers(
+                    nextApprovers.map(s => s.approverUserId),
+                    'Leave request awaiting your approval',
+                    `${(lr as any).employee?.fullName || 'An employee'}'s ${leaveTypeLabel(lr.type)} request (${rangeLabel}) is ready for your approval.`,
+                    '/approvals',
+                );
             }
         }
 
@@ -343,7 +511,15 @@ export const getRequestsByEmployee = async (req: Request, res: Response) => {
         const { employeeId } = req.params;
         const requests = await prisma.leaveRequest.findMany({
             where: { employeeId },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
+            // Include the org approval chain so the employee can see exactly where their request
+            // sits — who has signed, whose desk it's on now, and who's still ahead.
+            include: {
+                approvalSteps: {
+                    orderBy: { sequence: 'asc' },
+                    include: { approver: { select: { fullName: true, role: true } } },
+                },
+            },
         });
         res.json(requests);
     } catch (error) {
@@ -385,6 +561,157 @@ export const getPendingRequests = async (req: Request, res: Response) => {
         res.json(requests);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch pending requests' });
+    }
+};
+
+// GET /staff-hub/requests/:id/form — generate the official "Leave Request Form" (.docx),
+// IPH-HRD-APU-F-001-R00, filled with the employee's details, the leave details, the leave-balance
+// table, and each approver's signature + decision date. Works at any stage (live): approvers who
+// haven't acted yet are simply left blank, so the same call yields the in-progress copy and the
+// final fully-signed record.
+export const getLeaveRequestForm = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const request = await prisma.leaveRequest.findUnique({
+            where: { id },
+            include: {
+                employee: { include: { department: true, division: true, jobDescription: { select: { title: true } } } },
+                user: { select: { signature: true } },
+                approvalSteps: {
+                    orderBy: { sequence: 'asc' },
+                    include: { approver: { select: { fullName: true, signature: true } } },
+                },
+            },
+        });
+        if (!request || !request.employee) {
+            return res.status(404).json({ error: 'Leave request not found.' });
+        }
+
+        const emp = request.employee;
+        const fmt = (d?: Date | string | null) => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+        // Attendance permissions (Late Coming / Early Leaving / Few Hours) use the separate
+        // "Late Arrival - Early Departure Request Form" with the short 3-stage chain.
+        if (PERMISSION_TYPES.includes(request.type)) {
+            const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const toEd = (step: (typeof request.approvalSteps)[number] | undefined): EarlyDepartureApprover | null =>
+                step ? { signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+            const toMin = (tm?: string | null) => { const m = tm && /^(\d{1,2}):(\d{2})/.exec(tm); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; };
+            const ms = toMin(request.startTime), me = toMin(request.endTime);
+            const hrs = (ms != null && me != null && me > ms) ? ((me - ms) / 60).toFixed(1).replace(/\.0$/, '') : '';
+            const buf = generateEarlyDepartureDocx({
+                employeeId: emp.staffId || '',
+                employeeName: emp.fullName || '',
+                positionTitle: (emp as any).jobDescription?.title || emp.position || '',
+                division: emp.division?.name || '',
+                department: emp.department?.name || '',
+                requestType: request.type as 'LATE_COMING' | 'EARLY_LEAVING' | 'HOURS_LEAVE',
+                date: fmt(request.startDate),
+                timeWindow: [request.startTime, request.endTime].filter(Boolean).join(' - '),
+                totalHours: hrs,
+                employeeSignature: request.user?.signature || null,
+                employeeSignatureDate: fmt(request.createdAt),
+                directSupervisor: toEd(stepBy('DIRECT_SUPERVISOR')),
+                headOfDepartment: toEd(stepBy('DEPT_HEAD')),
+                headOfAttendance: toEd(stepBy('HEAD_ATTENDANCE')),
+            });
+            const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="Permission_Request_${safeName}.docx"`);
+            return res.send(buf);
+        }
+
+        const start = new Date(request.startDate);
+        const end = request.endDate ? new Date(request.endDate) : start;
+        const days = countLeaveDays(start, end);
+        const resume = new Date(end);
+        resume.setDate(resume.getDate() + 1);
+
+        const metrics = calculateHolidayMetrics(
+            emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed
+        );
+
+        const stepByStage = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+        const toApprover = (step: (typeof request.approvalSteps)[number] | undefined): LeaveFormApprover | null => {
+            if (!step) return null;
+            return {
+                name: step.approver?.fullName || '',
+                signature: step.approver?.signature || null,
+                date: step.decidedAt ? fmt(step.decidedAt) : '',
+                decided: step.status === 'APPROVED',
+            };
+        };
+
+        // Smart-signature row mapping. Each printed row is filled by whoever *covers* it — a single
+        // person may cover several rows (division head who is also the direct manager, director who
+        // is also the direct manager, …), so their lone signature is shown in every row they own.
+        // Coverage is computed at request time (resolveApprovalChain) and stored on each step.
+        const stepCovering = (row: string) =>
+            request.approvalSteps.find(s => (s.coversStages || []).includes(row) && s.status === 'APPROVED')
+            ?? request.approvalSteps.find(s => (s.coversStages || []).includes(row));
+
+        // Legacy fallback for requests created before coverage was tracked (coversStages all empty):
+        // "Direct supervisor" = the most-immediate head (unit, else dept); "Head of Department /
+        // Division" = the next level up (dept head if direct was a unit head, else division head).
+        const hasCoverage = request.approvalSteps.some(s => (s.coversStages || []).length > 0);
+        const unitStep = stepByStage('UNIT_HEAD');
+        const deptStep = stepByStage('DEPT_HEAD');
+        const divStep = stepByStage('DIVISION_HEAD');
+        const headAttendanceStep = hasCoverage ? stepCovering('HEAD_ATTENDANCE') : stepByStage('HEAD_ATTENDANCE');
+        const directStep = hasCoverage ? stepCovering('DIRECT_SUPERVISOR') : (unitStep || deptStep);
+        const deptDivStep = hasCoverage ? stepCovering('HEAD_DEPT_DIVISION') : (unitStep ? deptStep : divStep);
+        const hrStep = hasCoverage ? stepCovering('HR_MANAGER') : stepByStage('HR_MANAGER');
+        const directorStep = hasCoverage ? stepCovering('DIRECTORATE') : stepByStage('DIRECTORATE');
+        const gmStep = hasCoverage ? stepCovering('GENERAL_MANAGER') : stepByStage('GENERAL_MANAGER');
+
+        const leaveTypeLabelMap: Record<string, string> = {
+            PAID_HOLIDAY: 'Annual (paid) Leave',
+            EMERGENCY_LEAVE: 'Emergency Leave',
+            UNPAID_LEAVE: 'Unpaid Leave',
+        };
+
+        const buf = generateLeaveRequestFormDocx({
+            employeeName: emp.fullName || '',
+            idNo: emp.staffId || '',
+            division: emp.division?.name || '',
+            department: emp.department?.name || '',
+            position: (emp as any).jobDescription?.title || emp.position || '',
+            contractStartDate: fmt(emp.contractStartDate),
+            contractEndDate: fmt(emp.contractEndDate),
+            employeeContract: emp.contractNumber || emp.contractType || '',
+            residencyStatus: emp.contractType || '',
+            typeOfLeave: leaveTypeLabelMap[request.type] || String(request.type).replace(/_/g, ' '),
+            from: fmt(request.startDate),
+            to: fmt(request.endDate || request.startDate),
+            totalDays: String(days),
+            startWorkingDate: fmt(resume),
+            employeeSignature: request.user?.signature || null,
+            employeeSignatureDate: fmt(request.createdAt),
+            replacementName: '',
+            annualEntitlement: String(metrics.earnedHolidays),
+            annualDeducted: request.type === 'PAID_HOLIDAY' ? String(days) : '',
+            annualRemaining: String(metrics.remainingHolidays),
+            unpaidEntitlement: '14',
+            unpaidDeducted: request.type === 'UNPAID_LEAVE' ? String(days) : '',
+            unpaidRemaining: String(metrics.remainingUnpaidHolidays),
+            emergencyEntitlement: '3',
+            emergencyDeducted: request.type === 'EMERGENCY_LEAVE' ? String(days) : '',
+            emergencyRemaining: String(metrics.remainingEmergencyHolidays),
+            headAttendance: toApprover(headAttendanceStep),
+            directSupervisor: toApprover(directStep),
+            headDeptDivision: toApprover(deptDivStep),
+            headHR: toApprover(hrStep),
+            adminDirector: toApprover(directorStep),
+            generalManager: toApprover(gmStep),
+        });
+
+        const safe = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="Leave_Request_${safe}.docx"`);
+        res.send(buf);
+    } catch (error) {
+        console.error('Error generating leave request form:', error);
+        res.status(500).json({ error: 'Failed to generate the leave request form.' });
     }
 };
 

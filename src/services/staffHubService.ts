@@ -12,6 +12,8 @@ export interface LeaveRequest {
     reason?: string;
     attachmentUrl?: string;
     attachmentName?: string;
+    finalDocumentUrl?: string;   // document the GM uploaded to grant final approval
+    finalDocumentName?: string;
     managerNote?: string;
     hrNote?: string;
     // PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only ever use PENDING/COMPLETED/REJECTED going
@@ -19,7 +21,23 @@ export interface LeaveRequest {
     // remain valid for the other request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) and older history.
     status: 'PENDING' | 'APPROVED_BY_UNIT' | 'APPROVED_BY_DEPT' | 'APPROVED_BY_DIVISION' | 'APPROVED_BY_DIRECTOR' | 'REJECTED' | 'COMPLETED';
     createdAt: string;
+    updatedAt?: string;
+    // Present on the org-chain leave types — the ordered approval trail (who signs, in what order).
+    approvalSteps?: {
+        id: string;
+        sequence: number;
+        stage: string;
+        status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
+        decidedAt?: string;
+        note?: string;
+        approver?: { fullName: string; role: string };
+    }[];
 }
+
+// A leave request joined with its employee — the shape returned by the list endpoints.
+export type LeaveRequestWithEmployee = LeaveRequest & {
+    employee?: { fullName: string; staffId?: string; bioId?: number; position?: string };
+};
 
 // One (stage, required approver) row in a leave request's org-based approval chain — see
 // resolveApprovalChain on the backend for how the chain is derived.
@@ -27,7 +45,10 @@ export interface LeaveApprovalStep {
     id: string;
     leaveRequestId: string;
     sequence: number;
-    stage: 'UNIT_HEAD' | 'DEPT_HEAD' | 'DIVISION_HEAD' | 'HR_MANAGER' | 'ADMIN_DIRECTOR' | 'GENERAL_MANAGER';
+    stage: 'HEAD_ATTENDANCE' | 'UNIT_HEAD' | 'DEPT_HEAD' | 'DIVISION_HEAD' | 'HR_MANAGER' | 'DIRECTORATE' | 'GENERAL_MANAGER';
+    // The printed form rows this one signature fills (smart signature: one person may hold several
+    // posts and cover several rows with a single approval).
+    coversStages?: string[];
     approverUserId: string;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
     note?: string;
@@ -89,6 +110,18 @@ export const staffHubService = {
         const response = await api.get('/staff-hub/requests/pending', { params: filters });
         return response.data;
     },
+    // Fully-approved leaves — the saved record shown on the Approved Leaves page and the
+    // Attendance overview. Reuses the pending-requests endpoint with a COMPLETED status filter.
+    async getApprovedLeaves(): Promise<LeaveRequestWithEmployee[]> {
+        const response = await api.get('/staff-hub/requests/pending', { params: { status: 'COMPLETED' } });
+        return response.data;
+    },
+    // Downloads the official Leave Request Form (.docx) for a request, filled with the employee's
+    // details, leave details, balances and each approver's signature so far. Works at any stage.
+    async getLeaveForm(requestId: string): Promise<Blob> {
+        const response = await api.get(`/staff-hub/requests/${requestId}/form`, { responseType: 'blob' });
+        return response.data;
+    },
 
     // New org-chain approval steps (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only) — identity-
     // scoped server-side, no role/org filtering needed client-side.
@@ -96,7 +129,17 @@ export const staffHubService = {
         const response = await api.get('/staff-hub/requests/my-pending-steps');
         return response.data;
     },
-    async decideApprovalStep(requestId: string, stepId: string, decision: 'APPROVE' | 'REJECT', note?: string) {
+    async decideApprovalStep(requestId: string, stepId: string, decision: 'APPROVE' | 'REJECT', note?: string, document?: File | null) {
+        if (document) {
+            const fd = new FormData();
+            fd.append('decision', decision);
+            if (note) fd.append('note', note);
+            fd.append('document', document);
+            const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            return response.data;
+        }
         const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, { decision, note });
         return response.data;
     },

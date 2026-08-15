@@ -68,6 +68,7 @@ export const PERMISSION_GROUPS: PermGroup[] = [
     {
         key: 'ops', titleKey: 'perm_cat_ops', titleDefault: 'Operations & Approvals', perms: [
             { id: 'manage_leaves', labelKey: 'perm_manage_leaves', labelDefault: 'Approve Leaves' },
+            { id: 'approve_attendance', labelKey: 'perm_approve_attendance', labelDefault: 'Head of Attendance Approval' },
             { id: 'manage_tasks', labelKey: 'perm_manage_tasks', labelDefault: 'Manage Tasks' },
             { id: 'manage_announcements', labelKey: 'perm_manage_announcements', labelDefault: 'Post Announcements' },
             { id: 'manager_approvals', labelKey: 'perm_manager_approvals', labelDefault: 'Full Mgr Approvals' },
@@ -409,6 +410,7 @@ const UserForm: React.FC = () => {
                                 {formData.role === 'HEAD_DIVISION' && (
                                     <div className="space-y-2 sm:col-span-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('assigned_division', { defaultValue: 'Assigned Division' })}</label>
+                                        <p className="text-[11px] text-slate-400 -mt-1">{t('assigned_division_hint', { defaultValue: 'This head approves for every department in the chosen division — leave requests from those employees route through them automatically.' })}</p>
                                         <select value={formData.divisionId} onChange={(e) => setFormData({ ...formData, divisionId: e.target.value })} className={selectClass}>
                                             <option value="">{t('select_division', { defaultValue: 'Select Division' })}</option>
                                             {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}

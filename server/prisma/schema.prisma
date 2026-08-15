@@ -18,6 +18,7 @@ model User {
   createdAt                DateTime               @default(now())
   departmentIds            String[]               @default([])
   unitId                   String?
+  divisionId               String?                // the division a HEAD_DIVISION owns (drives leave-approval routing for all its departments)
   permissions              String[]               @default([])
   signature                String?
   announcements            Announcement[]
@@ -553,6 +554,9 @@ model LeaveRequest {
   reason               String?
   attachmentUrl        String?
   attachmentName       String?
+  // Supporting document the General Manager must upload before granting the final approval.
+  finalDocumentUrl     String?
+  finalDocumentName    String?
   managerNote          String?
   hrNote               String?
   status               String    @default("PENDING")
@@ -585,6 +589,11 @@ model LeaveApprovalStep {
   leaveRequestId String
   sequence       Int       // shared by every row belonging to the same logical stage
   stage          String    // UNIT_HEAD | DEPT_HEAD | DIVISION_HEAD | HR_MANAGER | ADMIN_DIRECTOR | GENERAL_MANAGER
+  // The printed form rows this single signature fills. One person can hold several posts (e.g. the
+  // division head IS the direct manager, or the director IS the direct manager), so they sign once
+  // but their signature is shown in every row they cover. Values are FORM-row stages:
+  // HEAD_ATTENDANCE | DIRECT_SUPERVISOR | HEAD_DEPT_DIVISION | HR_MANAGER | DIRECTORATE | GENERAL_MANAGER.
+  coversStages   String[]  @default([])
   approverUserId String
   status         String    @default("PENDING") // PENDING | APPROVED | REJECTED | SKIPPED
   note           String?

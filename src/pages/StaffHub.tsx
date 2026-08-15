@@ -12,12 +12,29 @@ import {
     Plus,
     X,
     Megaphone,
-    Paperclip
+    Paperclip,
+    CheckCircle2,
+    Clock,
+    XCircle,
+    MinusCircle,
+    FileDown
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { Employee } from '../types';
+
+// Human-readable labels for the org approval-chain stages, shown in each request's progress trail.
+const STAGE_LABELS: Record<string, string> = {
+    HEAD_ATTENDANCE: 'Head of Attendance',
+    DIRECT_SUPERVISOR: 'Direct Supervisor',
+    UNIT_HEAD: 'Unit Head',
+    DEPT_HEAD: 'Department Head',
+    DIVISION_HEAD: 'Division Head',
+    HR_MANAGER: 'HR Manager',
+    DIRECTORATE: 'Directorate',
+    GENERAL_MANAGER: 'General Manager',
+};
 
 const StaffHub: React.FC = () => {
     const { currentUser } = useAuth();
@@ -188,10 +205,54 @@ const StaffHub: React.FC = () => {
                                 {req.endDate && <span className="text-slate-300">→</span>}
                                 {req.endDate && format(new Date(req.endDate), 'MMM dd')}
                             </div>
+                            {/* Approval trail — shows exactly where the request sits in the chain. The
+                                first still-pending step is the desk it's on right now. */}
+                            {req.approvalSteps && req.approvalSteps.length > 0 && (() => {
+                                const steps = req.approvalSteps.filter(s => s.status !== 'SKIPPED');
+                                const currentId = steps.find(s => s.status === 'PENDING')?.id;
+                                return (
+                                    <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1.5">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('approval_progress', { defaultValue: 'Approval Progress' })}</p>
+                                        {steps.map(s => {
+                                            const isCurrent = s.id === currentId;
+                                            const Icon = s.status === 'APPROVED' ? CheckCircle2 : s.status === 'REJECTED' ? XCircle : isCurrent ? Clock : MinusCircle;
+                                            const color = s.status === 'APPROVED' ? 'text-emerald-500' : s.status === 'REJECTED' ? 'text-red-500' : isCurrent ? 'text-orange-500' : 'text-slate-300';
+                                            return (
+                                                <div key={s.id} className={`flex items-center gap-2 text-xs ${isCurrent ? 'font-bold text-slate-700' : 'font-semibold text-slate-500'}`}>
+                                                    <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
+                                                    <span className="shrink-0">{STAGE_LABELS[s.stage] || s.stage}</span>
+                                                    {s.approver?.fullName && <span className="text-slate-400 truncate">· {s.approver.fullName}</span>}
+                                                    {isCurrent && <span className="ml-auto shrink-0 text-[9px] font-black text-orange-500 uppercase tracking-wider">{t('current', { defaultValue: 'Now' })}</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                             {req.managerNote && (
                                 <div className="mt-2 p-2 bg-slate-50 rounded-lg text-xs italic text-slate-500 border-l-2 border-slate-200">
                                     {t("manager_note")} {req.managerNote}
                                 </div>
+                            )}
+                            {req.approvalSteps && req.approvalSteps.length > 0 && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const blob = await staffHubService.getLeaveForm(req.id);
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `Leave_Request_${req.id.slice(0, 8)}.docx`;
+                                            a.click();
+                                            window.URL.revokeObjectURL(url);
+                                        } catch {
+                                            toast.error(t('leave_form_failed', { defaultValue: 'Failed to generate the leave form.' }));
+                                        }
+                                    }}
+                                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors"
+                                >
+                                    <FileDown className="w-3.5 h-3.5" /> {t('download_form', { defaultValue: 'Download Form' })}
+                                </button>
                             )}
                         </div>
                     )) : (
@@ -223,7 +284,7 @@ const StaffHub: React.FC = () => {
                                     <select
                                         className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
                                         value={newRequest.type}
-                                        onChange={e => setNewRequest({ ...newRequest, type: e.target.value })}
+                                        onChange={e => setNewRequest({ ...newRequest, type: e.target.value, startTime: '', endTime: '' })}
                                     >
                                         <option value="PAID_HOLIDAY">{t("paid_holiday")}</option>
                                         <option value="UNPAID_LEAVE">{t("unpaid_leave")}</option>
@@ -254,10 +315,11 @@ const StaffHub: React.FC = () => {
                                     />
                                 </div>
 
-                                {newRequest.type.includes('HOURS') || newRequest.type.includes('LATE') || newRequest.type.includes('EARLY') ? (
+                                {newRequest.type === 'HOURS_LEAVE' ? (
+                                    /* Few Hours Permission — a time window (from → to). */
                                     <>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("start_time")}</label>
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("from_time", { defaultValue: 'From (Time)' })}</label>
                                             <input
                                                 type="time"
                                                 className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
@@ -266,7 +328,7 @@ const StaffHub: React.FC = () => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("end_time")}</label>
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("to_time", { defaultValue: 'To (Time)' })}</label>
                                             <input
                                                 type="time"
                                                 className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
@@ -275,6 +337,21 @@ const StaffHub: React.FC = () => {
                                             />
                                         </div>
                                     </>
+                                ) : (newRequest.type === 'EARLY_LEAVING' || newRequest.type === 'LATE_COMING') ? (
+                                    /* A single time: when you leave (Early Departure) or arrive (Late Arrival). */
+                                    <div className="space-y-2 col-span-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                            {newRequest.type === 'EARLY_LEAVING'
+                                                ? t("departure_time", { defaultValue: 'Departure Time (when you leave)' })
+                                                : t("arrival_time", { defaultValue: 'Arrival Time (when you arrive)' })}
+                                        </label>
+                                        <input
+                                            type="time"
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                            value={newRequest.startTime}
+                                            onChange={e => setNewRequest({ ...newRequest, startTime: e.target.value })}
+                                        />
+                                    </div>
                                 ) : null}
 
                                 <div className="col-span-2 space-y-2">

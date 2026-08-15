@@ -25,6 +25,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
                 role: true,
                 departmentId: true,
                 unitId: true,
+                divisionId: true,
                 departmentIds: true,
                 groupId: true,
                 permissions: true,

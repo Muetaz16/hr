@@ -12,6 +12,7 @@ import {
     type HolidayItem,
     type MultiplierFactorItem,
 } from '../services/attendanceSettingsService';
+import { staffHubService } from '../services/staffHubService';
 import { useAuth } from '../context/AuthContext';
 import { formatMinutesAsHM, formatHmsAsHM, cleanReason } from '../utils/attendanceFormat';
 import Modal from '../components/Modal';
@@ -207,6 +208,13 @@ const AttendancePage: React.FC = () => {
         queryKey: ['attendance-employee-leaves'],
         queryFn: () => attendanceService.getEmployeeLeaves(),
         enabled: tab === 'daily-logging',
+        retry: false,
+    });
+    // Fully-approved leaves from our own approval chain — shown as a live list on the overview.
+    const { data: approvedLeaves = [] } = useQuery({
+        queryKey: ['approved-leaves-overview'],
+        queryFn: () => staffHubService.getApprovedLeaves(),
+        enabled: tab === 'overview',
         retry: false,
     });
     const { data: outWorksList = [], isLoading: isLoadingOutWorks } = useQuery({
@@ -774,15 +782,41 @@ const AttendancePage: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Leave Request — real submission/approval already lives in Staff Hub / Manager Approvals */}
-                    <div className="bg-white border border-[#511d29]/10 rounded-xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div>
-                            <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Leave Requests</h4>
-                            <p className="text-xs text-slate-500 mt-1">Submission and approval already happen in Staff Hub and Manager Approvals — this links straight there rather than duplicating that flow.</p>
+                    {/* Approved Leaves — fully-approved requests from the org approval chain, already
+                        pushed to the attendance system. Submission/approval still live in Staff Hub /
+                        Manager Approvals; this is the read-only record. */}
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl shadow-sm overflow-hidden">
+                        <div className="p-5 border-b border-[#511d29]/10 bg-[#511d29]/[0.03] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide flex items-center gap-2">
+                                    <CalendarCheck className="w-4 h-4" /> Approved Leaves
+                                </h4>
+                                <p className="text-xs text-slate-500 mt-1">Fully-approved leave requests — automatically recorded in the attendance system.</p>
+                            </div>
+                            <a href="/approved-leaves" className="shrink-0 px-4 py-2.5 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] transition-colors rounded-lg">
+                                View All
+                            </a>
                         </div>
-                        <a href="/approvals" className="shrink-0 px-4 py-2.5 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] transition-colors rounded-lg">
-                            Open Manager Approvals
-                        </a>
+                        <div className="divide-y divide-slate-100">
+                            {approvedLeaves.slice(0, 6).map((l: any) => {
+                                const start = String(l.startDate).split('T')[0];
+                                const end = l.endDate ? String(l.endDate).split('T')[0] : start;
+                                const typeLabel = ({ PAID_HOLIDAY: 'Paid Leave', EMERGENCY_LEAVE: 'Emergency Leave', UNPAID_LEAVE: 'Unpaid Leave' } as Record<string, string>)[l.type] || String(l.type).replace(/_/g, ' ');
+                                return (
+                                    <div key={l.id} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-[#511d29]/[0.02] transition-colors">
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-slate-800 text-sm truncate">{l.employee?.fullName || '—'}</p>
+                                            <p className="text-xs text-slate-400 font-mono">{l.employee?.staffId || ''}</p>
+                                        </div>
+                                        <span className="shrink-0 text-xs font-black text-[#511d29]">{typeLabel}</span>
+                                        <span className="shrink-0 text-xs font-bold text-slate-500 hidden sm:inline">{start}{end !== start ? ` → ${end}` : ''}</span>
+                                    </div>
+                                );
+                            })}
+                            {approvedLeaves.length === 0 && (
+                                <div className="px-5 py-8 text-center text-xs font-bold text-slate-400">No approved leaves yet.</div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Work Authorization Form — not built yet on either system */}

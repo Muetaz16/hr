@@ -120,3 +120,20 @@ export async function createBioTimeLeaveRecord(params: { empCode: string; leaveT
         return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
     }
 }
+
+// Registers an excused late / excused early-out in BioTime once an approved attendance-permission
+// request completes, so the employee isn't penalised. Fail-soft, never throws.
+async function postExcused(path: string, params: { empCode: string; date: Date | string; excusedMinutes: number; reason?: string }): Promise<BioTimeResult> {
+    try {
+        const response = await fetch(new URL(path, ATTENDANCE_API_BASE).toString(), jsonPost(params));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return { success: false, message: (data as any)?.message || `BioTime returned ${response.status}` };
+        return { success: true, message: (data as any)?.message };
+    } catch (error: any) {
+        return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
+    }
+}
+export const createBioTimeExcusedLate = (p: { empCode: string; date: Date | string; excusedMinutes: number; reason?: string }) =>
+    postExcused('/api/attendance/excused-lates', p);
+export const createBioTimeExcusedEarlyOut = (p: { empCode: string; date: Date | string; excusedMinutes: number; reason?: string }) =>
+    postExcused('/api/attendance/excused-early-outs', p);

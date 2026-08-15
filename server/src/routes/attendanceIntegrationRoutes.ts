@@ -27,7 +27,7 @@ import {
     syncEmployeesFromBioTime,
     getMyMonthlyReport,
 } from '../controllers/attendanceIntegrationController';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { authenticateToken, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticateToken);
@@ -35,7 +35,9 @@ router.use(authenticateToken);
 // Self-service: any authenticated employee can view their own attendance activity.
 router.get('/me/monthly-report', getMyMonthlyReport);
 
-router.use(authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'));
+// Role OR permission: the attendance/time-tracking permissions (granted to a Head of Attendance &
+// Payroll) open the attendance workspace even when the account's org role isn't listed here.
+router.use(authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_time_tracking', 'manage_time_tracking']));
 
 router.get('/summary', getAttendanceSummary);
 router.get('/leave-types', getAttendanceLeaveTypes);

@@ -15,6 +15,7 @@ export const getUsers = async (req: Request, res: Response) => {
                 role: true,
                 departmentId: true,
                 unitId: true,
+                divisionId: true,
                 departmentIds: true,
                 groupId: true,
                 permissions: true,
@@ -43,7 +44,7 @@ export const getUsers = async (req: Request, res: Response) => {
 // Create a new user
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { email, password, fullName, role, departmentId, unitId, departmentIds, groupId, employeeId, permissions } = req.body;
+        const { email, password, fullName, role, departmentId, unitId, divisionId, departmentIds, groupId, employeeId, permissions } = req.body;
         const normalizedEmail = email?.toLowerCase();
 
         const existingUser = await prisma.user.findUnique({
@@ -63,6 +64,7 @@ export const createUser = async (req: Request, res: Response) => {
             role,
             departmentId,
             unitId,
+            divisionId: divisionId || null,
             departmentIds: departmentIds || [],
             groupId,
             permissions: permissions || [],
@@ -78,6 +80,7 @@ export const createUser = async (req: Request, res: Response) => {
                 role: true,
                 departmentId: true,
                 unitId: true,
+                divisionId: true,
                 departmentIds: true,
                 groupId: true,
                 permissions: true,
@@ -104,7 +107,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { email, fullName, role, departmentId, unitId, departmentIds, groupId, password, employeeId, permissions } = req.body;
+        const { email, fullName, role, departmentId, unitId, divisionId, departmentIds, groupId, password, employeeId, permissions } = req.body;
         const normalizedEmail = email?.toLowerCase();
 
         const dataToUpdate: any = {
@@ -113,6 +116,7 @@ export const updateUser = async (req: Request, res: Response) => {
             role,
             departmentId,
             unitId,
+            divisionId: divisionId || null,
             departmentIds: departmentIds || [],
             groupId,
             permissions: permissions || [],
@@ -132,6 +136,7 @@ export const updateUser = async (req: Request, res: Response) => {
                 role: true,
                 departmentId: true,
                 unitId: true,
+                divisionId: true,
                 departmentIds: true,
                 groupId: true,
                 permissions: true,

@@ -1543,7 +1543,19 @@ const EmployeeForm: React.FC = () => {
                                 <input
                                     type="date"
                                     value={formData.contractStartDate || ''}
-                                    onChange={(e) => setFormData({ ...formData, contractStartDate: e.target.value })}
+                                    onChange={(e) => {
+                                        const start = e.target.value;
+                                        // Setting the start auto-fills the end 6 months later (still editable).
+                                        setFormData(prev => {
+                                            const next: typeof prev = { ...prev, contractStartDate: start };
+                                            const d = new Date(start);
+                                            if (start && !isNaN(d.getTime())) {
+                                                d.setMonth(d.getMonth() + 6);
+                                                next.contractEndDate = d.toISOString().split('T')[0];
+                                            }
+                                            return next;
+                                        });
+                                    }}
                                     className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800 shadow-sm"
                                 />
                             </div>
