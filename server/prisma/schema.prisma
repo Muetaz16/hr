@@ -28,7 +28,8 @@ model User {
   gmEvaluations            GMEvaluation[]         @relation("GMEvaluationsSubmittedBy")
   chairmanEvaluations      ChairmanEvaluation[]   @relation("ChairmanEvaluationsSubmittedBy")
   employee                 Employee?
-  enabledPeriods           EvaluationPeriod[]
+  enabledPeriods           EvaluationPeriod[]     @relation("EvaluationPeriodEnabledBy")
+  disabledPeriods          EvaluationPeriod[]     @relation("EvaluationPeriodDisabledBy")
   hrEvaluations            HREvaluation[]         @relation("HREvaluationsSubmittedBy")
   leaveDeptApprovals       LeaveRequest[]         @relation("LeaveDeptApprovals")
   leaveDivisionApprovals   LeaveRequest[]         @relation("LeaveDivisionApprovals")
@@ -320,8 +321,18 @@ model EvaluationPeriod {
   enabledById  String?
   enabledAt    DateTime    @default(now())
   notes        String?
+  // true while this month's period is driven purely by the day-15/day-20 auto
+  // open/close schedule; flipped to false the moment HR/SUPER_ADMIN manually
+  // enables or disables it, so the daily reconciliation job stops touching it.
+  isAutoManaged      Boolean   @default(true)
+  disabledById       String?
+  disabledAt         DateTime?
+  // Idempotency markers so the daily job sends each monthly batch exactly once.
+  openNotifiedAt     DateTime?
+  reminderNotifiedAt DateTime?
   department   Department? @relation(fields: [departmentId], references: [id])
-  enabledBy    User?       @relation(fields: [enabledById], references: [id])
+  enabledBy    User?       @relation("EvaluationPeriodEnabledBy", fields: [enabledById], references: [id])
+  disabledBy   User?       @relation("EvaluationPeriodDisabledBy", fields: [disabledById], references: [id])
 }
 
 model TimeRecord {
@@ -499,6 +510,8 @@ model PayrollResult {
   personnelScore         Float?
   personnelDeductionDays Float?
   personnelBonusDays     Float?
+  exceptionalScore       Float?
+  trainingScore          Float?
   trainingSummary        String?
   finalScore             Float
   finalSalary            Float

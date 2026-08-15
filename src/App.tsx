@@ -30,6 +30,7 @@ const ContractDetailPage = lazy(() => import('./pages/ContractDetail'));
 const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
 const MyAttendancePage = lazy(() => import('./pages/MyAttendance'));
+const EvaluationDetailPage = lazy(() => import('./pages/EvaluationDetail'));
 const AnnouncementsFeedPage = lazy(() => import('./pages/AnnouncementsFeed'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
 const PersonnelRelationsPage = lazy(() => import('./pages/personnel-relations/PersonnelRelations'));
@@ -98,6 +99,7 @@ function App() {
                   </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
                   <Route path="/my-attendance" element={<MyAttendancePage />} />
+                  <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
                   <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />

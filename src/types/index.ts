@@ -458,9 +458,11 @@ export interface PayrollResult {
     directorImpact?: number;
 
     // Personnel Metrics
-    personnelScore?: number; // Kept here
+    personnelScore?: number; // exceptionalScore + trainingScore combined
     personnelDeductionDays?: number;
     personnelBonusDays?: number;
+    exceptionalScore?: number; // ±20%, part of finalScore
+    trainingScore?: number;    // +10%, part of finalScore
     trainingSummary?: string; // New field for CSV/Display
 
     csvGenerated: boolean;
@@ -497,6 +499,14 @@ export interface EvaluationPeriod {
     enabledBy: string; // HR Manager user ID
     enabledAt: string;
     notes?: string;
+    // true while this month's period is still driven by the day-15/day-20
+    // auto open/close schedule; false once HR/SUPER_ADMIN manually enables
+    // or disables it.
+    isAutoManaged?: boolean;
+    disabledById?: string;
+    disabledAt?: string;
+    openNotifiedAt?: string;
+    reminderNotifiedAt?: string;
 }
 
 export interface RecruitmentRequest {

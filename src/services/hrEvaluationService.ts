@@ -71,6 +71,11 @@ export async function getHREvaluationsByMonth(month: string): Promise<HREvaluati
     }
 }
 
+export async function recomputePresence(month: string, employeeId?: string): Promise<{ stored: number; skipped: number; requested: number }> {
+    const response = await api.post('/evaluations/hr/recompute-presence', { month, employeeId });
+    return response.data;
+}
+
 export async function isHREvaluationCompleted(employeeId: string, month: string): Promise<boolean> {
     const evaluation = await getHREvaluation(employeeId, month);
     return evaluation?.status === 'submitted';

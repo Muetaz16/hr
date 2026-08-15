@@ -24,7 +24,7 @@ export const roleThemes = {
         light: '#fdfcf7',
         dark: '#300a15',
         gradient: 'from-[#421220] to-[#aa7a51]',
-        text: 'General Manager',
+        text: 'Directorate Head',
         badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
     },
     HEAD_UNIT: {

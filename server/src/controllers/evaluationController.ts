@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { canEvaluate, EvalLevel, OrgPlacement } from '../utils/evaluationHierarchy';
+import { computeAndStorePresence } from '../utils/presenceScoring';
 
 const prisma = new PrismaClient();
 
@@ -112,7 +113,7 @@ const checkEvaluationPeriod = async (month: string, departmentId?: string | null
 // Resolve a submitter's org placement (role + scope ids) from their user + linked
 // employee record. User rows only carry unit/department, so division/directorate
 // come from the employee record.
-const resolveManagerPlacement = async (userId: string) => {
+export const resolveManagerPlacement = async (userId: string) => {
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { employee: true } });
     if (!user) return null;
     const emp: any = (user as any).employee;
@@ -146,11 +147,50 @@ const checkCanEvaluate = async (
     return null;
 };
 
+// Roles that may read any employee's evaluation data (they already see the
+// full roster in the frontend evaluation screens).
+const ADMIN_LIKE_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'];
+
+// This employee's own id, if `userId` is linked to one — mirrors the same
+// User.userId -> Employee lookup `/employees/me` uses, so "viewing my own
+// evaluation" resolves consistently across the app.
+const resolveOwnEmployeeId = async (userId: string): Promise<string | null> => {
+    const emp = await prisma.employee.findUnique({ where: { userId } });
+    return emp?.id ?? null;
+};
+
+// Read-access gate for the single-record GET endpoints: an admin-like role,
+// the employee viewing their own record, or (for hierarchy-governed levels)
+// one of the two legitimate evaluators may read it. Everyone else is denied —
+// closes a gap where any authenticated user could previously read any
+// employee's evaluation by passing an arbitrary `employeeId`.
+const checkCanViewEvaluation = async (
+    requesterUser: any,
+    targetEmployeeId: string,
+    level?: EvalLevel
+): Promise<boolean> => {
+    if (ADMIN_LIKE_ROLES.includes(requesterUser.role)) return true;
+    const ownEmployeeId = await resolveOwnEmployeeId(requesterUser.id);
+    if (ownEmployeeId && ownEmployeeId === targetEmployeeId) return true;
+    if (!level) return false;
+    const submitter = await resolveManagerPlacement(requesterUser.id);
+    if (!submitter) return false;
+    const target = await prisma.employee.findUnique({
+        where: { id: targetEmployeeId },
+        select: { role: true, unitId: true, departmentId: true, divisionId: true, directorateId: true }
+    });
+    if (!target) return false;
+    return canEvaluate(submitter.placement, target as any, level);
+};
+
 // --- HR Evaluations ---
 export const getHREvaluation = async (req: Request, res: Response) => {
     try {
         const { employeeId, month } = req.query;
         if (!employeeId || !month) return res.status(400).json({ error: 'Missing params' });
+
+        const allowed = await checkCanViewEvaluation((req as any).user, String(employeeId));
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
 
         const evalData = await prisma.hREvaluation.findFirst({
             where: {
@@ -229,6 +269,42 @@ export const saveHREvaluation = async (req: Request, res: Response) => {
     }
 };
 
+// Manual safety-net for the automatic Presence scoring (server/src/jobs/presenceScoreCron.ts):
+// lets HR force a refresh for one employee or the whole month — before day 25 (the presence
+// window hasn't fully closed yet) or to retry after the attendance system was unreachable —
+// even overriding an already-submitted record, since this is an explicit user action.
+export const recomputePresence = async (req: Request, res: Response) => {
+    try {
+        const { month, employeeId } = req.body;
+        if (!month) return res.status(400).json({ error: 'Missing month' });
+
+        const submittedById = (req as any).user?.id || null;
+        const employees = await prisma.employee.findMany({
+            where: { bioId: { not: null }, ...(employeeId ? { id: String(employeeId) } : {}) },
+            select: { id: true, bioId: true, fullName: true },
+        });
+
+        const results = [];
+        for (const emp of employees) {
+            const result = await computeAndStorePresence({
+                employeeId: emp.id, bioId: emp.bioId as number, month: String(month), submittedById, force: true,
+            });
+            results.push({ employeeId: emp.id, fullName: emp.fullName, ...result });
+        }
+
+        res.json({
+            month,
+            requested: employees.length,
+            stored: results.filter(r => r.status === 'stored').length,
+            skipped: results.filter(r => r.status === 'skipped').length,
+            results,
+        });
+    } catch (error) {
+        console.error('Error recomputing presence:', error);
+        res.status(500).json({ error: 'Failed to recompute presence scores' });
+    }
+};
+
 // -----------------------------------------------------------------------------
 // Generic org-evaluation handlers (Unit / Department / Division / Director)
 // Each of these levels stores the 16 competency metrics; the total (0..80) is
@@ -236,9 +312,14 @@ export const saveHREvaluation = async (req: Request, res: Response) => {
 // -----------------------------------------------------------------------------
 type MetricModel = 'unitEvaluation' | 'departmentEvaluation' | 'divisionEvaluation' | 'directorEvaluation';
 
-const makeGetOrgEval = (model: MetricModel) => async (req: Request, res: Response) => {
+const makeGetOrgEval = (model: MetricModel, level: EvalLevel) => async (req: Request, res: Response) => {
     try {
         const { employeeId, month } = req.query;
+        if (!employeeId || !month) return res.status(400).json({ error: 'Missing params' });
+
+        const allowed = await checkCanViewEvaluation((req as any).user, String(employeeId), level);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
         const evalData = await (prisma as any)[model].findFirst({
             where: { employeeId: String(employeeId), month: String(month) }
         });
@@ -319,25 +400,25 @@ const makeSaveOrgEval = (model: MetricModel, level: EvalLevel) => async (req: Re
 };
 
 // Unit
-export const getUnitEvaluation = makeGetOrgEval('unitEvaluation');
+export const getUnitEvaluation = makeGetOrgEval('unitEvaluation', 'UNIT');
 export const getUnitEvaluationsByMonth = makeGetOrgEvalsByMonth('unitEvaluation');
 export const saveUnitEvaluation = makeSaveOrgEval('unitEvaluation', 'UNIT');
 export const deleteUnitEvaluation = makeDeleteOrgEval('unitEvaluation');
 
 // Department
-export const getDeptEvaluation = makeGetOrgEval('departmentEvaluation');
+export const getDeptEvaluation = makeGetOrgEval('departmentEvaluation', 'DEPARTMENT');
 export const getDeptEvaluationsByMonth = makeGetOrgEvalsByMonth('departmentEvaluation');
 export const saveDeptEvaluation = makeSaveOrgEval('departmentEvaluation', 'DEPARTMENT');
 export const deleteDeptEvaluation = makeDeleteOrgEval('departmentEvaluation');
 
 // Division
-export const getDivisionEvaluation = makeGetOrgEval('divisionEvaluation');
+export const getDivisionEvaluation = makeGetOrgEval('divisionEvaluation', 'DIVISION');
 export const getDivisionEvaluationsByMonth = makeGetOrgEvalsByMonth('divisionEvaluation');
 export const saveDivisionEvaluation = makeSaveOrgEval('divisionEvaluation', 'DIVISION');
 export const deleteDivisionEvaluation = makeDeleteOrgEval('divisionEvaluation');
 
 // Director (Directorate head)
-export const getDirectorEvaluation = makeGetOrgEval('directorEvaluation');
+export const getDirectorEvaluation = makeGetOrgEval('directorEvaluation', 'DIRECTOR');
 export const getDirectorEvaluationsByMonth = makeGetOrgEvalsByMonth('directorEvaluation');
 export const saveDirectorEvaluation = makeSaveOrgEval('directorEvaluation', 'DIRECTOR');
 export const deleteDirectorEvaluation = makeDeleteOrgEval('directorEvaluation');
@@ -363,9 +444,14 @@ export const lockEvaluation = async (req: Request, res: Response) => {
 // -----------------------------------------------------------------------------
 type ScoreModel = 'gMEvaluation' | 'chairmanEvaluation';
 
-const makeGetScoreEval = (model: ScoreModel) => async (req: Request, res: Response) => {
+const makeGetScoreEval = (model: ScoreModel, level: EvalLevel) => async (req: Request, res: Response) => {
     try {
         const { employeeId, month } = req.query;
+        if (!employeeId || !month) return res.status(400).json({ error: 'Missing params' });
+
+        const allowed = await checkCanViewEvaluation((req as any).user, String(employeeId), level);
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
         const evalData = await (prisma as any)[model].findFirst({
             where: { employeeId: String(employeeId), month: String(month) }
         });
@@ -438,13 +524,13 @@ const makeSaveScoreEval = (model: ScoreModel, level: EvalLevel) => async (req: R
 };
 
 // GM
-export const getGMEvaluation = makeGetScoreEval('gMEvaluation');
+export const getGMEvaluation = makeGetScoreEval('gMEvaluation', 'GM');
 export const getGMEvaluationsByMonth = makeGetScoreEvalsByMonth('gMEvaluation');
 export const saveGMEvaluation = makeSaveScoreEval('gMEvaluation', 'GM');
 export const deleteGMEvaluation = makeDeleteScoreEval('gMEvaluation');
 
 // Chairman
-export const getChairmanEvaluation = makeGetScoreEval('chairmanEvaluation');
+export const getChairmanEvaluation = makeGetScoreEval('chairmanEvaluation', 'CHAIRMAN');
 export const getChairmanEvaluationsByMonth = makeGetScoreEvalsByMonth('chairmanEvaluation');
 export const saveChairmanEvaluation = makeSaveScoreEval('chairmanEvaluation', 'CHAIRMAN');
 export const deleteChairmanEvaluation = makeDeleteScoreEval('chairmanEvaluation');
@@ -453,6 +539,11 @@ export const deleteChairmanEvaluation = makeDeleteScoreEval('chairmanEvaluation'
 export const getPersonnelEvaluation = async (req: Request, res: Response) => {
     try {
         const { employeeId, month } = req.query;
+        if (!employeeId || !month) return res.status(400).json({ error: 'Missing params' });
+
+        const allowed = await checkCanViewEvaluation((req as any).user, String(employeeId));
+        if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
         const evalData = await prisma.personnelEvaluation.findFirst({
             where: {
                 employeeId: String(employeeId),

@@ -37,6 +37,9 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import Modal from '../../components/Modal';
 import type { Employee, EmployeeDocument } from '../../types';
 import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
+import { canAccess } from '../../utils/access';
+import EvaluationControl from '../hr/EvaluationControl';
+import EvaluationsPage from '../Evaluations';
 
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
@@ -832,39 +835,17 @@ const PersonnelRelations: React.FC = () => {
             )}
 
             {activeTab === 'evaluations' && (
-                <div className="space-y-6">
-                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
-                                <Calendar className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Monthly Performance Evaluations</h3>
-                                <p className="text-sm text-slate-600 mt-1">
-                                    Tracks and manages monthly staff review metrics. Evaluation scores trigger rewards, raises, and bonuses.
-                                </p>
-                            </div>
-                        </div>
+                canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['manage_evaluation_control']) ? (
+                    // HR/Admin: open/close the evaluation window, monitor & delete submitted evaluations.
+                    <EvaluationControl embedded />
+                ) : canAccess(currentUser, ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], ['view_evaluations']) ? (
+                    // Managers: fill in evaluations for the employees under them.
+                    <EvaluationsPage />
+                ) : (
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
+                        You don't have permission to view evaluation controls.
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white border border-[#511d29]/10 p-6 rounded-xl shadow-sm text-center">
-                            <p className="text-slate-400 font-bold uppercase text-[10px]">Monthly Review Completion</p>
-                            <h3 className="text-3xl font-black text-[#511d29] mt-2">84%</h3>
-                            <p className="text-xs text-slate-500 mt-1">For July 2026</p>
-                        </div>
-                        <div className="bg-white border border-[#511d29]/10 p-6 rounded-xl shadow-sm text-center">
-                            <p className="text-slate-400 font-bold uppercase text-[10px]">Avg Team Score</p>
-                            <h3 className="text-3xl font-black text-emerald-600 mt-2">4.2 / 5.0</h3>
-                            <p className="text-xs text-slate-500 mt-1">Across all departments</p>
-                        </div>
-                        <div className="bg-white border border-[#511d29]/10 p-6 rounded-xl shadow-sm text-center">
-                            <p className="text-slate-400 font-bold uppercase text-[10px]">Pending Actions</p>
-                            <h3 className="text-3xl font-black text-amber-600 mt-2">5</h3>
-                            <p className="text-xs text-slate-500 mt-1">Evaluations waiting GM review</p>
-                        </div>
-                    </div>
-                </div>
+                )
             )}
 
             {/* MODALS */}

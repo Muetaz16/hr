@@ -62,6 +62,8 @@ import notificationRoutes from './routes/notificationRoutes';
 import publicRoutes from './routes/publicRoutes';
 import attendanceIntegrationRoutes from './routes/attendanceIntegrationRoutes';
 import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
+import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
+import { initPresenceScoreScheduler } from './jobs/presenceScoreCron';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -106,4 +108,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 app.listen(Number(port), '0.0.0.0', () => {
     console.log(`[INIT] IPH HR Server ${SERVER_VERSION} is running on port ${port}`);
+    initEvaluationPeriodScheduler();
+    initPresenceScoreScheduler();
 });

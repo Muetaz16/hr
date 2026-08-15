@@ -43,6 +43,9 @@ export const enableEvaluationPeriod = async (req: Request, res: Response) => {
             }
         });
 
+        // Any manual enable/disable takes this month's period out of the
+        // day-15/day-20 auto schedule, so the daily reconciliation job stops
+        // touching it (see server/src/jobs/evaluationPeriodCron.ts).
         if (existing) {
             const updated = await prisma.evaluationPeriod.update({
                 where: { id: existing.id },
@@ -50,7 +53,10 @@ export const enableEvaluationPeriod = async (req: Request, res: Response) => {
                     enabled: true,
                     enabledById,
                     enabledAt: new Date(),
-                    notes
+                    notes,
+                    isAutoManaged: false,
+                    disabledById: null,
+                    disabledAt: null
                 }
             });
             return res.json(updated);
@@ -62,7 +68,8 @@ export const enableEvaluationPeriod = async (req: Request, res: Response) => {
                 departmentId: departmentId || null,
                 enabled: true,
                 enabledById,
-                notes
+                notes,
+                isAutoManaged: false
             }
         });
         res.json(created);
@@ -73,13 +80,20 @@ export const enableEvaluationPeriod = async (req: Request, res: Response) => {
     }
 };
 
-// Disable a period
+// Disable a period. This used to delete the row outright, which silently
+// destroyed history the Monitor UI relies on — now it's a status update, same
+// as enable, so a disabled period stays visible (and out of the auto schedule).
 export const disableEvaluationPeriod = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        await prisma.evaluationPeriod.delete({ where: { id } });
-        res.json({ message: 'Period disabled' });
+        const disabledById = (req as any).user?.id;
+        const updated = await prisma.evaluationPeriod.update({
+            where: { id },
+            data: { enabled: false, isAutoManaged: false, disabledById, disabledAt: new Date() }
+        });
+        res.json(updated);
     } catch (error) {
+        console.error("Error disabling period:", error);
         res.status(500).json({ error: 'Failed to disable period' });
     }
 };

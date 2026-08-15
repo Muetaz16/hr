@@ -10,6 +10,7 @@ import {
     getRequiredLevels, levelForRole, canEvaluate
 } from '../utils/evaluationHierarchy';
 import Modal from '../components/Modal';
+import PersonnelEvaluationModal from '../components/PersonnelEvaluationModal';
 import { format } from 'date-fns';
 import {
     Search, User, Clock, Calendar, ArrowUpRight, TrendingUp, Filter,
@@ -49,7 +50,10 @@ const EvaluationsPage: React.FC = () => {
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-    const [modalLevel, setModalLevel] = useState<EvalLevel | 'PERSONNEL'>('UNIT');
+    const [modalLevel, setModalLevel] = useState<EvalLevel>('UNIT');
+    // The "HR evaluation" (Exceptional Performance + Training) popup is a
+    // separate, shared component — see PersonnelEvaluationModal.
+    const [personnelEmp, setPersonnelEmp] = useState<Employee | null>(null);
 
     const initialMetrics = {
         relationshipWithColleagues: 0, teamworkParticipation: 0, workOrganization: 0, communicationSkills: 0, regulatoryCompliance: 0,
@@ -59,10 +63,6 @@ const EvaluationsPage: React.FC = () => {
     };
     const [metricForm, setMetricForm] = useState(initialMetrics);
     const [scoreForm, setScoreForm] = useState({ finalScore: 0, comments: '' });
-    const [persForm, setPersForm] = useState({
-        warningMessages: 0, disciplinaryDeduction: 0, appreciationMessages: 0, exceptionalAssignments: 0,
-        specializedTraining: false, supportingTraining: false, languageTraining: false, softwareTraining: false
-    });
 
     useEffect(() => { fetchData(); }, [selectedMonth, currentUser]);
 
@@ -147,15 +147,10 @@ const EvaluationsPage: React.FC = () => {
         CHAIRMAN: evaluationService.getChairmanEvaluation,
     };
 
-    const openModal = async (emp: Employee, level: EvalLevel | 'PERSONNEL') => {
+    const openModal = async (emp: Employee, level: EvalLevel) => {
         setSelectedEmp(emp);
         setModalLevel(level);
-        if (level === 'PERSONNEL') {
-            setPersForm(persEvals[emp.id] || {
-                warningMessages: 0, disciplinaryDeduction: 0, appreciationMessages: 0, exceptionalAssignments: 0,
-                specializedTraining: false, supportingTraining: false, languageTraining: false, softwareTraining: false
-            });
-        } else if (level === 'GM' || level === 'CHAIRMAN') {
+        if (level === 'GM' || level === 'CHAIRMAN') {
             const rec = await getMappedEval[level](emp.id, selectedMonth);
             setScoreForm({ finalScore: rec?.finalScore || 0, comments: rec?.comments || '' });
         } else {
@@ -179,9 +174,7 @@ const EvaluationsPage: React.FC = () => {
         if (!selectedEmp || !currentUser) return;
         const base = { employeeId: selectedEmp.id, month: selectedMonth, submittedBy: currentUser.id };
         try {
-            if (modalLevel === 'PERSONNEL') {
-                await evaluationService.savePersonnelEvaluation({ ...base, ...persForm, submittedAt: new Date().toISOString() } as any);
-            } else if (modalLevel === 'GM' || modalLevel === 'CHAIRMAN') {
+            if (modalLevel === 'GM' || modalLevel === 'CHAIRMAN') {
                 await saveByLevel[modalLevel]({ ...base, ...scoreForm });
             } else {
                 await saveByLevel[modalLevel]({ ...base, ...metricForm, submittedAt: new Date().toISOString() });
@@ -194,7 +187,7 @@ const EvaluationsPage: React.FC = () => {
         }
     };
 
-    const renderMetricInput = (label: string, field: keyof typeof initialMetrics, maxScore: number) => {
+    const renderMetricInput = (label: string, description: string, field: keyof typeof initialMetrics, maxScore: number) => {
         const currentVal = metricForm[field];
         const displayValue = typeof currentVal === 'number' && maxScore > 0 ? Math.round((currentVal / maxScore) * 100) : 0;
         const handleChange = (inputVal: number) => {
@@ -203,18 +196,21 @@ const EvaluationsPage: React.FC = () => {
             setMetricForm(prev => ({ ...prev, [field]: scaledVal }));
         };
         return (
-            <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-tight">{label}</label>
-                    <span className="text-[10px] font-mono text-slate-400">Weight: {maxScore}%</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 py-5 border-b border-slate-100 last:border-0">
+                <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-bold text-slate-700">{label}</label>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded shrink-0">Weight {maxScore}%</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xl">{description}</p>
                 </div>
-                <div className="relative">
+                <div className="relative w-full sm:w-40 shrink-0">
                     <input
                         type="number" min="0" max="100" step="1" required value={displayValue}
                         onChange={(e) => handleChange(Number(e.target.value))}
-                        className="w-full pl-3 pr-8 py-2 bg-slate-50 border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-800 text-sm"
+                        className="w-full pl-4 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-300 transition-all font-bold text-slate-800 text-base text-center"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">%</span>
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">%</span>
                 </div>
             </div>
         );
@@ -421,7 +417,7 @@ const EvaluationsPage: React.FC = () => {
                                                     return (
                                                         <button
                                                             key={a}
-                                                            onClick={() => openModal(emp, a)}
+                                                            onClick={() => a === 'PERSONNEL' ? setPersonnelEmp(emp) : openModal(emp, a)}
                                                             disabled={disabled}
                                                             title={label}
                                                             className={`p-2 rounded-xl border transition-all shadow-sm hover:shadow-md ${disabled ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : (done || persDone) ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white'}`}
@@ -455,9 +451,11 @@ const EvaluationsPage: React.FC = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={modalLevel === 'PERSONNEL' ? t('personnel_evaluation') : `${LEVEL_LABEL[modalLevel as EvalLevel]} — ${selectedEmp?.fullName || ''}`}
+                title={`${LEVEL_LABEL[modalLevel]} — ${selectedEmp?.fullName || ''}`}
+                fullScreen
+                fullScreenWidth="max-w-5xl"
             >
-                <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="flex items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-4 sticky top-0 z-10">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#541c2c] to-[#aa7a51] flex items-center justify-center mr-4 text-[#e3c4a2] font-black shadow-md shadow-[#300a15]/50">{(selectedEmp?.fullName || 'U').charAt(0)}</div>
                         <div>
@@ -467,94 +465,76 @@ const EvaluationsPage: React.FC = () => {
                     </div>
 
                     {/* Metric-based levels */}
-                    {METRIC_LEVELS.includes(modalLevel as EvalLevel) && (
+                    {METRIC_LEVELS.includes(modalLevel) && (
                         <>
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-2 flex justify-between">{t('administrative_behavior')} <span className="text-indigo-600">25%</span></h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {renderMetricInput(t('relationship_with_colleagues'), 'relationshipWithColleagues', 5)}
-                                    {renderMetricInput(t('teamwork_participation'), 'teamworkParticipation', 5)}
-                                    {renderMetricInput(t('work_organization'), 'workOrganization', 5)}
-                                    {renderMetricInput(t('written_communication'), 'communicationSkills', 5)}
-                                    {renderMetricInput(t('regulatory_compliance'), 'regulatoryCompliance', 5)}
-                                </div>
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6">
+                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-3 mb-1 flex justify-between">{t('administrative_behavior')} <span className="text-indigo-600">25%</span></h4>
+                                {renderMetricInput(t('relationship_with_colleagues'), t('relationship_with_colleagues_desc'), 'relationshipWithColleagues', 5)}
+                                {renderMetricInput(t('teamwork_participation'), t('teamwork_participation_desc'), 'teamworkParticipation', 5)}
+                                {renderMetricInput(t('work_organization'), t('work_organization_desc'), 'workOrganization', 5)}
+                                {renderMetricInput(t('written_communication'), t('written_communication_desc'), 'communicationSkills', 5)}
+                                {renderMetricInput(t('regulatory_compliance'), t('regulatory_compliance_desc'), 'regulatoryCompliance', 5)}
                             </div>
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-2 flex justify-between">{t('executive_performance')} <span className="text-indigo-600">40%</span></h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {renderMetricInput(t('quality_completion'), 'taskQuality', 7)}
-                                    {renderMetricInput(t('time_commitment'), 'timeCommitment', 7)}
-                                    {renderMetricInput(t('organizational_compliance'), 'organizationalCompliance', 7)}
-                                    {renderMetricInput(t('problem_solving'), 'problemSolving', 6)}
-                                    {renderMetricInput(t('performance_pressure'), 'pressureHandling', 7)}
-                                    {renderMetricInput(t('continuous_development'), 'continuousDevelopment', 6)}
-                                </div>
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6">
+                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-3 mb-1 flex justify-between">{t('executive_performance')} <span className="text-indigo-600">40%</span></h4>
+                                {renderMetricInput(t('quality_completion'), t('quality_completion_desc'), 'taskQuality', 7)}
+                                {renderMetricInput(t('time_commitment'), t('time_commitment_desc'), 'timeCommitment', 7)}
+                                {renderMetricInput(t('organizational_compliance'), t('organizational_compliance_desc'), 'organizationalCompliance', 7)}
+                                {renderMetricInput(t('problem_solving'), t('problem_solving_desc'), 'problemSolving', 6)}
+                                {renderMetricInput(t('performance_pressure'), t('performance_pressure_desc'), 'pressureHandling', 7)}
+                                {renderMetricInput(t('continuous_development'), t('continuous_development_desc'), 'continuousDevelopment', 6)}
                             </div>
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-2 flex justify-between">{t('care_and_discipline')} <span className="text-indigo-600">15%</span></h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {renderMetricInput(t('regulations_adherence'), 'regulationsAdherence', 3)}
-                                    {renderMetricInput(t('safety_adherence'), 'safetyAdherence', 3)}
-                                    {renderMetricInput(t('workplace_appearance'), 'appearanceCommitment', 3)}
-                                    {renderMetricInput(t('resource_preservation'), 'resourcePreservation', 3)}
-                                    {renderMetricInput(t('data_privacy'), 'dataPrivacy', 3)}
-                                </div>
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6">
+                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-3 mb-1 flex justify-between">{t('care_and_discipline')} <span className="text-indigo-600">15%</span></h4>
+                                {renderMetricInput(t('regulations_adherence'), t('regulations_adherence_desc'), 'regulationsAdherence', 3)}
+                                {renderMetricInput(t('safety_adherence'), t('safety_adherence_desc'), 'safetyAdherence', 3)}
+                                {renderMetricInput(t('workplace_appearance'), t('workplace_appearance_desc'), 'appearanceCommitment', 3)}
+                                {renderMetricInput(t('resource_preservation'), t('resource_preservation_desc'), 'resourcePreservation', 3)}
+                                {renderMetricInput(t('data_privacy'), t('data_privacy_desc'), 'dataPrivacy', 3)}
                             </div>
-                            <div className="space-y-2">
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6 space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('observer_comments')}</label>
-                                <textarea value={metricForm.comments} onChange={(e) => setMetricForm({ ...metricForm, comments: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all text-slate-700 min-h-[80px]" placeholder={t('add_feedback')} />
+                                <textarea value={metricForm.comments} onChange={(e) => setMetricForm({ ...metricForm, comments: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-slate-100 focus:bg-white transition-all text-slate-700 min-h-[100px]" placeholder={t('add_feedback')} />
                             </div>
                         </>
                     )}
 
                     {/* Score-only levels (GM / Chairman) */}
                     {(modalLevel === 'GM' || modalLevel === 'CHAIRMAN') && (
-                        <div className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Final Score (0–100)</label>
-                                <input type="number" min="0" max="100" step="0.1" required value={scoreForm.finalScore} onChange={(e) => setScoreForm({ ...scoreForm, finalScore: Math.min(100, Math.max(0, Number(e.target.value))) })} className="w-full px-3 py-2 bg-slate-50 border-transparent rounded-lg font-bold text-slate-800" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t('observer_comments')}</label>
-                                <textarea value={scoreForm.comments} onChange={(e) => setScoreForm({ ...scoreForm, comments: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl text-slate-700 min-h-[80px]" placeholder={t('add_feedback')} />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Personnel record */}
-                    {modalLevel === 'PERSONNEL' && (
                         <div className="space-y-6">
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-2">{t('activity_discipline')}</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">{t('warning_messages')}</label><input type="number" min="0" max="3" value={persForm.warningMessages} onChange={e => setPersForm({ ...persForm, warningMessages: Number(e.target.value) })} className="w-full px-3 py-2 bg-slate-50 border-transparent rounded-lg font-bold" /></div>
-                                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">{t('disciplinary_days')}</label><input type="number" min="0" max="14" value={persForm.disciplinaryDeduction} onChange={e => setPersForm({ ...persForm, disciplinaryDeduction: Number(e.target.value) })} className="w-full px-3 py-2 bg-slate-50 border-transparent rounded-lg font-bold" /></div>
-                                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">{t('appreciation_msg')}</label><input type="number" min="0" max="3" value={persForm.appreciationMessages} onChange={e => setPersForm({ ...persForm, appreciationMessages: Number(e.target.value) })} className="w-full px-3 py-2 bg-slate-50 border-transparent rounded-lg font-bold" /></div>
-                                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">{t('exceptional_days')}</label><input type="number" min="0" max="30" value={persForm.exceptionalAssignments} onChange={e => setPersForm({ ...persForm, exceptionalAssignments: Number(e.target.value) })} className="w-full px-3 py-2 bg-slate-50 border-transparent rounded-lg font-bold" /></div>
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6">
+                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-3 mb-1">{t('overall_performance')}</h4>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 py-5">
+                                    <div className="flex-1">
+                                        <label className="text-sm font-bold text-slate-700">Final Score (0–100)</label>
+                                        <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xl">{t('final_score_desc')}</p>
+                                    </div>
+                                    <div className="w-full sm:w-40 shrink-0">
+                                        <input type="number" min="0" max="100" step="0.1" required value={scoreForm.finalScore} onChange={(e) => setScoreForm({ ...scoreForm, finalScore: Math.min(100, Math.max(0, Number(e.target.value))) })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-300 transition-all font-bold text-slate-800 text-base text-center" />
+                                    </div>
                                 </div>
                             </div>
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-2">{t('training_development')}</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[{ label: t('specialized_training'), key: 'specializedTraining' }, { label: t('supporting_training'), key: 'supportingTraining' }, { label: t('language_courses'), key: 'languageTraining' }, { label: t('software_electronic'), key: 'softwareTraining' }].map((item) => (
-                                        <div key={item.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                            <span className="text-xs font-bold text-slate-600 uppercase">{item.label}</span>
-                                            <button type="button" onClick={() => setPersForm(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof persForm] }))} className={`w-12 h-6 rounded-full transition-colors relative ${persForm[item.key as keyof typeof persForm] ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                                                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${persForm[item.key as keyof typeof persForm] ? 'translate-x-6' : ''}`} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="bg-white/60 rounded-2xl border border-slate-100 p-6 space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('observer_comments')}</label>
+                                <textarea value={scoreForm.comments} onChange={(e) => setScoreForm({ ...scoreForm, comments: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-xl text-slate-700 min-h-[100px]" placeholder={t('add_feedback')} />
                             </div>
                         </div>
                     )}
 
                     <div className="pt-4 border-t sticky bottom-0 bg-white pb-2 flex gap-4">
                         <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-6 py-4 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all">{t('cancel')}</button>
-                        <button type="submit" className={`flex-1 px-6 py-4 rounded-xl text-white font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-r ${theme.gradient}`}>{modalLevel === 'PERSONNEL' ? t('save_record') : t('submit_assessment')}</button>
+                        <button type="submit" className={`flex-1 px-6 py-4 rounded-xl text-white font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-r ${theme.gradient}`}>{t('submit_assessment')}</button>
                     </div>
                 </form>
             </Modal>
+
+            <PersonnelEvaluationModal
+                employee={personnelEmp}
+                month={selectedMonth}
+                isOpen={!!personnelEmp}
+                onClose={() => setPersonnelEmp(null)}
+                onSaved={fetchData}
+            />
         </div>
     );
 };

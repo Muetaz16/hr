@@ -36,7 +36,8 @@ export const payrollService = {
                 'Administrative Behavior': r.adminScore?.toFixed(2) || '0.00',
                 'Executive Performance': r.executiveScore?.toFixed(2) || '0.00',
                 'Care and discipline': r.careScore?.toFixed(2) || '0.00',
-                'Exceptional performance': r.personnelBonusDays ? `+${r.personnelBonusDays} days` : '0',
+                'Exceptional performance (%)': typeof r.exceptionalScore === 'number' ? `${r.exceptionalScore >= 0 ? '+' : ''}${r.exceptionalScore.toFixed(1)}%` : '0.0%',
+                'Training (%)': typeof r.trainingScore === 'number' ? `+${r.trainingScore.toFixed(1)}%` : '0.0%',
                 'Training and Education': r.trainingSummary || '',
                 'Total': r.finalScore.toFixed(2)
             };
@@ -72,7 +73,8 @@ export const payrollService = {
                     'Administrative Behavior': r.adminScore?.toFixed(2) || '0.00',
                     'Executive Performance': r.executiveScore?.toFixed(2) || '0.00',
                     'Care and discipline': r.careScore?.toFixed(2) || '0.00',
-                    'Exceptional performance': r.personnelBonusDays ? `+${r.personnelBonusDays} days` : '0',
+                    'Exceptional performance (%)': typeof r.exceptionalScore === 'number' ? `${r.exceptionalScore >= 0 ? '+' : ''}${r.exceptionalScore.toFixed(1)}%` : '0.0%',
+                    'Training (%)': typeof r.trainingScore === 'number' ? `+${r.trainingScore.toFixed(1)}%` : '0.0%',
                     'Training and Education': r.trainingSummary || '',
                     'Total': r.finalScore.toFixed(2)
                 };
@@ -128,8 +130,8 @@ export const payrollService = {
                     r.resPreservation || 0,
                     r.dataPrivacy || 0,
                     r.careScore || 0,
-                    r.personnelBonusDays ? `+${r.personnelBonusDays} days` : '-',
-                    r.trainingSummary || '-',
+                    typeof r.exceptionalScore === 'number' ? `${r.exceptionalScore >= 0 ? '+' : ''}${r.exceptionalScore.toFixed(1)}%` : '0.0%',
+                    typeof r.trainingScore === 'number' ? `+${r.trainingScore.toFixed(1)}%${r.trainingSummary ? ' (' + r.trainingSummary + ')' : ''}` : '-',
                     r.finalScore
                 ]);
             });
@@ -322,7 +324,7 @@ export const payrollService = {
             { v: 'Admin (25%)', s: adminStyle }, '', '', '', '', { v: 'Score', s: adminStyle },
             { v: 'Exec (40%)', s: execStyle }, '', '', '', '', '', { v: 'Score', s: execStyle },
             { v: 'Care (15%)', s: careStyle }, '', '', '', '', { v: 'Score', s: careStyle },
-            { v: 'Bonus', s: headerStyle }, { v: 'Training', s: headerStyle }, { v: 'Total', s: { ...headerStyle, font: { name: "Segoe UI", sz: 11, bold: true, color: { rgb: "E3C4A2" } } } }
+            { v: 'Exceptional %', s: headerStyle }, { v: 'Training %', s: headerStyle }, { v: 'Final Score', s: { ...headerStyle, font: { name: "Segoe UI", sz: 11, bold: true, color: { rgb: "E3C4A2" } } } }
         ];
 
         const h2 = [
@@ -427,9 +429,9 @@ export const payrollService = {
         wscols[0] = { wch: 10 }; // ID
         wscols[1] = { wch: 25 }; // Name
         wscols[2] = { wch: 10 }; // Month
-        wscols[28] = { wch: 12 }; // Bonus
-        wscols[29] = { wch: 25 }; // Training
-        wscols[30] = { wch: 10 }; // Total
+        wscols[28] = { wch: 12 }; // Exceptional %
+        wscols[29] = { wch: 25 }; // Training %
+        wscols[30] = { wch: 12 }; // Final Score
         worksheet['!cols'] = wscols;
 
         return worksheet;

@@ -583,6 +583,14 @@ export const createEmployee = async (req: Request, res: Response) => {
                 }
             }
 
+            // Employees attached directly to a Division (e.g. Head of Division) skip the
+            // department level entirely, so the derivation above never fires for them —
+            // derive directorateId straight from the Division instead.
+            if (data.divisionId && !data.directorateId) {
+                const division = await tx.division.findUnique({ where: { id: data.divisionId } });
+                if (division?.directorateId) data.directorateId = division.directorateId;
+            }
+
             const employee = await tx.employee.create({ data });
 
             // 3. Auto-create Onboarding Asset Request (Laptop)
@@ -892,6 +900,14 @@ export const updateEmployee = async (req: Request, res: Response) => {
                 if (!data.divisionId && dept.divisionId) data.divisionId = dept.divisionId;
                 if (!data.directorateId && dept.division?.directorateId) data.directorateId = dept.division.directorateId;
             }
+        }
+
+        // Employees attached directly to a Division (e.g. Head of Division) skip the
+        // department level entirely, so the derivation above never fires for them —
+        // derive directorateId straight from the Division instead.
+        if (data.divisionId && !data.directorateId) {
+            const division = await prisma.division.findUnique({ where: { id: data.divisionId } });
+            if (division?.directorateId) data.directorateId = division.directorateId;
         }
 
         // --- Complete enrolment of a BioTime-imported stub ---------------------------------------

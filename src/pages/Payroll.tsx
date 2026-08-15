@@ -169,42 +169,30 @@ const PayrollPage: React.FC = () => {
                     return 0;
                 };
 
-                // Personnel Score Calculation (Proposed Formula)
-                let persScore = 0;
+                // Exceptional Performance (±20%): each of the 4 items is prorated to its
+                // stated maximum (not flat), ±5% each — matches the official evaluation form.
+                let exceptionalScore = 0;
                 let persDeduct = 0;
                 let persBonus = 0;
-                let trainingList: string[] = [];
-
                 if (persEval) {
-                    // Base 80 + Adjustments
-                    let score = 80;
-                    score += (persEval.appreciationMessages * 5);
-                    score -= (persEval.warningMessages * 10);
-                    score += (persEval.exceptionalAssignments * 0.5); // +0.5 per day
-                    score -= (persEval.disciplinaryDeduction * 2);   // -2 per day score penalty
-
-                    // Training (+5 each)
-                    if (persEval.specializedTraining) { score += 5; trainingList.push("Specialized"); }
-                    if (persEval.supportingTraining) { score += 5; trainingList.push("Supporting"); }
-                    if (persEval.languageTraining) { score += 5; trainingList.push("Language"); }
-                    if (persEval.softwareTraining) { score += 5; trainingList.push("Software"); }
-
-                    persScore = Math.min(100, Math.max(0, score));
+                    exceptionalScore += 5 * Math.min(1, (persEval.appreciationMessages || 0) / 3);
+                    exceptionalScore += 5 * Math.min(1, (persEval.exceptionalAssignments || 0) / 30);
+                    exceptionalScore -= 5 * Math.min(1, (persEval.warningMessages || 0) / 3);
+                    exceptionalScore -= 5 * Math.min(1, (persEval.disciplinaryDeduction || 0) / 14);
 
                     persDeduct = persEval.disciplinaryDeduction;
                     persBonus = persEval.exceptionalAssignments;
                 }
-                // const trainingSummary = trainingList.join(", "); // We will translate this in the render if possible, or just join simple strings. 
-                // Actually, training types are hardcoded in DB probably, but we can translate them here for display if we want.
-                // For now, let's just join them as is, or use regex in render.
-                // But wait, trainingList pushes English strings "Specialized", "Supporting", etc.
-                // We should push keys or translated strings?
-                // If we push keys, we can translate in render.
-                // But trainingSummary is saved to DB as string?
-                // The interface says trainingSummary: string.
-                // Let's save the keys or English for now, and maybe translate in render if possible.
-                // Or better, let's just save English for consistency in DB, and frontend can translate if needed, but it's a "summary" field.
-                // Let's stick to English for the DB value for now to avoid complexity with existing data.
+
+                // Training (+10%): flat per completed type (Yes/No fields), 3/3/2/2 per the form.
+                let trainingScore = 0;
+                let trainingList: string[] = [];
+                if (persEval) {
+                    if (persEval.specializedTraining) { trainingScore += 3; trainingList.push("Specialized"); }
+                    if (persEval.supportingTraining) { trainingScore += 3; trainingList.push("Supporting"); }
+                    if (persEval.languageTraining) { trainingScore += 2; trainingList.push("Language"); }
+                    if (persEval.softwareTraining) { trainingScore += 2; trainingList.push("Software"); }
+                }
                 const trainingSummary = trainingList.join(", ");
 
                 // HR Score (Now out of 20 directly)
@@ -212,8 +200,10 @@ const PayrollPage: React.FC = () => {
                 const hrScaledScore = hrRawScore;
 
                 // Final Score Calculation (Sum of Categories)
-                // Admin(25) + Exec(40) + Care(15) + HR(20) = 100
-                const finalScore = hrScaledScore + adminScore + executiveScore + careScore;
+                // Presence(20) + Admin(25) + Exec(40) + Care(15) + Exceptional(±20) + Training(+10)
+                // No ceiling — a strong month can legitimately exceed 100, per the official form
+                // (theoretical max 130). Floored at 0 only as a sanity bound.
+                const finalScore = Math.max(0, hrScaledScore + adminScore + executiveScore + careScore + exceptionalScore + trainingScore);
 
                 // Salary Calc - DISABLED per user request
                 const finalSalary = 0;
@@ -267,10 +257,12 @@ const PayrollPage: React.FC = () => {
                     directorScore: dirEval?.finalScore ?? dirEval?.totalScore ?? 0,
 
                     // Personnel Metrics
-                    personnelScore: persScore, // Kept but not in finalScore
+                    personnelScore: exceptionalScore + trainingScore,
                     personnelDeductionDays: persDeduct,
                     personnelBonusDays: persBonus,
-                    trainingSummary, // New field
+                    exceptionalScore,
+                    trainingScore,
+                    trainingSummary,
 
                     finalScore: finalScore,
                     finalSalary: finalSalary,
@@ -556,12 +548,18 @@ const PayrollPage: React.FC = () => {
                                         </td>
 
                                         <td className="px-4 py-4 text-center payroll-score-cell">
-                                            <div className="text-[10px] font-bold payroll-bonus-text">
+                                            <div className={`text-[11px] font-black ${(result.exceptionalScore || 0) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                {typeof result.exceptionalScore === 'number' ? `${result.exceptionalScore >= 0 ? '+' : ''}${result.exceptionalScore.toFixed(1)}%` : '0.0%'}
+                                            </div>
+                                            <div className="text-[8px] font-medium payroll-bonus-text mt-0.5">
                                                 {result.personnelBonusDays ? `+${result.personnelBonusDays}d` : '-'}
                                             </div>
                                         </td>
                                         <td className="px-4 py-4 payroll-score-cell">
-                                            <div className="text-[9px] font-medium leading-tight line-clamp-2 max-w-[120px] payroll-training-text">
+                                            <div className="text-[11px] font-black text-emerald-400">
+                                                {typeof result.trainingScore === 'number' ? `+${result.trainingScore.toFixed(1)}%` : '0.0%'}
+                                            </div>
+                                            <div className="text-[8px] font-medium leading-tight line-clamp-2 max-w-[120px] payroll-training-text mt-0.5">
                                                 {result.trainingSummary || '-'}
                                             </div>
                                         </td>
