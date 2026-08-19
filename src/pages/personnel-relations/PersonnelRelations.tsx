@@ -113,6 +113,16 @@ const PersonnelRelations: React.FC = () => {
         enabled: !!detailEmp && isHRRole,
     });
 
+    // Full record (incl. contract history) for the employee open in the detail modal. Each renewal
+    // archives the old contract and adds a new ACTIVE one, so this list grows with every renewal —
+    // e.g. a renewed employee shows Contract 1 (archived) + Contract 2 (active).
+    const { data: detailFull } = useQuery({
+        queryKey: ['employee-contracts', detailEmp?.id],
+        queryFn: () => employeeService.getEmployeeById(detailEmp!.id),
+        enabled: !!detailEmp,
+    });
+    const detailContracts: any[] = (detailFull as any)?.contracts || [];
+
     // Replace/upload one of the fixed document slots (CV, degree, etc.) directly from this screen.
     const handleFixedDocUpload = async (empId: string, key: string, file?: File) => {
         if (!file) return;
@@ -432,6 +442,7 @@ const PersonnelRelations: React.FC = () => {
             });
             queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
             queryClient.invalidateQueries({ queryKey: ['employee-documents', selectedEmployee.id] });
+            queryClient.invalidateQueries({ queryKey: ['employee-contracts', selectedEmployee.id] });
             toast.success('Contract renewed. Signed document filed to the employee lifecycle.');
             setIsRenewalModalOpen(false);
         } catch (err: any) {
@@ -1461,6 +1472,39 @@ const PersonnelRelations: React.FC = () => {
                                 )}
 
                             </div>
+
+                            {/* Contract History — every renewal archives the old contract and adds a new
+                                one, so a renewed employee shows Contract 1 (archived) + Contract 2 (active). */}
+                            <Section icon={FileText} title="Contract History" color="bg-rose-50 text-rose-600" wide>
+                                {detailContracts.length === 0 ? (
+                                    <div className="col-span-full text-sm font-bold text-slate-300">No contract records yet.</div>
+                                ) : (
+                                    <div className="col-span-full space-y-2">
+                                        {[...detailContracts]
+                                            .sort((a, b) => {
+                                                const sa = new Date(a.startDate || a.createdAt).getTime();
+                                                const sb = new Date(b.startDate || b.createdAt).getTime();
+                                                return sa - sb;
+                                            })
+                                            .map((c, i) => (
+                                                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <span className="w-7 h-7 rounded-lg bg-[#511d29] text-white text-[11px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-black text-slate-700 truncate">Contract {i + 1}{c.contractNumber ? ` · ${c.contractNumber}` : ''}{c.type ? ` · ${c.type}` : ''}</p>
+                                                            <p className="text-[10px] text-slate-500">
+                                                                {c.startDate ? fmt(c.startDate) : '—'}{c.endDate ? ` → ${fmt(c.endDate)}` : ''}
+                                                                {c.position ? ` · ${c.position}` : ''}
+                                                                {(c.salary || c.salary === 0) ? ` · ${Number(c.salary).toLocaleString()}` : ''}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : c.status === 'TERMINATED' ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`}>{c.status}</span>
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </Section>
 
                             {/* Documents live outside the masonry flow — always full width */}
                             <Section icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" wide>

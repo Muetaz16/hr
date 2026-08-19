@@ -1124,9 +1124,9 @@ export const renewContract = async (req: Request, res: Response) => {
             const carriedOverHolidays = Math.max(0, Math.min(oldRemainingHolidays, PAID_LEAVE_CARRYOVER_CAP));
 
             // 2. Archive current ACTIVE contracts with SNAPSHOT data
-            await tx.contract.updateMany({
+            const archived = await tx.contract.updateMany({
                 where: { employeeId: id, status: 'ACTIVE' },
-                data: { 
+                data: {
                     status: 'ARCHIVED',
                     position: employee.position,
                     jobCategory: employee.jobCategory,
@@ -1138,6 +1138,31 @@ export const renewContract = async (req: Request, res: Response) => {
                     notes: notes ? `Renewed on ${new Date().toLocaleDateString()}. Notes: ${notes}` : `Renewed on ${new Date().toLocaleDateString()}`
                 } as any
             });
+
+            // 2b. Many employees were imported without an initial Contract row — their outgoing
+            // contract lived only on the Employee record. If nothing was archived above, snapshot
+            // that outgoing contract into an ARCHIVED row so the renewal shows as the SECOND contract
+            // in the history (Contract 1 = original, Contract 2 = the new one below).
+            if (archived.count === 0 && employee.contractStartDate) {
+                await tx.contract.create({
+                    data: {
+                        employeeId: id,
+                        startDate: employee.contractStartDate,
+                        endDate: employee.contractEndDate,
+                        contractNumber: employee.contractNumber,
+                        type: employee.contractType,
+                        salary: employee.baseSalary,
+                        position: employee.position,
+                        jobCategory: employee.jobCategory,
+                        jobGrade: employee.jobGrade,
+                        holidaysUsed: employee.holidaysUsed,
+                        emergencyHolidaysUsed: employee.emergencyHolidaysUsed,
+                        unpaidHolidaysUsed: employee.unpaidHolidaysUsed,
+                        status: 'ARCHIVED',
+                        notes: `Original contract (archived at renewal on ${new Date().toLocaleDateString()}).`,
+                    } as any
+                });
+            }
 
             // 3. Create NEW contract (ACTIVE). The signed contract file (if uploaded) is stored on
             // the contract record itself.
