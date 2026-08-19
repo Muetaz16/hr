@@ -34,6 +34,13 @@ export const employeeService = {
         return response.data;
     },
 
+    // Generate the Contract Renewal Form (.docx) with the employee's info auto-filled, for printing
+    // and collecting the physical approval signatures. Returned as a Blob for download.
+    async generateContractRenewalForm(id: string): Promise<Blob> {
+        const response = await api.get(`/employees/${id}/renewal-form`, { responseType: 'blob' });
+        return response.data;
+    },
+
     async getEmployeesByDepartment(deptId: string): Promise<Employee[]> {
         const response = await api.get('/employees');
         const all: Employee[] = response.data;

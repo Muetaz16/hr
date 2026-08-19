@@ -87,15 +87,27 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             attachmentName = file.originalname;
         }
 
+        const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found.' });
+        }
+
+        if (employee.contractEndDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const contractEnd = new Date(employee.contractEndDate);
+            contractEnd.setHours(0, 0, 0, 0);
+            const reqEnd = endDate ? new Date(endDate) : new Date(startDate);
+            reqEnd.setHours(0, 0, 0, 0);
+
+            if (contractEnd < today || reqEnd > contractEnd) {
+                return res.status(400).json({ error: 'YOU CAN NOT REQUEST FOR LEAVE OR HOLIDAY UNTIL YOUR CONTRACT RENEWAL' });
+            }
+        }
+
         const isChainType = CHAIN_LEAVE_TYPES.includes(type);
-        let employee: Awaited<ReturnType<typeof prisma.employee.findUnique>> = null;
 
         if (isChainType) {
-            employee = await prisma.employee.findUnique({ where: { id: employeeId } });
-            if (!employee) {
-                return res.status(404).json({ error: 'Employee not found.' });
-            }
-
             const start = new Date(startDate);
             const end = endDate ? new Date(endDate) : start;
             const dayCount = countLeaveDays(start, end);
@@ -171,9 +183,6 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
         // Attendance-permission types — the short 3-stage chain (Direct Supervisor -> Head of
         // Department -> Head of Attendance & Payroll), matching the Early Departure Request Form.
         if (PERMISSION_TYPES.includes(type)) {
-            const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
-            if (!employee) return res.status(404).json({ error: 'Employee not found.' });
-
             const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee);
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });

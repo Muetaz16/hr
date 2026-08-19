@@ -62,6 +62,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import publicRoutes from './routes/publicRoutes';
 import attendanceIntegrationRoutes from './routes/attendanceIntegrationRoutes';
 import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
+import personnelActionRoutes from './routes/personnelActionRoutes';
 import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
 import { initPresenceScoreScheduler } from './jobs/presenceScoreCron';
 
@@ -94,6 +95,7 @@ app.use('/api/candidates', candidateRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/attendance-integration', attendanceIntegrationRoutes);
 app.use('/api/attendance-settings', attendanceSettingsRoutes);
+app.use('/api/personnel-actions', personnelActionRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

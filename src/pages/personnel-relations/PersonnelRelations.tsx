@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
+import { personnelActionService, type PersonnelActionForm } from '../../services/personnelActionService';
+import { jobDescriptionService } from '../../services/jobDescriptionService';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { directorateService } from '../../services/directorateService';
@@ -14,7 +16,6 @@ import {
     Award,
     AlertOctagon,
     CheckCircle2,
-    Calendar,
     Building2,
     ShieldAlert,
     Search,
@@ -29,11 +30,16 @@ import {
     CalendarDays,
     ExternalLink,
     Trash2,
+    Plus,
+    ArrowRight,
+    Check,
+    X,
+    Upload,
     FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { toast } from 'sonner';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInDays, parseISO, addDays, addMonths } from 'date-fns';
 import Modal from '../../components/Modal';
 import type { Employee, EmployeeDocument } from '../../types';
 import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
@@ -67,8 +73,22 @@ const PersonnelRelations: React.FC = () => {
     // Modals
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
     const [isActionFormModalOpen, setIsActionFormModalOpen] = useState(false);
-    const [actionFormType, setActionFormType] = useState<'INTERCOMPANY' | 'INTERDEPT'>('INTERCOMPANY');
+    // Personnel Action Form (internal transfer) — driven by the target Job Description.
+    const emptyPaf = {
+        employeeId: '', newJobDescriptionId: '', newJobGrade: '', newPlaceOfWork: '',
+        reportsTo: '', typeOfTransfer: '', effectiveDate: '', justification: '',
+    };
+    const [pafForm, setPafForm] = useState({ ...emptyPaf });
+    const [pafSubmitting, setPafSubmitting] = useState(false);
+    const [decidePaf, setDecidePaf] = useState<PersonnelActionForm | null>(null);
+    const [decideFile, setDecideFile] = useState<File | null>(null);
+    const [decideBusy, setDecideBusy] = useState<string | null>(null);
+    const [pafGenBusy, setPafGenBusy] = useState<string | null>(null);
     const [isRenewalModalOpen, setIsRenewalModalOpen] = useState(false);
+    // Initiate Renewal form: the proposed new contract + the signed contract file to attach.
+    const [renewForm, setRenewForm] = useState({ startDate: '', endDate: '', salary: 0, contractNumber: '', notes: '' });
+    const [renewFile, setRenewFile] = useState<File | null>(null);
+    const [renewSubmitting, setRenewSubmitting] = useState(false);
     const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
     const [isDisciplinaryModalOpen, setIsDisciplinaryModalOpen] = useState(false);
     const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
@@ -176,6 +196,14 @@ const PersonnelRelations: React.FC = () => {
     const { data: directorates = [] } = useQuery({
         queryKey: ['relations-directorates'],
         queryFn: directorateService.getAllDirectorates
+    });
+    const { data: personnelActions = [] } = useQuery({
+        queryKey: ['personnel-actions'],
+        queryFn: () => personnelActionService.list(),
+    });
+    const { data: jobDescriptions = [] } = useQuery({
+        queryKey: ['relations-jds'],
+        queryFn: jobDescriptionService.getAllJobDescriptions,
     });
 
     // An employee isn't necessarily attached to a Department — they may belong to a Unit
@@ -291,16 +319,151 @@ const PersonnelRelations: React.FC = () => {
     ]);
 
     // Handlers
-    const handleActionFormSubmit = (e: React.FormEvent) => {
+    // Create a Personnel Action Form (internal transfer). Persists a PENDING record; the DOCX is
+    // generated separately, signed offline, then uploaded on Accept.
+    // Create a Personnel Action Form (internal transfer). The chosen target Job Description drives
+    // the destination; a PENDING record is stored, then generated/signed/uploaded/accepted.
+    const handleActionFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        toast.success('Personnel Action Form submitted successfully for approval.');
-        setIsActionFormModalOpen(false);
+        if (!pafForm.employeeId) { toast.error('Select an employee.'); return; }
+        if (!pafForm.newJobDescriptionId) { toast.error('Select the target position (Job Description).'); return; }
+        setPafSubmitting(true);
+        try {
+            await personnelActionService.create(pafForm);
+            queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
+            toast.success('Transfer form created. Generate it to collect signatures.');
+            setIsActionFormModalOpen(false);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Failed to create the form.');
+        } finally {
+            setPafSubmitting(false);
+        }
     };
 
-    const handleRenewalSubmit = (e: React.FormEvent) => {
+    const openCreatePaf = () => { setPafForm({ ...emptyPaf }); setIsActionFormModalOpen(true); };
+
+    // Download the filled Personnel Action Form (.docx).
+    const downloadPafForm = async (paf: PersonnelActionForm) => {
+        setPafGenBusy(paf.id);
+        try {
+            const blob = await personnelActionService.generateForm(paf.id);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Personnel_Action_${(paf.employee?.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Personnel Action Form generated.');
+        } catch (error: any) {
+            let msg = 'Failed to generate the form.';
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setPafGenBusy(null);
+        }
+    };
+
+    // Accept (applies the transfer, requires the signed file) or reject a pending form.
+    const handleDecide = async (decision: 'ACCEPT' | 'REJECT') => {
+        if (!decidePaf) return;
+        if (decision === 'ACCEPT' && !decideFile) { toast.error('Attach the signed form to accept.'); return; }
+        setDecideBusy(decision);
+        try {
+            let documentUrl: string | undefined;
+            let documentName: string | undefined;
+            if (decideFile) {
+                const uploaded = await employeeService.uploadDocument(decideFile);
+                documentUrl = uploaded.url;
+                documentName = uploaded.name;
+            }
+            await personnelActionService.decide(decidePaf.id, { decision, documentUrl, documentName });
+            queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
+            queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['employee-documents', decidePaf.employeeId] });
+            toast.success(decision === 'ACCEPT' ? 'Transfer accepted and applied to the employee.' : 'Form rejected.');
+            setDecidePaf(null);
+            setDecideFile(null);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Failed to process the decision.');
+        } finally {
+            setDecideBusy(null);
+        }
+    };
+
+    // Open the Initiate Renewal modal, pre-filling the new contract as: start = day after the
+    // current contract ends, end = start + 6 months (editable), salary carried from the record.
+    const openRenewalModal = (emp: any) => {
+        const start = emp.contractEndDate ? addDays(parseISO(emp.contractEndDate), 1) : new Date();
+        const end = addMonths(start, 6);
+        setSelectedEmployee(emp);
+        setRenewForm({
+            startDate: format(start, 'yyyy-MM-dd'),
+            endDate: format(end, 'yyyy-MM-dd'),
+            salary: emp.baseSalary || 0,
+            contractNumber: '',
+            notes: '',
+        });
+        setRenewFile(null);
+        setIsRenewalModalOpen(true);
+    };
+
+    // Apply the renewal: upload the signed contract, then update the contract (which archives the
+    // old one, carries over paid leave, resets emergency/unpaid, and files the signed doc under the
+    // employee's Lifecycle documents).
+    const handleRenewalSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        toast.success('Contract renewal request logged and forwarded to GM/Chairman.');
-        setIsRenewalModalOpen(false);
+        if (!selectedEmployee) return;
+        if (!renewForm.startDate || !renewForm.endDate) { toast.error('Enter the new contract start and end dates.'); return; }
+        if (!renewFile) { toast.error('Attach the signed contract before confirming.'); return; }
+        setRenewSubmitting(true);
+        try {
+            const { url, name } = await employeeService.uploadDocument(renewFile);
+            await employeeService.renewContract(selectedEmployee.id, {
+                startDate: renewForm.startDate,
+                endDate: renewForm.endDate,
+                salary: renewForm.salary,
+                contractNumber: renewForm.contractNumber || null,
+                type: selectedEmployee.contractType || null,
+                notes: renewForm.notes || null,
+                documentUrl: url,
+                documentName: name,
+            });
+            queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['employee-documents', selectedEmployee.id] });
+            toast.success('Contract renewed. Signed document filed to the employee lifecycle.');
+            setIsRenewalModalOpen(false);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Failed to renew the contract.');
+        } finally {
+            setRenewSubmitting(false);
+        }
+    };
+
+    // Generate the Contract Renewal Form (.docx) with the employee's info auto-filled, then trigger
+    // a browser download so HR can print it and collect the physical approval signatures.
+    const [renewalFormBusy, setRenewalFormBusy] = useState<string | null>(null);
+    const handleGenerateRenewalForm = async (emp: any) => {
+        setRenewalFormBusy(emp.id);
+        try {
+            const blob = await employeeService.generateContractRenewalForm(emp.id);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Contract_Renewal_${(emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Contract renewal form generated.');
+        } catch (error: any) {
+            let msg = 'Failed to generate the form.';
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setRenewalFormBusy(null);
+        }
     };
 
     const handleNominateSubmit = (e: React.FormEvent) => {
@@ -512,12 +675,22 @@ const PersonnelRelations: React.FC = () => {
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-right">
-                                                    <button
-                                                        onClick={() => { setSelectedEmployee(emp); setIsRenewalModalOpen(true); }}
-                                                        className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-amber-700 transition-colors"
-                                                    >
-                                                        Initiate Renewal
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleGenerateRenewalForm(emp)}
+                                                            disabled={renewalFormBusy === emp.id}
+                                                            className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        >
+                                                            <FileText className="w-3 h-3" />
+                                                            {renewalFormBusy === emp.id ? 'Generating…' : 'Generate Form'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openRenewalModal(emp)}
+                                                            className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-amber-700 transition-colors"
+                                                        >
+                                                            Initiate Renewal
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -544,88 +717,92 @@ const PersonnelRelations: React.FC = () => {
                             <div>
                                 <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Personnel Action Forms</h3>
                                 <p className="text-sm text-slate-600 mt-1">
-                                    Generate action documents for intercompany transfers (for Subsidiaries) and inter-department transfers (for IPH).
+                                    Internal transfers driven by the target Job Description. Generate the form, collect signatures, upload the signed copy, then accept to move the employee.
                                 </p>
                             </div>
                         </div>
                         <div className="flex gap-2">
                             <button
-                                onClick={() => { setActionFormType('INTERCOMPANY'); setIsActionFormModalOpen(true); }}
-                                className="px-4 py-2 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d]"
+                                onClick={openCreatePaf}
+                                className="px-4 py-2 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] inline-flex items-center gap-2"
                             >
-                                + Intercompany Form
-                            </button>
-                            <button
-                                onClick={() => { setActionFormType('INTERDEPT'); setIsActionFormModalOpen(true); }}
-                                className="px-4 py-2 bg-slate-800 text-white text-xs font-black uppercase tracking-widest hover:bg-slate-900"
-                            >
-                                + Inter-Department Form
+                                <Plus className="w-4 h-4" /> Create Internal Transfer
                             </button>
                         </div>
                     </div>
 
-                    {/* Show Form Template Direct Layout */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Subsidiary Form Draft */}
-                        <div className="bg-white border border-[#511d29]/25 p-6 rounded-xl shadow-sm space-y-6 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-[#511d29]/5 rounded-bl-full flex items-center justify-center">
-                                <Building2 className="w-8 h-8 text-[#511d29]/20" />
-                            </div>
-                            <div className="border-b border-[#511d29]/20 pb-4">
-                                <h4 className="text-md font-black text-[#511d29] uppercase tracking-wide">Intercompany Personnel Action Form</h4>
-                                <p className="text-xs text-slate-500">For transfers, shifts, or details affecting subsidiary branches.</p>
-                            </div>
-                            <div className="space-y-4 text-xs font-medium text-slate-700">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">From Company/Entity</p>
-                                        <p className="text-sm font-black text-[#511d29]">IPH Holding</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">To Subsidiary</p>
-                                        <p className="text-sm font-black text-[#511d29]">IPH Medical Services Ltd</p>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Actions Supported</p>
-                                    <ul className="list-disc list-inside mt-1 space-y-1 text-slate-500">
-                                        <li>Permanent Subsidiary Relocation</li>
-                                        <li>Dual-Company Role Adjustments</li>
-                                        <li>Temporary Liaison Assignments</li>
-                                    </ul>
-                                </div>
-                            </div>
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
+                        <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Transfer Requests</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{personnelActions.length} {personnelActions.length === 1 ? 'Form' : 'Forms'}</span>
                         </div>
-
-                        {/* IPH Department Form Draft */}
-                        <div className="bg-white border border-slate-800/25 p-6 rounded-xl shadow-sm space-y-6 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-slate-800/5 rounded-bl-full flex items-center justify-center">
-                                <Users className="w-8 h-8 text-slate-800/20" />
-                            </div>
-                            <div className="border-b border-slate-800/20 pb-4">
-                                <h4 className="text-md font-black text-slate-800 uppercase tracking-wide">Inter-Department Personnel Action Form</h4>
-                                <p className="text-xs text-slate-500">For internal movements, promotions, and department relocations inside IPH.</p>
-                            </div>
-                            <div className="space-y-4 text-xs font-medium text-slate-700">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">From Department</p>
-                                        <p className="text-sm font-black text-slate-800">Finance & Payroll</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">To Department</p>
-                                        <p className="text-sm font-black text-slate-800">Personnel Relations</p>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Actions Supported</p>
-                                    <ul className="list-disc list-inside mt-1 space-y-1 text-slate-500">
-                                        <li>Cross-Department Relocation</li>
-                                        <li>Internal Promotion & Role Elevation</li>
-                                        <li>Temporary Cross-Project Assignment</li>
-                                    </ul>
-                                </div>
-                            </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <thead>
+                                    <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
+                                        <th className="p-4">Employee</th>
+                                        <th className="p-4">Move</th>
+                                        <th className="p-4">Effective</th>
+                                        <th className="p-4">Status</th>
+                                        <th className="p-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
+                                    {personnelActions.map((paf) => {
+                                        const toName = units.find((u: any) => u.id === paf.newUnitId)?.name
+                                            || departments.find((d: any) => d.id === paf.newDepartmentId)?.name
+                                            || divisions.find((d: any) => d.id === paf.newDivisionId)?.name || '—';
+                                        const fromName = paf.currentUnit || paf.currentDepartment || paf.currentDivision || '—';
+                                        const badge = paf.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800'
+                                            : paf.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800';
+                                        return (
+                                            <tr key={paf.id} className="hover:bg-slate-50/50">
+                                                <td className="p-4">
+                                                    <p className="font-bold text-slate-800">{paf.employee?.fullName || '—'}</p>
+                                                    <p className="text-[10px] text-slate-500">{paf.newPositionTitle || paf.typeOfTransfer || 'Internal Transfer'}</p>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className="inline-flex items-center gap-1.5 text-slate-600">
+                                                        <span className="font-bold">{fromName}</span>
+                                                        <ArrowRight className="w-3 h-3 text-[#511d29]" />
+                                                        <span className="font-black text-[#511d29]">{toName}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 font-bold">{paf.effectiveDate ? format(parseISO(paf.effectiveDate), 'dd MMM yyyy') : '—'}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${badge}`}>{paf.status}</span>
+                                                    {paf.decidedByName && <p className="text-[9px] text-slate-400 mt-1">by {paf.decidedByName}</p>}
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => downloadPafForm(paf)}
+                                                            disabled={pafGenBusy === paf.id}
+                                                            className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5 disabled:opacity-60"
+                                                        >
+                                                            <FileText className="w-3 h-3" />
+                                                            {pafGenBusy === paf.id ? 'Generating…' : 'Generate Form'}
+                                                        </button>
+                                                        {paf.status === 'PENDING' && (
+                                                            <button
+                                                                onClick={() => { setDecidePaf(paf); setDecideFile(null); }}
+                                                                className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-amber-700 transition-colors inline-flex items-center gap-1.5"
+                                                            >
+                                                                <Upload className="w-3 h-3" /> Upload &amp; Decide
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {personnelActions.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">No transfer requests yet. Create one to get started.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -849,79 +1026,147 @@ const PersonnelRelations: React.FC = () => {
             )}
 
             {/* MODALS */}
-            {/* Modal 1: Personnel Action Form */}
-            <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title={`Log Personnel Action Form (${actionFormType === 'INTERCOMPANY' ? 'Intercompany' : 'Inter-Department'})`} maxWidth="max-w-xl">
-                <form onSubmit={handleActionFormSubmit} className="space-y-4 text-xs font-semibold text-slate-700">
+            {/* Modal 1: Create Internal Transfer (Personnel Action Form) */}
+            <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title="Create Internal Transfer" maxWidth="max-w-xl">
+                <form onSubmit={handleActionFormSubmit} className="space-y-4 text-xs font-semibold text-slate-700 max-h-[70vh] overflow-y-auto pr-1">
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            {employees.map((e: any) => (
-                                <option key={e.id} value={e.id}>{e.fullName}</option>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Employee <span className="text-red-500">*</span></label>
+                        <select value={pafForm.employeeId} onChange={e => setPafForm({ ...pafForm, employeeId: e.target.value })}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white">
+                            <option value="">— Select employee —</option>
+                            {[...employees].sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || '')).map((e: any) => (
+                                <option key={e.id} value={e.id}>{e.fullName}{e.staffId ? ` (${e.staffId})` : ''}</option>
                             ))}
                         </select>
                     </div>
 
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Target Position — Job Description <span className="text-red-500">*</span></label>
+                        <select value={pafForm.newJobDescriptionId} onChange={e => setPafForm({ ...pafForm, newJobDescriptionId: e.target.value })}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white">
+                            <option value="">— Select the position to move into —</option>
+                            {[...jobDescriptions].sort((a: any, b: any) => (a.title || '').localeCompare(b.title || '')).map((j: any) => (
+                                <option key={j.id} value={j.id}>{j.title}</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-slate-400 mt-1">The new division / department / unit / position / category come from the selected Job Description. On accept the employee is assigned to it.</p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Action Type</label>
-                            <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                                <option value="TRANSFER">Department Transfer</option>
-                                <option value="PROMOTION">Promotion</option>
-                                <option value="DEMOTION">Demotion</option>
-                                <option value="SALARY_ADJ">Salary Adjustment</option>
-                                <option value="SUSPENSION">Suspension</option>
-                            </select>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Type of Transfer</label>
+                            <input type="text" value={pafForm.typeOfTransfer} placeholder="e.g. Internal Transfer, Promotion" onChange={e => setPafForm({ ...pafForm, typeOfTransfer: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Effective Date</label>
-                            <input type="date" required className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Effectivity Date</label>
+                            <input type="date" value={pafForm.effectiveDate} onChange={e => setPafForm({ ...pafForm, effectiveDate: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">From Department/Entity</label>
-                            <input type="text" placeholder="Current location" className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Job Grade (Optional)</label>
+                            <input type="text" value={pafForm.newJobGrade} placeholder="Defaults to current" onChange={e => setPafForm({ ...pafForm, newJobGrade: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">To Department/Entity</label>
-                            <input type="text" placeholder="Target location" className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Reports To (Optional)</label>
+                            <input type="text" value={pafForm.reportsTo} placeholder="Defaults to the JD" onChange={e => setPafForm({ ...pafForm, reportsTo: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Justification / Remarks</label>
-                        <textarea rows={3} required placeholder="Reason for action" className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Place of Work (Optional)</label>
+                        <input type="text" value={pafForm.newPlaceOfWork} placeholder="Defaults to the JD" onChange={e => setPafForm({ ...pafForm, newPlaceOfWork: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                     </div>
 
-                    <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
-                        Submit Action Form
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Justification / Remarks</label>
+                        <textarea rows={2} value={pafForm.justification} onChange={e => setPafForm({ ...pafForm, justification: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                    </div>
+
+                    <button type="submit" disabled={pafSubmitting} className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d] disabled:opacity-60 disabled:cursor-not-allowed">
+                        {pafSubmitting ? 'Creating…' : 'Create Transfer Form'}
                     </button>
                 </form>
+            </Modal>
+
+            {/* Modal 1b: Upload signed form + Accept/Reject */}
+            <Modal isOpen={!!decidePaf} onClose={() => { setDecidePaf(null); setDecideFile(null); }} title="Personnel Action — Decision" maxWidth="max-w-md">
+                <div className="space-y-4 text-xs font-semibold text-slate-700">
+                    <p className="text-slate-500">Employee: <span className="font-black text-[#511d29]">{decidePaf?.employee?.fullName}</span></p>
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Signed Form <span className="text-red-500">*</span></label>
+                        <input type="file" accept=".pdf,.doc,.docx,image/*"
+                            onChange={e => setDecideFile(e.target.files?.[0] || null)}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
+                        {decideFile && <p className="text-[10px] text-emerald-600 mt-1 font-bold">{decideFile.name}</p>}
+                    </div>
+                    <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">
+                        Accepting will move the employee into the target Job Description (division/department/unit/position/category) and file the signed form to their Lifecycle documents. Blocked if the JD is above its staffing plan.
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => handleDecide('REJECT')} disabled={!!decideBusy}
+                            className="flex-1 py-3 bg-white border border-red-300 text-red-600 font-black uppercase tracking-widest hover:bg-red-50 disabled:opacity-60 inline-flex items-center justify-center gap-1.5">
+                            <X className="w-4 h-4" /> {decideBusy === 'REJECT' ? 'Rejecting…' : 'Reject'}
+                        </button>
+                        <button onClick={() => handleDecide('ACCEPT')} disabled={!!decideBusy}
+                            className="flex-1 py-3 bg-emerald-600 text-white font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-60 inline-flex items-center justify-center gap-1.5">
+                            <Check className="w-4 h-4" /> {decideBusy === 'ACCEPT' ? 'Applying…' : 'Accept & Apply'}
+                        </button>
+                    </div>
+                </div>
             </Modal>
 
             {/* Modal 2: Contract Renewal */}
             <Modal isOpen={isRenewalModalOpen} onClose={() => setIsRenewalModalOpen(false)} title="Initiate Contract Renewal" maxWidth="max-w-md">
                 <form onSubmit={handleRenewalSubmit} className="space-y-4 text-xs font-semibold text-slate-700">
-                    <p className="text-slate-500 mb-2">Initiate renewal process for: <span className="font-black text-[#511d29]">{selectedEmployee?.fullName}</span></p>
+                    <p className="text-slate-500 mb-2">Renew contract for: <span className="font-black text-[#511d29]">{selectedEmployee?.fullName}</span></p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Start Date</label>
+                            <input type="date" value={renewForm.startDate}
+                                onChange={e => setRenewForm({ ...renewForm, startDate: e.target.value })}
+                                className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        </div>
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New End Date</label>
+                            <input type="date" value={renewForm.endDate}
+                                onChange={e => setRenewForm({ ...renewForm, endDate: e.target.value })}
+                                className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 -mt-2">Pre-filled to 6 months from the day after the current contract ends — adjust if needed.</p>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Contract Duration</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option value="6M">6 Months</option>
-                            <option value="1Y">1 Year</option>
-                            <option value="2Y">2 Years</option>
-                            <option value="PERMANENT">Permanent / Indefinite</option>
-                        </select>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Contract No. (Optional)</label>
+                        <input type="text" value={renewForm.contractNumber}
+                            onChange={e => setRenewForm({ ...renewForm, contractNumber: e.target.value })}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white" />
                     </div>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Salary Adjustment (Optional)</label>
-                        <input type="number" placeholder="Enter amount or leave empty" className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Signed Contract <span className="text-red-500">*</span></label>
+                        <input type="file" accept=".pdf,.doc,.docx,image/*"
+                            onChange={e => setRenewFile(e.target.files?.[0] || null)}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
+                        {renewFile && <p className="text-[10px] text-emerald-600 mt-1 font-bold">{renewFile.name}</p>}
                     </div>
 
-                    <button type="submit" className="w-full py-3 bg-amber-600 text-white font-black uppercase tracking-widest hover:bg-amber-700">
-                        Initiate Renewal Process
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Notes (Optional)</label>
+                        <textarea value={renewForm.notes} rows={2}
+                            onChange={e => setRenewForm({ ...renewForm, notes: e.target.value })}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                    </div>
+
+                    <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">
+                        Confirming will archive the current contract, start the new one, carry over remaining paid leave (capped at 14 days), reset emergency &amp; unpaid leave, and file the signed contract to the employee's Lifecycle documents.
+                    </div>
+
+                    <button type="submit" disabled={renewSubmitting}
+                        className="w-full py-3 bg-amber-600 text-white font-black uppercase tracking-widest hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                        {renewSubmitting ? 'Processing…' : 'Confirm Renewal'}
                     </button>
                 </form>
             </Modal>

@@ -9,8 +9,10 @@ import { PrismaClient, Employee } from '@prisma/client';
 // no department head is covered by the division head, then the directorate):
 //   HEAD_UNIT              <-> User.unitId === Employee.unitId
 //   HEAD_DEPARTMENT/OFFICE <-> User.departmentId === Employee.departmentId
-//   HEAD_DIVISION          <-> Employee.departmentId is in User.departmentIds
-//   HEAD_DIRECTOR          <-> Employee.departmentId is in User.departmentIds  (the "Directorate" stage)
+//   HEAD_DIVISION          <-> User.divisionId === the employee's division (dept -> division)
+//   HEAD_DIRECTOR          <-> the employee's directorate (dept -> division -> directorate), matched
+//                             against the director's own Employee.directorateId, OR (legacy) the
+//                             employee's department listed in User.departmentIds  (the "Directorate" stage)
 // The Head-of-Attendance stage is granted by the "approve_attendance" permission (a function, not a
 // role); HR_MANAGER and GENERAL_MANAGER are global, unscoped roles. Every person matching one of
 // these three stages must sign, and each stage must have at least one holder or the request is blocked.
@@ -56,11 +58,37 @@ export const STAGE_SEQUENCE: Record<string, number> = {
 // approvers here means a real misconfiguration, not a tolerable org-coverage gap.
 const REQUIRED_NONEMPTY_STAGES: ApprovalStage[] = ['HEAD_ATTENDANCE', 'HR_MANAGER', 'GENERAL_MANAGER'];
 
+// The requester's own seniority in the org. A head's leave must never route through their own
+// subordinates — approvers sit STRICTLY above the requester — so a Division Head's direct head is
+// the Director, not the Department Head beneath them. HEAD_ATTENDANCE and HR_MANAGER are cross-
+// cutting functions (not levels) and always sign regardless of rank.
+const ORG_RANK: Record<string, number> = {
+    EMPLOYEE: 0,
+    HEAD_UNIT: 1,
+    HEAD_DEPARTMENT: 2,
+    HEAD_OFFICE: 2,
+    HEAD_DIVISION: 3,
+    HEAD_DIRECTOR: 4,
+    GENERAL_MANAGER: 5,
+    CHAIRMAN: 6,
+};
+const orgRank = (role?: string | null): number => (role && ORG_RANK[role] != null ? ORG_RANK[role] : 0);
+
 export async function resolveApprovalChain(
     prisma: PrismaClient,
     employee: Employee
 ): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
     const idsOf = (rows: { id: string }[]) => rows.map(r => r.id);
+
+    // The requester's own seniority — a head's leave must be approved from the level ABOVE them, so
+    // we never route it through their own subordinates. Take the higher of their Employee role and
+    // their linked User account role (a head is usually a HEAD_* User but may sit as an EMPLOYEE row).
+    let requesterRole: string | null = employee.role ?? null;
+    if (employee.userId) {
+        const requesterUser = await prisma.user.findUnique({ where: { id: employee.userId }, select: { role: true } });
+        if (requesterUser && orgRank(requesterUser.role) > orgRank(requesterRole)) requesterRole = requesterUser.role;
+    }
+    const requesterRank = orgRank(requesterRole);
 
     // --- Resolve every org role-holder group up-front, so we can both build the signing chain and
     // work out the "smart signature" coverage (which printed row each person's lone signature fills).
@@ -82,68 +110,98 @@ export async function resolveApprovalChain(
 
     let deptHeads: string[] = [];
     let divisionHeads: string[] = [];
+    // The division & directorate this employee ultimately rolls up to — resolved smartly through the
+    // org structure (department -> division -> directorate) even when they aren't stamped directly
+    // on the employee record.
+    let resolvedDivisionId: string | null = employee.divisionId ?? null;
+    let directorateId: string | null = employee.directorateId ?? null;
     if (employee.departmentId) {
         deptHeads = idsOf(await prisma.user.findMany({
             where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
             select: { id: true },
         }));
-        // Division head: whoever owns the DIVISION this department belongs to. A HEAD_DIVISION is
-        // assigned a division (User.divisionId) once, and automatically covers every department under it.
         const dept = await prisma.department.findUnique({
             where: { id: employee.departmentId },
-            select: { divisionId: true },
+            select: { divisionId: true, division: { select: { directorateId: true } } },
         });
-        if (dept?.divisionId) {
-            divisionHeads = idsOf(await prisma.user.findMany({
-                where: { role: 'HEAD_DIVISION', divisionId: dept.divisionId },
-                select: { id: true },
-            }));
-        }
+        if (!resolvedDivisionId) resolvedDivisionId = dept?.divisionId ?? null;
+        if (!directorateId) directorateId = dept?.division?.directorateId ?? null;
     }
-
-    const hrManagers = idsOf(await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } }));
-
-    let directors: string[] = [];
-    if (employee.departmentId) {
-        directors = idsOf(await prisma.user.findMany({
-            where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } },
+    // Division head: whoever owns the DIVISION this employee rolls up to. A HEAD_DIVISION is assigned
+    // a division (User.divisionId) once, and automatically covers every department under it.
+    if (resolvedDivisionId) {
+        divisionHeads = idsOf(await prisma.user.findMany({
+            where: { role: 'HEAD_DIVISION', divisionId: resolvedDivisionId },
             select: { id: true },
         }));
     }
 
+    const hrManagers = idsOf(await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } }));
+
+    // Directorate head — the "Administrative Director" endorsement. Resolve two ways and union them so
+    // the director always lands in the flow when the org structure says they head this branch:
+    //   (a) a HEAD_DIRECTOR user explicitly scoped to this department (legacy User.departmentIds), and
+    //   (b) whoever heads the DIRECTORATE this employee rolls up to — their linked Employee carries
+    //       role HEAD_DIRECTOR + directorateId — the same smart org relation used across the app.
+    const directorIds = new Set<string>();
+    if (employee.departmentId) {
+        const byDept = await prisma.user.findMany({
+            where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } },
+            select: { id: true },
+        });
+        byDept.forEach(u => directorIds.add(u.id));
+    }
+    if (directorateId) {
+        const byDirectorate = await prisma.employee.findMany({
+            where: { role: 'HEAD_DIRECTOR', directorateId, userId: { not: null } },
+            select: { userId: true },
+        });
+        byDirectorate.forEach(e => { if (e.userId) directorIds.add(e.userId); });
+    }
+    const directors = Array.from(directorIds);
+
     const generalManagers = idsOf(await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } }));
 
-    // --- Signing chain, in order. Unchanged: everyone who signs today still signs. UNIT/DEPT/
-    // DIVISION are separate signing stages; the *form* collapses them onto two printed rows below.
+    // Keep only the org-head levels STRICTLY ABOVE the requester — so a Division Head's request never
+    // routes through the Department Head beneath them. HEAD_ATTENDANCE / HR_MANAGER / GENERAL_MANAGER
+    // are always kept (functions / top of this form); the requester is also removed by self-exclusion.
+    const above = (levelRank: number, ids: string[]) => (levelRank > requesterRank ? ids : []);
+    const unitHeadsA = above(ORG_RANK.HEAD_UNIT, unitHeads);
+    const deptHeadsA = above(ORG_RANK.HEAD_DEPARTMENT, deptHeads);
+    const divisionHeadsA = above(ORG_RANK.HEAD_DIVISION, divisionHeads);
+    const directorsA = above(ORG_RANK.HEAD_DIRECTOR, directors);
+
+    // --- Signing chain, in order. Only heads above the requester sign; UNIT/DEPT/DIVISION are
+    // separate signing stages, and the *form* collapses them onto two printed rows below.
     const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
     rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
-    if (employee.unitId) rawStages.push({ stage: 'UNIT_HEAD', userIds: unitHeads });
+    if (employee.unitId) rawStages.push({ stage: 'UNIT_HEAD', userIds: unitHeadsA });
     if (employee.departmentId) {
-        rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeads });
-        rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeads });
+        rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeadsA });
+        rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeadsA });
     }
     rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
-    rawStages.push({ stage: 'DIRECTORATE', userIds: directors });
+    rawStages.push({ stage: 'DIRECTORATE', userIds: directorsA });
     rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
 
     // --- Smart-signature coverage: which single person fills each printed row on the form.
-    // "Always look for the direct head" — the nearest real head up the org ladder — and let one
-    // signature stand in for every post that person actually holds:
-    //   • Direct supervisor          = nearest real local head (unit → dept → division), else the director.
-    //   • Head of Department/Division = the post directly above 'direct'; if there's only one real
-    //                                   local head it equals 'direct' (one signature shown in both rows);
-    //                                   if there are none, it falls through to the director too.
-    //   • Administrative Director     = the director (always in the flow when one exists). If the
-    //                                   director IS the direct head, their signature covers all of the above.
-    const localLadder = [unitHeads, deptHeads, divisionHeads].filter(g => g.length > 0);
-    const directGroup = localLadder[0] ?? directors;
-    const deptDivGroup = localLadder[1] ?? localLadder[0] ?? directors;
+    // "Always look for the direct head" — the nearest real head STRICTLY ABOVE the requester — and let
+    // one signature stand in for every post that person actually holds:
+    //   • Direct supervisor          = nearest head above the requester (unit → dept → division →
+    //                                   director → GM). For a Division Head requester this is the Director.
+    //   • Head of Department/Division = the post directly above 'direct'; if there's only one head above
+    //                                   the requester it equals 'direct' (one signature shown in both rows).
+    //   • Administrative Director     = the director. If the director IS the direct head (e.g. a Division
+    //                                   Head's request), their single signature covers all of the above.
+    const aboveLadder = [unitHeadsA, deptHeadsA, divisionHeadsA, directorsA].filter(g => g.length > 0);
+    const directGroup = aboveLadder[0] ?? generalManagers;
+    const deptDivGroup = aboveLadder[1] ?? aboveLadder[0] ?? generalManagers;
     const rowHolders: { row: ApprovalStage; userIds: string[] }[] = [
         { row: 'HEAD_ATTENDANCE', userIds: attendanceHeads },
         { row: 'DIRECT_SUPERVISOR', userIds: directGroup },
         { row: 'HEAD_DEPT_DIVISION', userIds: deptDivGroup },
         { row: 'HR_MANAGER', userIds: hrManagers },
-        { row: 'DIRECTORATE', userIds: directors },
+        { row: 'DIRECTORATE', userIds: directorsA },
         { row: 'GENERAL_MANAGER', userIds: generalManagers },
     ];
 

@@ -246,6 +246,7 @@ model Employee {
   assetRequests          AssetRequest[]
   contracts              Contract[]
   documents              EmployeeDocument[]
+  personnelActionForms   PersonnelActionForm[]
   departmentEvaluations  DepartmentEvaluation[]
   directorEvaluations    DirectorEvaluation[]
   divisionEvaluations    DivisionEvaluation[]
@@ -288,6 +289,54 @@ model EmployeeDocument {
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+}
+
+// Personnel Action Form (PAF) — an internal transfer. HR picks the target Job Description (which
+// defines the destination division/department/unit/position/category); the DOCX is generated for
+// physical signatures, the signed copy is uploaded, then on Accept the employee is moved into that
+// JD and the signed form is filed under their Lifecycle documents. `current*` snapshots the
+// placement at creation for the document + audit; `new*` mirrors the target JD's placement.
+model PersonnelActionForm {
+  id                  String    @id @default(uuid())
+  employeeId          String
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  actionType          String    @default("TRANSFER")
+  status              String    @default("PENDING") // PENDING | ACCEPTED | REJECTED
+
+  currentDivision     String?
+  currentDepartment   String?
+  currentUnit         String?
+  currentPosition     String?
+  currentJobCategory  String?
+  currentJobGrade     String?
+  currentPlaceOfWork  String?
+
+  newJobDescriptionId String? // the target JD that drives the move
+  newDivisionId       String?
+  newDepartmentId     String?
+  newUnitId           String?
+  newPositionTitle    String?
+  newJobCategory      String?
+  newJobGrade         String?
+  newPlaceOfWork      String?
+  reportsTo           String?
+
+  typeOfTransfer      String?
+  effectiveDate       DateTime?
+  justification       String?
+
+  documentUrl         String?
+  documentName        String?
+
+  createdByName       String?
+  decidedByName       String?
+  decidedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
 }
 
 model Contract {

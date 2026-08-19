@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, regenerateAllStaffIds, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument } from '../controllers/employeeController';
+import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, regenerateAllStaffIds, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument, generateContractRenewalForm } from '../controllers/employeeController';
 import { authenticateToken, authorizeRoles, authorizePermissions, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
@@ -36,6 +36,7 @@ router.put('/:id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['edit_employees
 router.delete('/:id', authorizeAccess(['HR_MANAGER'], ['edit_employees']), deleteEmployee);
 
 // Contract Lifecycle
+router.get('/:id/renewal-form', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_contracts', 'manage_contract_management']), generateContractRenewalForm);
 router.post('/:id/renew', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), renewContract);
 router.post('/:id/terminate', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), terminateEmployee);
 

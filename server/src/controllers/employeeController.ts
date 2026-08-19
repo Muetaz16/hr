@@ -4,6 +4,7 @@ import type { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { presetForRole } from '../utils/rolePresets';
 import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
+import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
 
 const prisma = new PrismaClient();
 
@@ -1107,7 +1108,7 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
 export const renewContract = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { startDate, endDate, salary, contractNumber, type, notes } = req.body;
+        const { startDate, endDate, salary, contractNumber, type, notes, documentUrl, documentName } = req.body;
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Fetch current employee data for snapshot
@@ -1138,7 +1139,8 @@ export const renewContract = async (req: Request, res: Response) => {
                 } as any
             });
 
-            // 3. Create NEW contract (ACTIVE)
+            // 3. Create NEW contract (ACTIVE). The signed contract file (if uploaded) is stored on
+            // the contract record itself.
             const newContract = await tx.contract.create({
                 data: {
                     employeeId: id,
@@ -1148,9 +1150,24 @@ export const renewContract = async (req: Request, res: Response) => {
                     contractNumber: contractNumber || null,
                     type: type || null,
                     notes: notes || null,
+                    documentUrl: documentUrl || null,
                     status: 'ACTIVE'
                 }
             });
+
+            // Also file the signed contract under the employee's Lifecycle documents so it shows in
+            // the Employee Lifecycle Tracking detail alongside their other documents.
+            if (documentUrl) {
+                await tx.employeeDocument.create({
+                    data: {
+                        employeeId: id,
+                        name: `Signed Contract — Renewal (${new Date().toLocaleDateString()})`,
+                        fileUrl: documentUrl,
+                        fileName: documentName?.trim() || null,
+                        uploadedByName: (req as AuthRequest).user?.fullName || null,
+                    }
+                });
+            }
 
             // 4. Update Employee (Reset Leave Stats)
             await tx.employee.update({
@@ -1220,5 +1237,134 @@ export const terminateEmployee = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Error terminating employee:', error);
         res.status(500).json({ error: 'Failed to terminate employee', details: error.message });
+    }
+};
+
+// GET /employees/:id/renewal-form
+// Generate the bilingual Contract Renewal Form (.docx) with the employee's information auto-filled,
+// ready to print and collect the physical approval signatures. The evaluation, new-contract-dates,
+// decision and signature sections are left blank on purpose — those are handled later.
+const formatFormDate = (value: string | Date | null | undefined): string => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = d.getUTCFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+};
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+// The `count` months ending at (and including) the month of `endDate`, oldest first. Each entry has
+// a "YYYY-MM" key (matching how evaluation rows store their month) and a human-readable label.
+const monthsEndingAt = (endDate: Date, count: number): { key: string; label: string }[] => {
+    const y = endDate.getUTCFullYear();
+    const m = endDate.getUTCMonth(); // 0-11
+    const out: { key: string; label: string }[] = [];
+    for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(Date.UTC(y, m - i, 1));
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        out.push({ key, label: `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}` });
+    }
+    return out;
+};
+
+const formatScore = (s: number): string => (Number.isInteger(s) ? String(s) : s.toFixed(1));
+
+const addDaysUTC = (d: Date, n: number): Date =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
+const addMonthsUTC = (d: Date, n: number): Date =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()));
+
+// A month's evaluation is only "finalized" once we're past the 25th of that month (the presence/
+// evaluation windows for month M close on ~the 24th–25th — see presenceScoring/evaluationPeriodCron).
+// So the latest month we can show a real score for is: the current month if today is on/after the
+// 25th, otherwise the previous month. Computed in Africa/Tripoli to match those jobs. Returns a Date
+// pinned to day 1 of that month (UTC).
+const latestFinalizedMonth = (): Date => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const get = (t: string) => Number(parts.find(p => p.type === t)!.value);
+    const y = get('year'), m = get('month'), d = get('day'); // m is 1-12
+    // day-1 of this month, then step back one month if this month hasn't finalized yet.
+    return new Date(Date.UTC(y, (m - 1) - (d >= 25 ? 0 : 1), 1));
+};
+
+export const generateContractRenewalForm = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const employee = await prisma.employee.findUnique({
+            where: { id },
+            include: {
+                department: { include: { division: true } },
+                division: true,
+            },
+        });
+        if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+        // An employee attaches to whichever org unit is most specific for them; the form has a
+        // single Division field, so prefer their direct division, else the department's parent.
+        const divisionName = employee.division?.name || employee.department?.division?.name || '';
+
+        // Evaluation period = the last 6 finalized months. We anchor to whichever is earlier: the
+        // latest finalized month (past the 25th) or the contract-end month — so we never show a
+        // not-yet-evaluated month, nor months past the contract. Pull the overall monthly score
+        // (PayrollResult.finalScore, 0-100) for each; months with no result on file are flagged so
+        // HR can see the gap rather than an empty cell.
+        let evaluations: { month: string; score: string }[] = [];
+        if (employee.contractEndDate) {
+            const ce = new Date(employee.contractEndDate);
+            const contractEndMonth = new Date(Date.UTC(ce.getUTCFullYear(), ce.getUTCMonth(), 1));
+            const finalized = latestFinalizedMonth();
+            const anchor = finalized < contractEndMonth ? finalized : contractEndMonth;
+            const period = monthsEndingAt(anchor, 6);
+            const results = await prisma.payrollResult.findMany({
+                where: { employeeId: id, month: { in: period.map(p => p.key) } },
+                select: { month: true, finalScore: true },
+            });
+            const scoreByMonth = new Map(results.map(r => [r.month, r.finalScore]));
+            evaluations = period.map(p => {
+                const s = scoreByMonth.get(p.key);
+                return {
+                    month: p.label,
+                    score: (s === undefined || s === null) ? 'Not evaluated this month' : formatScore(s),
+                };
+            });
+        }
+
+        // Proposed renewal period: starts the day after the current contract ends and runs 6 months.
+        let newContractStartDate = '';
+        let newContractEndDate = '';
+        if (employee.contractEndDate) {
+            const start = addDaysUTC(new Date(employee.contractEndDate), 1);
+            newContractStartDate = formatFormDate(start);
+            newContractEndDate = formatFormDate(addMonthsUTC(start, 6));
+        }
+
+        const buffer = generateContractRenewalDocx({
+            employeeName: employee.fullName || '',
+            idNo: employee.staffId || '',
+            division: divisionName,
+            department: employee.department?.name || '',
+            position: employee.position || '',
+            category: employee.jobCategory || '',
+            jobGrade: employee.jobGrade || '',
+            contractStartDate: formatFormDate(employee.contractStartDate),
+            contractEndDate: formatFormDate(employee.contractEndDate),
+            newContractStartDate,
+            newContractEndDate,
+            evaluations,
+        });
+
+        const safeName = (employee.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="Contract_Renewal_${safeName}.docx"`);
+        res.send(buffer);
+    } catch (error: any) {
+        console.error('Error generating contract renewal form:', error);
+        res.status(500).json({ error: 'Failed to generate contract renewal form', details: error.message });
     }
 };
