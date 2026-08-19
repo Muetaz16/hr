@@ -219,6 +219,7 @@ export interface Employee {
     languageFactor?: number;
     roleCategory?: string;
     evaluationPoints?: number;
+    promotionNotified?: boolean; // one-shot flag: HR already notified once evaluationPoints crossed the promotion threshold
 
     // Contract Details
     contractStartDate?: string;

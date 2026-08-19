@@ -15,6 +15,22 @@ export const getTimeRecordsByMonth = async (req: Request, res: Response) => {
     }
 };
 
+// GET /api/time/employee/:employeeId — one employee's attendance history for the Lifecycle detail
+// view. Deliberately ungated beyond authentication, unlike /month/:month (a bulk cross-company
+// dump) — same exposure level as the Leave Balances already shown ungated on that screen.
+export const getTimeRecordsByEmployee = async (req: Request, res: Response) => {
+    try {
+        const { employeeId } = req.params;
+        const records = await prisma.timeRecord.findMany({
+            where: { employeeId },
+            orderBy: { month: 'desc' },
+        });
+        res.json(records);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch time records' });
+    }
+};
+
 export const createOrUpdateTimeRecord = async (req: Request, res: Response) => {
     try {
         const data = req.body;

@@ -1,8 +1,23 @@
 import api from './apiClient';
 import type {
     UnitEvaluation, DepartmentEvaluation, DivisionEvaluation,
-    DirectorEvaluation, GMEvaluation, ChairmanEvaluation, PersonnelEvaluation
+    DirectorEvaluation, GMEvaluation, ChairmanEvaluation, PersonnelEvaluation, HREvaluation
 } from '../types';
+
+// One month's worth of data across every evaluation table, as returned by
+// GET /evaluations/employee/:employeeId/history — used by the Lifecycle detail tree.
+export interface EvaluationHistoryMonth {
+    month: string;
+    hr?: HREvaluation;
+    personnel?: PersonnelEvaluation;
+    unit?: UnitEvaluation;
+    department?: DepartmentEvaluation;
+    division?: DivisionEvaluation;
+    director?: DirectorEvaluation;
+    gm?: GMEvaluation;
+    chairman?: ChairmanEvaluation;
+    finalization?: { finalScore: number; finalizedAt: string; isAuto: boolean };
+}
 
 // Generic GET helpers keep the per-level methods tiny and consistent.
 const getOne = async <T>(path: string, employeeId: string, month: string): Promise<T | null> => {
@@ -66,6 +81,19 @@ export const evaluationService = {
     async savePersonnelEvaluation(evalData: Omit<PersonnelEvaluation, 'id'>) {
         const response = await api.post('/evaluations/personnel', evalData);
         return response.data;
+    },
+
+    // Every month's evaluation data for one employee (Lifecycle detail tree). A 403 means the
+    // viewer isn't allowed to see this employee's evaluations — treated as "no data", not an error,
+    // so the tree can render a normal restricted row instead of an error toast.
+    async getEvaluationHistory(employeeId: string): Promise<{ allowed: boolean; months: EvaluationHistoryMonth[] }> {
+        try {
+            const response = await api.get(`/evaluations/employee/${employeeId}/history`);
+            return { allowed: true, months: response.data };
+        } catch (error: any) {
+            if (error?.response?.status === 403) return { allowed: false, months: [] };
+            throw error;
+        }
     },
 
     // --- Finalization (save/freeze the whole employee+month evaluation) ---

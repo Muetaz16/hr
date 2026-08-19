@@ -24,7 +24,7 @@ import type { UserRole } from '../types';
 const METRIC_LEVELS: EvalLevel[] = ['UNIT', 'DEPARTMENT', 'DIVISION', 'DIRECTOR'];
 const MAX_METRIC_TOTAL = 80;
 
-type EvalRecord = { totalScore?: number; finalScore?: number };
+type EvalRecord = { totalScore?: number; finalScore?: number; submittedById?: string };
 type LevelMaps = Record<EvalLevel, Record<string, EvalRecord>>;
 const emptyMaps = (): LevelMaps => ({ UNIT: {}, DEPARTMENT: {}, DIVISION: {}, DIRECTOR: {}, GM: {}, CHAIRMAN: {} });
 

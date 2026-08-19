@@ -709,6 +709,49 @@ export const getFinalizationsByMonth = async (req: Request, res: Response) => {
     }
 };
 
+const EVAL_MODELS: Array<{ key: string; model: string; mapper?: (r: any) => any }> = [
+    { key: 'hr', model: 'hREvaluation', mapper: mapHREvalFromDB },
+    { key: 'personnel', model: 'personnelEvaluation' },
+    { key: 'unit', model: 'unitEvaluation', mapper: mapOrgEvalFromDB },
+    { key: 'department', model: 'departmentEvaluation', mapper: mapOrgEvalFromDB },
+    { key: 'division', model: 'divisionEvaluation', mapper: mapOrgEvalFromDB },
+    { key: 'director', model: 'directorEvaluation', mapper: mapOrgEvalFromDB },
+    { key: 'gm', model: 'gMEvaluation' },
+    { key: 'chairman', model: 'chairmanEvaluation' },
+    { key: 'finalization', model: 'evaluationFinalization' },
+];
+
+// GET /api/evaluations/employee/:employeeId/history — every month's evaluation data for one
+// employee across all 9 evaluation tables, for the Lifecycle detail tree. Gated to admin-like
+// roles or the employee viewing their own record only — simpler than checkCanViewEvaluation's
+// full evaluator-based access, so no score/comment data ever reaches an unauthorized viewer.
+export const getEvaluationHistoryForEmployee = async (req: Request, res: Response) => {
+    try {
+        const { employeeId } = req.params;
+        const requester = (req as any).user;
+        const isAllowed = ADMIN_LIKE_ROLES.includes(requester.role)
+            || (await resolveOwnEmployeeId(requester.id)) === employeeId;
+        if (!isAllowed) return res.status(403).json({ error: 'Forbidden' });
+
+        const results = await Promise.all(
+            EVAL_MODELS.map(m => (prisma as any)[m.model].findMany({ where: { employeeId } }))
+        );
+
+        const byMonth = new Map<string, any>();
+        EVAL_MODELS.forEach((m, i) => {
+            for (const row of results[i]) {
+                const entry = byMonth.get(row.month) || { month: row.month };
+                entry[m.key] = m.mapper ? m.mapper(row) : row;
+                byMonth.set(row.month, entry);
+            }
+        });
+        res.json(Array.from(byMonth.values()).sort((a, b) => b.month.localeCompare(a.month)));
+    } catch (error) {
+        console.error('Error fetching evaluation history:', error);
+        res.status(500).json({ error: 'Failed to fetch evaluation history' });
+    }
+};
+
 // Saves/freezes an employee's whole monthly evaluation: snapshots the server-computed
 // finalScore into EvaluationFinalization (which every save handler above now checks),
 // and credits the Evaluation Index (Employee.evaluationPoints). Scope: one employee,

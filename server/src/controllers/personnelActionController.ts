@@ -124,6 +124,23 @@ export const listPersonnelActions = async (req: Request, res: Response) => {
     }
 };
 
+// GET /api/personnel-actions/employee/:employeeId — one employee's transfer history for the
+// Lifecycle detail view. Deliberately ungated beyond authentication (unlike listPersonnelActions'
+// HR-only bulk list) — same exposure level as the Contract History already shown on that screen.
+export const getPersonnelActionsByEmployee = async (req: Request, res: Response) => {
+    try {
+        const { employeeId } = req.params;
+        const forms = await prisma.personnelActionForm.findMany({
+            where: { employeeId },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(forms);
+    } catch (error: any) {
+        console.error('Error fetching personnel action forms for employee:', error);
+        res.status(500).json({ error: 'Failed to fetch personnel action forms' });
+    }
+};
+
 // GET /api/personnel-actions/:id/form  — generate the filled DOCX
 export const generatePersonnelActionFormDoc = async (req: Request, res: Response) => {
     try {

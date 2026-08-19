@@ -4,9 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
 import { personnelActionService, type PersonnelActionForm } from '../../services/personnelActionService';
 import { jobDescriptionService } from '../../services/jobDescriptionService';
-import { departmentService, divisionService } from '../../services/departmentService';
+import { departmentService, divisionService, groupService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { directorateService } from '../../services/directorateService';
+import { timeService } from '../../services/timeService';
+import { staffHubService } from '../../services/staffHubService';
+import { evaluationService, type EvaluationHistoryMonth } from '../../services/evaluationService';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -35,6 +38,10 @@ import {
     Check,
     X,
     Upload,
+    ChevronRight,
+    ChevronDown,
+    Lock,
+    TrendingUp,
     FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
@@ -44,9 +51,64 @@ import Modal from '../../components/Modal';
 import type { Employee, EmployeeDocument } from '../../types';
 import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
 import { canAccess } from '../../utils/access';
+import { getRequiredLevels, type EvalLevel } from '../../utils/evaluationHierarchy';
+import { buildEvaluationBreakdown } from '../../utils/evaluationScoring';
+import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
+import JobDescriptionView from '../../components/JobDescriptionView';
 import EvaluationControl from '../hr/EvaluationControl';
 import EvaluationsPage from '../Evaluations';
 import EmployeesPage from '../admin/Employees';
+
+// Collapsible tree node — file-explorer style. Module-scope (not defined inside
+// PersonnelRelations' render) so its identity is stable across renders: a component
+// redefined on every render is a *different type* to React at the same tree position,
+// so it fully unmounts/remounts (losing the just-clicked button's focus and churning the
+// whole DOM subtree) instead of patching in place — that was the cause of the page
+// jumping/scrolling on every branch toggle. Expand state lives in the parent and is
+// passed in as isOpen/onToggle rather than read from a nodeKey here, so this component
+// has no closure dependencies at all.
+const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', count, level = 0, restricted, isOpen, onToggle, children }: any) => {
+    if (restricted) {
+        return (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 flex items-center gap-2.5" style={{ marginLeft: level * 20 }}>
+                <Lock className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex-1">{title}</span>
+                <span className="text-[10px] font-bold text-slate-300">{restricted}</span>
+            </div>
+        );
+    }
+    return (
+        <div className="rounded-xl border border-slate-100 bg-white shadow-sm" style={{ marginLeft: level * 20 }}>
+            <button
+                type="button"
+                onClick={onToggle}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-slate-50/70 transition-colors rounded-xl"
+            >
+                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em] flex-1">{title}</h4>
+                {count !== undefined && <span className="text-[10px] font-black text-slate-400 shrink-0">{count}</span>}
+            </button>
+            {isOpen && <div className="px-4 pb-4 pt-1 border-t border-slate-50">{children}</div>}
+        </div>
+    );
+};
+
+const Row = ({ label, value, dir }: { label: string; value?: any; dir?: 'rtl' | 'ltr' }) => (
+    <div className="min-w-0">
+        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
+        <div className="text-sm font-bold text-slate-700 break-words" dir={dir}>{(value === 0 || value) ? value : <span className="text-slate-300">—</span>}</div>
+    </div>
+);
+
+// Module-scope for the same reason as TreeBranch above — takes `emp` as an explicit prop
+// instead of closing over it.
+const Field = ({ emp, label, k, type, dir }: { emp: Employee; label: string; k: string; type?: string; dir?: 'rtl' | 'ltr' }) => {
+    let v: any = (emp as any)[k];
+    if (type === 'date') v = v ? format(parseISO(v as string), 'dd MMM yyyy') : '';
+    if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
+    return <Row label={label} value={v} dir={dir} />;
+};
 
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
@@ -108,6 +170,18 @@ const PersonnelRelations: React.FC = () => {
     // would remount the inline inputs on every keystroke and kick focus/scroll around.
     const [addDocModalOpen, setAddDocModalOpen] = useState(false);
 
+    // Which tree branches are expanded in the detail view — lifted up here (rather than living
+    // inside TreeBranch itself) because TreeBranch is defined inside this component's render, so
+    // its own useState would remount and reset on every unrelated re-render (e.g. a query refetch).
+    const [expandedNodes, setExpandedNodes] = useState<Set<string>>(
+        () => new Set(['personal', 'identity', 'identity.idpassport'])
+    );
+    const toggleNode = (key: string) => setExpandedNodes(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
+
     // Additional (free-form) documents for the employee currently open in the detail modal.
     const { data: employeeDocuments = [] } = useQuery({
         queryKey: ['employee-documents', detailEmp?.id],
@@ -124,6 +198,30 @@ const PersonnelRelations: React.FC = () => {
         enabled: !!detailEmp,
     });
     const detailContracts: any[] = (detailFull as any)?.contracts || [];
+
+    // --- New Lifecycle tree data: Career Transfers, Attendance & Leave, Monthly Evaluations ---
+    const { data: detailTransfers = [] } = useQuery({
+        queryKey: ['employee-transfers', detailEmp?.id],
+        queryFn: () => personnelActionService.getByEmployee(detailEmp!.id),
+        enabled: !!detailEmp,
+    });
+    const { data: detailTimeRecords = [] } = useQuery({
+        queryKey: ['employee-time-records', detailEmp?.id],
+        queryFn: () => timeService.getTimeRecordsByEmployee(detailEmp!.id),
+        enabled: !!detailEmp,
+    });
+    const { data: detailLeaveRequests = [] } = useQuery({
+        queryKey: ['employee-leave-requests', detailEmp?.id],
+        queryFn: () => staffHubService.getMyRequests(detailEmp!.id),
+        enabled: !!detailEmp,
+    });
+    // `allowed: false` (a 403) means this viewer isn't permitted to see this employee's scores —
+    // rendered as a locked row rather than an error, never inferred purely client-side.
+    const { data: detailEvalHistory = { allowed: true, months: [] as EvaluationHistoryMonth[] } } = useQuery({
+        queryKey: ['employee-evaluation-history', detailEmp?.id],
+        queryFn: () => evaluationService.getEvaluationHistory(detailEmp!.id),
+        enabled: !!detailEmp,
+    });
 
     // Replace/upload one of the fixed document slots (CV, degree, etc.) directly from this screen.
     const handleFixedDocUpload = async (empId: string, key: string, file?: File) => {
@@ -208,6 +306,10 @@ const PersonnelRelations: React.FC = () => {
     const { data: directorates = [] } = useQuery({
         queryKey: ['relations-directorates'],
         queryFn: directorateService.getAllDirectorates
+    });
+    const { data: groups = [] } = useQuery({
+        queryKey: ['relations-groups'],
+        queryFn: groupService.getAllGroups
     });
     const { data: personnelActions = [] } = useQuery({
         queryKey: ['personnel-actions'],
@@ -1310,40 +1412,19 @@ const PersonnelRelations: React.FC = () => {
                     const paidAccrued = num((emp as any).accruedHolidays);
                     const paidRemaining = num((emp as any).remainingHolidays);
                     const paidTaken = num(emp.holidaysUsed);
+                    const paidBonus = num(emp.bonusHolidays);
+                    const paidEarned = num((emp as any).earnedHolidays);
                     const unpaidTaken = num(emp.unpaidHolidaysUsed);
                     const emergTaken = num(emp.emergencyHolidaysUsed);
+                    const emergBonus = num(emp.bonusEmergencyHolidays);
+                    // Matches the "Collected" figure the employee's own Dashboard already shows
+                    // (src/pages/Dashboard.tsx) — the old "3 - taken" formula here ignored the bonus.
+                    const emergCollected = 3 + emergBonus;
+                    const emergRemaining = emergCollected - emergTaken;
                     // Only show the identity/contact/bank/document fields this employee's contract
                     // type actually collects — same Resident / Direct Non-Resident / Service Provider
                     // split used on the onboarding review screen.
                     const showField = makeFieldVisibility(emp.contractType);
-
-                    // Cards sit in a CSS-columns (masonry) flow rather than a row-based grid, so a
-                    // short card (e.g. Service Provider's sparse Identity section) never leaves a
-                    // tall dead gap next to/under a taller neighbour — each card just packs into
-                    // whichever column has room, sized to its own content.
-                    const Section = ({ icon: Icon, title, color, wide, children }: any) => (
-                        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm mb-6 break-inside-avoid">
-                            <div className="flex items-center gap-2.5 mb-5">
-                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}><Icon className="w-4 h-4" /></div>
-                                <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.2em]">{title}</h4>
-                            </div>
-                            <div className={`grid grid-cols-1 sm:grid-cols-2 ${wide ? 'lg:grid-cols-3' : ''} gap-x-6 gap-y-4`}>{children}</div>
-                        </div>
-                    );
-
-                    const Row = ({ label, value, dir }: { label: string; value?: any; dir?: 'rtl' | 'ltr' }) => (
-                        <div className="min-w-0">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
-                            <div className="text-sm font-bold text-slate-700 break-words" dir={dir}>{(value === 0 || value) ? value : <span className="text-slate-300">—</span>}</div>
-                        </div>
-                    );
-
-                    const Field = ({ label, k, type, dir }: { label: string; k: string; type?: string; dir?: 'rtl' | 'ltr' }) => {
-                        let v: any = emp[k as keyof Employee];
-                        if (type === 'date') v = v ? fmt(v as string) : '';
-                        if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
-                        return <Row label={label} value={v} dir={dir} />;
-                    };
 
                     const docs = [
                         { label: 'CV / Resume', k: 'cvUrl' },
@@ -1359,6 +1440,27 @@ const PersonnelRelations: React.FC = () => {
                         { label: 'Residency Document', k: 'residencyDocumentUrl' },
                         { label: 'Interview Evaluation', k: 'interviewEvaluationUrl' },
                     ].filter(d => showField(d.k));
+                    const uploadedDocsCount = docs.filter(d => emp[d.k as keyof Employee]).length;
+
+                    // Resolve a transfer's target org unit id (division/department/unit) to its name
+                    // from the org lists this page already fetches — PersonnelActionForm stores ids
+                    // only for the new placement, no server-side join.
+                    const nameOfOrgUnit = (list: any[], id?: string | null): string | null =>
+                        id ? (list.find((x: any) => x.id === id)?.name || null) : null;
+
+                    // Which raw evaluation record backs a given evaluator level, from one month's
+                    // slice of the employee's evaluation history (already fetched in bulk).
+                    const pickLevelRecord = (level: EvalLevel | undefined, monthSlice: EvaluationHistoryMonth): any => {
+                        if (!level) return null;
+                        switch (level) {
+                            case 'UNIT': return monthSlice.unit || null;
+                            case 'DEPARTMENT': return monthSlice.department || null;
+                            case 'DIVISION': return monthSlice.division || null;
+                            case 'DIRECTOR': return monthSlice.director || null;
+                            case 'GM': return monthSlice.gm || null;
+                            case 'CHAIRMAN': return monthSlice.chairman || null;
+                        }
+                    };
 
                     return (
                         <div className="space-y-6">
@@ -1396,212 +1498,404 @@ const PersonnelRelations: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Section cards — masonry flow (see Section component note above) */}
-                            <div className="columns-1 xl:columns-2 gap-6">
-                                <Section icon={User} title="Identity Details" color="bg-indigo-50 text-indigo-600">
-                                    {showField('gender') && <Field label="Gender" k="gender" />}
-                                    <Field label="Date of Birth" k="dateOfBirth" type="date" />
-                                    <Field label="Place of Birth" k="placeOfBirth" />
-                                    {showField('placeOfBirthArabic') && <Field label="Place of Birth (Arabic)" k="placeOfBirthArabic" dir="rtl" />}
-                                    <Field label="Nationality" k="nationality" />
-                                    {showField('nationalityArabic') && <Field label="Nationality (Arabic)" k="nationalityArabic" dir="rtl" />}
-                                    {showField('nationalId') && <Field label="National ID" k="nationalId" />}
-                                    <Field label="Blood Type" k="bloodType" />
-                                    <Field label="Academic Qualification" k="academicQualification" />
-                                    {showField('academicQualificationArabic') && <Field label="Academic Qualification (Arabic)" k="academicQualificationArabic" dir="rtl" />}
-                                </Section>
-
-                                <Section icon={CreditCard} title="ID, Passport & License" color="bg-teal-50 text-teal-600">
-                                    {showField('idCardNumber') && <Field label="ID Card Number" k="idCardNumber" />}
-                                    {showField('idPlaceOfIssue') && <Field label="ID Place of Issue" k="idPlaceOfIssue" />}
-                                    {showField('idPlaceOfIssueArabic') && <Field label="ID Place of Issue (Arabic)" k="idPlaceOfIssueArabic" dir="rtl" />}
-                                    {showField('idIssueDate') && <Field label="ID Issue Date" k="idIssueDate" type="date" />}
-                                    <Field label="Passport Number" k="passportNumber" />
-                                    {showField('passportPlaceOfIssue') && <Field label="Passport Place of Issue" k="passportPlaceOfIssue" />}
-                                    {showField('passportPlaceOfIssueArabic') && <Field label="Passport Place of Issue (Arabic)" k="passportPlaceOfIssueArabic" dir="rtl" />}
-                                    <Field label="Passport Expiry" k="passportExpiryDate" type="date" />
-                                    {showField('drivingLicenseType') && <Field label="License Type" k="drivingLicenseType" />}
-                                    {showField('drivingLicenseTypeArabic') && <Field label="License Type (Arabic)" k="drivingLicenseTypeArabic" dir="rtl" />}
-                                    {showField('drivingLicenseNumber') && <Field label="License Number" k="drivingLicenseNumber" />}
-                                    {showField('drivingLicenseExpiry') && <Field label="License Expiry" k="drivingLicenseExpiry" type="date" />}
-                                    {showField('drivingLicensePlaceOfIssue') && <Field label="License Place of Issue" k="drivingLicensePlaceOfIssue" />}
-                                    {showField('drivingLicensePlaceOfIssueArabic') && <Field label="License Place of Issue (Arabic)" k="drivingLicensePlaceOfIssueArabic" dir="rtl" />}
-                                </Section>
-
-                                <Section icon={Phone} title="Contact & Address" color="bg-emerald-50 text-emerald-600">
-                                    <Field label="Personal Phone" k="personalPhone" />
-                                    <Field label="Personal E-mail" k="personalEmail" />
-                                    <Field label="Login Email" k="email" />
-                                    <Field label="Emergency Contact" k="emergencyContactNumber" />
-                                    <Field label="Residential Address" k="residentialAddress" />
-                                    {showField('residentialAddressArabic') && <Field label="Residential Address (Arabic)" k="residentialAddressArabic" dir="rtl" />}
-                                </Section>
-
-                                <Section icon={Briefcase} title="Employment Details" color="bg-blue-50 text-blue-600">
-                                    <Row label="Role" value={emp.role} />
-                                    <Field label="Position" k="position" />
-                                    <Field label="Job Category" k="jobCategory" />
-                                    <Field label="Job Grade" k="jobGrade" />
-                                    <Field label="Contract Type" k="contractType" />
-                                    <Field label="Contract #" k="contractNumber" />
-                                    <Field label="Status" k="contractStatus" />
-                                    <Field label="Base Salary" k="baseSalary" />
-                                    <Field label="Arrival Date" k="arrivalDate" type="date" />
-                                    <Field label="Join Date" k="joinDate" type="date" />
-                                    <Field label="Contract Start" k="contractStartDate" type="date" />
-                                    <Field label="Contract End" k="contractEndDate" type="date" />
-                                    <Field label="Worked Before?" k="workedBefore" />
-                                    {showField('hasRelativesInCompany') && <Field label="Relatives in Company?" k="hasRelativesInCompany" />}
-                                    {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && <Field label="Relatives' Names" k="relativesNames" />}
-                                    {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && showField('relativesNamesArabic') && <Field label="Relatives' Names (Arabic)" k="relativesNamesArabic" dir="rtl" />}
-                                </Section>
-
-                                {(showField('serviceProviderCompany') || showField('employeeTravelDate')) && (emp.serviceProviderCompany || emp.employeeTravelDate) && (
-                                    <Section icon={Building2} title="Onboarding Submission Details" color="bg-cyan-50 text-cyan-600">
-                                        <Field label="Service Provider Company" k="serviceProviderCompany" />
-                                        <Field label="Travel Date" k="employeeTravelDate" type="date" />
-                                    </Section>
-                                )}
-
-                                <Section icon={CalendarDays} title="Leave Balances" color="bg-amber-50 text-amber-600">
-                                    <Row label="Paid Accrued" value={paidAccrued} />
-                                    <Row label="Paid Taken" value={paidTaken} />
-                                    <Row label="Paid Balance" value={paidRemaining} />
-                                    <Row label="Unpaid Taken" value={unpaidTaken} />
-                                    <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
-                                    <Row label="Emergency Taken" value={emergTaken} />
-                                    <Row label="Emergency Balance (3)" value={3 - emergTaken} />
-                                </Section>
-
-                                {showField('bankName') && (
-                                    <Section icon={Landmark} title="Bank Details" color="bg-slate-100 text-slate-600">
-                                        <Field label="Bank Name" k="bankName" />
-                                        <Field label="Bank Name (Arabic)" k="bankNameArabic" dir="rtl" />
-                                        <Field label="Bank Branch" k="bankBranchName" />
-                                        <Field label="Bank Branch (Arabic)" k="bankBranchNameArabic" dir="rtl" />
-                                        <Field label="Account Number" k="bankAccountNumber" />
-                                    </Section>
-                                )}
-
-                            </div>
-
-                            {/* Contract History — every renewal archives the old contract and adds a new
-                                one, so a renewed employee shows Contract 1 (archived) + Contract 2 (active). */}
-                            <Section icon={FileText} title="Contract History" color="bg-rose-50 text-rose-600" wide>
-                                {detailContracts.length === 0 ? (
-                                    <div className="col-span-full text-sm font-bold text-slate-300">No contract records yet.</div>
-                                ) : (
-                                    <div className="col-span-full space-y-2">
-                                        {[...detailContracts]
-                                            .sort((a, b) => {
-                                                const sa = new Date(a.startDate || a.createdAt).getTime();
-                                                const sb = new Date(b.startDate || b.createdAt).getTime();
-                                                return sa - sb;
-                                            })
-                                            .map((c, i) => (
-                                                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                                    <div className="flex items-center gap-3 min-w-0">
-                                                        <span className="w-7 h-7 rounded-lg bg-[#511d29] text-white text-[11px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-black text-slate-700 truncate">Contract {i + 1}{c.contractNumber ? ` · ${c.contractNumber}` : ''}{c.type ? ` · ${c.type}` : ''}</p>
-                                                            <p className="text-[10px] text-slate-500">
-                                                                {c.startDate ? fmt(c.startDate) : '—'}{c.endDate ? ` → ${fmt(c.endDate)}` : ''}
-                                                                {c.position ? ` · ${c.position}` : ''}
-                                                                {(c.salary || c.salary === 0) ? ` · ${Number(c.salary).toLocaleString()}` : ''}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : c.status === 'TERMINATED' ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`}>{c.status}</span>
-                                                </div>
-                                            ))}
+                            {/* The information tree — one collapsible branch per category, file-explorer
+                                style. See TreeBranch/expandedNodes above for how expand state works. */}
+                            <div className="space-y-2">
+                                <TreeBranch isOpen={expandedNodes.has('personal')} onToggle={() => toggleNode('personal')} icon={User} title="Personal Information" color="bg-indigo-50 text-indigo-600">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                        {showField('gender') && <Field emp={emp} label="Gender" k="gender" />}
+                                        <Field emp={emp} label="Date of Birth" k="dateOfBirth" type="date" />
+                                        <Field emp={emp} label="Place of Birth" k="placeOfBirth" />
+                                        {showField('placeOfBirthArabic') && <Field emp={emp} label="Place of Birth (Arabic)" k="placeOfBirthArabic" dir="rtl" />}
+                                        <Field emp={emp} label="Nationality" k="nationality" />
+                                        {showField('nationalityArabic') && <Field emp={emp} label="Nationality (Arabic)" k="nationalityArabic" dir="rtl" />}
+                                        {showField('nationalId') && <Field emp={emp} label="National ID" k="nationalId" />}
+                                        <Field emp={emp} label="Blood Type" k="bloodType" />
+                                        <Field emp={emp} label="Academic Qualification" k="academicQualification" />
+                                        {showField('academicQualificationArabic') && <Field emp={emp} label="Academic Qualification (Arabic)" k="academicQualificationArabic" dir="rtl" />}
                                     </div>
-                                )}
-                            </Section>
+                                </TreeBranch>
 
-                            {/* Documents live outside the masonry flow — always full width */}
-                            <Section icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" wide>
-                                {docs.map(d => {
-                                    const raw = emp[d.k as keyof Employee] as string | undefined;
-                                    const href = raw ? (raw.startsWith('http') ? raw : `${SERVER_URL}${raw}`) : '';
-                                    const busy = uploadingDocKey === d.k;
-                                    return (
-                                        <div key={d.k} className="flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                            <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {raw && (
-                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
-                                                        View <ExternalLink className="w-3 h-3" />
-                                                    </a>
+                                <TreeBranch isOpen={expandedNodes.has('identity')} onToggle={() => toggleNode('identity')} icon={CreditCard} title="Identity & Documents" color="bg-teal-50 text-teal-600">
+                                    <div className="space-y-2">
+                                        <TreeBranch isOpen={expandedNodes.has('identity.idpassport')} onToggle={() => toggleNode('identity.idpassport')} level={1} icon={CreditCard} title="ID, Passport & License" color="bg-teal-50 text-teal-600">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                                {showField('idCardNumber') && <Field emp={emp} label="ID Card Number" k="idCardNumber" />}
+                                                {showField('idPlaceOfIssue') && <Field emp={emp} label="ID Place of Issue" k="idPlaceOfIssue" />}
+                                                {showField('idPlaceOfIssueArabic') && <Field emp={emp} label="ID Place of Issue (Arabic)" k="idPlaceOfIssueArabic" dir="rtl" />}
+                                                {showField('idIssueDate') && <Field emp={emp} label="ID Issue Date" k="idIssueDate" type="date" />}
+                                                <Field emp={emp} label="Passport Number" k="passportNumber" />
+                                                {showField('passportPlaceOfIssue') && <Field emp={emp} label="Passport Place of Issue" k="passportPlaceOfIssue" />}
+                                                {showField('passportPlaceOfIssueArabic') && <Field emp={emp} label="Passport Place of Issue (Arabic)" k="passportPlaceOfIssueArabic" dir="rtl" />}
+                                                <Field emp={emp} label="Passport Expiry" k="passportExpiryDate" type="date" />
+                                                {showField('drivingLicenseType') && <Field emp={emp} label="License Type" k="drivingLicenseType" />}
+                                                {showField('drivingLicenseTypeArabic') && <Field emp={emp} label="License Type (Arabic)" k="drivingLicenseTypeArabic" dir="rtl" />}
+                                                {showField('drivingLicenseNumber') && <Field emp={emp} label="License Number" k="drivingLicenseNumber" />}
+                                                {showField('drivingLicenseExpiry') && <Field emp={emp} label="License Expiry" k="drivingLicenseExpiry" type="date" />}
+                                                {showField('drivingLicensePlaceOfIssue') && <Field emp={emp} label="License Place of Issue" k="drivingLicensePlaceOfIssue" />}
+                                                {showField('drivingLicensePlaceOfIssueArabic') && <Field emp={emp} label="License Place of Issue (Arabic)" k="drivingLicensePlaceOfIssueArabic" dir="rtl" />}
+                                            </div>
+                                        </TreeBranch>
+
+                                        <TreeBranch isOpen={expandedNodes.has('identity.documents')} onToggle={() => toggleNode('identity.documents')} level={1} icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" count={`${uploadedDocsCount}/${docs.length}`}>
+                                            <div className="space-y-2">
+                                                {docs.map(d => {
+                                                    const raw = emp[d.k as keyof Employee] as string | undefined;
+                                                    const href = raw ? (raw.startsWith('http') ? raw : `${SERVER_URL}${raw}`) : '';
+                                                    const busy = uploadingDocKey === d.k;
+                                                    return (
+                                                        <div key={d.k} className="flex items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                            <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                {raw && (
+                                                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                                        View <ExternalLink className="w-3 h-3" />
+                                                                    </a>
+                                                                )}
+                                                                {!raw && !isHRRole && <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
+                                                                {isHRRole && (
+                                                                    <label className={`cursor-pointer text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border transition-all ${busy ? 'text-slate-300 border-slate-100' : 'text-[#511d29] border-[#511d29]/20 hover:bg-[#511d29]/5'}`}>
+                                                                        <input
+                                                                            type="file"
+                                                                            className="hidden"
+                                                                            disabled={busy}
+                                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                                                            onChange={e => handleFixedDocUpload(emp.id, d.k, e.target.files?.[0])}
+                                                                        />
+                                                                        {busy ? 'Uploading…' : (raw ? 'Replace' : 'Upload')}
+                                                                    </label>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </TreeBranch>
+
+                                        {/* Always rendered now (was HR-only-or-non-empty before) — an empty branch is
+                                            still a branch. Non-HR viewers still never fetch this list (query stays
+                                            isHRRole-gated below), so they just see the empty state either way. */}
+                                        <TreeBranch isOpen={expandedNodes.has('identity.additional')} onToggle={() => toggleNode('identity.additional')} level={1} icon={FileText} title="Additional Documents" color="bg-cyan-50 text-cyan-600" count={employeeDocuments.length}>
+                                            <div className="space-y-3">
+                                                {employeeDocuments.length === 0 && (
+                                                    <p className="text-xs text-slate-400 font-medium">No additional documents on file.</p>
                                                 )}
-                                                {!raw && !isHRRole && <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
+                                                {employeeDocuments.map((doc: EmployeeDocument) => {
+                                                    const href = doc.fileUrl.startsWith('http') ? doc.fileUrl : `${SERVER_URL}${doc.fileUrl}`;
+                                                    return (
+                                                        <div key={doc.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-bold text-slate-700 truncate">{doc.name}</p>
+                                                                <p className="text-[10px] text-slate-400 font-medium truncate">
+                                                                    {[doc.fileName, doc.uploadedByName ? `by ${doc.uploadedByName}` : '', format(parseISO(doc.createdAt), 'dd MMM yyyy')].filter(Boolean).join(' · ')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                                    View <ExternalLink className="w-3 h-3" />
+                                                                </a>
+                                                                {isHRRole && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteDocument(emp.id, doc.id)}
+                                                                        className="text-slate-400 hover:text-rose-600 transition-colors"
+                                                                        title="Remove document"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+
                                                 {isHRRole && (
-                                                    <label className={`cursor-pointer text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border transition-all ${busy ? 'text-slate-300 border-slate-100' : 'text-[#511d29] border-[#511d29]/20 hover:bg-[#511d29]/5'}`}>
-                                                        <input
-                                                            type="file"
-                                                            className="hidden"
-                                                            disabled={busy}
-                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                                                            onChange={e => handleFixedDocUpload(emp.id, d.k, e.target.files?.[0])}
-                                                        />
-                                                        {busy ? 'Uploading…' : (raw ? 'Replace' : 'Upload')}
-                                                    </label>
+                                                    <div className="pt-3 mt-1 border-t border-dashed border-slate-200">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAddDocModalOpen(true)}
+                                                            className="px-4 py-2.5 bg-[#511d29] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2"
+                                                        >
+                                                            <FileText className="w-3.5 h-3.5" /> Add Document
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </Section>
+                                        </TreeBranch>
+                                    </div>
+                                </TreeBranch>
 
-                            {/* Free-form documents beyond the fixed slots above — HR can add/remove; everyone else views. */}
-                            {(isHRRole || employeeDocuments.length > 0) && (
-                                <Section icon={FileText} title="Additional Documents" color="bg-cyan-50 text-cyan-600" wide>
-                                    <div className="sm:col-span-2 lg:col-span-3 space-y-3">
-                                        {employeeDocuments.length === 0 && (
-                                            <p className="text-xs text-slate-400 font-medium">No additional documents on file.</p>
+                                <TreeBranch isOpen={expandedNodes.has('contact')} onToggle={() => toggleNode('contact')} icon={Phone} title="Contact & Address" color="bg-emerald-50 text-emerald-600">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                        <Field emp={emp} label="Personal Phone" k="personalPhone" />
+                                        <Field emp={emp} label="Personal E-mail" k="personalEmail" />
+                                        <Field emp={emp} label="Login Email" k="email" />
+                                        <Field emp={emp} label="Emergency Contact" k="emergencyContactNumber" />
+                                        <Field emp={emp} label="Residential Address" k="residentialAddress" />
+                                        {showField('residentialAddressArabic') && <Field emp={emp} label="Residential Address (Arabic)" k="residentialAddressArabic" dir="rtl" />}
+                                    </div>
+                                </TreeBranch>
+
+                                <TreeBranch isOpen={expandedNodes.has('employment')} onToggle={() => toggleNode('employment')} icon={Briefcase} title="Employment & Career History" color="bg-blue-50 text-blue-600">
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                            <Row label="Role" value={emp.role} />
+                                            <Row label="Enrollment Status" value={emp.enrollmentStatus || 'ACTIVE'} />
+                                            <Field emp={emp} label="Position" k="position" />
+                                            <Field emp={emp} label="Place of Work" k="placeOfWork" />
+                                            <Field emp={emp} label="Job Category" k="jobCategory" />
+                                            <Field emp={emp} label="Job Grade" k="jobGrade" />
+                                            <Field emp={emp} label="Contract Type" k="contractType" />
+                                            <Field emp={emp} label="Contract #" k="contractNumber" />
+                                            <Field emp={emp} label="Status" k="contractStatus" />
+                                            <Field emp={emp} label="Base Salary" k="baseSalary" />
+                                            <Field emp={emp} label="Arrival Date" k="arrivalDate" type="date" />
+                                            <Field emp={emp} label="Join Date" k="joinDate" type="date" />
+                                            <Field emp={emp} label="Contract Start" k="contractStartDate" type="date" />
+                                            <Field emp={emp} label="Contract End" k="contractEndDate" type="date" />
+                                            <Field emp={emp} label="Worked Before?" k="workedBefore" />
+                                            {showField('hasRelativesInCompany') && <Field emp={emp} label="Relatives in Company?" k="hasRelativesInCompany" />}
+                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && <Field emp={emp} label="Relatives' Names" k="relativesNames" />}
+                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && showField('relativesNamesArabic') && <Field emp={emp} label="Relatives' Names (Arabic)" k="relativesNamesArabic" dir="rtl" />}
+                                            <Row label="Directorate" value={nameOfOrgUnit(directorates, emp.directorateId)} />
+                                            <Row label="Division" value={nameOfOrgUnit(divisions, emp.divisionId)} />
+                                            <Row label="Department" value={nameOfOrgUnit(departments, emp.departmentId)} />
+                                            <Row label="Unit" value={nameOfOrgUnit(units, emp.unitId)} />
+                                            <Row label="Group" value={nameOfOrgUnit(groups, emp.groupId)} />
+                                            <Row label="Login Account" value={emp.userId ? 'Yes' : 'No'} />
+                                        </div>
+
+                                        {(showField('serviceProviderCompany') || showField('employeeTravelDate') || showField('employeeStartDate')) && (emp.serviceProviderCompany || emp.employeeTravelDate || emp.employeeStartDate) && (
+                                            <TreeBranch isOpen={expandedNodes.has('employment.onboarding')} onToggle={() => toggleNode('employment.onboarding')} level={1} icon={Building2} title="Onboarding Submission Details" color="bg-cyan-50 text-cyan-600">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                                    <Field emp={emp} label="Service Provider Company" k="serviceProviderCompany" />
+                                                    <Field emp={emp} label="Travel Date" k="employeeTravelDate" type="date" />
+                                                    <Field emp={emp} label="Employee Start Date" k="employeeStartDate" type="date" />
+                                                </div>
+                                            </TreeBranch>
                                         )}
-                                        {employeeDocuments.map((doc: EmployeeDocument) => {
-                                            const href = doc.fileUrl.startsWith('http') ? doc.fileUrl : `${SERVER_URL}${doc.fileUrl}`;
+
+                                        <TreeBranch isOpen={expandedNodes.has('employment.jobdescription')} onToggle={() => toggleNode('employment.jobdescription')} level={1} icon={Building2} title="Assigned Job Description" color="bg-indigo-50 text-indigo-600">
+                                            {(detailFull as any)?.jobDescription ? (
+                                                <JobDescriptionView jd={(detailFull as any).jobDescription} accent="text-[#511d29]" />
+                                            ) : (
+                                                <div className="text-sm font-bold text-slate-300">No job description assigned.</div>
+                                            )}
+                                        </TreeBranch>
+
+                                        {/* Every renewal archives the old contract and adds a new one, so a
+                                            renewed employee shows Contract 1 (archived) + Contract 2 (active). */}
+                                        <TreeBranch isOpen={expandedNodes.has('employment.contracts')} onToggle={() => toggleNode('employment.contracts')} level={1} icon={FileText} title="Contract History" color="bg-rose-50 text-rose-600" count={detailContracts.length}>
+                                            {detailContracts.length === 0 ? (
+                                                <div className="text-sm font-bold text-slate-300">No contract records yet.</div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {[...detailContracts]
+                                                        .sort((a, b) => {
+                                                            const sa = new Date(a.startDate || a.createdAt).getTime();
+                                                            const sb = new Date(b.startDate || b.createdAt).getTime();
+                                                            return sa - sb;
+                                                        })
+                                                        .map((c, i) => (
+                                                            <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <span className="w-7 h-7 rounded-lg bg-[#511d29] text-white text-[11px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-black text-slate-700 truncate">Contract {i + 1}{c.contractNumber ? ` · ${c.contractNumber}` : ''}{c.type ? ` · ${c.type}` : ''}</p>
+                                                                        <p className="text-[10px] text-slate-500">
+                                                                            {c.startDate ? fmt(c.startDate) : '—'}{c.endDate ? ` → ${fmt(c.endDate)}` : ''}
+                                                                            {c.position ? ` · ${c.position}` : ''}
+                                                                            {(c.salary || c.salary === 0) ? ` · ${Number(c.salary).toLocaleString()}` : ''}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : c.status === 'TERMINATED' ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`}>{c.status}</span>
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            )}
+                                        </TreeBranch>
+
+                                        {/* New — internal transfer history (PersonnelActionForm). Ungated beyond
+                                            authentication, same exposure level as Contract History above. */}
+                                        <TreeBranch isOpen={expandedNodes.has('employment.transfers')} onToggle={() => toggleNode('employment.transfers')} level={1} icon={ArrowRight} title="Career Transfers & Internal Moves" color="bg-orange-50 text-orange-600" count={detailTransfers.length}>
+                                            {detailTransfers.length === 0 ? (
+                                                <div className="text-sm font-bold text-slate-300">No transfer records yet.</div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {detailTransfers.map((t) => {
+                                                        const statusStyle = t.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-700' : t.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
+                                                        const currentPlacement = [t.currentDivision, t.currentDepartment, t.currentUnit].filter(Boolean).join(' · ');
+                                                        const newPlacement = [nameOfOrgUnit(divisions, t.newDivisionId), nameOfOrgUnit(departments, t.newDepartmentId), nameOfOrgUnit(units, t.newUnitId)].filter(Boolean).join(' · ');
+                                                        const docHref = t.documentUrl ? (t.documentUrl.startsWith('http') ? t.documentUrl : `${SERVER_URL}${t.documentUrl}`) : '';
+                                                        return (
+                                                            <div key={t.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <p className="text-xs font-black text-slate-700 truncate">{t.typeOfTransfer || t.actionType}{t.newPositionTitle ? ` · ${t.newPositionTitle}` : ''}</p>
+                                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{t.status}</span>
+                                                                </div>
+                                                                <p className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                                                                    <span>{currentPlacement || '—'}</span>
+                                                                    <ArrowRight className="w-3 h-3 shrink-0" />
+                                                                    <span>{newPlacement || t.newPositionTitle || '—'}</span>
+                                                                </p>
+                                                                {t.justification && <p className="text-[11px] text-slate-500 italic">"{t.justification}"</p>}
+                                                                <p className="text-[10px] text-slate-400">
+                                                                    {t.effectiveDate ? `Effective ${fmt(t.effectiveDate)}` : ''}{t.createdByName ? ` · Requested by ${t.createdByName}` : ''}
+                                                                    {t.decidedByName ? ` · Decided by ${t.decidedByName}${t.decidedAt ? ' on ' + fmt(t.decidedAt) : ''}` : ''}
+                                                                </p>
+                                                                {t.documentUrl && (
+                                                                    <a href={docHref} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                                        View signed form <ExternalLink className="w-3 h-3" />
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </TreeBranch>
+                                    </div>
+                                </TreeBranch>
+
+                                {/* New — monthly evaluation history across all 9 evaluation tables. Server-side
+                                    gated: `allowed` is false (403) for any viewer who isn't HR/Admin or the
+                                    employee themself, in which case no score data is fetched at all. */}
+                                <TreeBranch
+                                    isOpen={expandedNodes.has('evaluations')} onToggle={() => toggleNode('evaluations')}
+                                    icon={TrendingUp}
+                                    title="Monthly Performance Evaluations"
+                                    color="bg-purple-50 text-purple-600"
+                                    count={detailEvalHistory.allowed ? detailEvalHistory.months.length : undefined}
+                                    restricted={!detailEvalHistory.allowed ? 'Restricted to HR/Personnel or the employee' : undefined}
+                                >
+                                    <div className="space-y-2">
+                                        {detailEvalHistory.allowed && (() => {
+                                            const promotionThreshold = emp.jobGrade === 'Intern' ? 3 : 18;
+                                            const points = emp.evaluationPoints || 0;
                                             return (
-                                                <div key={doc.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs font-bold text-slate-700 truncate">{doc.name}</p>
-                                                        <p className="text-[10px] text-slate-400 font-medium truncate">
-                                                            {[doc.fileName, doc.uploadedByName ? `by ${doc.uploadedByName}` : '', format(parseISO(doc.createdAt), 'dd MMM yyyy')].filter(Boolean).join(' · ')}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 shrink-0">
-                                                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
-                                                            View <ExternalLink className="w-3 h-3" />
-                                                        </a>
-                                                        {isHRRole && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDeleteDocument(emp.id, doc.id)}
-                                                                className="text-slate-400 hover:text-rose-600 transition-colors"
-                                                                title="Remove document"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100">
+                                                    <span className="text-xs font-black text-amber-700 flex items-center gap-1.5">★ Evaluation Index: {points.toFixed(2)}</span>
+                                                    <span className="text-[10px] font-bold text-amber-600/70 uppercase tracking-wider">
+                                                        {points.toFixed(2)} / {promotionThreshold} to promotion{emp.promotionNotified ? ' · Promotion notified' : ''}
+                                                    </span>
                                                 </div>
                                             );
-                                        })}
-
-                                        {isHRRole && (
-                                            <div className="pt-3 mt-1 border-t border-dashed border-slate-200">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setAddDocModalOpen(true)}
-                                                    className="px-4 py-2.5 bg-[#511d29] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2"
-                                                >
-                                                    <FileText className="w-3.5 h-3.5" /> Add Document
-                                                </button>
-                                            </div>
+                                        })()}
+                                        {detailEvalHistory.months.length === 0 ? (
+                                            <div className="text-sm font-bold text-slate-300">No evaluation records yet.</div>
+                                        ) : (
+                                            [...detailEvalHistory.months].sort((a, b) => b.month.localeCompare(a.month)).map((m) => {
+                                                const requiredLevels = getRequiredLevels(emp);
+                                                const breakdown = buildEvaluationBreakdown({
+                                                    employeeId: emp.id,
+                                                    month: m.month,
+                                                    requiredLevels,
+                                                    levelARecord: pickLevelRecord(requiredLevels[0], m),
+                                                    levelBRecord: pickLevelRecord(requiredLevels[1], m),
+                                                    hrEval: m.hr || null,
+                                                    persEval: m.personnel || null,
+                                                });
+                                                const monthLabel = format(parseISO(`${m.month}-01`), 'MMM yyyy');
+                                                const statusLabel = m.finalization ? 'Finalized' : 'Provisional';
+                                                return (
+                                                    <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}>
+                                                        <EvaluationBreakdownView employee={emp} breakdown={breakdown} />
+                                                    </TreeBranch>
+                                                );
+                                            })
                                         )}
                                     </div>
-                                </Section>
-                            )}
+                                </TreeBranch>
+
+                                <TreeBranch isOpen={expandedNodes.has('attendance')} onToggle={() => toggleNode('attendance')} icon={CalendarDays} title="Attendance & Leave" color="bg-amber-50 text-amber-600">
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                            <Row label="Paid Accrued" value={paidAccrued} />
+                                            <Row label="Bonus Paid Days" value={paidBonus} />
+                                            <Row label="Paid Earned (Accrued + Bonus)" value={paidEarned} />
+                                            <Row label="Paid Taken" value={paidTaken} />
+                                            <Row label="Paid Balance" value={paidRemaining} />
+                                            <Row label="Unpaid Taken" value={unpaidTaken} />
+                                            <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
+                                            <Row label="Emergency Taken" value={emergTaken} />
+                                            <Row label="Bonus Emergency Days" value={emergBonus} />
+                                            <Row label="Emergency Balance" value={emergRemaining} />
+                                        </div>
+
+                                        {/* New — monthly attendance aggregates (TimeRecord). Ungated beyond
+                                            authentication, same exposure level as the Leave Balances above. */}
+                                        <TreeBranch isOpen={expandedNodes.has('attendance.timerecords')} onToggle={() => toggleNode('attendance.timerecords')} level={1} icon={Clock} title="Monthly Time Records" color="bg-amber-50 text-amber-600" count={detailTimeRecords.length}>
+                                            {detailTimeRecords.length === 0 ? (
+                                                <div className="text-sm font-bold text-slate-300">No attendance records yet.</div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {[...detailTimeRecords].sort((a: any, b: any) => b.month.localeCompare(a.month)).map((tr: any) => (
+                                                        <div key={tr.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                            <p className="text-xs font-black text-slate-700 shrink-0">{format(parseISO(`${tr.month}-01`), 'MMM yyyy')}</p>
+                                                            <p className="text-[11px] text-slate-500 text-right">
+                                                                Worked {tr.workedHours}h · Assigned {tr.assignedHours}h · OT {tr.overtimeHours}h
+                                                                {tr.absences ? ` · ${tr.absences} absence(s)` : ''}
+                                                                {tr.lateMinutes ? ` · ${tr.lateMinutes}m late` : ''}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </TreeBranch>
+
+                                        {/* New — individual leave requests (reuses the same endpoint the Staff Hub
+                                            uses), beyond the balance numbers above. Ungated beyond authentication. */}
+                                        <TreeBranch isOpen={expandedNodes.has('attendance.leaverequests')} onToggle={() => toggleNode('attendance.leaverequests')} level={1} icon={CalendarDays} title="Leave Requests" color="bg-amber-50 text-amber-600" count={detailLeaveRequests.length}>
+                                            {detailLeaveRequests.length === 0 ? (
+                                                <div className="text-sm font-bold text-slate-300">No leave requests yet.</div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {detailLeaveRequests.map((lr: any) => {
+                                                        const approvalSummary = (lr.approvalSteps || []).length
+                                                            ? (lr.approvalSteps as any[]).map(s => `${String(s.stage).replace(/_/g, ' ')}: ${s.status}${s.approver?.fullName ? ` (${s.approver.fullName})` : ''}`).join(' · ')
+                                                            : '';
+                                                        return (
+                                                            <div key={lr.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <p className="text-xs font-black text-slate-700">{String(lr.type).replace(/_/g, ' ')}</p>
+                                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-slate-200 text-slate-600 shrink-0">{lr.status}</span>
+                                                                </div>
+                                                                <p className="text-[11px] text-slate-500">{fmt(lr.startDate)}{lr.endDate ? ` → ${fmt(lr.endDate)}` : ''}{lr.reason ? ` · ${lr.reason}` : ''}</p>
+                                                                {approvalSummary && <p className="text-[10px] text-slate-400">{approvalSummary}</p>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </TreeBranch>
+                                    </div>
+                                </TreeBranch>
+
+                                <TreeBranch isOpen={expandedNodes.has('factors')} onToggle={() => toggleNode('factors')} icon={TrendingUp} title="System & Scoring Factors" color="bg-slate-100 text-slate-600">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                        <Field emp={emp} label="Position Factor" k="positionFactor" />
+                                        <Field emp={emp} label="Site Factor" k="siteFactor" />
+                                        <Field emp={emp} label="Skill Factor" k="skillFactor" />
+                                        <Field emp={emp} label="Language Factor" k="languageFactor" />
+                                        <Field emp={emp} label="Salary Structure Type" k="salaryStructureType" />
+                                        <Field emp={emp} label="Role Category" k="roleCategory" />
+                                        <Field emp={emp} label="BioTime ID" k="bioId" />
+                                    </div>
+                                </TreeBranch>
+
+                                {showField('bankName') && (
+                                    <TreeBranch isOpen={expandedNodes.has('bank')} onToggle={() => toggleNode('bank')} icon={Landmark} title="Bank Details" color="bg-slate-100 text-slate-600">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                            <Field emp={emp} label="Bank Name" k="bankName" />
+                                            <Field emp={emp} label="Bank Name (Arabic)" k="bankNameArabic" dir="rtl" />
+                                            <Field emp={emp} label="Bank Branch" k="bankBranchName" />
+                                            <Field emp={emp} label="Bank Branch (Arabic)" k="bankBranchNameArabic" dir="rtl" />
+                                            <Field emp={emp} label="Account Number" k="bankAccountNumber" />
+                                        </div>
+                                    </TreeBranch>
+                                )}
+                            </div>
                         </div>
                     );
                 })()}

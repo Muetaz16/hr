@@ -10,7 +10,7 @@ import {
     getPersonnelEvaluation, getPersonnelEvaluationsByMonth, savePersonnelEvaluation,
     deleteHREvaluation, deleteUnitEvaluation, deleteDeptEvaluation, deleteDivisionEvaluation,
     deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation,
-    finalizeEvaluations, getFinalizationsByMonth
+    finalizeEvaluations, getFinalizationsByMonth, getEvaluationHistoryForEmployee
 } from '../controllers/evaluationController';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 import { MANAGER_ROLES } from '../utils/evaluationAssignments';
@@ -62,6 +62,10 @@ router.post('/gm', saveGMEvaluation);
 router.get('/chairman', getChairmanEvaluation);
 router.get('/chairman/month/:month', authorizeEvaluators, getChairmanEvaluationsByMonth);
 router.post('/chairman', saveChairmanEvaluation);
+
+// Employee history (Lifecycle tree) — access check happens inside the controller itself,
+// matching the single-record GET routes above rather than route-level middleware.
+router.get('/employee/:employeeId/history', getEvaluationHistoryForEmployee);
 
 // Finalize (save/freeze) — body: { month, employeeId?, departmentId? }
 router.post('/finalize', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'), finalizeEvaluations);

@@ -36,6 +36,12 @@ export const personnelActionService = {
         return response.data;
     },
 
+    // One employee's transfer history (Lifecycle detail tree).
+    async getByEmployee(employeeId: string): Promise<PersonnelActionForm[]> {
+        const response = await api.get(`/personnel-actions/employee/${employeeId}`);
+        return response.data;
+    },
+
     async create(data: any): Promise<PersonnelActionForm> {
         const response = await api.post('/personnel-actions', data);
         return response.data;

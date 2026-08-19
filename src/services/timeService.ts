@@ -14,6 +14,12 @@ export const timeService = {
         return records.find((r: TimeRecord) => r.employeeId === employeeId) || null;
     },
 
+    // One employee's attendance history, all months (Lifecycle detail tree).
+    async getTimeRecordsByEmployee(employeeId: string): Promise<TimeRecord[]> {
+        const response = await api.get(`/time/employee/${employeeId}`);
+        return response.data;
+    },
+
     async createOrUpdateTimeRecord(record: Partial<TimeRecord> & { employeeId: string, month: string }) {
         await api.post('/time', record);
     }
