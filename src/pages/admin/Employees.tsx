@@ -9,19 +9,20 @@ import {
     Trash2,
     Search,
     Filter,
-    MoreHorizontal,
     X,
     Calendar,
     Download,
     UserPlus,
     AlertTriangle,
     ChevronDown,
+    ChevronUp,
     Check,
     Hash
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { evaluationService } from '../../services/evaluationService';
 import { payrollService } from '../../services/payrollService';
+import { directorateService } from '../../services/directorateService';
 import { format } from 'date-fns';
 import type { DirectorEvaluation, PayrollResult } from '../../types';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -39,7 +40,7 @@ const getCurrencySymbol = (type?: string | null) => {
     return '$';
 };
 
-const EmployeesPage: React.FC = () => {
+const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
     const confirm = useConfirm();
@@ -57,6 +58,18 @@ const EmployeesPage: React.FC = () => {
     const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
+    // Column sorting
+    type SortKey = 'name' | 'performance' | 'holidays' | 'salary' | 'staffId' | 'contractType' | 'position' | 'place';
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+    const handleSort = (key: SortKey) => {
+        setSortConfig(prev => prev?.key === key
+            ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+            : { key, direction: 'asc' });
+    };
+    const sortIndicator = (key: SortKey) => sortConfig?.key === key
+        ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+        : <ChevronDown className="w-3 h-3 opacity-20" />;
+
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
 
     const { data, isLoading: loading, isError, error, refetch: fetchData } = useQuery({
@@ -68,10 +81,11 @@ const EmployeesPage: React.FC = () => {
             // payroll, evaluations) stays resilient so a single outage doesn't blank the page.
             const emps = await employeeService.getAllEmployees();
 
-            const [depts, uns, divs, pRecords] = await Promise.all([
+            const [depts, uns, divs, dirs, pRecords] = await Promise.all([
                 departmentService.getAllDepartments().catch((e) => { console.error("depts error", e); return []; }),
                 unitService.getAllUnits().catch((e) => { console.error("uns error", e); return []; }),
                 divisionService.getAllDivisions().catch((e) => { console.error("divs error", e); return []; }),
+                directorateService.getAllDirectorates().catch((e) => { console.error("dirs error", e); return []; }),
                 payrollService.getPayrollByMonth(selectedMonth).catch((e) => { console.error("payroll error", e); return []; })
             ]);
 
@@ -92,6 +106,7 @@ const EmployeesPage: React.FC = () => {
                 departments: depts || [],
                 units: uns || [],
                 divisions: divs || [],
+                directorates: dirs || [],
                 payrollRecords: pMap,
                 dirEvals: eMap
             };
@@ -101,7 +116,19 @@ const EmployeesPage: React.FC = () => {
     const employees = data?.employees || [];
     const departments = data?.departments || [];
     const units = data?.units || [];
+    const divisions = data?.divisions || [];
+    const directorates = data?.directorates || [];
     const dirEvals = data?.dirEvals || {};
+
+    // The org unit an employee is most specifically attached to — unit is the most
+    // granular placement, falling back up the chain to department/division/directorate.
+    const getPlace = (emp: typeof employees[number]): string => {
+        if (emp.unitId) return units.find(u => u.id === emp.unitId)?.name || '—';
+        if (emp.departmentId) return departments.find(d => d.id === emp.departmentId)?.name || '—';
+        if (emp.divisionId) return divisions.find(d => d.id === emp.divisionId)?.name || '—';
+        if (emp.directorateId) return directorates.find(d => d.id === emp.directorateId)?.name || '—';
+        return '—';
+    };
 
     // Bulk-regenerate every Staff ID in the new IPH-0<digit><YY>-<seq> format.
     const [regenBusy, setRegenBusy] = useState(false);
@@ -235,13 +262,52 @@ const EmployeesPage: React.FC = () => {
         }
     };
 
+    // Searches across every identifying field shown or implied by this table, not just the name.
+    const matchesSearch = (emp: typeof employees[number], term: string) => {
+        if (!term.trim()) return true;
+        const needle = term.toLowerCase();
+        const deptName = departments.find(d => d.id === emp.departmentId)?.name || '';
+        const unitName = units.find(u => u.id === emp.unitId)?.name || '';
+        const fields = [
+            emp.fullName, emp.fullNameArabic, emp.staffId, emp.email, emp.personalEmail,
+            emp.position, emp.role, emp.nationalId, emp.personalPhone, emp.passportNumber,
+            emp.salaryStructureType, emp.contractType, deptName, unitName,
+        ];
+        return fields.some(f => (f || '').toString().toLowerCase().includes(needle));
+    };
+
     const filteredEmployees = employees.filter(emp => {
-        const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = !deptIdFilter || emp.departmentId === deptIdFilter;
         const matchesUnit = selectedUnits.length === 0 || selectedUnits.includes(emp.unitId || '');
         const matchesRole = selectedRoles.length === 0 || selectedRoles.includes(emp.role);
-        return matchesSearch && matchesDept && matchesUnit && matchesRole;
+        return matchesSearch(emp, searchTerm) && matchesDept && matchesUnit && matchesRole;
     });
+
+    const getSortValue = (emp: typeof employees[number], key: SortKey): number | string => {
+        switch (key) {
+            case 'name': return (emp.fullName || '').toLowerCase();
+            case 'performance': return dirEvals[emp.id]?.finalScore ?? -1;
+            case 'holidays': return emp.remainingHolidays ?? 0;
+            case 'salary': {
+                const factor = 1.0 + (Math.max(emp.positionFactor || 1, emp.skillFactor || 1) - 1.0) + ((emp.siteFactor || 1) - 1.0) + ((emp.languageFactor || 1) - 1.0);
+                return (emp.baseSalary || 0) * factor;
+            }
+            case 'staffId': return (emp.staffId || '').toLowerCase();
+            case 'contractType': return (emp.contractType || '').toLowerCase();
+            case 'position': return (emp.position || '').toLowerCase();
+            case 'place': return getPlace(emp).toLowerCase();
+            default: return 0;
+        }
+    };
+
+    const sortedEmployees = sortConfig
+        ? [...filteredEmployees].sort((a, b) => {
+            const va = getSortValue(a, sortConfig.key);
+            const vb = getSortValue(b, sortConfig.key);
+            const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+            return sortConfig.direction === 'asc' ? cmp : -cmp;
+        })
+        : filteredEmployees;
 
     const activeDeptName = departments.find(d => d.id === deptIdFilter)?.name;
 
@@ -317,23 +383,27 @@ const EmployeesPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                        <Calendar className="w-4 h-4 text-slate-400 mr-2" />
-                        <input
-                            type="month"
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(e.target.value)}
-                            className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-700 outline-none"
-                        />
-                    </div>
-                    <button
-                        onClick={handleExport}
-                        className="flex items-center px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold shadow-sm hover:bg-slate-50 transition-all text-sm"
-                    >
-                        <Download size={18} className="mr-2" />
-                        {t('export_payroll')}
-                    </button>
-                    {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('register_employees')) && (
+                    {!minimal && (
+                        <div className="flex items-center px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                            <Calendar className="w-4 h-4 text-slate-400 mr-2" />
+                            <input
+                                type="month"
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-700 outline-none"
+                            />
+                        </div>
+                    )}
+                    {!minimal && (
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold shadow-sm hover:bg-slate-50 transition-all text-sm"
+                        >
+                            <Download size={18} className="mr-2" />
+                            {t('export_payroll')}
+                        </button>
+                    )}
+                    {!minimal && (currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('register_employees')) && (
                         <button
                             onClick={handleRegenerateStaffIds}
                             disabled={regenBusy}
@@ -399,10 +469,6 @@ const EmployeesPage: React.FC = () => {
                                 {t('all_heads', { defaultValue: 'Select All Heads' })}
                             </button>
                             <div className="h-4 w-[1px] bg-slate-200"></div>
-                            <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-                                <Filter className="w-5 h-5" />
-                            </button>
-                            <div className="h-4 w-[1px] bg-slate-200"></div>
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredEmployees.length} {t('results')}</span>
                         </div>
                     </div>
@@ -465,17 +531,59 @@ const EmployeesPage: React.FC = () => {
                                         }}
                                     />
                                 </th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('personnel')}</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">{t('performance_status')}</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">{t('holiday_balance')}</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Structure & Salary</th>
+                                {minimal ? (
+                                    <>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('name')}>
+                                            <div className="flex items-center gap-1">Name {sortIndicator('name')}</div>
+                                        </th>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('staffId')}>
+                                            <div className="flex items-center gap-1">Staff ID {sortIndicator('staffId')}</div>
+                                        </th>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('contractType')}>
+                                            <div className="flex items-center gap-1">Contract Type {sortIndicator('contractType')}</div>
+                                        </th>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('position')}>
+                                            <div className="flex items-center gap-1">Position {sortIndicator('position')}</div>
+                                        </th>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('place')}>
+                                            <div className="flex items-center gap-1">Place {sortIndicator('place')}</div>
+                                        </th>
+                                    </>
+                                ) : (
+                                    <>
+                                        <th
+                                            className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600"
+                                            onClick={() => handleSort('name')}
+                                        >
+                                            <div className="flex items-center gap-1">{t('personnel')} {sortIndicator('name')}</div>
+                                        </th>
+                                        <th
+                                            className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none hover:text-slate-600"
+                                            onClick={() => handleSort('performance')}
+                                        >
+                                            <div className="flex items-center justify-center gap-1">{t('performance_status')} {sortIndicator('performance')}</div>
+                                        </th>
+                                        <th
+                                            className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none hover:text-slate-600"
+                                            onClick={() => handleSort('holidays')}
+                                        >
+                                            <div className="flex items-center justify-center gap-1">{t('holiday_balance')} {sortIndicator('holidays')}</div>
+                                        </th>
+                                        <th
+                                            className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none hover:text-slate-600"
+                                            onClick={() => handleSort('salary')}
+                                        >
+                                            <div className="flex items-center justify-center gap-1">Structure & Salary {sortIndicator('salary')}</div>
+                                        </th>
+                                    </>
+                                )}
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {filteredEmployees.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="px-8 py-16 text-center">
+                                    <td colSpan={minimal ? 7 : 6} className="px-8 py-16 text-center">
                                         <div className="inline-flex flex-col items-center text-slate-400">
                                             <Search className="w-8 h-8 mb-3 text-slate-300" />
                                             <p className="text-sm font-bold uppercase tracking-widest">{t('no_workforce_records')}</p>
@@ -483,7 +591,7 @@ const EmployeesPage: React.FC = () => {
                                     </td>
                                 </tr>
                             )}
-                            {filteredEmployees.map((emp) => {
+                            {sortedEmployees.map((emp) => {
                                 const empTheme = roleThemes[emp.role as UserRole] || theme;
                                 const isSelected = selectedEmployeeIds.includes(emp.id);
                                 return (
@@ -502,63 +610,82 @@ const EmployeesPage: React.FC = () => {
                                                 }}
                                             />
                                         </td>
-                                        <td className="px-8 py-5 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold text-lg mr-4 shadow-sm group-hover:scale-105 transition-transform`}>
-                                                    {emp.fullName.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
-                                                    <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
-                                                        <span className="mr-2 text-indigo-500">{emp.staffId || t('no_id')}</span>
-                                                        <Calendar className="w-3 h-3 mr-1" /> {t('bound')} {emp.joinDate ? format(new Date(emp.joinDate), 'dd MMM yyyy') : 'N/A'}
-                                                        {emp.contractEndDate && (
-                                                            <Link
-                                                                to={`/contracts/${emp.id}`}
-                                                                className={`ml-3 px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tighter uppercase transition-transform hover:scale-105 active:scale-95 ${new Date(emp.contractEndDate) < new Date() ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}
-                                                            >
-                                                                {t('expires')}: {format(new Date(emp.contractEndDate), 'dd MMM yyyy')}
-                                                            </Link>
-                                                        )}
+                                        {minimal ? (
+                                            <>
+                                                <td className="px-8 py-5 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold mr-3 shadow-sm group-hover:scale-105 transition-transform`}>
+                                                            {emp.fullName.charAt(0)}
+                                                        </div>
+                                                        <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-5 text-center">
-                                            {dirEvals[emp.id] ? (
-                                                <div className="inline-flex flex-col items-center">
-                                                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${dirEvals[emp.id].locked ? 'bg-slate-900 text-white' : 'bg-blue-50 text-blue-600'}`}>
-                                                        {dirEvals[emp.id].locked ? t('locked') : t('drafting')}
+                                                </td>
+                                                <td className="px-8 py-5 text-sm font-bold text-indigo-500">{emp.staffId || t('no_id')}</td>
+                                                <td className="px-8 py-5 text-sm text-slate-600">{emp.contractType || '—'}</td>
+                                                <td className="px-8 py-5 text-sm text-slate-600">{emp.position || '—'}</td>
+                                                <td className="px-8 py-5 text-sm text-slate-600">{getPlace(emp)}</td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td className="px-8 py-5 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold text-lg mr-4 shadow-sm group-hover:scale-105 transition-transform`}>
+                                                            {emp.fullName.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
+                                                            <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
+                                                                <span className="mr-2 text-indigo-500">{emp.staffId || t('no_id')}</span>
+                                                                <Calendar className="w-3 h-3 mr-1" /> {t('bound')} {emp.joinDate ? format(new Date(emp.joinDate), 'dd MMM yyyy') : 'N/A'}
+                                                                {emp.contractEndDate && (
+                                                                    <Link
+                                                                        to={`/contracts/${emp.id}`}
+                                                                        className={`ml-3 px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tighter uppercase transition-transform hover:scale-105 active:scale-95 ${new Date(emp.contractEndDate) < new Date() ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}
+                                                                    >
+                                                                        {t('expires')}: {format(new Date(emp.contractEndDate), 'dd MMM yyyy')}
+                                                                    </Link>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-xs font-bold text-slate-400 mt-1">{((dirEvals[emp.id].finalScore || 0) / 80 * 100).toFixed(1)}/100</span>
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-slate-300 font-bold uppercase">{t('pending_rating')}</div>
-                                            )}
-                                        </td>
-                                        <td className="px-8 py-5 text-center">
-                                            <div className="inline-flex flex-col items-center">
-                                                <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${(emp.remainingHolidays || 0) <= 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                    {emp.remainingHolidays?.toFixed(1) || '0.0'} {t('days_left')}
-                                                </div>
-                                                <div className="flex flex-col text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                                                    <span>{t('accrued')}: {emp.accruedHolidays?.toFixed(1) || '0.0'}</span>
-                                                    {emp.bonusHolidays > 0 && <span className="text-blue-500">+{t('bonus')}: {emp.bonusHolidays.toFixed(1)}</span>}
-                                                    <span className="text-red-400">-{t('used')}: {emp.holidaysUsed?.toFixed(1) || '0.0'}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-5 text-center">
-                                            <div className="inline-flex flex-col items-center">
-                                                <div className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600">
-                                                    {emp.salaryStructureType || 'N/A'}
-                                                </div>
-                                                <div className="flex flex-col text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                                                    <span>Base: {getCurrencySymbol(emp.salaryStructureType)}{emp.baseSalary?.toLocaleString() || '0'}</span>
-                                                    <span className="text-indigo-500 mt-0.5">Total: {getCurrencySymbol(emp.salaryStructureType)}{((emp.baseSalary || 0) * (1.0 + (Math.max(emp.positionFactor || 1, emp.skillFactor || 1) - 1.0) + ((emp.siteFactor || 1) - 1.0) + ((emp.languageFactor || 1) - 1.0))).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                                </div>
-                                            </div>
-                                        </td>
+                                                </td>
+                                                <td className="px-8 py-5 text-center">
+                                                    {dirEvals[emp.id] ? (
+                                                        <div className="inline-flex flex-col items-center">
+                                                            <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${dirEvals[emp.id].locked ? 'bg-slate-900 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                                                                {dirEvals[emp.id].locked ? t('locked') : t('drafting')}
+                                                            </div>
+                                                            <span className="text-xs font-bold text-slate-400 mt-1">{((dirEvals[emp.id].finalScore || 0) / 80 * 100).toFixed(1)}/100</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[10px] text-slate-300 font-bold uppercase">{t('pending_rating')}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-8 py-5 text-center">
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${(emp.remainingHolidays || 0) <= 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                            {emp.remainingHolidays?.toFixed(1) || '0.0'} {t('days_left')}
+                                                        </div>
+                                                        <div className="flex flex-col text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
+                                                            <span>{t('accrued')}: {emp.accruedHolidays?.toFixed(1) || '0.0'}</span>
+                                                            {emp.bonusHolidays > 0 && <span className="text-blue-500">+{t('bonus')}: {emp.bonusHolidays.toFixed(1)}</span>}
+                                                            <span className="text-red-400">-{t('used')}: {emp.holidaysUsed?.toFixed(1) || '0.0'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-5 text-center">
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <div className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600">
+                                                            {emp.salaryStructureType || 'N/A'}
+                                                        </div>
+                                                        <div className="flex flex-col text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
+                                                            <span>Base: {getCurrencySymbol(emp.salaryStructureType)}{emp.baseSalary?.toLocaleString() || '0'}</span>
+                                                            <span className="text-indigo-500 mt-0.5">Total: {getCurrencySymbol(emp.salaryStructureType)}{((emp.baseSalary || 0) * (1.0 + (Math.max(emp.positionFactor || 1, emp.skillFactor || 1) - 1.0) + ((emp.siteFactor || 1) - 1.0) + ((emp.languageFactor || 1) - 1.0))).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        )}
                                         <td className="px-8 py-5 text-right">
                                             <div className="flex justify-end gap-2">
                                                 {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('edit_employees')) && (
@@ -577,9 +704,6 @@ const EmployeesPage: React.FC = () => {
                                                         <Trash2 size={16} />
                                                     </button>
                                                 )}
-                                                <button className="p-2.5 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 transition-all border border-transparent">
-                                                    <MoreHorizontal size={16} />
-                                                </button>
                                             </div>
                                         </td>
                                     </tr>

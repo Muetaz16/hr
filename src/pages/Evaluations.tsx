@@ -273,6 +273,13 @@ const EvaluationsPage: React.FC = () => {
         const actions: (EvalLevel | 'PERSONNEL')[] = [];
         if (currentUser?.role === 'SUPER_ADMIN') {
             actions.push(...required); // admin may fill either required level
+        } else if (currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
+            // Stand in only for levels nobody has evaluated yet, or to fix their own
+            // prior stand-in entry — never to overwrite a real manager's submission.
+            actions.push(...required.filter(l => {
+                const rec = maps[l]?.[emp.id];
+                return !rec || rec.submittedById === currentUser.id;
+            }));
         } else if (myLevel && canEvaluate(me, emp as OrgPlacement, myLevel)) {
             actions.push(myLevel);
         }

@@ -31,6 +31,7 @@ model User {
   employee                 Employee?
   enabledPeriods           EvaluationPeriod[]     @relation("EvaluationPeriodEnabledBy")
   disabledPeriods          EvaluationPeriod[]     @relation("EvaluationPeriodDisabledBy")
+  evaluationFinalizations  EvaluationFinalization[] @relation("EvaluationFinalizationsFinalizedBy")
   hrEvaluations            HREvaluation[]         @relation("HREvaluationsSubmittedBy")
   leaveDeptApprovals       LeaveRequest[]         @relation("LeaveDeptApprovals")
   leaveDivisionApprovals   LeaveRequest[]         @relation("LeaveDivisionApprovals")
@@ -266,6 +267,7 @@ model Employee {
   personnelEvaluations   PersonnelEvaluation[]
   timeRecords            TimeRecord[]
   unitEvaluations        UnitEvaluation[]
+  evaluationFinalizations EvaluationFinalization[]
 
   @@index([departmentId])
   @@index([unitId])
@@ -533,6 +535,28 @@ model PersonnelEvaluation {
   submittedBy            User?    @relation("PersonnelEvaluationsSubmittedBy", fields: [submittedById], references: [id])
 
   @@index([employeeId, month])
+}
+
+// One row per employee per month, created the moment HR "saves"/finalizes that
+// month's evaluation (manually, day 25-30, or automatically once day 30 has
+// passed). Its existence is the single source of truth that freezes every
+// other evaluation table (HR/Personnel/Unit/Department/Division/Director/GM/
+// Chairman) for that employee+month, and is the trigger point for crediting
+// Employee.evaluationPoints (the "Evaluation Index") — see
+// server/src/utils/evaluationPoints.ts. Never updated once created; the
+// @@unique guarantees it can only ever be awarded once per employee per month.
+model EvaluationFinalization {
+  id            String    @id @default(uuid())
+  employeeId    String
+  month         String
+  finalScore    Float
+  finalizedAt   DateTime  @default(now())
+  finalizedById String?
+  isAuto        Boolean   @default(false)
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  finalizedBy   User?     @relation("EvaluationFinalizationsFinalizedBy", fields: [finalizedById], references: [id])
+
+  @@unique([employeeId, month])
 }
 
 model PayrollResult {

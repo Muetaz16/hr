@@ -46,6 +46,7 @@ import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
 import { canAccess } from '../../utils/access';
 import EvaluationControl from '../hr/EvaluationControl';
 import EvaluationsPage from '../Evaluations';
+import EmployeesPage from '../admin/Employees';
 
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
@@ -65,6 +66,7 @@ const PersonnelRelations: React.FC = () => {
         if (currentPath.includes('/disciplinary')) return 'disciplinary';
         if (currentPath.includes('/offboarding')) return 'offboarding';
         if (currentPath.includes('/evaluations')) return 'evaluations';
+        if (currentPath.includes('/employee-control')) return 'employee-control';
         return 'lifecycle'; // Fallback
     };
 
@@ -1032,6 +1034,16 @@ const PersonnelRelations: React.FC = () => {
                 ) : (
                     <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
                         You don't have permission to view evaluation controls.
+                    </div>
+                )
+            )}
+
+            {activeTab === 'employee-control' && (
+                canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_employees', 'manage_employees']) ? (
+                    <EmployeesPage minimal />
+                ) : (
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
+                        You don't have permission to view employee control.
                     </div>
                 )
             )}

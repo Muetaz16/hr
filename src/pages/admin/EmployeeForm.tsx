@@ -240,11 +240,15 @@ const EmployeeForm: React.FC = () => {
     const onboardingType = (fromOnboarding && (KNOWN_CONTRACT_TYPES as readonly string[]).includes(formData.contractType || ''))
         ? (formData.contractType as ResidentContractType)
         : null;
-    const showField = makeFieldVisibility(formData.contractType, fromOnboarding);
-    const onboardingTypeLabel = onboardingType === 'RESDANT' ? t('rs_resident', { defaultValue: 'Resident' })
-        : onboardingType === 'DIRCT NONE RESDANT' ? t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })
-        : onboardingType === 'NONE RESDANT' ? t('rs_service_provider', { defaultValue: 'Service Provider' })
+    // Type-based field visibility now applies everywhere (not just onboarding review) — an
+    // admin creating/editing an employee manually gets the same "only show what this residency
+    // type actually collects" behavior, driven by the Employee Type picker at the top of the form.
+    const showField = makeFieldVisibility(formData.contractType);
+    const residencyTypeLabel = (type: string | null | undefined) => type === 'RESDANT' ? t('rs_resident', { defaultValue: 'Resident' })
+        : type === 'DIRCT NONE RESDANT' ? t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })
+        : type === 'NONE RESDANT' ? t('rs_service_provider', { defaultValue: 'Service Provider' })
         : '';
+    const onboardingTypeLabel = residencyTypeLabel(onboardingType);
 
     useEffect(() => {
         if (isEditMode && id) {
@@ -742,6 +746,36 @@ const EmployeeForm: React.FC = () => {
                                 {t('reviewing_onboarding_type', { defaultValue: 'Reviewing a {{type}} onboarding submission — only the fields that form collects are shown below.', type: onboardingTypeLabel })}
                             </p>
                         </div>
+                    )}
+                    {/* 0. Employee Type — chosen first; drives which fields below are shown. Locked
+                        during onboarding review (the type was already fixed by the candidate's
+                        own submission), shown as the banner above instead. */}
+                    {!fromOnboarding && (
+                        <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/50 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-8 text-indigo-500/10">
+                                <Globe2 size={120} />
+                            </div>
+                            <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-4 relative z-10">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+                                    <Globe2 size={20} />
+                                </div>
+                                <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('employee_type', { defaultValue: 'Employee Type' })}</h2>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
+                                {(['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT'] as const).map(value => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, contractType: value })}
+                                        className={`px-6 py-5 rounded-2xl border-2 text-left font-bold transition-all ${formData.contractType === value
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                                    >
+                                        {residencyTypeLabel(value)}
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
                     )}
                     {/* 1. Identity Details */}
                     <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/50 relative overflow-hidden">
@@ -1584,15 +1618,9 @@ const EmployeeForm: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('contract_type')}</label>
-                                <select
-                                    value={formData.contractType || 'RESDANT'}
-                                    onChange={(e) => setFormData({ ...formData, contractType: e.target.value })}
-                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
-                                >
-                                    <option value="RESDANT">RESDANT</option>
-                                    <option value="DIRCT NONE RESDANT">DIRCT NONE RESDANT</option>
-                                    <option value="NONE RESDANT">NONE RESDANT</option>
-                                </select>
+                                <div className="w-full px-5 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500">
+                                    {residencyTypeLabel(formData.contractType) || t('select_employee_type_above', { defaultValue: 'Select above ↑' })}
+                                </div>
                             </div>
                         </div>
 

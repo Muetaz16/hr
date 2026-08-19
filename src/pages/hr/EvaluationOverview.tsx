@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { directorateService } from '../../services/directorateService';
 import { unitService } from '../../services/unitService';
@@ -8,7 +9,8 @@ import { getHREvaluationsByMonth } from '../../services/hrEvaluationService';
 import type { Employee, Department, Division, Directorate, Unit } from '../../types';
 import { type EvalLevel, type OrgPlacement, getRequiredLevels } from '../../utils/evaluationHierarchy';
 import { buildEvaluationBreakdown, mapRawHREval, mapRawOrgEval, METRIC_LEVELS, type EvaluationBreakdown } from '../../utils/evaluationScoring';
-import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Search, Building2, FileSearch, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Search, Building2, FileSearch, Pencil, Lock, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import Modal from '../../components/Modal';
 import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
 import PersonnelEvaluationModal from '../../components/PersonnelEvaluationModal';
@@ -35,6 +37,7 @@ const ScoreBadge: React.FC<{ label?: string; value: string; done: boolean }> = (
 // and the aggregated Final Score. Reuses buildEvaluationBreakdown against
 // data already bulk-fetched here, so there's no extra per-employee network cost.
 const EvaluationOverview: React.FC<Props> = ({ month }) => {
+    const { currentUser } = useAuth();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [divisions, setDivisions] = useState<Division[]>([]);
@@ -48,13 +51,15 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [detailEmp, setDetailEmp] = useState<Employee | null>(null);
     const [personnelEmp, setPersonnelEmp] = useState<Employee | null>(null);
+    const [finalizedMap, setFinalizedMap] = useState<Record<string, { finalizedAt: string; isAuto: boolean }>>({});
+    const [finalizing, setFinalizing] = useState<string | null>(null); // 'all' | groupName | employeeId | null
 
     useEffect(() => { fetchAll(); }, [month]);
 
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [emps, depts, divs, dirs, unitList, unitEvals, deptEvals, divEvals, dirEvals, gmEvals, chairmanEvals, persEvals, hrEvals] = await Promise.all([
+            const [emps, depts, divs, dirs, unitList, unitEvals, deptEvals, divEvals, dirEvals, gmEvals, chairmanEvals, persEvals, hrEvals, finalizations] = await Promise.all([
                 employeeService.getAllEmployees(),
                 departmentService.getAllDepartments(),
                 divisionService.getAllDivisions(),
@@ -68,6 +73,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                 evaluationService.getChairmanEvaluationsByMonth(month),
                 evaluationService.getPersonnelEvaluationsByMonth(month),
                 getHREvaluationsByMonth(month),
+                evaluationService.getFinalizationsByMonth(month),
             ]);
             setEmployees(emps.filter((e: any) => (e.enrollmentStatus || 'ACTIVE') === 'ACTIVE'));
             setDepartments(depts);
@@ -86,6 +92,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
             });
             setPersMap(index(persEvals));
             setHrMap(Object.fromEntries(Object.entries(index(hrEvals)).map(([id, r]) => [id, mapRawHREval(r)])));
+            setFinalizedMap(Object.fromEntries(finalizations.map((f: any) => [f.employeeId, f])));
         } catch (error) {
             console.error('Error loading evaluation overview:', error);
         } finally {
@@ -133,6 +140,60 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
         return other ? mine.totalScore / 2 : mine.totalScore;
     };
 
+    // Mirrors the server-side day-25 guard (Presence isn't final before then) — a
+    // client-side convenience so the button doesn't invite a doomed request; the
+    // server is the real enforcement point. Past months are always finalizable.
+    const canFinalizeMonth = useMemo(() => {
+        if (currentUser?.role === 'SUPER_ADMIN') return true;
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (month < currentMonth) return true;
+        if (month > currentMonth) return false;
+        return now.getDate() >= 25;
+    }, [month, currentUser]);
+
+    const finalizeOne = async (employeeId: string) => {
+        setFinalizing(employeeId);
+        try {
+            await evaluationService.finalizeEvaluations(month, { employeeId });
+            toast.success('Evaluation finalized.');
+            await fetchAll();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || 'Failed to finalize evaluation.');
+        } finally {
+            setFinalizing(null);
+        }
+    };
+
+    const finalizeGroup = async (groupName: string, groupEmployees: Employee[]) => {
+        setFinalizing(groupName);
+        try {
+            const targets = groupEmployees.filter(e => !finalizedMap[e.id]);
+            for (const emp of targets) {
+                await evaluationService.finalizeEvaluations(month, { employeeId: emp.id });
+            }
+            toast.success(`Finalized ${targets.length} employee(s) in ${groupName}.`);
+            await fetchAll();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || 'Failed to finalize group.');
+        } finally {
+            setFinalizing(null);
+        }
+    };
+
+    const finalizeAll = async () => {
+        setFinalizing('all');
+        try {
+            const result = await evaluationService.finalizeEvaluations(month);
+            toast.success(`Finalized ${result.finalized} employee(s), ${result.skipped} already done.`);
+            await fetchAll();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || 'Failed to finalize all evaluations.');
+        } finally {
+            setFinalizing(null);
+        }
+    };
+
     const groups = useMemo(() => {
         const filtered = employees.filter(e => e.fullName.toLowerCase().includes(searchTerm.toLowerCase()));
         const map = new Map<string, Employee[]>();
@@ -176,12 +237,23 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                         All employees for <strong>{month}</strong> — {fullyEvaluated}/{totalEmployees} fully evaluated.
                     </p>
                 </div>
-                <div className="relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                    <input
-                        type="text" placeholder="Search employee..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
-                    />
+                <div className="flex items-center gap-3">
+                    <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                        <input
+                            type="text" placeholder="Search employee..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
+                        />
+                    </div>
+                    <button
+                        onClick={finalizeAll}
+                        disabled={!canFinalizeMonth || finalizing !== null}
+                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : 'Save/finalize every employee\'s evaluation for this month'}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    >
+                        <ShieldCheck className="w-4 h-4" />
+                        {finalizing === 'all' ? 'Finalizing…' : 'Finalize All'}
+                    </button>
                 </div>
             </div>
 
@@ -194,19 +266,27 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                     const groupDone = groupEmployees.filter(isFullyEvaluated).length;
                     return (
                         <div key={groupName}>
-                            <button
-                                onClick={() => toggleGroup(groupName)}
-                                className="w-full px-6 py-4 flex items-center justify-between gap-4 bg-slate-50/60 hover:bg-slate-50 transition-colors text-left"
-                            >
-                                <div className="flex items-center gap-2">
+                            <div className="w-full px-6 py-4 flex items-center justify-between gap-4 bg-slate-50/60 hover:bg-slate-50 transition-colors">
+                                <button onClick={() => toggleGroup(groupName)} className="flex items-center gap-2 text-left flex-1">
                                     {isCollapsed ? <ChevronRight className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                                     <span className="font-bold text-slate-700">{groupName}</span>
                                     <span className="text-xs text-slate-400">({groupEmployees.length})</span>
-                                </div>
+                                </button>
                                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${groupDone >= groupEmployees.length ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-50 text-amber-600 ring-1 ring-amber-100'}`}>
                                     {groupDone}/{groupEmployees.length} evaluated
                                 </span>
-                            </button>
+                                {groupEmployees.some(e => !finalizedMap[e.id]) && (
+                                    <button
+                                        onClick={() => finalizeGroup(groupName, groupEmployees)}
+                                        disabled={!canFinalizeMonth || finalizing !== null}
+                                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : `Finalize every employee in ${groupName}`}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                    >
+                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                        {finalizing === groupName ? 'Finalizing…' : 'Finalize Group'}
+                                    </button>
+                                )}
+                            </div>
 
                             {!isCollapsed && (
                                 <div className="overflow-x-auto">
@@ -232,11 +312,17 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                 const bIsMetric = !!b.evaluatorB && METRIC_LEVELS.includes(b.evaluatorB.level);
                                                 const col1 = aIsMetric ? managerColumnValue(b.metricA, b.metricB) : null;
                                                 const col2 = bIsMetric ? managerColumnValue(b.metricB, b.metricA) : null;
+                                                const finalized = finalizedMap[emp.id];
                                                 return (
                                                     <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
                                                         <td className="px-6 py-4">
                                                             <p className="font-bold text-slate-700 text-sm">{emp.fullName}</p>
                                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{emp.staffId || emp.id.slice(0, 8)}</p>
+                                                            {finalized && (
+                                                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-900 text-white" title={`Finalized ${new Date(finalized.finalizedAt).toLocaleDateString()}${finalized.isAuto ? ' (auto)' : ''}`}>
+                                                                    <Lock className="w-2.5 h-2.5" /> Finalized
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             {!b.evaluatorA ? (
@@ -270,10 +356,21 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
                                                             <div className="flex justify-end gap-2">
+                                                                {!finalized && (
+                                                                    <button
+                                                                        onClick={() => finalizeOne(emp.id)}
+                                                                        disabled={!canFinalizeMonth || finalizing !== null}
+                                                                        className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : 'Finalize this employee\'s evaluation'}
+                                                                    >
+                                                                        <ShieldCheck className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => setPersonnelEmp(emp)}
-                                                                    className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
-                                                                    title="Edit Exceptional / Training"
+                                                                    disabled={!!finalized && currentUser?.role !== 'SUPER_ADMIN'}
+                                                                    className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                    title={finalized && currentUser?.role !== 'SUPER_ADMIN' ? 'Finalized — no longer editable' : 'Edit Exceptional / Training'}
                                                                 >
                                                                     <Pencil className="w-4 h-4" />
                                                                 </button>

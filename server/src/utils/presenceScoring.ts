@@ -67,20 +67,31 @@ export async function fetchPresenceInputs(bioId: number, start: string, end: str
 }
 
 export type ComputePresenceResult =
-    | { status: 'stored'; presenceScore: number }
-    | { status: 'skipped'; reason: 'already_submitted' | 'fetch_failed' };
+    | { status: 'stored'; presenceScore: number; wasFinalized: boolean }
+    | { status: 'skipped'; reason: 'already_submitted' | 'fetch_failed' | 'finalized' };
 
 // Fetches, scores, and upserts one employee's Presence (HREvaluation) row for a month.
 // Leaves an already-submitted (locked) record alone unless force=true — mirrors the
-// "manual override retained" precedent from the evaluation-period automation.
+// "manual override retained" precedent from the evaluation-period automation. A
+// finalized month (EvaluationFinalization exists) is never touched unless
+// bypassFinalized=true (SUPER_ADMIN's "edit anytime" — the caller is responsible for
+// re-finalizing afterward so the frozen snapshot/Evaluation Index stay in sync).
 export async function computeAndStorePresence(params: {
     employeeId: string;
     bioId: number;
     month: string;
     submittedById?: string | null;
     force?: boolean;
+    bypassFinalized?: boolean;
 }): Promise<ComputePresenceResult> {
-    const { employeeId, bioId, month, submittedById, force } = params;
+    const { employeeId, bioId, month, submittedById, force, bypassFinalized } = params;
+
+    const finalized = await prisma.evaluationFinalization.findUnique({
+        where: { employeeId_month: { employeeId, month } }
+    });
+    if (finalized && !bypassFinalized) {
+        return { status: 'skipped', reason: 'finalized' };
+    }
 
     const existing = await prisma.hREvaluation.findFirst({ where: { employeeId, month } });
     if (existing && existing.status === 'submitted' && !force) {
@@ -110,5 +121,5 @@ export async function computeAndStorePresence(params: {
         await prisma.hREvaluation.create({ data });
     }
 
-    return { status: 'stored', presenceScore };
+    return { status: 'stored', presenceScore, wasFinalized: !!finalized };
 }

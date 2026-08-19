@@ -109,19 +109,20 @@ const HREvaluations: React.FC = () => {
         });
     };
 
-    const handleSaveAll = async () => {
+    const handleSaveAll = async (statusOverride?: string) => {
         if (!currentUser) return;
         setSaving(true);
         try {
             const promises = Object.values(evaluations).map(evalData => {
-                // Only save if it has changed from default? 
+                // Only save if it has changed from default?
                 // For now, save all to ensure consistency.
                 if (!evalData.employeeId) return Promise.resolve();
 
+                const payload = statusOverride ? { ...evalData, status: statusOverride } : evalData;
                 return createOrUpdateHREvaluation(
                     evalData.employeeId!,
                     selectedMonth,
-                    evalData as Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
+                    payload as Omit<HREvaluation, 'id' | 'submittedAt' | 'submittedBy'>,
                     currentUser.id || 'unknown'
                 );
             });
@@ -144,8 +145,11 @@ const HREvaluations: React.FC = () => {
 
         setSubmitting(true);
         try {
-            // First ensure all current data is saved
-            await handleSaveAll();
+            // Actually transition every row to 'submitted' — previously this called
+            // handleSaveAll() with no override, which just re-saved whatever status
+            // each row already had (usually 'draft'), so "Submit All" never differed
+            // from "Save Drafts" in practice.
+            await handleSaveAll('submitted');
 
             alert(t('all_evaluations_submitted_success'));
             await fetchData();
@@ -251,7 +255,7 @@ const HREvaluations: React.FC = () => {
                         {t('save_as_csv')}
                     </button>
                     <button
-                        onClick={handleSaveAll}
+                        onClick={() => handleSaveAll()}
                         disabled={saving}
                         className="px-6 py-3.5 bg-white border border-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-[18px] hover:bg-slate-50 flex items-center shadow-sm transition-all hover:-translate-y-1 active:scale-95 group/btn"
                     >

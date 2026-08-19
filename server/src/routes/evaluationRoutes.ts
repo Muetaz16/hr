@@ -9,7 +9,8 @@ import {
     getChairmanEvaluation, getChairmanEvaluationsByMonth, saveChairmanEvaluation,
     getPersonnelEvaluation, getPersonnelEvaluationsByMonth, savePersonnelEvaluation,
     deleteHREvaluation, deleteUnitEvaluation, deleteDeptEvaluation, deleteDivisionEvaluation,
-    deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation
+    deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation,
+    finalizeEvaluations, getFinalizationsByMonth
 } from '../controllers/evaluationController';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 import { MANAGER_ROLES } from '../utils/evaluationAssignments';
@@ -61,6 +62,10 @@ router.post('/gm', saveGMEvaluation);
 router.get('/chairman', getChairmanEvaluation);
 router.get('/chairman/month/:month', authorizeEvaluators, getChairmanEvaluationsByMonth);
 router.post('/chairman', saveChairmanEvaluation);
+
+// Finalize (save/freeze) — body: { month, employeeId?, departmentId? }
+router.post('/finalize', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'), finalizeEvaluations);
+router.get('/finalizations/month/:month', authorizeEvaluators, getFinalizationsByMonth);
 
 // Personnel
 router.get('/personnel', getPersonnelEvaluation);

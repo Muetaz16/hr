@@ -68,6 +68,16 @@ export const evaluationService = {
         return response.data;
     },
 
+    // --- Finalization (save/freeze the whole employee+month evaluation) ---
+    async getFinalizationsByMonth(month: string): Promise<{ employeeId: string; finalizedAt: string; isAuto: boolean }[]> {
+        const response = await api.get(`/evaluations/finalizations/month/${month}`);
+        return response.data;
+    },
+    async finalizeEvaluations(month: string, scope?: { employeeId?: string; departmentId?: string }) {
+        const response = await api.post('/evaluations/finalize', { month, ...scope });
+        return response.data;
+    },
+
     // Retained for backwards compatibility; locking is no longer part of the flow.
     async lockEvaluation(id: string) {
         await api.post('/evaluations/director/lock', { id });

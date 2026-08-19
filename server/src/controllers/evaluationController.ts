@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { canEvaluate, EvalLevel, OrgPlacement } from '../utils/evaluationHierarchy';
 import { computeAndStorePresence } from '../utils/presenceScoring';
+import { finalizeOneEmployee, reFinalizeEmployee } from '../utils/evaluationFinalize';
 
 const prisma = new PrismaClient();
 
@@ -110,6 +111,16 @@ const checkEvaluationPeriod = async (month: string, departmentId?: string | null
     return false;
 };
 
+// Once an employee's evaluation for a month has been finalized (EvaluationFinalization
+// row exists — see finalizeEvaluations below), every evaluation table for that
+// employee+month becomes immutable. Checked by every save handler in this file.
+const isMonthFinalized = async (employeeId: string, month: string): Promise<boolean> => {
+    const row = await prisma.evaluationFinalization.findUnique({
+        where: { employeeId_month: { employeeId, month } }
+    });
+    return !!row;
+};
+
 // Resolve a submitter's org placement (role + scope ids) from their user + linked
 // employee record. User rows only carry unit/department, so division/directorate
 // come from the employee record.
@@ -129,18 +140,33 @@ export const resolveManagerPlacement = async (userId: string) => {
 
 // Enforce the skip-level rule: this submitter may evaluate this target at `level`.
 // Returns an error message to send (403), or null when allowed.
+//
+// `existingSubmitterId` is the submittedById of any record already saved for this
+// employee+month+level (or undefined/null if none) — lets HR_MANAGER/PERSONNEL stand
+// in for a manager who never submitted, without ever overwriting a real manager's
+// work: they may create a fresh record, or fix their own prior stand-in, but not touch
+// a record some other (non-HR) submitter created.
 const checkCanEvaluate = async (
     submitter: { user: any; placement: OrgPlacement },
     targetId: string,
-    level: EvalLevel
+    level: EvalLevel,
+    existingSubmitterId?: string | null
 ): Promise<string | null> => {
-    if (submitter.user.role === 'SUPER_ADMIN') return null;
     const target = await prisma.employee.findUnique({
         where: { id: targetId },
         select: { userId: true, role: true, unitId: true, departmentId: true, divisionId: true, directorateId: true }
     });
     if (!target) return 'Employee not found';
     if (target.userId && target.userId === submitter.user.id) return 'You cannot evaluate yourself';
+
+    if (submitter.user.role === 'SUPER_ADMIN') return null;
+
+    if (['HR_MANAGER', 'PERSONNEL'].includes(submitter.user.role)) {
+        if (!existingSubmitterId) return null;
+        const existingSubmitter = await prisma.user.findUnique({ where: { id: existingSubmitterId }, select: { role: true } });
+        if (!existingSubmitter || ['HR_MANAGER', 'PERSONNEL'].includes(existingSubmitter.role)) return null;
+    }
+
     if (!canEvaluate(submitter.placement, target as any, level)) {
         return 'You are not one of the two required evaluators for this employee';
     }
@@ -240,6 +266,11 @@ export const saveHREvaluation = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
         }
 
+        const finalized = await isMonthFinalized(employeeId, month);
+        if (finalized && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'This employee\'s evaluation for this month has already been finalized and can no longer be edited.' });
+        }
+
         // Check if evaluation period is enabled
         const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
         if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
@@ -252,18 +283,13 @@ export const saveHREvaluation = async (req: Request, res: Response) => {
             where: { employeeId, month }
         });
 
-        if (existing) {
-            const updated = await prisma.hREvaluation.update({
-                where: { id: existing.id },
-                data: dbData
-            });
-            res.json(updated);
-        } else {
-            const created = await prisma.hREvaluation.create({
-                data: dbData
-            });
-            res.json(created);
-        }
+        const result = existing
+            ? await prisma.hREvaluation.update({ where: { id: existing.id }, data: dbData })
+            : await prisma.hREvaluation.create({ data: dbData });
+
+        if (finalized) await reFinalizeEmployee(employeeId, month, submittedById);
+
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: 'Failed to save HR evaluation' });
     }
@@ -279,6 +305,7 @@ export const recomputePresence = async (req: Request, res: Response) => {
         if (!month) return res.status(400).json({ error: 'Missing month' });
 
         const submittedById = (req as any).user?.id || null;
+        const isSuperAdmin = (req as any).user?.role === 'SUPER_ADMIN';
         const employees = await prisma.employee.findMany({
             where: { bioId: { not: null }, ...(employeeId ? { id: String(employeeId) } : {}) },
             select: { id: true, bioId: true, fullName: true },
@@ -288,7 +315,11 @@ export const recomputePresence = async (req: Request, res: Response) => {
         for (const emp of employees) {
             const result = await computeAndStorePresence({
                 employeeId: emp.id, bioId: emp.bioId as number, month: String(month), submittedById, force: true,
+                bypassFinalized: isSuperAdmin,
             });
+            if (result.status === 'stored' && result.wasFinalized) {
+                await reFinalizeEmployee(emp.id, String(month), submittedById);
+            }
             results.push({ employeeId: emp.id, fullName: emp.fullName, ...result });
         }
 
@@ -361,6 +392,11 @@ const makeSaveOrgEval = (model: MetricModel, level: EvalLevel) => async (req: Re
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
         }
 
+        const finalized = await isMonthFinalized(employeeId, month);
+        if (finalized && submitter.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'This employee\'s evaluation for this month has already been finalized and can no longer be edited.' });
+        }
+
         // Evaluation window must be open (Super Admin bypasses)
         const isEnabled = await checkEvaluationPeriod(month, submitter.user.departmentId);
         if (!isEnabled && submitter.user.role !== 'SUPER_ADMIN') {
@@ -368,7 +404,10 @@ const makeSaveOrgEval = (model: MetricModel, level: EvalLevel) => async (req: Re
         }
 
         // Skip-level rule: only the two required evaluators may score this employee
-        const denied = await checkCanEvaluate(submitter, employeeId, level);
+        // (HR/Personnel may stand in only when nobody else has submitted yet — see
+        // checkCanEvaluate). Fetched here (rather than after) so it can be passed in.
+        const existing = await (prisma as any)[model].findFirst({ where: { employeeId, month } });
+        const denied = await checkCanEvaluate(submitter, employeeId, level, existing?.submittedById);
         if (denied) return res.status(403).json({ error: denied });
 
         const mapped = mapOrgEvalToDB(data, submittedById);
@@ -379,20 +418,30 @@ const makeSaveOrgEval = (model: MetricModel, level: EvalLevel) => async (req: Re
             totalScore,
             comments: data.comments
         };
-        // The Director model carries the metric total under `finalScore` too.
+        // The Director model carries the metric total under `finalScore` too, and is
+        // marked locked/lockedAt the moment the Directorate Head submits it — reviving
+        // this field's original intent (Dashboard.tsx/Tasks.tsx read it to know whether
+        // the Director's own evaluation is done) after it went dead when the old
+        // separate "final approval" endpoint was retired.
         if (model === 'directorEvaluation') {
             dbData.finalScore = totalScore;
-            delete dbData.comments; // DirectorEvaluation has no comments column
+            dbData.locked = true;
+            dbData.lockedAt = new Date();
+            // DirectorEvaluation has no comments/submittedAt/totalScore columns (only
+            // finalScore, already set above from the same value) — these three generic
+            // fields were silently breaking every director-evaluation create/update.
+            delete dbData.comments;
+            delete dbData.submittedAt;
+            delete dbData.totalScore;
         }
 
-        const existing = await (prisma as any)[model].findFirst({ where: { employeeId, month } });
-        if (existing) {
-            const updated = await (prisma as any)[model].update({ where: { id: existing.id }, data: dbData });
-            res.json(updated);
-        } else {
-            const created = await (prisma as any)[model].create({ data: dbData });
-            res.json(created);
-        }
+        const result = existing
+            ? await (prisma as any)[model].update({ where: { id: existing.id }, data: dbData })
+            : await (prisma as any)[model].create({ data: dbData });
+
+        if (finalized) await reFinalizeEmployee(employeeId, month, submittedById);
+
+        res.json(result);
     } catch (error: any) {
         console.error(`[EVAL][ERROR] save ${model}:`, error.message);
         res.status(500).json({ error: `Failed to save ${model}` });
@@ -493,12 +542,18 @@ const makeSaveScoreEval = (model: ScoreModel, level: EvalLevel) => async (req: R
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
         }
 
+        const finalized = await isMonthFinalized(employeeId, month);
+        if (finalized && submitter.user.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'This employee\'s evaluation for this month has already been finalized and can no longer be edited.' });
+        }
+
         const isEnabled = await checkEvaluationPeriod(month, submitter.user.departmentId);
         if (!isEnabled && submitter.user.role !== 'SUPER_ADMIN') {
             return res.status(403).json({ error: 'Evaluation period is disabled for this month' });
         }
 
-        const denied = await checkCanEvaluate(submitter, employeeId, level);
+        const existing = await (prisma as any)[model].findFirst({ where: { employeeId, month } });
+        const denied = await checkCanEvaluate(submitter, employeeId, level, existing?.submittedById);
         if (denied) return res.status(403).json({ error: denied });
 
         const dbData: any = {
@@ -509,14 +564,13 @@ const makeSaveScoreEval = (model: ScoreModel, level: EvalLevel) => async (req: R
             submittedById
         };
 
-        const existing = await (prisma as any)[model].findFirst({ where: { employeeId, month } });
-        if (existing) {
-            const updated = await (prisma as any)[model].update({ where: { id: existing.id }, data: dbData });
-            res.json(updated);
-        } else {
-            const created = await (prisma as any)[model].create({ data: dbData });
-            res.json(created);
-        }
+        const result = existing
+            ? await (prisma as any)[model].update({ where: { id: existing.id }, data: dbData })
+            : await (prisma as any)[model].create({ data: dbData });
+
+        if (finalized) await reFinalizeEmployee(employeeId, month, submittedById);
+
+        res.json(result);
     } catch (error: any) {
         console.error(`[EVAL][ERROR] save ${model}:`, error.message);
         res.status(500).json({ error: `Failed to save ${model}` });
@@ -579,6 +633,11 @@ export const savePersonnelEvaluation = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Submitter account not found. Please logout and login again.' });
         }
 
+        const finalized = await isMonthFinalized(employeeId, month);
+        if (finalized && submitterExists.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'This employee\'s evaluation for this month has already been finalized and can no longer be edited.' });
+        }
+
         // Check if evaluation period is enabled
         const isEnabled = await checkEvaluationPeriod(month, submitterExists.departmentId);
         if (!isEnabled && submitterExists.role !== 'SUPER_ADMIN') {
@@ -604,18 +663,13 @@ export const savePersonnelEvaluation = async (req: Request, res: Response) => {
             where: { employeeId, month }
         });
 
-        if (existing) {
-            const updated = await prisma.personnelEvaluation.update({
-                where: { id: existing.id },
-                data: dbData
-            });
-            res.json(updated);
-        } else {
-            const created = await prisma.personnelEvaluation.create({
-                data: dbData
-            });
-            res.json(created);
-        }
+        const result = existing
+            ? await prisma.personnelEvaluation.update({ where: { id: existing.id }, data: dbData })
+            : await prisma.personnelEvaluation.create({ data: dbData });
+
+        if (finalized) await reFinalizeEmployee(employeeId, month, submittedById);
+
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: 'Failed to save Personnel evaluation' });
     }
@@ -628,5 +682,76 @@ export const deletePersonnelEvaluation = async (req: Request, res: Response) => 
         res.json({ message: 'Deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete' });
+    }
+};
+
+// Same Africa/Tripoli "today" helper as the period/presence crons — the Presence
+// window for the current month only finishes on day 24, so finalizing earlier
+// than day 25 would freeze an evaluation missing its Presence component.
+const todayInTripoli = (): { day: number; month: string } => {
+    const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Tripoli', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date()).split('-');
+    return { day: Number(d), month: `${y}-${m}` };
+};
+
+// Bulk read for the Overview screen — which employees are already finalized this month.
+export const getFinalizationsByMonth = async (req: Request, res: Response) => {
+    try {
+        const { month } = req.params;
+        const rows = await prisma.evaluationFinalization.findMany({
+            where: { month },
+            select: { employeeId: true, finalizedAt: true, isAuto: true },
+        });
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch evaluation finalizations' });
+    }
+};
+
+// Saves/freezes an employee's whole monthly evaluation: snapshots the server-computed
+// finalScore into EvaluationFinalization (which every save handler above now checks),
+// and credits the Evaluation Index (Employee.evaluationPoints). Scope: one employee,
+// one department, or (neither given) every active employee. Already-finalized
+// employees in scope are silently skipped — a month can only ever be finalized once.
+export const finalizeEvaluations = async (req: Request, res: Response) => {
+    try {
+        const { month, employeeId, departmentId } = req.body;
+        if (!month) return res.status(400).json({ error: 'Missing month' });
+
+        const { day, month: currentMonth } = todayInTripoli();
+        const role = (req as any).user?.role;
+        if (role !== 'SUPER_ADMIN' && month === currentMonth && day < 25) {
+            return res.status(400).json({ error: 'This month cannot be finalized before day 25 — Presence data is not final until the 25th.' });
+        }
+
+        const finalizedById = (req as any).user?.id || null;
+        const employees = await prisma.employee.findMany({
+            where: {
+                enrollmentStatus: 'ACTIVE',
+                ...(employeeId ? { id: String(employeeId) } : {}),
+                ...(departmentId ? { departmentId: String(departmentId) } : {}),
+            },
+        });
+
+        const results: Array<{ employeeId: string; fullName: string; status: 'finalized' | 'refinalized' | 'skipped'; finalScore?: number }> = [];
+        for (const emp of employees) {
+            const result = await finalizeOneEmployee(emp as any, String(month), finalizedById, false);
+            results.push({
+                employeeId: emp.id, fullName: emp.fullName, status: result.status,
+                ...(result.status === 'finalized' ? { finalScore: result.finalScore } : {}),
+            });
+        }
+
+        res.json({
+            month,
+            requested: employees.length,
+            finalized: results.filter(r => r.status === 'finalized').length,
+            skipped: results.filter(r => r.status === 'skipped').length,
+            results,
+        });
+    } catch (error) {
+        console.error('Error finalizing evaluations:', error);
+        res.status(500).json({ error: 'Failed to finalize evaluations' });
     }
 };
