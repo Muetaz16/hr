@@ -1590,21 +1590,13 @@ const PersonnelRelations: React.FC = () => {
                     const emp = detailEmp;
                     const fmt = (d?: string) => d ? format(parseISO(d), 'dd MMM yyyy') : '—';
                     const num = (x: any) => Number(x) || 0;
-                    // accruedHolidays/remainingHolidays come straight from the API (calculateHolidayMetrics
-                    // server-side) — recomputing them here from contractStartDate alone used to ignore
-                    // bonusHolidays entirely, which now also holds any renewal carry-over.
-                    const paidAccrued = num((emp as any).accruedHolidays);
+                    // remainingHolidays comes straight from the API (calculateHolidayMetrics server-side,
+                    // computed live from contractStartDate/bonusHolidays/holidaysUsed) — not a stored column.
                     const paidRemaining = num((emp as any).remainingHolidays);
-                    const paidTaken = num(emp.holidaysUsed);
-                    const paidBonus = num(emp.bonusHolidays);
-                    const paidEarned = num((emp as any).earnedHolidays);
                     const unpaidTaken = num(emp.unpaidHolidaysUsed);
+                    // Emergency leave is a fixed 3 days per contract, depletion-only, reset at renewal —
+                    // no bonus/carry-over concept applies here (unlike paid leave).
                     const emergTaken = num(emp.emergencyHolidaysUsed);
-                    const emergBonus = num(emp.bonusEmergencyHolidays);
-                    // Matches the "Collected" figure the employee's own Dashboard already shows
-                    // (src/pages/Dashboard.tsx) — the old "3 - taken" formula here ignored the bonus.
-                    const emergCollected = 3 + emergBonus;
-                    const emergRemaining = emergCollected - emergTaken;
                     // Only show the identity/contact/bank/document fields this employee's contract
                     // type actually collects — same Resident / Direct Non-Resident / Service Provider
                     // split used on the onboarding review screen.
@@ -1995,16 +1987,9 @@ const PersonnelRelations: React.FC = () => {
                                 <TreeBranch isOpen={expandedNodes.has('attendance')} onToggle={() => toggleNode('attendance')} icon={CalendarDays} title="Attendance & Leave" color="bg-amber-50 text-amber-600">
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                            <Row label="Paid Accrued" value={paidAccrued} />
-                                            <Row label="Bonus Paid Days" value={paidBonus} />
-                                            <Row label="Paid Earned (Accrued + Bonus)" value={paidEarned} />
-                                            <Row label="Paid Taken" value={paidTaken} />
-                                            <Row label="Paid Balance" value={paidRemaining} />
-                                            <Row label="Unpaid Taken" value={unpaidTaken} />
-                                            <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
-                                            <Row label="Emergency Taken" value={emergTaken} />
-                                            <Row label="Bonus Emergency Days" value={emergBonus} />
-                                            <Row label="Emergency Balance" value={emergRemaining} />
+                                            <Row label="Paid Leave Balance" value={paidRemaining} />
+                                            <Row label="Unpaid Leave Balance" value={14 - unpaidTaken} />
+                                            <Row label="Emergency Leave Balance" value={3 - emergTaken} />
                                         </div>
 
                                         {/* New — monthly attendance aggregates (TimeRecord). Ungated beyond
@@ -2063,7 +2048,6 @@ const PersonnelRelations: React.FC = () => {
                                         <Field emp={emp} label="Skill Factor" k="skillFactor" />
                                         <Field emp={emp} label="Language Factor" k="languageFactor" />
                                         <Field emp={emp} label="Salary Structure Type" k="salaryStructureType" />
-                                        <Field emp={emp} label="Role Category" k="roleCategory" />
                                         <Field emp={emp} label="BioTime ID" k="bioId" />
                                     </div>
                                 </TreeBranch>

@@ -598,7 +598,7 @@ const Dashboard: React.FC = () => {
                                     </div>
                                     <div className="mt-4 text-[10px] font-black text-amber-700/60 uppercase tracking-widest flex justify-between items-center bg-amber-100/30 px-3 py-1.5 rounded-lg border border-amber-100/50">
                                         <span>Collected:</span>
-                                        <span className="text-amber-700">{3 + (myEmployeeData.bonusEmergencyHolidays || 0)} Days</span>
+                                        <span className="text-amber-700">3 Days</span>
                                     </div>
                                 </div>
 

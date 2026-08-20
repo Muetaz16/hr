@@ -174,12 +174,7 @@ model Employee {
   nationality            String?
   passportNumber         String?
   unpaidHolidaysUsed     Float                  @default(0)
-  accruedHolidays        Float                  @default(0)
-  bonusEmergencyHolidays Float                  @default(0)
-  earnedHolidays         Float                  @default(0)
-  remainingHolidays      Float                  @default(0)
   positionFactor         Float                  @default(1.0)
-  roleCategory           String?                @default("Support")
   siteFactor             Float                  @default(1.0)
   skillFactor            Float                  @default(1.0)
   languageFactor         Float                  @default(1.0)

@@ -317,7 +317,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             id, fullName, email, password, role, departmentId, unitId, groupId, divisionId, directorateId, baseSalary, joinDate, staffId,
             position, placeOfWork, contractStartDate, contractEndDate, contractType, contractStatus, holidaysUsed, bonusHolidays,
                 fullNameArabic, passportNumber, contractNumber, nationality, jobCategory, jobGrade, salaryStructureType, emergencyHolidaysUsed,
-            unpaidHolidaysUsed, permissions, roleCategory, positionFactor, skillFactor, siteFactor, languageFactor, evaluationPoints, jobDescriptionId,
+            unpaidHolidaysUsed, permissions, positionFactor, skillFactor, siteFactor, languageFactor, evaluationPoints, jobDescriptionId,
             // Extended Identity Details (recruitment intake form)
             dateOfBirth, placeOfBirth, nationalId, academicQualification, gender, bloodType,
             idCardNumber, idPlaceOfIssue, idIssueDate, passportPlaceOfIssue, passportExpiryDate,
@@ -501,7 +501,6 @@ export const createEmployee = async (req: Request, res: Response) => {
                 jobCategory: jobCategory || null,
                 jobGrade: jobGrade || null,
                 salaryStructureType: salaryStructureType || null,
-                roleCategory: roleCategory || 'Support',
                 positionFactor: dynamicPositionFactor,
                 skillFactor: parseFloatSafe(skillFactor) || 1.0,
                 siteFactor: parseFloatSafe(siteFactor) || 1.0,
@@ -788,7 +787,6 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.jobCategory !== undefined) data.jobCategory = body.jobCategory || null;
         if (body.jobGrade !== undefined) data.jobGrade = body.jobGrade || null;
         if (body.salaryStructureType !== undefined) data.salaryStructureType = body.salaryStructureType || null;
-        if (body.roleCategory !== undefined) data.roleCategory = body.roleCategory || 'Support';
         if (body.positionFactor !== undefined) data.positionFactor = parseFloatSafe(body.positionFactor);
         if (body.skillFactor !== undefined) data.skillFactor = parseFloatSafe(body.skillFactor);
         if (body.siteFactor !== undefined) data.siteFactor = parseFloatSafe(body.siteFactor);
@@ -1108,12 +1106,30 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
 export const renewContract = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { startDate, endDate, salary, contractNumber, type, notes, documentUrl, documentName } = req.body;
+        const { startDate, endDate, contractNumber, type, notes, documentUrl, documentName } = req.body;
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Fetch current employee data for snapshot
             const employee = await tx.employee.findUnique({ where: { id } });
             if (!employee) throw new Error('Employee not found');
+
+            // Salary is always re-derived from the salary structure table, never accepted as a free
+            // value from the client — the renewal form doesn't let HR change job category/grade, so
+            // the employee's existing classification is the correct lookup key. Previously this
+            // accepted whatever number was typed, letting it drift from the structure it should match.
+            const salaryStructure = await tx.salaryStructure.findUnique({
+                where: {
+                    jobCategory_jobGrade_structureLevel: {
+                        jobCategory: employee.jobCategory || '',
+                        jobGrade: employee.jobGrade || '',
+                        structureLevel: employee.salaryStructureType || '',
+                    },
+                },
+            });
+            if (!salaryStructure) {
+                throw new Error('No matching salary structure found for this employee\'s job category/grade/structure type — cannot renew without a valid salary reference.');
+            }
+            const renewedSalary = salaryStructure.monthlyRate;
 
             // Paid leave carries into the new contract capped at 14 days — compute it from the
             // OLD contract's numbers before anything gets reset. Emergency/unpaid do NOT carry
@@ -1171,7 +1187,7 @@ export const renewContract = async (req: Request, res: Response) => {
                     employeeId: id,
                     startDate: new Date(startDate),
                     endDate: endDate ? new Date(endDate) : null,
-                    salary: parseFloatSafe(salary),
+                    salary: renewedSalary,
                     contractNumber: contractNumber || null,
                     type: type || null,
                     notes: notes || null,
@@ -1201,7 +1217,7 @@ export const renewContract = async (req: Request, res: Response) => {
                     contractStartDate: new Date(startDate),
                     contractEndDate: endDate ? new Date(endDate) : null,
                     contractNumber: contractNumber || null,
-                    baseSalary: parseFloatSafe(salary),
+                    baseSalary: renewedSalary,
                     contractStatus: 'Active',
                     holidaysUsed: 0,
                     bonusHolidays: carriedOverHolidays,

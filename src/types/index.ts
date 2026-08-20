@@ -217,7 +217,6 @@ export interface Employee {
     skillFactor?: number;
     siteFactor?: number;
     languageFactor?: number;
-    roleCategory?: string;
     evaluationPoints?: number;
     promotionNotified?: boolean; // one-shot flag: HR already notified once evaluationPoints crossed the promotion threshold
 
@@ -230,7 +229,6 @@ export interface Employee {
     emergencyHolidaysUsed?: number;
     unpaidHolidaysUsed?: number;
     bonusHolidays: number;
-    bonusEmergencyHolidays?: number;
     accruedHolidays?: number;
     earnedHolidays?: number;
     remainingHolidays?: number;

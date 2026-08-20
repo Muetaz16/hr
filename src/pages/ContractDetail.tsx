@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
 import { departmentService, groupService } from '../services/departmentService';
+import api from '../services/apiClient';
 import { roleThemes } from '../config/roleThemes';
 import { useAuth } from '../context/AuthContext';
 import type { UserRole, Contract } from '../types';
@@ -41,7 +42,6 @@ const ContractDetail: React.FC = () => {
     const [renewData, setRenewData] = useState({
         startDate: format(new Date(), 'yyyy-MM-dd'),
         endDate: '',
-        salary: 0,
         contractNumber: '',
         type: 'Limited',
         notes: ''
@@ -70,6 +70,18 @@ const ContractDetail: React.FC = () => {
             return { ...emp, deptName, groupName };
         },
         enabled: !!id
+    });
+
+    // Renewal always re-derives salary from the current salary structure (matches the same
+    // jobCategory/jobGrade/structureLevel lookup used at hire) rather than accepting a free-text
+    // override — the renewal form doesn't let HR change job category/grade anyway.
+    const { data: renewalSalaryStructure } = useQuery({
+        queryKey: ['salary-structure-lookup', employee?.jobCategory, employee?.jobGrade, employee?.salaryStructureType],
+        queryFn: async () => {
+            const response = await api.get(`/salary-structures/lookup?jobCategory=${encodeURIComponent(employee!.jobCategory!)}&jobGrade=${encodeURIComponent(employee!.jobGrade!)}&structureLevel=${encodeURIComponent(employee!.salaryStructureType!)}`);
+            return response.data as { monthlyRate: number };
+        },
+        enabled: isRenewModalOpen && !!employee?.jobCategory && !!employee?.jobGrade && !!employee?.salaryStructureType,
     });
 
     const renewMutation = useMutation({
@@ -177,7 +189,6 @@ const ContractDetail: React.FC = () => {
                             onClick={() => {
                                 setRenewData({
                                     ...renewData,
-                                    salary: employee.baseSalary,
                                     contractNumber: employee.contractNumber ? `${parseInt(employee.contractNumber) + 1}${employee.contractNumber.replace(/[0-9]/g, '') || 'nd'}` : '2nd'
                                 });
                                 setIsRenewModalOpen(true);
@@ -407,12 +418,11 @@ const ContractDetail: React.FC = () => {
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('new_salary')}</label>
-                            <input 
-                                type="number" 
-                                value={renewData.salary}
-                                onChange={e => setRenewData({...renewData, salary: Number(e.target.value)})}
-                                className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-transparent focus:ring-2 focus:ring-indigo-100"
-                            />
+                            {/* Always re-derived from the current salary structure, not freely editable —
+                                see the note on renewalSalaryStructure above. */}
+                            <div className="w-full px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-500">
+                                {renewalSalaryStructure ? renewalSalaryStructure.monthlyRate.toLocaleString() : '—'}
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('contract_number')}</label>
@@ -435,10 +445,10 @@ const ContractDetail: React.FC = () => {
                         />
                     </div>
 
-                    <button 
+                    <button
                         onClick={() => renewMutation.mutate(renewData)}
-                        disabled={renewMutation.isPending}
-                        className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center"
+                        disabled={renewMutation.isPending || !renewalSalaryStructure}
+                        className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center disabled:opacity-50"
                     >
                         {renewMutation.isPending ? <Clock className="animate-spin" /> : t('confirm_renewal')}
                     </button>
