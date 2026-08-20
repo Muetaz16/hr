@@ -39,13 +39,39 @@ const SIG_MAX_H_EMU = Math.round(0.4 * EMU_PER_INCH); // ~0.4" tall
 const cellText = (cell: string): string =>
     [...cell.matchAll(/<w:t(?: [^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m => m[1]).join('').replace(/\s+/g, ' ').trim();
 
-// Inject an arbitrary run into a (usually empty) cell, just before it closes.
-const injectRun = (cell: string, run: string): string => {
-    if (/<\/w:p>\s*<\/w:tc>$/.test(cell)) {
-        return cell.replace(/<\/w:p>\s*<\/w:tc>$/, `${run}</w:p></w:tc>`);
+// Center the last paragraph in a cell (the one we inject into) so values sit in the
+// middle of their box rather than flush against the left edge.
+const centerLastParagraph = (cell: string): string => {
+    const start = Math.max(cell.lastIndexOf('<w:p '), cell.lastIndexOf('<w:p>'));
+    if (start < 0) return cell;
+    const tagEnd = cell.indexOf('>', start);
+    if (tagEnd < 0) return cell;
+    const head = cell.slice(0, tagEnd + 1);
+    let body = cell.slice(tagEnd + 1);
+    const pPrClose = body.indexOf('</w:pPr>');
+    if (/^\s*<w:pPr[ >]/.test(body) && pPrClose >= 0) {
+        // Existing paragraph properties — set/replace the justification (jc goes late in
+        // the pPr child order, so insert it just before the closing tag).
+        const before = body.slice(0, pPrClose);
+        const after = body.slice(pPrClose);
+        body = (/<w:jc\b/.test(before)
+            ? before.replace(/<w:jc\b[^>]*\/>/, '<w:jc w:val="center"/>')
+            : before + '<w:jc w:val="center"/>') + after;
+    } else {
+        // No pPr yet — add one as the paragraph's first child.
+        body = '<w:pPr><w:jc w:val="center"/></w:pPr>' + body;
     }
-    // Cell without a trailing paragraph — wrap the run in one.
-    return cell.replace(/<\/w:tc>$/, `<w:p>${run}</w:p></w:tc>`);
+    return head + body;
+};
+
+// Inject an arbitrary run into a (usually empty) cell, just before it closes, and
+// center the paragraph it lands in.
+const injectRun = (cell: string, run: string): string => {
+    const filled = /<\/w:p>\s*<\/w:tc>$/.test(cell)
+        ? cell.replace(/<\/w:p>\s*<\/w:tc>$/, `${run}</w:p></w:tc>`)
+        // Cell without a trailing paragraph — wrap the run in one.
+        : cell.replace(/<\/w:tc>$/, `<w:p>${run}</w:p></w:tc>`);
+    return centerLastParagraph(filled);
 };
 
 export interface EvaluationData {

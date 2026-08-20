@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
@@ -49,6 +49,7 @@ import { toast } from 'sonner';
 import { format, differenceInDays, parseISO, addDays, addMonths } from 'date-fns';
 import Modal from '../../components/Modal';
 import type { Employee, EmployeeDocument } from '../../types';
+import { JOB_GRADES } from '../../types';
 import { makeFieldVisibility } from '../../utils/employeeFieldVisibility';
 import { canAccess } from '../../utils/access';
 import { getRequiredLevels, type EvalLevel } from '../../utils/evaluationHierarchy';
@@ -94,6 +95,69 @@ const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', 
     );
 };
 
+interface SearchOption { value: string; label: string; sub?: string; group?: string }
+
+// A compact searchable dropdown (combobox): shows the selected label, opens a filterable list on
+// click, groups options by `group`, and closes on outside-click. Used for the Employee and Target
+// Position pickers in the Create Internal Transfer modal.
+const SearchSelect: React.FC<{
+    value: string;
+    onChange: (v: string) => void;
+    options: SearchOption[];
+    placeholder?: string;
+    emptyText?: string;
+}> = ({ value, onChange, options, placeholder, emptyText }) => {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
+    }, [open]);
+    const selected = options.find(o => o.value === value);
+    const q = query.trim().toLowerCase();
+    const filtered = q
+        ? options.filter(o => `${o.label} ${o.sub || ''} ${o.group || ''}`.toLowerCase().includes(q))
+        : options;
+    const groups: Record<string, SearchOption[]> = {};
+    filtered.forEach(o => { const g = o.group || ''; (groups[g] = groups[g] || []).push(o); });
+    const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+    return (
+        <div className="relative" ref={ref}>
+            <button type="button" onClick={() => setOpen(o => !o)}
+                className="w-full p-2 border border-[#511d29]/20 bg-white text-left flex items-center justify-between gap-2">
+                <span className={`truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>{selected ? selected.label : (placeholder || 'Select…')}</span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-[#511d29]/20 shadow-xl rounded-lg max-h-64 overflow-auto">
+                    <div className="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <div className="relative">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input autoFocus type="text" value={query} onChange={e => setQuery(e.target.value)}
+                                placeholder="Search…" className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded text-xs" />
+                        </div>
+                    </div>
+                    {filtered.length === 0 && <div className="px-3 py-4 text-center text-slate-400 text-xs">{emptyText || 'No matches'}</div>}
+                    {groupKeys.map(g => (
+                        <div key={g}>
+                            {g && <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 sticky top-[49px]">{g}</div>}
+                            {groups[g].map(o => (
+                                <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
+                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-[#511d29]/5 ${o.value === value ? 'bg-[#511d29]/10 font-black text-[#511d29]' : 'text-slate-600'}`}>
+                                    {o.label}{o.sub ? <span className="text-slate-400 font-normal"> · {o.sub}</span> : null}
+                                </button>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const Row = ({ label, value, dir }: { label: string; value?: any; dir?: 'rtl' | 'ltr' }) => (
     <div className="min-w-0">
         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
@@ -109,7 +173,6 @@ const Field = ({ emp, label, k, type, dir }: { emp: Employee; label: string; k: 
     if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
     return <Row label={label} value={v} dir={dir} />;
 };
-
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
     const currentPath = location.pathname;
@@ -140,10 +203,12 @@ const PersonnelRelations: React.FC = () => {
     // Personnel Action Form (internal transfer) — driven by the target Job Description.
     const emptyPaf = {
         employeeId: '', newJobDescriptionId: '', newJobGrade: '', newPlaceOfWork: '',
-        reportsTo: '', typeOfTransfer: '', effectiveDate: '', justification: '',
+        reportsTo: '', typeOfTransfer: 'Internal', effectiveDate: '', newJobCategory: '',
     };
     const [pafForm, setPafForm] = useState({ ...emptyPaf });
     const [pafSubmitting, setPafSubmitting] = useState(false);
+    // Filter the Target Position list. Encoded as "<type>:<id>" — dir: directorate, div: division, off: office.
+    const [pafJdScope, setPafJdScope] = useState('');
     const [decidePaf, setDecidePaf] = useState<PersonnelActionForm | null>(null);
     const [decideFile, setDecideFile] = useState<File | null>(null);
     const [decideBusy, setDecideBusy] = useState<string | null>(null);
@@ -441,6 +506,11 @@ const PersonnelRelations: React.FC = () => {
         e.preventDefault();
         if (!pafForm.employeeId) { toast.error('Select an employee.'); return; }
         if (!pafForm.newJobDescriptionId) { toast.error('Select the target position (Job Description).'); return; }
+        {
+            const jd = (jobDescriptions as any[]).find(j => j.id === pafForm.newJobDescriptionId);
+            const cats: string[] = Array.isArray(jd?.jobCategories) ? jd.jobCategories : [];
+            if (cats.length > 1 && !pafForm.newJobCategory) { toast.error('Select a job category for this transfer.'); return; }
+        }
         setPafSubmitting(true);
         try {
             await personnelActionService.create(pafForm);
@@ -454,7 +524,64 @@ const PersonnelRelations: React.FC = () => {
         }
     };
 
-    const openCreatePaf = () => { setPafForm({ ...emptyPaf }); setIsActionFormModalOpen(true); };
+    const openCreatePaf = () => {
+        setPafForm({ ...emptyPaf });
+        setPafJdScope('');
+        setIsActionFormModalOpen(true);
+    };
+
+    // Resolve which division / department a Job Description belongs to (JDs are scoped to one level,
+    // so a unit-level JD's division comes from its department's division, etc.). Used to filter the
+    // Target Position picker by division and group it by department.
+    const jdDivisionId = (jd: any): string | undefined => {
+        if (jd.divisionId) return jd.divisionId;
+        if (jd.departmentId) return departments.find((d: any) => d.id === jd.departmentId)?.divisionId;
+        if (jd.unitId) {
+            const u = units.find((x: any) => x.id === jd.unitId);
+            return u ? departments.find((d: any) => d.id === u.departmentId)?.divisionId : undefined;
+        }
+        return undefined;
+    };
+    const jdDepartmentId = (jd: any): string | undefined => {
+        if (jd.departmentId) return jd.departmentId;
+        if (jd.unitId) return units.find((x: any) => x.id === jd.unitId)?.departmentId;
+        return undefined;
+    };
+
+    const jdDirectorateId = (jd: any): string | undefined => {
+        if (jd.directorateId) return jd.directorateId;
+        const divId = jdDivisionId(jd);
+        return divId ? divisions.find((d: any) => d.id === divId)?.directorateId : undefined;
+    };
+
+    // The DIRECT head the employee will report to in the target position — the head of the position's
+    // OWN org unit, matched by role + org membership (same resolution the JD document uses for
+    // dept/division/directorate heads, incl. HEAD_OFFICE). Falls up unit → department → division →
+    // directorate only if the position's own level has no head on record.
+    const headOfJd = (jd: any): string => {
+        if (!jd) return '';
+        const find = (roles: string[], key: string, id?: string) =>
+            id ? (employees as any[]).find(e => roles.includes(e.role) && e[key] === id) : undefined;
+        const head =
+            find(['HEAD_UNIT'], 'unitId', jd.unitId)
+            || find(['HEAD_DEPARTMENT', 'HEAD_OFFICE'], 'departmentId', jdDepartmentId(jd))
+            || find(['HEAD_DIVISION', 'HEAD_OFFICE'], 'divisionId', jdDivisionId(jd))
+            || find(['HEAD_DIRECTOR'], 'directorateId', jdDirectorateId(jd));
+        return head?.fullName || '';
+    };
+
+    // Selecting the target JD auto-fills Reports To with the head of that position (still editable).
+    // When the JD lists a single job category we pre-select it; with several the user picks one.
+    const selectJd = (jdId: string) => {
+        const jd = (jobDescriptions as any[]).find(j => j.id === jdId);
+        const cats: string[] = Array.isArray(jd?.jobCategories) ? jd.jobCategories : [];
+        setPafForm(prev => ({
+            ...prev,
+            newJobDescriptionId: jdId,
+            reportsTo: jd ? headOfJd(jd) : '',
+            newJobCategory: cats.length === 1 ? cats[0] : '',
+        }));
+    };
 
     // Download the filled Personnel Action Form (.docx).
     const downloadPafForm = async (paf: PersonnelActionForm) => {
@@ -510,7 +637,7 @@ const PersonnelRelations: React.FC = () => {
     // current contract ends, end = start + 6 months (editable), salary carried from the record.
     const openRenewalModal = (emp: any) => {
         const start = emp.contractEndDate ? addDays(parseISO(emp.contractEndDate), 1) : new Date();
-        const end = addMonths(start, 6);
+        const end = addDays(addMonths(start, 6), -1); // 6 months minus a day → an exact 6-month term
         setSelectedEmployee(emp);
         setRenewForm({
             startDate: format(start, 'yyyy-MM-dd'),
@@ -1153,64 +1280,135 @@ const PersonnelRelations: React.FC = () => {
             {/* MODALS */}
             {/* Modal 1: Create Internal Transfer (Personnel Action Form) */}
             <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title="Create Internal Transfer" maxWidth="max-w-xl">
-                <form onSubmit={handleActionFormSubmit} className="space-y-4 text-xs font-semibold text-slate-700 max-h-[70vh] overflow-y-auto pr-1">
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Employee <span className="text-red-500">*</span></label>
-                        <select value={pafForm.employeeId} onChange={e => setPafForm({ ...pafForm, employeeId: e.target.value })}
-                            className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option value="">— Select employee —</option>
-                            {[...employees].sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || '')).map((e: any) => (
-                                <option key={e.id} value={e.id}>{e.fullName}{e.staffId ? ` (${e.staffId})` : ''}</option>
-                            ))}
-                        </select>
+                <form onSubmit={handleActionFormSubmit} className="space-y-5 text-xs font-semibold text-slate-700">
+                    <p className="flex items-start gap-2 text-[11px] font-medium text-slate-500 leading-relaxed">
+                        <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-[#511d29]" />
+                        Move an employee into a new position. The transfer starts as a draft form for review and signature before it takes effect.
+                    </p>
+
+                    {/* Section: Employee */}
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
+                            <User className="w-3.5 h-3.5" /> Employee <span className="text-red-500">*</span>
+                        </label>
+                        <SearchSelect
+                            value={pafForm.employeeId}
+                            onChange={(v) => setPafForm(prev => ({ ...prev, employeeId: v }))}
+                            placeholder="— Select employee —"
+                            emptyText="No employees match"
+                            options={[...employees]
+                                .sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || ''))
+                                .map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined }))}
+                        />
                     </div>
 
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Target Position — Job Description <span className="text-red-500">*</span></label>
-                        <select value={pafForm.newJobDescriptionId} onChange={e => setPafForm({ ...pafForm, newJobDescriptionId: e.target.value })}
-                            className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option value="">— Select the position to move into —</option>
-                            {[...jobDescriptions].sort((a: any, b: any) => (a.title || '').localeCompare(b.title || '')).map((j: any) => (
-                                <option key={j.id} value={j.id}>{j.title}</option>
-                            ))}
-                        </select>
-                        <p className="text-[10px] text-slate-400 mt-1">The new division / department / unit / position / category come from the selected Job Description. On accept the employee is assigned to it.</p>
+                    {/* Section: Target Position — grouped in a subtle card */}
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                        <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
+                            <Briefcase className="w-3.5 h-3.5" /> Target Position — Job Description <span className="text-red-500">*</span>
+                        </label>
+                        <div>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Filter by directorate / division / office</span>
+                            <select value={pafJdScope} onChange={e => setPafJdScope(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
+                                <option value="">All directorates / divisions / offices</option>
+                                <optgroup label="Directorates">
+                                    {[...directorates].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
+                                        <option key={`dir-${d.id}`} value={`dir:${d.id}`}>{d.name}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Divisions">
+                                    {[...divisions].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
+                                        <option key={`div-${d.id}`} value={`div:${d.id}`}>{d.name}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Offices">
+                                    {(departments as any[]).filter((d: any) => d.isOffice)
+                                        .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
+                                            <option key={`off-${d.id}`} value={`off:${d.id}`}>{d.name}</option>
+                                        ))}
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Position to move into</span>
+                            <SearchSelect
+                                value={pafForm.newJobDescriptionId}
+                                onChange={selectJd}
+                                placeholder="— Select the position to move into —"
+                                emptyText="No positions match this filter/search"
+                                options={(jobDescriptions as any[])
+                                    .filter((j) => {
+                                        if (!pafJdScope) return true;
+                                        const [type, id] = pafJdScope.split(':');
+                                        if (type === 'dir') return jdDirectorateId(j) === id;
+                                        if (type === 'div') return jdDivisionId(j) === id;
+                                        if (type === 'off') return jdDepartmentId(j) === id;
+                                        return true;
+                                    })
+                                    .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+                                    .map((j) => ({
+                                        value: j.id,
+                                        label: j.title || 'Untitled',
+                                        group: departments.find((d: any) => d.id === jdDepartmentId(j))?.name || 'Division-level (no department)',
+                                    }))}
+                            />
+                        </div>
+                        <p className="text-[10px] font-medium text-slate-400 leading-relaxed">The new division / department / unit / position / category come from the selected Job Description. On accept the employee is assigned to it.</p>
                     </div>
 
+                    {(() => {
+                        const jd = (jobDescriptions as any[]).find(j => j.id === pafForm.newJobDescriptionId);
+                        const cats: string[] = Array.isArray(jd?.jobCategories) ? jd.jobCategories : [];
+                        if (cats.length <= 1) return null; // single (or no) category — nothing to choose.
+                        return (
+                            <div className="space-y-1.5">
+                                <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Job Category <span className="text-red-500">*</span></label>
+                                <select value={pafForm.newJobCategory} onChange={e => setPafForm({ ...pafForm, newJobCategory: e.target.value })}
+                                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
+                                    <option value="">— Select a job category —</option>
+                                    {cats.map((c) => (<option key={c} value={c}>{c}</option>))}
+                                </select>
+                                <p className="text-[10px] font-medium text-slate-400">This Job Description covers several categories — pick the one for this transfer.</p>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Section: Details */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Type of Transfer</label>
-                            <input type="text" value={pafForm.typeOfTransfer} placeholder="e.g. Internal Transfer, Promotion" onChange={e => setPafForm({ ...pafForm, typeOfTransfer: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        <div className="space-y-1.5">
+                            <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
+                                <CalendarDays className="w-3.5 h-3.5" /> Effectivity Date
+                            </label>
+                            <input type="date" value={pafForm.effectiveDate} onChange={e => setPafForm({ ...pafForm, effectiveDate: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                         </div>
-                        <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Effectivity Date</label>
-                            <input type="date" value={pafForm.effectiveDate} onChange={e => setPafForm({ ...pafForm, effectiveDate: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        <div className="space-y-1.5">
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">New Job Grade</label>
+                            {(() => {
+                                const cur: any = (employees as any[]).find(e => e.id === pafForm.employeeId);
+                                return (
+                                    <select value={pafForm.newJobGrade} onChange={e => setPafForm({ ...pafForm, newJobGrade: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
+                                        <option value="">{cur?.jobGrade ? `Same grade (${cur.jobGrade})` : 'Same as current grade'}</option>
+                                        {JOB_GRADES.filter(g => g !== cur?.jobGrade).map(g => (
+                                            <option key={g} value={g}>{g}</option>
+                                        ))}
+                                    </select>
+                                );
+                            })()}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Job Grade (Optional)</label>
-                            <input type="text" value={pafForm.newJobGrade} placeholder="Defaults to current" onChange={e => setPafForm({ ...pafForm, newJobGrade: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                        </div>
-                        <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Reports To (Optional)</label>
-                            <input type="text" value={pafForm.reportsTo} placeholder="Defaults to the JD" onChange={e => setPafForm({ ...pafForm, reportsTo: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                        </div>
+                    <div className="space-y-1.5">
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Reports To</label>
+                        <input type="text" value={pafForm.reportsTo} placeholder="Head of the selected position (auto-filled)" onChange={e => setPafForm({ ...pafForm, reportsTo: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                     </div>
 
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Place of Work (Optional)</label>
-                        <input type="text" value={pafForm.newPlaceOfWork} placeholder="Defaults to the JD" onChange={e => setPafForm({ ...pafForm, newPlaceOfWork: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                    </div>
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Justification / Remarks</label>
-                        <textarea rows={2} value={pafForm.justification} onChange={e => setPafForm({ ...pafForm, justification: e.target.value })} className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                    </div>
-
-                    <button type="submit" disabled={pafSubmitting} className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d] disabled:opacity-60 disabled:cursor-not-allowed">
-                        {pafSubmitting ? 'Creating…' : 'Create Transfer Form'}
+                    <button type="submit" disabled={pafSubmitting}
+                        className="w-full py-3.5 rounded-xl bg-[#511d29] text-white font-black uppercase tracking-widest shadow-sm hover:bg-[#3a151d] disabled:opacity-60 disabled:cursor-not-allowed transition inline-flex items-center justify-center gap-2">
+                        {pafSubmitting ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Transfer Form</>)}
                     </button>
                 </form>
             </Modal>
@@ -1264,25 +1462,11 @@ const PersonnelRelations: React.FC = () => {
                     <p className="text-[10px] text-slate-400 -mt-2">Pre-filled to 6 months from the day after the current contract ends — adjust if needed.</p>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Contract No. (Optional)</label>
-                        <input type="text" value={renewForm.contractNumber}
-                            onChange={e => setRenewForm({ ...renewForm, contractNumber: e.target.value })}
-                            className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                    </div>
-
-                    <div>
                         <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Signed Contract <span className="text-red-500">*</span></label>
                         <input type="file" accept=".pdf,.doc,.docx,image/*"
                             onChange={e => setRenewFile(e.target.files?.[0] || null)}
                             className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
                         {renewFile && <p className="text-[10px] text-emerald-600 mt-1 font-bold">{renewFile.name}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Notes (Optional)</label>
-                        <textarea value={renewForm.notes} rows={2}
-                            onChange={e => setRenewForm({ ...renewForm, notes: e.target.value })}
-                            className="w-full p-2 border border-[#511d29]/20 bg-white" />
                     </div>
 
                     <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">

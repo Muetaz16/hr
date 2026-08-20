@@ -202,6 +202,11 @@ const EmployeeForm: React.FC = () => {
     // the role (standard Employee, any Head, GM, HR, Personnel, etc.).
 
     const availableJobDescriptions = jobDescriptions.filter(jd => {
+        // Match head/standard role
+        const isHeadRole = ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(formData.role || '');
+        if (isHeadRole && !jd.isHead) return false;
+        if (!isHeadRole && jd.isHead) return false;
+
         // Scope match: only JDs belonging to the employee's selected org unit
         let scopeMatch = false;
         if (formData.role === 'HEAD_DIRECTOR') scopeMatch = jd.directorateId === formData.directorateId;
@@ -1433,6 +1438,9 @@ const EmployeeForm: React.FC = () => {
                                             } else if (formData.role === 'HEAD_DIVISION' && formData.divisionId) {
                                                 const div = divisions.find(d => d.id === formData.divisionId);
                                                 if (div && (div as any).positionFactor) dynamicFactor = (div as any).positionFactor;
+                                            } else if (formData.role === 'HEAD_DIRECTOR' && formData.directorateId) {
+                                                const dir = directorates.find(d => d.id === formData.directorateId);
+                                                if (dir && (dir as any).positionFactor) dynamicFactor = (dir as any).positionFactor;
                                             } else if (formData.role === 'HEAD_UNIT') {
                                                 dynamicFactor = 1.20;
                                             } else if (formData.role === 'GENERAL_MANAGER' || formData.role === 'CHAIRMAN') {
@@ -1585,6 +1593,7 @@ const EmployeeForm: React.FC = () => {
                                             const d = new Date(start);
                                             if (start && !isNaN(d.getTime())) {
                                                 d.setMonth(d.getMonth() + 6);
+                                                d.setDate(d.getDate() - 1);
                                                 next.contractEndDate = d.toISOString().split('T')[0];
                                             }
                                             return next;

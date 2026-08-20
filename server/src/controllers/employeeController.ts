@@ -1366,7 +1366,7 @@ export const generateContractRenewalForm = async (req: Request, res: Response) =
         if (employee.contractEndDate) {
             const start = addDaysUTC(new Date(employee.contractEndDate), 1);
             newContractStartDate = formatFormDate(start);
-            newContractEndDate = formatFormDate(addMonthsUTC(start, 6));
+            newContractEndDate = formatFormDate(addDaysUTC(addMonthsUTC(start, 6), -1)); // 6 months minus a day → exact 6-month term
         }
 
         const buffer = generateContractRenewalDocx({

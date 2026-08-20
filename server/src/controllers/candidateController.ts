@@ -539,9 +539,10 @@ export const generateOffer = async (req: Request, res: Response) => {
         }
 
         // Gross = basic salary + factor allowances, following the system's additive salary model
-        // (base + (positionFactor − 1)·base + (frontlineFactor − 1)·base). Only when a factor applies.
+        // (base + (positionFactor − 1)·base + (frontlineFactor − 1)·base). With no factors the
+        // combined multiplier is 1, so gross simply equals the basic salary — still shown here.
         let grossSalary = '';
-        if (basicNum > 0 && (positionFactorNum > 1 || frontlineFactorNum > 1)) {
+        if (basicNum > 0) {
             const combined = 1 + (positionFactorNum - 1) + (frontlineFactorNum - 1);
             grossSalary = String(Math.round(basicNum * combined * 100) / 100);
         }

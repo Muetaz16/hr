@@ -60,7 +60,7 @@ const orgNames = async (p: { divisionId: string | null; departmentId: string | n
 // POST /api/personnel-actions  — create a transfer request driven by the target Job Description.
 export const createPersonnelAction = async (req: Request, res: Response) => {
     try {
-        const { employeeId, newJobDescriptionId, newJobGrade, newPlaceOfWork, reportsTo, typeOfTransfer, effectiveDate, justification, actionType } = req.body;
+        const { employeeId, newJobDescriptionId, newJobGrade, newPlaceOfWork, reportsTo, typeOfTransfer, effectiveDate, justification, actionType, newJobCategory } = req.body;
         if (!employeeId) return res.status(400).json({ error: 'An employee is required.' });
         if (!newJobDescriptionId) return res.status(400).json({ error: 'A target Job Description is required.' });
 
@@ -91,7 +91,9 @@ export const createPersonnelAction = async (req: Request, res: Response) => {
                 newDepartmentId: placement.departmentId,
                 newUnitId: placement.unitId,
                 newPositionTitle: jd.title || null,
-                newJobCategory: Array.isArray(jd.jobCategories) && jd.jobCategories.length ? jd.jobCategories.join(', ') : (employee.jobCategory || null),
+                // Prefer the category the user chose (for JDs listing several); otherwise fall back to
+                // the JD's single/joined categories, then the employee's current category.
+                newJobCategory: newJobCategory || (Array.isArray(jd.jobCategories) && jd.jobCategories.length ? jd.jobCategories.join(', ') : (employee.jobCategory || null)),
                 newJobGrade: newJobGrade || employee.jobGrade || null,
                 newPlaceOfWork: newPlaceOfWork || (Array.isArray(jd.workLocations) && jd.workLocations.length ? jd.workLocations.join(', ') : null),
                 reportsTo: reportsTo || jdDetails.reportsTo || null,
