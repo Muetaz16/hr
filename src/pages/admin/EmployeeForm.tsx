@@ -408,6 +408,8 @@ const EmployeeForm: React.FC = () => {
                 placeOfWork: placeOfWork || prev.placeOfWork,
                 contractStartDate: onboarding ? isoDate(start) : prev.contractStartDate,
                 contractEndDate: onboarding ? isoDate(end) : prev.contractEndDate,
+                // Join Date mirrors Contract Start for new hires (see the field itself).
+                joinDate: onboarding ? isoDate(start) : prev.joinDate,
             }));
         }
     }, [isEditMode, searchParams]);
@@ -615,7 +617,9 @@ const EmployeeForm: React.FC = () => {
                     ? t('enrolment_completed', { defaultValue: 'Enrolment completed — login account created and available in Access Management.' })
                     : t('employee_updated'));
             } else {
-                const created = await employeeService.createEmployee(formData as any);
+                // Belt-and-suspenders: Join Date must equal Contract Start for a new hire (their
+                // first contract), regardless of which pre-fill path set contractStartDate.
+                const created = await employeeService.createEmployee({ ...formData, joinDate: formData.contractStartDate || formData.joinDate } as any);
                 // If enrolling a hired candidate, close them out and mark the requisition filled.
                 if (candidateId && created?.id) {
                     try {
@@ -1611,13 +1615,22 @@ const EmployeeForm: React.FC = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10 mb-8">
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('engagement_date')}</label>
-                                <input
-                                    type="date" required
-                                    value={formData.joinDate}
-                                    onChange={(e) => setFormData({ ...formData, joinDate: e.target.value })}
-                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800 shadow-sm"
-                                />
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('engagement_date')} {!isEditMode && <Lock size={12} className="text-slate-400" />}</label>
+                                {isEditMode ? (
+                                    <input
+                                        type="date" required
+                                        value={formData.joinDate}
+                                        onChange={(e) => setFormData({ ...formData, joinDate: e.target.value })}
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800 shadow-sm"
+                                    />
+                                ) : (
+                                    // A new employee's Join Date IS the start date of their first (this)
+                                    // contract — kept in sync with Contract Start instead of entered
+                                    // separately, so the two can no longer drift apart.
+                                    <div className="w-full px-5 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500">
+                                        {formData.contractStartDate || t('set_contract_start_first', { defaultValue: 'Set Contract Start →' })}
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('contract_start')}</label>
@@ -1629,6 +1642,8 @@ const EmployeeForm: React.FC = () => {
                                         // Setting the start auto-fills the end 6 months later (still editable).
                                         setFormData(prev => {
                                             const next: typeof prev = { ...prev, contractStartDate: start };
+                                            // New hires: Join Date mirrors Contract Start (see field above).
+                                            if (!isEditMode) next.joinDate = start;
                                             const d = new Date(start);
                                             if (start && !isNaN(d.getTime())) {
                                                 d.setMonth(d.getMonth() + 6);

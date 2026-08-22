@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
 import { personnelActionService, type PersonnelActionForm } from '../../services/personnelActionService';
 import { jobDescriptionService } from '../../services/jobDescriptionService';
-import { departmentService, divisionService, groupService } from '../../services/departmentService';
+import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { directorateService } from '../../services/directorateService';
 import { timeService } from '../../services/timeService';
@@ -263,6 +263,11 @@ const PersonnelRelations: React.FC = () => {
         enabled: !!detailEmp,
     });
     const detailContracts: any[] = (detailFull as any)?.contracts || [];
+    // Join Date = start date of the employee's first (oldest) contract, not the separately
+    // stored Employee.joinDate — some legacy records had the two drift apart.
+    const firstContractStartDate = detailContracts.length
+        ? [...detailContracts].sort((a, b) => new Date(a.startDate || a.createdAt).getTime() - new Date(b.startDate || b.createdAt).getTime())[0].startDate
+        : detailEmp?.joinDate || null; // no Contract rows yet (e.g. pending enrolment) — fall back to the stored value
 
     // --- New Lifecycle tree data: Career Transfers, Attendance & Leave, Monthly Evaluations ---
     const { data: detailTransfers = [] } = useQuery({
@@ -371,10 +376,6 @@ const PersonnelRelations: React.FC = () => {
     const { data: directorates = [] } = useQuery({
         queryKey: ['relations-directorates'],
         queryFn: directorateService.getAllDirectorates
-    });
-    const { data: groups = [] } = useQuery({
-        queryKey: ['relations-groups'],
-        queryFn: groupService.getAllGroups
     });
     const { data: personnelActions = [] } = useQuery({
         queryKey: ['personnel-actions'],
@@ -1822,11 +1823,9 @@ const PersonnelRelations: React.FC = () => {
                                             <Field emp={emp} label="Job Category" k="jobCategory" />
                                             <Field emp={emp} label="Job Grade" k="jobGrade" />
                                             <Field emp={emp} label="Contract Type" k="contractType" />
-                                            <Field emp={emp} label="Contract #" k="contractNumber" />
                                             <Field emp={emp} label="Status" k="contractStatus" />
                                             <Field emp={emp} label="Base Salary" k="baseSalary" />
-                                            <Field emp={emp} label="Arrival Date" k="arrivalDate" type="date" />
-                                            <Field emp={emp} label="Join Date" k="joinDate" type="date" />
+                                            <Row label="Join Date" value={fmt(firstContractStartDate)} />
                                             <Field emp={emp} label="Contract Start" k="contractStartDate" type="date" />
                                             <Field emp={emp} label="Contract End" k="contractEndDate" type="date" />
                                             <Field emp={emp} label="Worked Before?" k="workedBefore" />
@@ -1837,7 +1836,6 @@ const PersonnelRelations: React.FC = () => {
                                             <Row label="Division" value={nameOfOrgUnit(divisions, emp.divisionId)} />
                                             <Row label="Department" value={nameOfOrgUnit(departments, emp.departmentId)} />
                                             <Row label="Unit" value={nameOfOrgUnit(units, emp.unitId)} />
-                                            <Row label="Group" value={nameOfOrgUnit(groups, emp.groupId)} />
                                             <Row label="Login Account" value={emp.userId ? 'Yes' : 'No'} />
                                         </div>
 
