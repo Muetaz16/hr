@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { presetForRole } from '../utils/rolePresets';
 import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
 import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
+import { purgeUserAndRelations } from './userController';
 
 const prisma = new PrismaClient();
 
@@ -315,7 +316,7 @@ export const createEmployee = async (req: Request, res: Response) => {
     try {
         const {
             id, fullName, email, password, role, departmentId, unitId, groupId, divisionId, directorateId, baseSalary, joinDate, staffId,
-            position, placeOfWork, contractStartDate, contractEndDate, contractType, contractStatus, holidaysUsed, bonusHolidays,
+            position, placeOfWork, contractStartDate, contractEndDate, contractType, contractWorkType, contractStatus, holidaysUsed, bonusHolidays,
                 fullNameArabic, passportNumber, contractNumber, nationality, jobCategory, jobGrade, salaryStructureType, emergencyHolidaysUsed,
             unpaidHolidaysUsed, permissions, positionFactor, skillFactor, siteFactor, languageFactor, evaluationPoints, jobDescriptionId,
             // Extended Identity Details (recruitment intake form)
@@ -489,6 +490,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 contractStartDate: parseDate(contractStartDate),
                 contractEndDate: parseDate(contractEndDate),
                 contractType: contractType || null,
+                contractWorkType: contractWorkType || 'Full Time',
                 contractStatus: contractStatus || 'Active',
                 holidaysUsed: parseFloatSafe(holidaysUsed),
                 emergencyHolidaysUsed: parseFloatSafe(emergencyHolidaysUsed),
@@ -775,6 +777,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.contractStartDate !== undefined) data.contractStartDate = parseDate(body.contractStartDate);
         if (body.contractEndDate !== undefined) data.contractEndDate = parseDate(body.contractEndDate);
         if (body.contractType !== undefined) data.contractType = body.contractType || null;
+        if (body.contractWorkType !== undefined) data.contractWorkType = body.contractWorkType || 'Full Time';
         if (body.contractStatus !== undefined) data.contractStatus = body.contractStatus || null;
         if (body.holidaysUsed !== undefined) data.holidaysUsed = parseFloatSafe(body.holidaysUsed);
         if (body.emergencyHolidaysUsed !== undefined) data.emergencyHolidaysUsed = parseFloatSafe(body.emergencyHolidaysUsed);
@@ -1002,7 +1005,22 @@ export const updateEmployee = async (req: Request, res: Response) => {
 export const deleteEmployee = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+        const employee = await prisma.employee.findUnique({ where: { id }, select: { userId: true } });
+        if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
         await prisma.employee.delete({ where: { id } });
+
+        // Employee and User are separate records (linked by Employee.userId) — deleting the
+        // employee alone left a dangling login account behind, so remove it too when one exists.
+        if (employee.userId) {
+            try {
+                await purgeUserAndRelations(employee.userId);
+            } catch (userError) {
+                console.error(`Employee ${id} deleted, but failed to remove linked user ${employee.userId}:`, userError);
+                return res.json({ message: 'Employee deleted successfully, but the linked user account could not be removed (it may still be referenced elsewhere, e.g. as a leave approver).' });
+            }
+        }
+
         res.json({ message: 'Employee deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete employee' });

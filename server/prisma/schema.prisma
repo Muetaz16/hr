@@ -173,6 +173,7 @@ model Employee {
   contractStartDate      DateTime?
   contractStatus         String?
   contractType           String?
+  contractWorkType       String?                @default("Full Time") // 'Full Time' | 'Part Time'
   holidaysUsed           Float                  @default(0)
   bonusHolidays          Float                  @default(0)
   userId                 String?                @unique

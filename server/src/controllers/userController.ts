@@ -174,12 +174,12 @@ export const updateUser = async (req: Request, res: Response) => {
 };
 
 // Delete user
-export const deleteUser = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    console.log(`[USER][DELETE] Start: id=${id}`);
-    try {
-        // Clear all relations to avoid foreign key constraint errors
-        await prisma.$transaction([
+// Clears every relation that would otherwise block a hard User delete (FK restrict on
+// required relations, e.g. LeaveApprovalStep.approver / RecruitmentRequest.requester),
+// then deletes the User row itself. Shared by the standalone "delete user" admin action
+// and by deleteEmployee (which also removes the employee's login account).
+export async function purgeUserAndRelations(id: string) {
+    await prisma.$transaction([
             // 1. Clear linked Employee
             prisma.employee.updateMany({
                 where: { userId: id },
@@ -302,7 +302,13 @@ export const deleteUser = async (req: Request, res: Response) => {
             // 11. Final Delete
             prisma.user.delete({ where: { id } })
         ]);
+}
 
+export const deleteUser = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    console.log(`[USER][DELETE] Start: id=${id}`);
+    try {
+        await purgeUserAndRelations(id);
         console.log(`[USER][DELETE] Success: id=${id}`);
         res.json({ message: 'User deleted successfully' });
     } catch (error: any) {

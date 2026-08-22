@@ -35,7 +35,8 @@ import {
     Car,
     Upload,
     Globe2,
-    UserPlus
+    UserPlus,
+    Loader2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -43,6 +44,7 @@ import {
     SITE_FACTORS,
     LANGUAGE_FACTORS
 } from '../../constants/factors';
+import { NATIONALITIES } from '../../constants/nationalities';
 
 const getCurrencySymbol = (type?: string | null) => {
     if (!type) return '$';
@@ -76,7 +78,11 @@ const EmployeeForm: React.FC = () => {
         position: '',
         contractStartDate: '',
         contractEndDate: '',
-        contractType: 'Limited',
+        // No default — this stores the residency classification (RESDANT / DIRCT NONE RESDANT /
+        // NONE RESDANT) picked via the "Employee Type" buttons below, not a contract-duration
+        // value. Leaving it unset forces that pick instead of silently saving a meaningless value.
+        contractType: '',
+        contractWorkType: 'Full Time',
         contractStatus: 'Active',
         holidaysUsed: 0,
         emergencyHolidaysUsed: 0,
@@ -152,6 +158,7 @@ const EmployeeForm: React.FC = () => {
         interviewEvaluationUrl: ''
     });
 
+    const [isSaving, setIsSaving] = useState(false);
     const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
     const [fetchedHourlyRate, setFetchedHourlyRate] = useState<number | null>(null);
     const [deptSearchTerm, setDeptSearchTerm] = useState('');
@@ -237,6 +244,21 @@ const EmployeeForm: React.FC = () => {
     const placeLocked = employmentLocked;
     const placeOptions = fromOnboarding && jdLocations.length ? jdLocations : ['OFFICE', 'SITE'];
 
+    // ---- Leave Adjustment: HR thinks in terms of "how many days does this employee have right
+    // now", not "how many have they used" — especially when entering a contractStartDate that's
+    // already in the past. So these 3 inputs show/edit the current balance, and we convert to the
+    // "used" counters the backend stores (same formula as calculateHolidayMetrics server-side).
+    const EMERGENCY_LEAVE_ALLOWANCE = 3;
+    const UNPAID_LEAVE_ALLOWANCE = 14;
+    const accruedHolidaysNow = (() => {
+        if (!formData.contractStartDate) return 0;
+        const diffDays = Math.floor(Math.max(0, Date.now() - new Date(formData.contractStartDate).getTime()) / (1000 * 60 * 60 * 24));
+        return Math.floor(diffDays / 12);
+    })();
+    const paidLeaveBalance = accruedHolidaysNow + (formData.bonusHolidays || 0) - (formData.holidaysUsed || 0);
+    const emergencyLeaveBalance = EMERGENCY_LEAVE_ALLOWANCE - (formData.emergencyHolidaysUsed || 0);
+    const unpaidLeaveBalance = UNPAID_LEAVE_ALLOWANCE - (formData.unpaidHolidaysUsed || 0);
+
     // ---- Onboarding-type field visibility: each of the 3 self-service onboarding forms
     // (Resident / Direct Non-Resident / Service Provider) collects a different set of fields.
     // When reviewing a hire that came through onboarding, only show the fields that type's form
@@ -270,6 +292,7 @@ const EmployeeForm: React.FC = () => {
                     fullNameArabic: emp.fullNameArabic || '',
                     passportNumber: emp.passportNumber || '',
                     contractNumber: emp.contractNumber || '1st',
+                    contractWorkType: emp.contractWorkType || 'Full Time',
                     nationality: emp.nationality || '',
                     jobCategory: emp.jobCategory || '',
                     jobGrade: emp.jobGrade || '',
@@ -554,6 +577,14 @@ const EmployeeForm: React.FC = () => {
             return;
         }
 
+        // Employee Type (residency classification) is required both for brand-new employees and
+        // when completing a pending BioTime import — same exemption pattern as Job Description
+        // below, so ordinary edits of already-classified employees aren't blocked retroactively.
+        if ((!isEditMode || isPendingEnrollment) && !fromOnboarding && !(KNOWN_CONTRACT_TYPES as readonly string[]).includes(formData.contractType || '')) {
+            toast.error(t('employee_type_required', { defaultValue: 'Employee Type (Resident / Direct Non-Resident / Service Provider) must be selected.' }));
+            return;
+        }
+
         // A Job Description is required both for brand-new employees and when completing a pending
         // BioTime import (ordinary edits of active employees are exempt — they may already have one).
         if ((!isEditMode || isPendingEnrollment) && !isGlobalScopeRole && !formData.jobDescriptionId) {
@@ -572,6 +603,7 @@ const EmployeeForm: React.FC = () => {
             return;
         }
 
+        setIsSaving(true);
         try {
             if (isEditMode && id) {
                 // Completing a pending BioTime import: flip to ACTIVE so the backend creates the
@@ -616,6 +648,8 @@ const EmployeeForm: React.FC = () => {
             }
 
             toast.error(`${t('error_saving_employee')}: ${detail}`, { duration: 6000 });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -861,7 +895,6 @@ const EmployeeForm: React.FC = () => {
                             {renderDate('dateOfBirth', t('date_of_birth', { defaultValue: 'Date of Birth' }))}
                             {renderText('placeOfBirth', t('place_of_birth', { defaultValue: 'Place of Birth' }), { placeholder: t('place_of_birth', { defaultValue: 'Place of Birth' }) })}
                             {showField('placeOfBirthArabic') && renderText('placeOfBirthArabic', t('place_of_birth_arabic', { defaultValue: 'Place of Birth (Arabic)' }), { dir: 'rtl', placeholder: 'مكان الميلاد' })}
-                            {showField('nationalId') && renderText('nationalId', t('national_id', { defaultValue: 'National ID (الرقم الوطني)' }), { placeholder: t('national_id', { defaultValue: 'National ID' }) })}
                             {showField('gender') && renderSelect('gender', t('gender', { defaultValue: 'Gender' }), ['Male', 'Female'], t('select', { defaultValue: 'Select…' }))}
                             {renderSelect('bloodType', t('blood_type', { defaultValue: 'Blood Type' }), ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], t('select', { defaultValue: 'Select…' }))}
                             {renderText('academicQualification', t('academic_qualification', { defaultValue: 'Academic Qualification (المؤهل العلمي)' }), { placeholder: t('academic_qualification', { defaultValue: 'e.g. Bachelor of Engineering' }) })}
@@ -1270,16 +1303,22 @@ const EmployeeForm: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('nationality', { defaultValue: 'Nationality' })} {employmentLocked && <Lock size={12} className="text-slate-400" />}</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={formData.nationality || ''}
                                     onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
                                     disabled={employmentLocked}
-                                    className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold shadow-sm ${employmentLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200 text-slate-800'}`}
-                                    placeholder="Libyan"
-                                />
+                                    className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold shadow-sm ${employmentLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200 text-slate-800 cursor-pointer'}`}
+                                >
+                                    <option value="">Select Nationality</option>
+                                    {/* Preserve an existing value that predates this list (e.g. imported records) instead of silently dropping it. */}
+                                    {formData.nationality && !NATIONALITIES.includes(formData.nationality) && (
+                                        <option value={formData.nationality}>{formData.nationality}</option>
+                                    )}
+                                    {NATIONALITIES.map(n => (
+                                        <option key={n} value={n}>{n}</option>
+                                    ))}
+                                </select>
                             </div>
-                            {showField('nationalityArabic') && renderText('nationalityArabic', t('nationality_arabic', { defaultValue: 'Nationality (Arabic)' }), { dir: 'rtl', placeholder: 'ليبي', disabled: employmentLocked })}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('job_category', { defaultValue: 'Job Category' })} {categoryLocked && <Lock size={12} className="text-slate-400" />}</label>
                                 {categoryLocked ? (
@@ -1626,6 +1665,17 @@ const EmployeeForm: React.FC = () => {
                                 </select>
                             </div>
                             <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('contract_work_type', { defaultValue: 'Employment Type' })}</label>
+                                <select
+                                    value={formData.contractWorkType || 'Full Time'}
+                                    onChange={(e) => setFormData({ ...formData, contractWorkType: e.target.value })}
+                                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800 shadow-sm cursor-pointer"
+                                >
+                                    <option value="Full Time">{t('full_time', { defaultValue: 'Full Time' })}</option>
+                                    <option value="Part Time">{t('part_time', { defaultValue: 'Part Time' })}</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('contract_type')}</label>
                                 <div className="w-full px-5 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500">
                                     {residencyTypeLabel(formData.contractType) || t('select_employee_type_above', { defaultValue: 'Select above ↑' })}
@@ -1636,43 +1686,33 @@ const EmployeeForm: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-slate-50/50 rounded-3xl border border-slate-100 relative z-10">
                             <h3 className="col-span-full text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t('leave_adjustment')}</h3>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('holidays_taken')}</label>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('paid_leave_balance', { defaultValue: 'Paid Leave Balance' })}</label>
                                 <input
-                                    type="number" step="0.5" min="0"
-                                    value={formData.holidaysUsed || 0}
-                                    onChange={(e) => setFormData({ ...formData, holidaysUsed: Number(e.target.value) })}
+                                    type="number" step="0.5"
+                                    value={paidLeaveBalance}
+                                    onChange={(e) => setFormData({ ...formData, holidaysUsed: accruedHolidaysNow + (formData.bonusHolidays || 0) - Number(e.target.value) })}
                                     className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-100 transition-all font-bold text-slate-800 shadow-sm"
                                     placeholder="0.0"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-red-500 uppercase tracking-wider block">{t('emergency_taken', { defaultValue: 'Emergency Taken' })}</label>
+                                <label className="text-xs font-bold text-red-500 uppercase tracking-wider block">{t('emergency_leave_balance', { defaultValue: 'Emergency Leave Balance' })}</label>
                                 <input
-                                    type="number" step="1" min="0"
-                                    value={formData.emergencyHolidaysUsed || 0}
-                                    onChange={(e) => setFormData({ ...formData, emergencyHolidaysUsed: Number(e.target.value) })}
+                                    type="number" step="1"
+                                    value={emergencyLeaveBalance}
+                                    onChange={(e) => setFormData({ ...formData, emergencyHolidaysUsed: EMERGENCY_LEAVE_ALLOWANCE - Number(e.target.value) })}
                                     className="w-full px-5 py-4 bg-red-50/30 border border-red-100 rounded-2xl focus:ring-4 focus:ring-red-50 transition-all font-bold text-red-900 shadow-sm"
-                                    placeholder="0"
+                                    placeholder="3"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-orange-500 uppercase tracking-wider block">{t('unpaid_taken', { defaultValue: 'Unpaid Taken' })}</label>
+                                <label className="text-xs font-bold text-orange-500 uppercase tracking-wider block">{t('unpaid_leave_balance', { defaultValue: 'Unpaid Leave Balance' })}</label>
                                 <input
-                                    type="number" step="0.5" min="0"
-                                    value={formData.unpaidHolidaysUsed || 0}
-                                    onChange={(e) => setFormData({ ...formData, unpaidHolidaysUsed: Number(e.target.value) })}
+                                    type="number" step="0.5"
+                                    value={unpaidLeaveBalance}
+                                    onChange={(e) => setFormData({ ...formData, unpaidHolidaysUsed: UNPAID_LEAVE_ALLOWANCE - Number(e.target.value) })}
                                     className="w-full px-5 py-4 bg-orange-50/30 border border-orange-100 rounded-2xl focus:ring-4 focus:ring-orange-50 transition-all font-bold text-orange-900 shadow-sm"
-                                    placeholder="0.0"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block">{t('bonus_holidays')}</label>
-                                <input
-                                    type="number" step="0.5" min="0"
-                                    value={formData.bonusHolidays || 0}
-                                    onChange={(e) => setFormData({ ...formData, bonusHolidays: Number(e.target.value) })}
-                                    className="w-full px-5 py-4 bg-blue-50/30 border border-blue-100 rounded-2xl focus:ring-4 focus:ring-blue-50 transition-all font-bold text-blue-900 shadow-sm"
-                                    placeholder="0.0"
+                                    placeholder="14"
                                 />
                             </div>
                         </div>
@@ -1710,12 +1750,17 @@ const EmployeeForm: React.FC = () => {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            className="flex-1 sm:flex-none px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
+                            disabled={isSaving}
+                            className="flex-1 sm:flex-none px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                         >
-                            <Save size={16} className="group-hover:rotate-12 transition-transform" />
-                            {isPendingEnrollment
-                                ? t('complete_enrolment_create_account', { defaultValue: 'Complete Enrolment & Create Account' })
-                                : (isEditMode ? t('commit_changes') : t('confirm_enrollment'))}
+                            {isSaving
+                                ? <Loader2 size={16} className="animate-spin" />
+                                : <Save size={16} className="group-hover:rotate-12 transition-transform" />}
+                            {isSaving
+                                ? t('saving', { defaultValue: 'Saving…' })
+                                : (isPendingEnrollment
+                                    ? t('complete_enrolment_create_account', { defaultValue: 'Complete Enrolment & Create Account' })
+                                    : (isEditMode ? t('commit_changes') : t('confirm_enrollment')))}
                         </button>
                     </div>
                 </div>

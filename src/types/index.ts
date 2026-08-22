@@ -245,6 +245,7 @@ export interface Employee {
     contractStartDate?: string;
     contractEndDate?: string;
     contractType?: string;
+    contractWorkType?: string; // 'Full Time' | 'Part Time'
     contractStatus?: string;
     holidaysUsed: number;
     emergencyHolidaysUsed?: number;
