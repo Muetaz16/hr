@@ -5,7 +5,7 @@ import { userService } from '../../services/userService';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
 import { employeeService } from '../../services/employeeService';
-import type { User, UserRole, Department, Unit, Employee, Division } from '../../types';
+import type { User, UserRole, Department, Unit, Employee, Division, FunctionalHat, AccessCatalog } from '../../types';
 import {
     ArrowLeft,
     Mail,
@@ -16,131 +16,71 @@ import {
     Save,
     AlertTriangle,
     Key,
+    Layers,
+    Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
-// Permission catalog — the single source of truth for every toggle shown on the
-// Authority Enrollment page. Grouped so we can render cards and offer per-group
-// "select all / clear" controls. Every id here must line up with the permission
-// strings checked in MainLayout / ProtectedRoute for the toggle to actually gate
-// something.
+// The permission catalog + each position's default bundle are now served by the
+// backend (/access-catalog) so there is ONE source of truth. This screen groups
+// them for display and layers three additive sources into an effective set:
+//   position defaults  ∪  functional hats  ∪  individual grants   (add-only)
 // ---------------------------------------------------------------------------
-type PermItem = { id: string; labelKey: string; labelDefault: string };
-type PermGroup = { key: string; titleKey: string; titleDefault: string; perms: PermItem[] };
+type PermItem = { id: string; label: string };
+type PermGroup = { key: string; title: string; perms: PermItem[] };
 
-export const PERMISSION_GROUPS: PermGroup[] = [
-    {
-        key: 'employees', titleKey: 'perm_cat_employees', titleDefault: 'Employees & Directory', perms: [
-            { id: 'view_directory', labelKey: 'perm_view_directory', labelDefault: 'View Directory' },
-            { id: 'view_employees', labelKey: 'perm_view_employees', labelDefault: 'View Full Emp Data' },
-            { id: 'manage_employees', labelKey: 'perm_manage_employees', labelDefault: 'Manage Emp Records' },
-            { id: 'register_employees', labelKey: 'perm_register_employees', labelDefault: 'Register New Emp' },
-            { id: 'edit_employees', labelKey: 'perm_edit_employees', labelDefault: 'Edit Emp Data' },
-            { id: 'delete_employees', labelKey: 'perm_delete_employees', labelDefault: 'Delete Emp' },
-        ]
-    },
-    {
-        key: 'recruitment', titleKey: 'perm_cat_recruitment', titleDefault: 'Recruitment', perms: [
-            { id: 'view_recruitment', labelKey: 'perm_view_recruitment', labelDefault: 'View Recruitment' },
-            { id: 'manage_recruitment', labelKey: 'perm_manage_recruitment', labelDefault: 'Manage Requests & Hiring' },
-            { id: 'recruitment_approvals', labelKey: 'perm_recruitment_approvals', labelDefault: 'Approve Recruitment' },
-            { id: 'approve_hr_manager', labelKey: 'perm_approve_hr_manager', labelDefault: 'Approve as Head of HR' },
-            { id: 'approve_hr_recruitment', labelKey: 'perm_approve_hr_recruitment', labelDefault: 'Approve as Head of Recruitment' },
-        ]
-    },
-    {
-        key: 'contracts', titleKey: 'perm_cat_contracts', titleDefault: 'Contracts & Lifecycle', perms: [
-            { id: 'view_contracts', labelKey: 'perm_view_contracts', labelDefault: 'View Contracts' },
-            { id: 'manage_contract_management', labelKey: 'perm_manage_contracts', labelDefault: 'Manage Contracts' },
-            { id: 'view_lifecycle', labelKey: 'perm_view_lifecycle', labelDefault: 'View Lifecycle' },
-            { id: 'manage_lifecycle_control', labelKey: 'perm_manage_lifecycle', labelDefault: 'Manage Lifecycle' },
-        ]
-    },
-    {
-        key: 'payroll', titleKey: 'perm_cat_payroll', titleDefault: 'Payroll & Time', perms: [
-            { id: 'view_payroll', labelKey: 'perm_view_payroll', labelDefault: 'View Payroll' },
-            { id: 'manage_payroll', labelKey: 'perm_manage_payroll', labelDefault: 'Manage Payroll' },
-            { id: 'view_time_tracking', labelKey: 'perm_view_time_tracking', labelDefault: 'View Time Logs' },
-            { id: 'manage_time_tracking', labelKey: 'perm_manage_time_tracking', labelDefault: 'Manage Time Logs' },
-        ]
-    },
-    {
-        key: 'ops', titleKey: 'perm_cat_ops', titleDefault: 'Operations & Approvals', perms: [
-            { id: 'manage_leaves', labelKey: 'perm_manage_leaves', labelDefault: 'Approve Leaves' },
-            { id: 'approve_attendance', labelKey: 'perm_approve_attendance', labelDefault: 'Head of Attendance Approval' },
-            { id: 'manage_tasks', labelKey: 'perm_manage_tasks', labelDefault: 'Manage Tasks' },
-            { id: 'manage_announcements', labelKey: 'perm_manage_announcements', labelDefault: 'Post Announcements' },
-            { id: 'manager_approvals', labelKey: 'perm_manager_approvals', labelDefault: 'Full Mgr Approvals' },
-        ]
-    },
-    {
-        key: 'evaluations', titleKey: 'perm_cat_evaluations', titleDefault: 'Evaluations', perms: [
-            { id: 'view_evaluations', labelKey: 'perm_view_evaluations', labelDefault: 'View All Evaluations' },
-            { id: 'view_hr_evaluations', labelKey: 'perm_view_hr_evaluations', labelDefault: 'Manage HR Evals' },
-            { id: 'manage_evaluation_control', labelKey: 'perm_manage_eval_control', labelDefault: 'Evaluation Control' },
-        ]
-    },
-    {
-        key: 'operational', titleKey: 'perm_cat_operational', titleDefault: 'IT & Operational Services', perms: [
-            { id: 'manage_onboarding', labelKey: 'perm_manage_onboarding', labelDefault: 'Manage Onboarding (Assets)' },
-            { id: 'manage_it_issues', labelKey: 'perm_manage_it_issues', labelDefault: 'Manage IT Support Tickets' },
-        ]
-    },
-    {
-        key: 'admin', titleKey: 'perm_cat_admin', titleDefault: 'Administration', perms: [
-            { id: 'manage_groups', labelKey: 'perm_manage_groups', labelDefault: 'Manage Groups' },
-            { id: 'manage_departments', labelKey: 'perm_manage_departments', labelDefault: 'Manage Depts' },
-            { id: 'manage_units', labelKey: 'perm_manage_units', labelDefault: 'Manage Units' },
-            { id: 'manage_job_descriptions', labelKey: 'perm_manage_job_descriptions', labelDefault: 'Manage Job Descriptions' },
-            { id: 'manage_users', labelKey: 'perm_manage_users', labelDefault: 'Manage System Users' },
-        ]
-    },
-];
-
-export const ALL_PERMISSION_IDS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p.id));
-
-// Recommended permission preset per role. Picking a role auto-applies these
-// (still fully editable afterwards). SUPER_ADMIN implicitly gets everything.
-export const ROLE_PRESETS: Record<string, string[]> = {
-    EMPLOYEE: [],
-    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manage_tasks', 'manager_approvals', 'view_evaluations', 'view_recruitment'],
-    HEAD_DEPARTMENT: ['view_directory', 'view_employees', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_OFFICE: ['view_directory', 'view_employees', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_DIVISION: ['view_directory', 'view_employees', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
-    HEAD_DIRECTOR: ['view_directory', 'view_employees', 'view_contracts', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
-    GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
-    CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
-    HR_MANAGER: ['view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager', 'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control', 'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking', 'manage_leaves', 'manage_announcements', 'view_evaluations', 'view_hr_evaluations', 'manage_evaluation_control', 'manage_onboarding', 'manage_job_descriptions'],
-    PERSONNEL: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'view_lifecycle', 'manage_onboarding', 'manage_it_issues'],
-    SUPER_ADMIN: ALL_PERMISSION_IDS,
+// Build display groups (preserving catalog order) from the fetched catalog.
+const buildGroups = (catalog: AccessCatalog | null): PermGroup[] => {
+    if (!catalog) return [];
+    const order: string[] = [];
+    const map = new Map<string, PermItem[]>();
+    for (const p of catalog.permissions) {
+        if (!map.has(p.group)) { map.set(p.group, []); order.push(p.group); }
+        map.get(p.group)!.push({ id: p.id, label: p.label });
+    }
+    return order.map(g => ({ key: g, title: g, perms: map.get(g)! }));
 };
 
-export const presetForRole = (role: string): string[] =>
-    role === 'SUPER_ADMIN' ? [...ALL_PERMISSION_IDS] : [...(ROLE_PRESETS[role] || [])];
-
-const ROLE_OPTIONS: { value: UserRole; labelKey: string; labelDefault: string }[] = [
-    { value: 'EMPLOYEE', labelKey: 'role_employee', labelDefault: 'Employee' },
-    { value: 'HEAD_UNIT', labelKey: 'role_head_unit', labelDefault: 'Head of Unit' },
-    { value: 'HEAD_DEPARTMENT', labelKey: 'role_head_department', labelDefault: 'Head of Department' },
-    { value: 'HEAD_OFFICE', labelKey: 'role_head_office', labelDefault: 'Head of Office' },
-    { value: 'HEAD_DIVISION', labelKey: 'role_head_division', labelDefault: 'Head of Division' },
-    { value: 'HEAD_DIRECTOR', labelKey: 'role_head_director', labelDefault: 'Head of Directorate' },
-    { value: 'HR_MANAGER', labelKey: 'role_hr_manager', labelDefault: 'HR Manager' },
-    { value: 'GENERAL_MANAGER', labelKey: 'role_general_manager', labelDefault: 'General Manager' },
-    { value: 'CHAIRMAN', labelKey: 'role_chairman', labelDefault: 'Chairman' },
-    { value: 'PERSONNEL', labelKey: 'role_personnel', labelDefault: 'Personnel' },
+// Organizational positions (a user holds exactly one). Kept as an optgroup so the
+// dropdown reads as a hierarchy. HR Manager / Personnel remain selectable as a
+// "functional primary role" because a dedicated HR account still drives approval
+// routing — but for anyone who simply needs HR access on top of their position,
+// leave the position as-is and add the matching hat below.
+const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
+    { value: 'EMPLOYEE', labelDefault: 'Employee' },
+    { value: 'HEAD_UNIT', labelDefault: 'Head of Unit' },
+    { value: 'HEAD_DEPARTMENT', labelDefault: 'Head of Department' },
+    { value: 'HEAD_OFFICE', labelDefault: 'Head of Office' },
+    { value: 'HEAD_DIVISION', labelDefault: 'Head of Division' },
+    { value: 'HEAD_DIRECTOR', labelDefault: 'Head of Directorate' },
+    { value: 'GENERAL_MANAGER', labelDefault: 'General Manager' },
+    { value: 'CHAIRMAN', labelDefault: 'Chairman' },
+];
+const FUNCTIONAL_ROLE_OPTIONS: { value: UserRole; labelDefault: string }[] = [
+    { value: 'HR_MANAGER', labelDefault: 'HR Manager (dedicated HR account)' },
+    { value: 'PERSONNEL', labelDefault: 'Personnel (dedicated HR data-entry account)' },
 ];
 
-const PermissionCheckbox: React.FC<{ id: string; label: string; checked: boolean; onChange: (id: string, checked: boolean) => void }> = ({ id, label, checked, onChange }) => (
-    <label className={`flex items-center gap-3 p-2 rounded-xl transition-all cursor-pointer group border ${checked ? 'bg-white border-indigo-200 shadow-sm' : 'border-transparent hover:bg-white hover:border-slate-100'}`}>
+const PermissionCheckbox: React.FC<{
+    id: string; label: string; checked: boolean; locked?: boolean; sources?: string[];
+    onChange: (id: string, checked: boolean) => void;
+}> = ({ id, label, checked, locked = false, sources = [], onChange }) => (
+    <label
+        title={locked ? `Granted by: ${sources.join(', ')}` : undefined}
+        className={`flex items-center gap-3 p-2 rounded-xl transition-all border ${locked
+            ? 'bg-emerald-50/60 border-emerald-100 cursor-default'
+            : checked ? 'bg-white border-indigo-200 shadow-sm cursor-pointer' : 'border-transparent hover:bg-white hover:border-slate-100 cursor-pointer'}`}
+    >
         <input
             type="checkbox"
             className="app-check"
             checked={checked}
+            disabled={locked}
             onChange={(e) => onChange(id, e.target.checked)}
         />
-        <span className={`text-[11px] font-bold transition-colors uppercase tracking-tight ${checked ? 'text-indigo-700' : 'text-slate-600 group-hover:text-slate-900'}`}>{label}</span>
+        <span className={`flex-1 text-[11px] font-bold transition-colors uppercase tracking-tight ${locked ? 'text-emerald-700' : checked ? 'text-indigo-700' : 'text-slate-600'}`}>{label}</span>
+        {locked && <Lock className="w-3 h-3 text-emerald-500 shrink-0" />}
     </label>
 );
 
@@ -157,6 +97,8 @@ const UserForm: React.FC = () => {
     const [units, setUnits] = useState<Unit[]>([]);
     const [divisions, setDivisions] = useState<Division[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [hats, setHats] = useState<FunctionalHat[]>([]);
+    const [catalog, setCatalog] = useState<AccessCatalog | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -172,7 +114,8 @@ const UserForm: React.FC = () => {
         unitId: '',
         departmentIds: [] as string[],
         employeeId: '',
-        permissions: [] as string[],
+        permissions: [] as string[], // individual GRANTS (extras beyond position + hats)
+        functionalHatIds: [] as string[],
     };
     const [formData, setFormData] = useState(initialFormState);
 
@@ -180,17 +123,21 @@ const UserForm: React.FC = () => {
         (async () => {
             setLoading(true);
             try {
-                const [deptsData, unitsData, empsData, divsData, usersData] = await Promise.all([
+                const [deptsData, unitsData, empsData, divsData, hatsData, catalogData, usersData] = await Promise.all([
                     departmentService.getAllDepartments(),
                     unitService.getAllUnits(),
                     employeeService.getAllEmployees(),
                     divisionService.getAllDivisions().catch(() => []),
+                    userService.getFunctionalHats().catch(() => [] as FunctionalHat[]),
+                    userService.getAccessCatalog().catch(() => null),
                     isEditMode ? userService.getAllUsers() : Promise.resolve([] as User[]),
                 ]);
                 setDepartments(deptsData);
                 setUnits(unitsData);
                 setEmployees(empsData);
                 setDivisions(divsData);
+                setHats(hatsData);
+                setCatalog(catalogData);
 
                 if (isEditMode && id) {
                     const user = usersData.find(u => u.id === id);
@@ -200,13 +147,6 @@ const UserForm: React.FC = () => {
                         return;
                     }
                     setEditingUserId(user.id);
-                    // If the account has no permissions stored yet (e.g. it was auto-created from
-                    // Personnel & Workforce before defaults were seeded), fall back to the role's
-                    // recommended preset so the admin sees the expected access pre-selected and can
-                    // simply toggle off what they don't want.
-                    const existingPerms = user.permissions && user.permissions.length
-                        ? user.permissions
-                        : presetForRole(user.role);
                     setFormData({
                         email: user.email,
                         password: '',
@@ -218,7 +158,8 @@ const UserForm: React.FC = () => {
                         unitId: user.unitId || '',
                         departmentIds: user.departmentIds || [],
                         employeeId: user.employeeId || '',
-                        permissions: existingPerms,
+                        permissions: user.permissions || [], // raw individual grants
+                        functionalHatIds: user.functionalHatIds || [],
                     });
                 }
             } catch (error) {
@@ -231,23 +172,54 @@ const UserForm: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, isEditMode]);
 
+    // Display groups + catalog-derived ids.
+    const groups = buildGroups(catalog);
+    const allPermIds = catalog ? catalog.permissions.map(p => p.id) : [];
+
+    // Inherited permissions come from the position's default bundle and every
+    // selected hat. Map each inherited permission id → the sources granting it
+    // (so we can show a badge and lock the toggle — add-only, can't be removed).
+    const inheritedSources = new Map<string, string[]>();
+    const addSource = (perm: string, src: string) => {
+        const cur = inheritedSources.get(perm) || [];
+        if (!cur.includes(src)) cur.push(src);
+        inheritedSources.set(perm, cur);
+    };
+    if (formData.role === 'SUPER_ADMIN') {
+        allPermIds.forEach(p => addSource(p, 'Super Admin'));
+    } else {
+        (catalog?.positionDefaults[formData.role] || []).forEach(p => addSource(p, 'Position'));
+        hats.filter(h => formData.functionalHatIds.includes(h.id))
+            .forEach(h => h.permissions.forEach(p => addSource(p, h.name)));
+    }
+    const isInherited = (permId: string) => inheritedSources.has(permId);
+    // Effective = inherited ∪ grants.
+    const effectiveSet = new Set<string>([...inheritedSources.keys(), ...formData.permissions]);
+
     const togglePermission = (permId: string, checked: boolean) => {
+        if (isInherited(permId)) return; // locked — comes from position/hat
         setFormData(prev => ({
             ...prev,
             permissions: checked ? [...prev.permissions, permId] : prev.permissions.filter(p => p !== permId),
         }));
     };
 
+    // Toggle every non-inherited permission in a group on/off (grants only).
     const setGroupPermissions = (group: PermGroup, on: boolean) => {
-        const ids = group.perms.map(p => p.id);
+        const ids = group.perms.map(p => p.id).filter(pid => !isInherited(pid));
         setFormData(prev => {
             const without = prev.permissions.filter(p => !ids.includes(p));
             return { ...prev, permissions: on ? [...without, ...ids] : without };
         });
     };
 
-    const applyRolePreset = (role: string) => {
-        setFormData(prev => ({ ...prev, permissions: presetForRole(role) }));
+    const toggleHat = (hatId: string) => {
+        setFormData(prev => ({
+            ...prev,
+            functionalHatIds: prev.functionalHatIds.includes(hatId)
+                ? prev.functionalHatIds.filter(h => h !== hatId)
+                : [...prev.functionalHatIds, hatId],
+        }));
     };
 
     // Linking an employee record is OPTIONAL — a system user does not have to be an employee.
@@ -258,6 +230,9 @@ const UserForm: React.FC = () => {
         e.preventDefault();
         setSaving(true);
         try {
+            // Persist ONLY the extra grants (strip anything already covered by the
+            // position or a hat) so grants stay meaningful and don't shadow hats.
+            const grantsOnly = formData.permissions.filter(p => !inheritedSources.has(p));
             const payload: any = {
                 email: formData.email,
                 fullName: formData.fullName,
@@ -268,7 +243,8 @@ const UserForm: React.FC = () => {
                 unitId: formData.unitId || undefined,
                 departmentIds: formData.departmentIds,
                 employeeId: formData.employeeId || undefined,
-                permissions: formData.permissions,
+                permissions: grantsOnly,
+                functionalHatIds: formData.functionalHatIds,
             };
 
             if (isEditMode && editingUserId) {
@@ -369,36 +345,37 @@ const UserForm: React.FC = () => {
                         <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm">
                             <Shield size={20} />
                         </div>
-                        <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('permission_tier', { defaultValue: 'Access Role' })}</h2>
+                        <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('organizational_position', { defaultValue: 'Organizational Position' })}</h2>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('system_access_role', { defaultValue: 'System Access Role' })}</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('position_in_hierarchy', { defaultValue: 'Position in the hierarchy' })}</label>
                         <div className="relative">
                             <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <select
                                 value={formData.role}
-                                onChange={(e) => {
-                                    const newRole = e.target.value as UserRole;
-                                    setFormData(prev => ({ ...prev, role: newRole, permissions: presetForRole(newRole) }));
-                                }}
+                                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
                                 className={`${selectClass} pl-10`}
                             >
-                                {ROLE_OPTIONS.map(r => (
-                                    <option key={r.value} value={r.value}>{t(r.labelKey, { defaultValue: r.labelDefault })}</option>
-                                ))}
+                                <optgroup label={t('org_position', { defaultValue: 'Organizational position' })}>
+                                    {POSITION_OPTIONS.map(r => (
+                                        <option key={r.value} value={r.value}>{t(`role_${r.value.toLowerCase()}`, { defaultValue: r.labelDefault })}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label={t('functional_primary', { defaultValue: 'Functional (dedicated HR accounts)' })}>
+                                    {FUNCTIONAL_ROLE_OPTIONS.map(r => (
+                                        <option key={r.value} value={r.value}>{r.labelDefault}</option>
+                                    ))}
+                                </optgroup>
                             </select>
                         </div>
                         <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-start gap-3">
                             <ShieldCheck className="w-5 h-5 text-indigo-500 mt-0.5 flex-shrink-0" />
                             <div className="flex-1">
-                                <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1">{t('role_preset_notice', { defaultValue: 'Recommended Permissions Applied' })}</p>
+                                <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1">{t('position_grants_defaults', { defaultValue: 'Position grants its default access automatically' })}</p>
                                 <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
-                                    {t('role_preset_note', { defaultValue: 'A recommended set of permissions for this role has been pre-selected below. This is a standalone system account — an employee record is optional. Fine-tune the toggles for exactly what this user should access.' })}
+                                    {t('position_note', { defaultValue: 'Each position comes with a default set of permissions (shown locked below). Add Functional Hats and Individual Grants on top — access only ever stacks, never shrinks. Pick HR Manager / Personnel here only for a dedicated HR account; otherwise keep the real position and add the matching hat.' })}
                                 </p>
                             </div>
-                            <button type="button" onClick={() => applyRolePreset(formData.role)} className="shrink-0 px-3 py-1.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-200 hover:bg-indigo-100 transition-all">
-                                {t('reset_to_recommended', { defaultValue: 'Reset to Recommended' })}
-                            </button>
                         </div>
                     </div>
 
@@ -475,6 +452,50 @@ const UserForm: React.FC = () => {
                     )}
                 </section>
 
+                {/* 2b. Functional Hats — stackable duty bundles on top of the position */}
+                <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/60">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-sm">
+                                <Layers size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('functional_hats', { defaultValue: 'Functional Hats' })}</h2>
+                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">{t('functional_hats_sub', { defaultValue: 'Extra duties this person can hold at the same time as their position. Each adds its permissions.' })}</p>
+                            </div>
+                        </div>
+                        {formData.functionalHatIds.length > 0 && (
+                            <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-widest">
+                                {formData.functionalHatIds.length} {t('active', { defaultValue: 'Active' })}
+                            </span>
+                        )}
+                    </div>
+                    {hats.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">{t('no_hats_yet', { defaultValue: 'No functional hats defined yet. Create them from Access Management → Functional Hats.' })}</p>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {hats.map(hat => {
+                                const on = formData.functionalHatIds.includes(hat.id);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={hat.id}
+                                        onClick={() => toggleHat(hat.id)}
+                                        className={`text-left p-4 rounded-2xl border transition-all ${on ? 'bg-amber-50/70 border-amber-300 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className={`text-sm font-black ${on ? 'text-amber-800' : 'text-slate-700'}`}>{hat.name}</span>
+                                            <span className={`w-5 h-5 rounded-md flex items-center justify-center border ${on ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-300 text-transparent'}`}>✓</span>
+                                        </div>
+                                        {hat.description && <p className="text-[10px] text-slate-400 font-medium mt-1 leading-snug">{hat.description}</p>}
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-2">{hat.permissions.length} {t('permissions', { defaultValue: 'permissions' })}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+
                 {/* 3. Optional personnel link */}
                 <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/60">
                     <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
@@ -518,47 +539,62 @@ const UserForm: React.FC = () => {
                     </div>
                 </section>
 
-                {/* 4. Permissions */}
+                {/* 4. Individual permission grants (extras on top of position + hats) */}
                 <section className="glass-card rounded-[32px] p-8 shadow-sm border border-slate-100 bg-white/60">
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shadow-sm">
                                 <ShieldCheck size={20} />
                             </div>
-                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('permissions_and_access', { defaultValue: 'Permissions & Access' })}</h2>
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('individual_grants', { defaultValue: 'Individual Grants' })}</h2>
+                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">{t('individual_grants_sub', { defaultValue: 'Give this specific person extra access beyond their position and hats.' })}</p>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest">
-                                {formData.permissions.length}/{ALL_PERMISSION_IDS.length} {t('selected', { defaultValue: 'Selected' })}
+                            <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest">
+                                {effectiveSet.size}/{allPermIds.length} {t('effective', { defaultValue: 'Effective' })}
                             </span>
-                            <button type="button" onClick={() => setFormData({ ...formData, permissions: [...ALL_PERMISSION_IDS] })} className="px-3 py-1.5 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:bg-slate-50 transition-all">
-                                {t('select_all', { defaultValue: 'Select All' })}
-                            </button>
                             <button type="button" onClick={() => setFormData({ ...formData, permissions: [] })} className="px-3 py-1.5 bg-white text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:bg-red-50 transition-all">
-                                {t('clear_all', { defaultValue: 'Clear All' })}
+                                {t('clear_grants', { defaultValue: 'Clear Grants' })}
                             </button>
                         </div>
                     </div>
 
+                    <div className="flex items-center gap-4 mb-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <span className="inline-flex items-center gap-1.5"><Lock className="w-3 h-3 text-emerald-500" /> {t('from_position_hats', { defaultValue: 'From position / hats (locked)' })}</span>
+                        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-200 inline-block" /> {t('individual_grant', { defaultValue: 'Individual grant' })}</span>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {PERMISSION_GROUPS.map(group => {
-                            const groupIds = group.perms.map(p => p.id);
-                            const activeCount = groupIds.filter(gid => formData.permissions.includes(gid)).length;
-                            const allOn = activeCount === groupIds.length;
+                        {groups.map(group => {
+                            const effActive = group.perms.filter(p => effectiveSet.has(p.id)).length;
+                            const grantable = group.perms.filter(p => !isInherited(p.id)).map(p => p.id);
+                            const allGranted = grantable.length > 0 && grantable.every(pid => formData.permissions.includes(pid));
                             return (
-                                <div key={group.key} className={`space-y-3 p-4 rounded-2xl border transition-all ${activeCount > 0 ? 'bg-indigo-50/40 border-indigo-100' : 'bg-slate-50/50 border-slate-100'}`}>
+                                <div key={group.key} className={`space-y-3 p-4 rounded-2xl border transition-all ${effActive > 0 ? 'bg-indigo-50/40 border-indigo-100' : 'bg-slate-50/50 border-slate-100'}`}>
                                     <div className="flex items-center justify-between gap-2">
                                         <h5 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">
-                                            {t(group.titleKey, { defaultValue: group.titleDefault })}
-                                            {activeCount > 0 && <span className="ml-1.5 text-slate-400">({activeCount})</span>}
+                                            {group.title}
+                                            {effActive > 0 && <span className="ml-1.5 text-slate-400">({effActive}/{group.perms.length})</span>}
                                         </h5>
-                                        <button type="button" onClick={() => setGroupPermissions(group, !allOn)} className="text-[9px] font-bold text-indigo-500 hover:text-indigo-700 uppercase tracking-wider">
-                                            {allOn ? t('clear', { defaultValue: 'Clear' }) : t('all', { defaultValue: 'All' })}
-                                        </button>
+                                        {grantable.length > 0 && (
+                                            <button type="button" onClick={() => setGroupPermissions(group, !allGranted)} className="text-[9px] font-bold text-indigo-500 hover:text-indigo-700 uppercase tracking-wider">
+                                                {allGranted ? t('clear', { defaultValue: 'Clear' }) : t('all', { defaultValue: 'All' })}
+                                            </button>
+                                        )}
                                     </div>
                                     <div className="space-y-1">
                                         {group.perms.map(perm => (
-                                            <PermissionCheckbox key={perm.id} id={perm.id} label={t(perm.labelKey, { defaultValue: perm.labelDefault })} checked={formData.permissions.includes(perm.id)} onChange={togglePermission} />
+                                            <PermissionCheckbox
+                                                key={perm.id}
+                                                id={perm.id}
+                                                label={perm.label}
+                                                checked={effectiveSet.has(perm.id)}
+                                                locked={isInherited(perm.id)}
+                                                sources={inheritedSources.get(perm.id) || []}
+                                                onChange={togglePermission}
+                                            />
                                         ))}
                                     </div>
                                 </div>

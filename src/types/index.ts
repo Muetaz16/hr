@@ -47,8 +47,29 @@ export interface User {
     departmentIds?: string[];
     fullName: string;
     employeeId?: string; // Link to HR record
-    permissions?: string[]; // Granular access permissions
+    permissions?: string[]; // Individual permission GRANTS (add-ons); at runtime the API returns the merged effective set
+    functionalHatIds?: string[]; // Functional hats the user holds (each adds its permissions)
     signature?: string | null; // Drawn signature stored as a PNG data URL
+}
+
+// A functional "hat" — a reusable bundle of permissions a user can wear on top
+// of their org position. Managed on the Access Management screen.
+export interface FunctionalHat {
+    id: string;
+    key?: string | null; // stable key for seeded system hats (null for custom)
+    name: string;
+    description?: string | null;
+    permissions: string[];
+    isSystem: boolean;
+    createdAt?: string;
+}
+
+// Access catalog served by the backend — the single source of truth for the
+// permission toggles + each position's default bundle.
+export interface AccessCatalog {
+    permissions: { id: string; group: string; label: string }[];
+    positions: string[];
+    positionDefaults: Record<string, string[]>;
 }
 
 export interface Unit {

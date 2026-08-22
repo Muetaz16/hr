@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { resolveEffectivePermissions } from '../utils/effectivePermissions';
 
 const prisma = new PrismaClient();
 
@@ -50,13 +51,16 @@ export const login = async (req: Request, res: Response) => {
             { expiresIn: '24h' }
         );
 
-        // Exclude password from response
+        // Exclude password from response; expose the merged EFFECTIVE permission
+        // set (position defaults + hats + individual grants) so the client's
+        // canAccess sees the full picture immediately.
         const { password: _, ...userWithoutPassword } = user;
+        const effective = await resolveEffectivePermissions(prisma, user);
 
         console.log(`[AUTH] Login successful for: ${email}`);
         res.json({
             token,
-            user: userWithoutPassword
+            user: { ...userWithoutPassword, permissions: effective }
         });
     } catch (error: any) {
         console.error('[AUTH] CRITICAL ERROR during login:', error.message);

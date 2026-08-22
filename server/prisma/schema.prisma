@@ -19,7 +19,8 @@ model User {
   departmentIds            String[]               @default([])
   unitId                   String?
   divisionId               String?                // the division a HEAD_DIVISION owns (drives leave-approval routing for all its departments)
-  permissions              String[]               @default([])
+  permissions              String[]               @default([]) // individual permission GRANTS layered on top of position + hats
+  functionalHatIds         String[]               @default([]) // FunctionalHat ids the user holds (many); each adds its permissions
   signature                String?
   announcements            Announcement[]
   requestedAssets          AssetRequest[]         @relation("AssetRequester")
@@ -60,6 +61,19 @@ model Group {
   id        String     @id @default(uuid())
   name      String
   employees Employee[]
+}
+
+// Functional "hat" a user can wear independently of their org position. A user
+// may hold several at once; each contributes its permissions to the user's
+// effective access. System hats (isSystem) are seeded and upserted by key.
+model FunctionalHat {
+  id          String   @id @default(uuid())
+  key         String?  @unique
+  name        String
+  description String?
+  permissions String[] @default([])
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }
 
 model Department {

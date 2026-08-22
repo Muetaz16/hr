@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { resolveEffectivePermissions } from '../utils/effectivePermissions';
 
 export interface AuthRequest extends Request {
     user?: any;
@@ -32,6 +33,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
                 departmentId: true,
                 departmentIds: true,
                 permissions: true,
+                functionalHatIds: true,
                 groupId: true
             }
         });
@@ -40,8 +42,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
             return res.status(401).json({ error: 'User no longer exists' });
         }
 
+        // Authorization runs on the merged EFFECTIVE set (position + hats + grants)
+        // so every downstream authorizeAccess/authorizePermissions check sees the
+        // full picture. `grants` keeps the raw individual grants for reference.
+        const effective = await resolveEffectivePermissions(prisma, user);
+        req.user = { ...user, grants: user.permissions, permissions: effective };
         console.log(`[AUTH][OK] User: ${user.fullName} (${user.role}) -> ${req.url}`);
-        req.user = user;
         next();
     } catch (err: any) {
         console.error(`[AUTH][ERROR] Token Verification Failed: ${err.message}`);

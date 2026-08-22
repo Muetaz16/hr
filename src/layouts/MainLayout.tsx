@@ -300,6 +300,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_job_descriptions'] },
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
+                        { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                     ]
                 }
             ]

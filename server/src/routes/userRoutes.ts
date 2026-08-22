@@ -9,6 +9,8 @@ import {
 import {
     getAllDirectorates, createDirectorate, updateDirectorate, deleteDirectorate
 } from '../controllers/directorateController';
+import { getHats, createHat, updateHat, deleteHat } from '../controllers/functionalHatController';
+import { PERMISSIONS, POSITIONS, POSITION_DEFAULTS } from '../utils/accessCatalog';
 
 const router = Router();
 
@@ -16,10 +18,22 @@ const router = Router();
 router.use(authenticateToken);
 
 // Users (Admin only)
-router.get('/users', authorizeAccess(['HR_MANAGER'], ['manage_users']), getUsers);
+router.get('/users', authorizeAccess([], ['manage_users']), getUsers);
 router.post('/users', authorizeAccess([], ['manage_users']), createUser);
 router.put('/users/:id', authorizeAccess([], ['manage_users']), updateUser);
 router.delete('/users/:id', authorizeAccess([], ['manage_users']), deleteUser);
+
+// Access catalog — permission definitions + position default bundles. Lets the
+// Access Management UI render toggles without duplicating the catalog by hand.
+router.get('/access-catalog', authorizeAccess([], ['manage_users']), (_req, res) => {
+    res.json({ permissions: PERMISSIONS, positions: POSITIONS, positionDefaults: POSITION_DEFAULTS });
+});
+
+// Functional hats (managed on the Access Management screen)
+router.get('/functional-hats', authorizeAccess([], ['manage_users']), getHats);
+router.post('/functional-hats', authorizeAccess([], ['manage_users']), createHat);
+router.put('/functional-hats/:id', authorizeAccess([], ['manage_users']), updateHat);
+router.delete('/functional-hats/:id', authorizeAccess([], ['manage_users']), deleteHat);
 
 // Departments (Admin/HR only)
 // Departments (Viewable by all staff)

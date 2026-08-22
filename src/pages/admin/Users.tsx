@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { userService } from '../../services/userService';
 import { groupService, departmentService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
-import type { User, UserRole, Group, Department, Unit } from '../../types';
+import type { User, UserRole, Group, Department, Unit, FunctionalHat } from '../../types';
 import {
     Edit,
     Trash2,
@@ -15,7 +15,8 @@ import {
     ShieldAlert,
     Filter,
     ChevronDown,
-    Check
+    Check,
+    Layers
 } from 'lucide-react';
 import { roleThemes } from '../../config/roleThemes';
 import { toast } from 'sonner';
@@ -29,6 +30,7 @@ const UsersPage: React.FC = () => {
     const [groups, setGroups] = useState<Group[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [units, setUnits] = useState<Unit[]>([]);
+    const [hats, setHats] = useState<FunctionalHat[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -119,16 +121,18 @@ const UsersPage: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [usersData, groupsData, deptsData, unitsData] = await Promise.all([
+            const [usersData, groupsData, deptsData, unitsData, hatsData] = await Promise.all([
                 userService.getAllUsers(),
                 groupService.getAllGroups(),
                 departmentService.getAllDepartments(),
                 unitService.getAllUnits(),
+                userService.getFunctionalHats().catch(() => [] as FunctionalHat[]),
             ]);
             setUsers(usersData);
             setGroups(groupsData);
             setDepartments(deptsData);
             setUnits(unitsData);
+            setHats(hatsData);
         } catch (error) {
             console.error("Error fetching data:", error);
         } finally {
@@ -164,6 +168,8 @@ const UsersPage: React.FC = () => {
 
         return matchesSearch && matchesGroup && matchesUnit && matchesRole;
     });
+
+    const hatMap = new Map(hats.map(h => [h.id, h.name]));
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[400px]">
@@ -338,9 +344,20 @@ const UsersPage: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-5 text-center">
-                                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${userTheme.badge} ring-1 ring-current ring-opacity-10`}>
-                                                <Shield className="w-3 h-3 mr-1" /> {(user.role || 'NA').replace('_', ' ')}
+                                        <td className="px-8 py-5">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${userTheme.badge} ring-1 ring-current ring-opacity-10`}>
+                                                    <Shield className="w-3 h-3 mr-1" /> {(user.role || 'NA').replace(/_/g, ' ')}
+                                                </div>
+                                                {(user.functionalHatIds || []).length > 0 && (
+                                                    <div className="flex flex-wrap justify-center gap-1">
+                                                        {(user.functionalHatIds || []).map(hid => (
+                                                            <span key={hid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[9px] font-bold uppercase tracking-tight">
+                                                                <Layers className="w-2.5 h-2.5" /> {hatMap.get(hid) || t('unknown_hat', { defaultValue: 'Hat' })}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-8 py-5 text-right">

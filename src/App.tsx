@@ -21,6 +21,7 @@ const EmployeesPage = lazy(() => import('./pages/admin/Employees'));
 const EmployeeFormPage = lazy(() => import('./pages/admin/EmployeeForm'));
 const UsersPage = lazy(() => import('./pages/admin/Users'));
 const UserFormPage = lazy(() => import('./pages/admin/UserForm'));
+const FunctionalHatsPage = lazy(() => import('./pages/admin/FunctionalHats'));
 const TimeTrackingPage = lazy(() => import('./pages/TimeTracking'));
 const EvaluationsPage = lazy(() => import('./pages/Evaluations'));
 const PayrollPage = lazy(() => import('./pages/Payroll'));
@@ -159,6 +160,7 @@ function App() {
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/users/new" element={<UserFormPage />} />
                     <Route path="/users/:id/edit" element={<UserFormPage />} />
+                    <Route path="/access/hats" element={<FunctionalHatsPage />} />
                   </Route>
                 </Route>
               </Route>

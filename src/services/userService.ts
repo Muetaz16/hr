@@ -1,5 +1,5 @@
 import api from './apiClient';
-import type { User, UserRole } from '../types';
+import type { User, UserRole, FunctionalHat, AccessCatalog } from '../types';
 
 export const userService = {
     // Create or Update user (sync with Auth) - For local, we usually just update
@@ -40,5 +40,30 @@ export const userService = {
 
     async deleteUser(uid: string) {
         await api.delete(`/users/${uid}`);
+    },
+
+    // --- Access catalog & functional hats (Access Management) ---
+    async getAccessCatalog(): Promise<AccessCatalog> {
+        const response = await api.get('/access-catalog');
+        return response.data;
+    },
+
+    async getFunctionalHats(): Promise<FunctionalHat[]> {
+        const response = await api.get('/functional-hats');
+        return response.data;
+    },
+
+    async createHat(data: Pick<FunctionalHat, 'name' | 'description' | 'permissions'>): Promise<FunctionalHat> {
+        const response = await api.post('/functional-hats', data);
+        return response.data;
+    },
+
+    async updateHat(id: string, data: Partial<Pick<FunctionalHat, 'name' | 'description' | 'permissions'>>): Promise<FunctionalHat> {
+        const response = await api.put(`/functional-hats/${id}`, data);
+        return response.data;
+    },
+
+    async deleteHat(id: string) {
+        await api.delete(`/functional-hats/${id}`);
     }
 };
