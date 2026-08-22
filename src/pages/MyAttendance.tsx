@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarCheck, Timer, Filter } from 'lucide-react';
+import { CalendarCheck, Timer, Filter, AlertTriangle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { attendanceService } from '../services/attendanceService';
-import { formatMinutesAsHM, formatHmsAsHM, cleanReason } from '../utils/attendanceFormat';
+import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
+import { resolveDayStatus, fillMissingDays } from '../utils/attendanceDayStatus';
+import DailyBreakdownTable from '../components/DailyBreakdownTable';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: React.ReactNode; color: string }) => (
     <div className="bg-white border border-[#511d29]/10 rounded-xl p-5 shadow-sm flex items-center gap-4">
@@ -32,7 +34,10 @@ const MyAttendancePage: React.FC = () => {
         retry: false,
     });
 
-    const rows = (report?.reportData || []).filter(day => {
+    // The attendance system only returns rows it has data for — filling the gaps first (before
+    // the filter below) is what lets a genuine no-show day be caught as Absent at all.
+    const filledReportData = report ? fillMissingDays(report.reportData, report.startDate, report.endDate) : [];
+    const rows = filledReportData.filter(day => {
         switch (dayFilter) {
             case 'late': return day.lateMins > 0;
             case 'earlyOut': return day.earlyOutMins > 0;
@@ -92,11 +97,31 @@ const MyAttendancePage: React.FC = () => {
 
             {report && (
                 <div className="space-y-6">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                         <StatCard icon={CalendarCheck} label="Worked" value={report.grandTotalWork} color="bg-emerald-50 text-emerald-600" />
-                        <StatCard icon={Timer} label="Overtime (Worked)" value={report.totalOT} color="bg-blue-50 text-blue-600" />
-                        <StatCard icon={Timer} label="Overtime (Approved)" value={report.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
+                        <StatCard
+                            icon={AlertTriangle}
+                            label="Absent Days"
+                            value={filledReportData.filter(d => resolveDayStatus(d, report.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'absent').length}
+                            color="bg-red-50 text-red-600"
+                        />
+                        <StatCard
+                            icon={CalendarCheck}
+                            label="Leave Days"
+                            value={
+                                <span>
+                                    <span className={report.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-300'}>{report.paidLeaveDays}</span>
+                                    <span className="text-slate-300 mx-0.5">/</span>
+                                    <span className={report.unpaidLeaveDays > 0 ? 'text-amber-600' : 'text-slate-300'}>{report.unpaidLeaveDays}</span>
+                                    <span className="text-slate-300 mx-0.5">/</span>
+                                    <span className={report.emergencyLeaveDays > 0 ? 'text-rose-600' : 'text-slate-300'}>{report.emergencyLeaveDays}</span>
+                                </span>
+                            }
+                            color="bg-slate-50 text-slate-500"
+                        />
                         <StatCard icon={CalendarCheck} label="Out-Work Days" value={report.outWorkDays} color="bg-indigo-50 text-indigo-600" />
+                        <StatCard icon={Timer} label="Overtime (Approved)" value={report.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
+                        <StatCard icon={Timer} label="Overtime (Worked)" value={report.totalOT} color="bg-blue-50 text-blue-600" />
                     </div>
                     <p className="text-[11px] text-slate-400 font-medium -mt-4">
                         "Worked" is calculated from your actual punch times (first check-in to last check-out) — it is not shifted to the scheduled start, so a late arrival still shortens this total even when the lateness itself is excused below.
@@ -114,107 +139,67 @@ const MyAttendancePage: React.FC = () => {
                             )}
                         </div>
                         <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-                            <div className="p-4 space-y-2">
-                                <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Late Arrival</p>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">Recorded late</span>
-                                    <span className="font-bold text-slate-700">{formatMinutesAsHM(report.totalLate + report.totalExcusedMins)}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">− Excused</span>
-                                    <span className="font-bold text-emerald-600">{formatMinutesAsHM(report.totalExcusedMins)}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                    <span className="font-black text-slate-600">= Chargeable</span>
-                                    <span className={`font-black ${report.totalLate > 0 ? 'text-red-600' : 'text-slate-400'}`}>{formatMinutesAsHM(report.totalLate)}</span>
-                                </div>
-                            </div>
-                            <div className="p-4 space-y-2">
-                                <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Early Departure</p>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">Recorded early-out</span>
-                                    <span className="font-bold text-slate-700">{formatMinutesAsHM(report.totalEarly + report.totalExcusedEarlyOutMins)}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-slate-400">− Excused</span>
-                                    <span className="font-bold text-emerald-600">{formatMinutesAsHM(report.totalExcusedEarlyOutMins)}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                    <span className="font-black text-slate-600">= Chargeable</span>
-                                    <span className={`font-black ${report.totalEarly > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{formatMinutesAsHM(report.totalEarly)}</span>
-                                </div>
-                            </div>
+                            {(() => {
+                                const lateRecorded = report.totalLate + report.totalExcusedMins;
+                                const latePct = lateRecorded > 0 ? (report.totalLate / lateRecorded) * 100 : 0;
+                                return (
+                                    <div className="p-4 space-y-2">
+                                        <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Late Arrival</p>
+                                        {lateRecorded > 0 && (
+                                            <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                                                <div style={{ width: `${latePct}%` }} className="bg-red-500" />
+                                                <div style={{ width: `${100 - latePct}%` }} className="bg-emerald-500" />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400">Recorded late</span>
+                                            <span className="font-bold text-slate-700">{formatMinutesAsHM(lateRecorded)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400">− Excused</span>
+                                            <span className="font-bold text-emerald-600">{formatMinutesAsHM(report.totalExcusedMins)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                                            <span className="font-black text-slate-600">= Chargeable</span>
+                                            <span className={`font-black ${report.totalLate > 0 ? 'text-red-600' : 'text-slate-400'}`}>{formatMinutesAsHM(report.totalLate)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                            {(() => {
+                                const earlyRecorded = report.totalEarly + report.totalExcusedEarlyOutMins;
+                                const earlyPct = earlyRecorded > 0 ? (report.totalEarly / earlyRecorded) * 100 : 0;
+                                return (
+                                    <div className="p-4 space-y-2">
+                                        <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Early Departure</p>
+                                        {earlyRecorded > 0 && (
+                                            <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                                                <div style={{ width: `${earlyPct}%` }} className="bg-amber-500" />
+                                                <div style={{ width: `${100 - earlyPct}%` }} className="bg-emerald-500" />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400">Recorded early-out</span>
+                                            <span className="font-bold text-slate-700">{formatMinutesAsHM(earlyRecorded)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400">− Excused</span>
+                                            <span className="font-bold text-emerald-600">{formatMinutesAsHM(report.totalExcusedEarlyOutMins)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                                            <span className="font-black text-slate-600">= Chargeable</span>
+                                            <span className={`font-black ${report.totalEarly > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{formatMinutesAsHM(report.totalEarly)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <p className="px-4 pb-3 text-[10px] text-slate-400 font-medium">
                             "Recorded" is derived (chargeable + excused) to show how much was logged before any excused allowance was applied.
                         </p>
                     </div>
 
-                    <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
-                        <div className="p-3 bg-slate-50 border-b border-slate-100">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Daily Breakdown</span>
-                        </div>
-                        <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                            <table className="w-full text-left border-collapse text-xs">
-                                <thead className="sticky top-0 bg-white">
-                                    <tr className="text-slate-400 uppercase font-black tracking-wider text-[10px] border-b border-slate-100">
-                                        <th className="p-3">Date</th>
-                                        <th className="p-3">Sessions</th>
-                                        <th className="p-3">Mid-Day Gap</th>
-                                        <th className="p-3">Late</th>
-                                        <th className="p-3">Early Out</th>
-                                        <th className="p-3">OT</th>
-                                        <th className="p-3">Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {rows.map(day => (
-                                        <tr key={day.date} className="hover:bg-slate-50/50">
-                                            <td className="p-3 font-bold">{format(parseISO(day.date), 'dd MMM yyyy')}</td>
-                                            <td className="p-3 font-mono">
-                                                {day.sessions.length > 0 ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        {day.sessions.map((s, i) => (
-                                                            <span key={i} className="whitespace-nowrap">{s.checkIn} – {s.checkOut}</span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="whitespace-nowrap">{day.firstPunch} – {day.lastPunch}</span>
-                                                )}
-                                            </td>
-                                            <td className="p-3">
-                                                <span className={day.midDayGapMins > 0 ? 'font-black text-slate-600' : 'text-slate-400'}>{day.midDayGapTime}</span>
-                                            </td>
-                                            <td className="p-3">
-                                                <span className={day.lateMins > 0 ? 'font-black text-red-600' : 'text-slate-400'}>{day.lateTimeStr}</span>
-                                            </td>
-                                            <td className="p-3">
-                                                <span className={day.earlyOutMins > 0 ? 'font-black text-amber-600' : 'text-slate-400'}>{day.earlyOutStr}</span>
-                                            </td>
-                                            <td className="p-3">{day.overTimeStr}</td>
-                                            <td className="p-3 text-slate-500">
-                                                {day.isHoliday && <span className="mr-2 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">{day.holidayName || 'Holiday'}</span>}
-                                                {day.isOutWork && <span className="mr-2 px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">Out-work: {day.outWorkReason}</span>}
-                                                {day.isExcusedLate && (
-                                                    <span className="mr-2 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">
-                                                        Excused Late{cleanReason(day.excusedLateReason) ? `: ${cleanReason(day.excusedLateReason)}` : ''}
-                                                    </span>
-                                                )}
-                                                {day.isExcusedEarlyOut && (
-                                                    <span className="mr-2 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">
-                                                        Excused Early-Out{cleanReason(day.excusedEarlyOutReason) ? `: ${cleanReason(day.excusedEarlyOutReason)}` : ''}
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {rows.length === 0 && (
-                                        <tr><td colSpan={7} className="p-8 text-center text-slate-400 font-bold">No days match this filter.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <DailyBreakdownTable rows={rows} empLeaves={report.empLeaves} />
 
                     {report.empLeaves.length > 0 && (
                         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">

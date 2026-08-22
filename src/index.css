@@ -573,14 +573,36 @@ body.dark-theme table tbody td span.bg-slate-50,
 body.dark-theme table tbody td div.bg-slate-50,
 body.dark-theme table tbody td span.bg-slate-100, 
 body.dark-theme table tbody td div.bg-slate-100,
-body.dark-theme table tbody td span[class*="bg-slate-"], 
+body.dark-theme table tbody td span[class*="bg-slate-"],
 body.dark-theme table tbody td div[class*="bg-slate-"] {
   background-color: rgba(227, 196, 162, 0.1) !important;
   color: #e3c4a2 !important;
   border: 1px solid rgba(227, 196, 162, 0.25) !important;
 }
 
-/* 6. General Inline Highlights and Sub-text coloring inside status cells */
+/* 6. Blue / Info / On-Leave Status Badges */
+body.dark-theme .bg-blue-50,
+body.dark-theme .bg-blue-100,
+body.dark-theme .text-blue-600,
+body.dark-theme .border-blue-100,
+body.dark-theme .border-blue-200 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(59, 130, 246, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-blue-50,
+body.dark-theme table tbody td div.bg-blue-50,
+body.dark-theme table tbody td span.bg-blue-100,
+body.dark-theme table tbody td div.bg-blue-100,
+body.dark-theme table tbody td span[class*="bg-blue-"],
+body.dark-theme table tbody td div[class*="bg-blue-"] {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(59, 130, 246, 0.35) !important;
+}
+
+/* 7. General Inline Highlights and Sub-text coloring inside status cells */
 body.dark-theme .text-red-400, 
 body.dark-theme .text-red-500, 
 body.dark-theme .text-rose-500, 

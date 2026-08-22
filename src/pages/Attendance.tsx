@@ -14,8 +14,11 @@ import {
 } from '../services/attendanceSettingsService';
 import { staffHubService } from '../services/staffHubService';
 import { useAuth } from '../context/AuthContext';
-import { formatMinutesAsHM, formatHmsAsHM, cleanReason } from '../utils/attendanceFormat';
+import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
+import { resolveDayStatus, fillMissingDays } from '../utils/attendanceDayStatus';
 import Modal from '../components/Modal';
+import DailyBreakdownTable from '../components/DailyBreakdownTable';
+import AttendanceInsights from '../components/AttendanceInsights';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: React.ReactNode; color: string }) => (
     <div className="bg-white border border-[#511d29]/10 rounded-xl p-5 shadow-sm flex items-center gap-4">
@@ -130,7 +133,12 @@ const AttendancePage: React.FC = () => {
     const leaveTypesList = settingsSnapshot?.leaveTypes || [];
     type DetailFilter = 'all' | 'late' | 'earlyOut' | 'holiday' | 'outWork' | 'excused';
     const [detailFilter, setDetailFilter] = useState<DetailFilter>('all');
-    const detailReportRows = (monthlyReport?.reportData || []).filter(day => {
+    // The attendance system only returns rows it has data for — filling the gaps first (before
+    // the filter below) is what lets a genuine no-show day be caught as Absent at all.
+    const filledDetailReportData = monthlyReport
+        ? fillMissingDays(monthlyReport.reportData, monthlyReport.startDate, monthlyReport.endDate)
+        : [];
+    const detailReportRows = filledDetailReportData.filter(day => {
         switch (detailFilter) {
             case 'late': return day.lateMins > 0;
             case 'earlyOut': return day.earlyOutMins > 0;
@@ -626,17 +634,17 @@ const AttendancePage: React.FC = () => {
                         <p className="text-xs font-bold text-rose-600">Dashboard note from the attendance system: {dashboard.error}</p>
                     )}
 
-                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
-                        <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
-                            <Clock className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Presence & Attendance</h3>
-                            <p className="text-sm text-slate-600 mt-1">
-                                Late minutes and leave days here feed the Presence &amp; Attendance score on the monthly evaluation, and connect to Disciplinary Action, Salary Deductions, and Contract Renewals.
-                            </p>
-                        </div>
+                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 px-4 py-2.5 rounded-lg flex items-center gap-2.5">
+                        <Clock className="w-4 h-4 text-[#511d29] shrink-0" />
+                        <p className="text-xs text-slate-600">
+                            <span className="font-black text-[#511d29] uppercase tracking-wide">Presence &amp; Attendance —</span> late minutes and leave days here feed the monthly evaluation score, Disciplinary Action, Salary Deductions, and Contract Renewals.
+                        </p>
                     </div>
+
+                    {/* Insights — charts over data the table below already carries, so the roster's
+                        leave mix and punctuality split are readable at a glance instead of only as
+                        per-row numbers. */}
+                    <AttendanceInsights rows={attendanceRows} />
 
                     {/* Attendance summary */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
@@ -713,7 +721,6 @@ const AttendancePage: React.FC = () => {
                                             <th className="p-4">Employee</th>
                                             <th className="p-4">Worked</th>
                                             <th className="p-4">Punctuality</th>
-                                            <th className="p-4">Excused</th>
                                             <th className="p-4">Overtime</th>
                                             <th className="p-4">Leave / Other</th>
                                             <th className="p-4 text-right">Actions</th>
@@ -729,14 +736,14 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 font-bold">{formatMinutesAsHM(row.totalWorkMins)}</td>
                                                 <td className="p-4">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className={row.totalLateMins > 0 ? 'font-black text-red-600' : 'text-slate-400'}>Late: {formatMinutesAsHM(row.totalLateMins)}</span>
-                                                        <span className={row.totalEarlyOutMins > 0 ? 'font-black text-amber-600' : 'text-slate-400'}>Early: {formatMinutesAsHM(row.totalEarlyOutMins)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className={row.totalExcusedMins > 0 ? 'font-black text-emerald-600' : 'text-slate-400'}>Late: {formatMinutesAsHM(row.totalExcusedMins)}</span>
-                                                        <span className={row.totalExcusedEarlyOutMins > 0 ? 'font-black text-emerald-600' : 'text-slate-400'}>Early: {formatMinutesAsHM(row.totalExcusedEarlyOutMins)}</span>
+                                                        <span className={row.totalLateMins > 0 ? 'font-black text-red-600' : 'text-slate-400'}>
+                                                            Late: {formatMinutesAsHM(row.totalLateMins)}
+                                                            {row.totalExcusedMins > 0 && <span className="text-emerald-600 font-bold"> (-{formatMinutesAsHM(row.totalExcusedMins)} excused)</span>}
+                                                        </span>
+                                                        <span className={row.totalEarlyOutMins > 0 ? 'font-black text-amber-600' : 'text-slate-400'}>
+                                                            Early: {formatMinutesAsHM(row.totalEarlyOutMins)}
+                                                            {row.totalExcusedEarlyOutMins > 0 && <span className="text-emerald-600 font-bold"> (-{formatMinutesAsHM(row.totalExcusedEarlyOutMins)} excused)</span>}
+                                                        </span>
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
@@ -748,7 +755,13 @@ const AttendancePage: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <p className="font-bold">P: {row.paidLeaveDays} · U: {row.unpaidLeaveDays} · E: {row.emergencyLeaveDays}</p>
+                                                    <p className="font-bold space-x-1">
+                                                        <span className={row.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-400'}>P: {row.paidLeaveDays}</span>
+                                                        <span className="text-slate-300">·</span>
+                                                        <span className={row.unpaidLeaveDays > 0 ? 'text-amber-600' : 'text-slate-400'}>U: {row.unpaidLeaveDays}</span>
+                                                        <span className="text-slate-300">·</span>
+                                                        <span className={row.emergencyLeaveDays > 0 ? 'text-rose-600' : 'text-slate-400'}>E: {row.emergencyLeaveDays}</span>
+                                                    </p>
                                                     {(row.holidayDays > 0 || row.outWorkDays > 0) && (
                                                         <p className="text-[10px] text-slate-500 mt-0.5">
                                                             {row.holidayDays > 0 && <>Holiday: {row.holidayDays}d </>}
@@ -768,12 +781,12 @@ const AttendancePage: React.FC = () => {
                                         ))}
                                         {!isLoadingAttendance && attendanceRows.length === 0 && (
                                             <tr>
-                                                <td colSpan={7} className="p-10 text-center text-slate-400 font-bold">No attendance data for this range.</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold">No attendance data for this range.</td>
                                             </tr>
                                         )}
                                         {isLoadingAttendance && (
                                             <tr>
-                                                <td colSpan={7} className="p-10 text-center text-slate-400 font-bold animate-pulse">Loading attendance data…</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">Loading attendance data…</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -801,14 +814,21 @@ const AttendancePage: React.FC = () => {
                             {approvedLeaves.slice(0, 6).map((l: any) => {
                                 const start = String(l.startDate).split('T')[0];
                                 const end = l.endDate ? String(l.endDate).split('T')[0] : start;
-                                const typeLabel = ({ PAID_HOLIDAY: 'Paid Leave', EMERGENCY_LEAVE: 'Emergency Leave', UNPAID_LEAVE: 'Unpaid Leave' } as Record<string, string>)[l.type] || String(l.type).replace(/_/g, ' ');
+                                // Same palette as ApprovedLeaves.tsx's TYPE_META, for a consistent
+                                // paid=emerald / unpaid=amber / emergency=rose meaning app-wide.
+                                const typeMeta = ({
+                                    PAID_HOLIDAY: { label: 'Paid Leave', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                                    EMERGENCY_LEAVE: { label: 'Emergency Leave', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+                                    UNPAID_LEAVE: { label: 'Unpaid Leave', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+                                } as Record<string, { label: string; className: string }>)[l.type]
+                                    || { label: String(l.type).replace(/_/g, ' '), className: 'bg-slate-50 text-slate-700 border-slate-200' };
                                 return (
                                     <div key={l.id} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-[#511d29]/[0.02] transition-colors">
                                         <div className="min-w-0">
                                             <p className="font-bold text-slate-800 text-sm truncate">{l.employee?.fullName || '—'}</p>
                                             <p className="text-xs text-slate-400 font-mono">{l.employee?.staffId || ''}</p>
                                         </div>
-                                        <span className="shrink-0 text-xs font-black text-[#511d29]">{typeLabel}</span>
+                                        <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${typeMeta.className}`}>{typeMeta.label}</span>
                                         <span className="shrink-0 text-xs font-bold text-slate-500 hidden sm:inline">{start}{end !== start ? ` → ${end}` : ''}</span>
                                     </div>
                                 );
@@ -817,12 +837,6 @@ const AttendancePage: React.FC = () => {
                                 <div className="px-5 py-8 text-center text-xs font-bold text-slate-400">No approved leaves yet.</div>
                             )}
                         </div>
-                    </div>
-
-                    {/* Work Authorization Form — not built yet on either system */}
-                    <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-6 text-center">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Work Authorization Form — Coming Soon</p>
-                        <p className="text-xs text-slate-400 mt-1">Change of work time/location requests aren't built yet in either system.</p>
                     </div>
                 </div>
             )}
@@ -1438,11 +1452,31 @@ const AttendancePage: React.FC = () => {
                 {isLoadingDetail && <p className="text-center text-slate-400 font-bold animate-pulse py-10">Loading daily breakdown…</p>}
                 {monthlyReport && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                             <StatCard icon={CalendarCheck} label="Worked" value={monthlyReport.grandTotalWork} color="bg-emerald-50 text-emerald-600" />
-                            <StatCard icon={Timer} label="Overtime (Worked)" value={monthlyReport.totalOT} color="bg-blue-50 text-blue-600" />
-                            <StatCard icon={Timer} label="Overtime (Approved)" value={monthlyReport.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
+                            <StatCard
+                                icon={AlertTriangle}
+                                label="Absent Days"
+                                value={filledDetailReportData.filter(d => resolveDayStatus(d, monthlyReport.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'absent').length}
+                                color="bg-red-50 text-red-600"
+                            />
+                            <StatCard
+                                icon={CalendarCheck}
+                                label="Leave Days"
+                                value={
+                                    <span>
+                                        <span className={monthlyReport.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-300'}>{monthlyReport.paidLeaveDays}</span>
+                                        <span className="text-slate-300 mx-0.5">/</span>
+                                        <span className={monthlyReport.unpaidLeaveDays > 0 ? 'text-amber-600' : 'text-slate-300'}>{monthlyReport.unpaidLeaveDays}</span>
+                                        <span className="text-slate-300 mx-0.5">/</span>
+                                        <span className={monthlyReport.emergencyLeaveDays > 0 ? 'text-rose-600' : 'text-slate-300'}>{monthlyReport.emergencyLeaveDays}</span>
+                                    </span>
+                                }
+                                color="bg-slate-50 text-slate-500"
+                            />
                             <StatCard icon={CalendarCheck} label="Out-Work Days" value={monthlyReport.outWorkDays} color="bg-indigo-50 text-indigo-600" />
+                            <StatCard icon={Timer} label="Overtime (Approved)" value={monthlyReport.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
+                            <StatCard icon={Timer} label="Overtime (Worked)" value={monthlyReport.totalOT} color="bg-blue-50 text-blue-600" />
                         </div>
                         <p className="text-[11px] text-slate-400 font-medium -mt-4">
                             "Worked" is calculated from actual punch times (first check-in to last check-out) — it is not shifted to the scheduled start, so a late arrival still shortens this total even when the lateness itself is later excused below.
@@ -1460,107 +1494,67 @@ const AttendancePage: React.FC = () => {
                                 )}
                             </div>
                             <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-                                <div className="p-4 space-y-2">
-                                    <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Late Arrival</p>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-400">Recorded late</span>
-                                        <span className="font-bold text-slate-700">{formatMinutesAsHM(monthlyReport.totalLate + monthlyReport.totalExcusedMins)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-400">− Excused</span>
-                                        <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedMins)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                        <span className="font-black text-slate-600">= Chargeable</span>
-                                        <span className={`font-black ${monthlyReport.totalLate > 0 ? 'text-red-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalLate)}</span>
-                                    </div>
-                                </div>
-                                <div className="p-4 space-y-2">
-                                    <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Early Departure</p>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-400">Recorded early-out</span>
-                                        <span className="font-bold text-slate-700">{formatMinutesAsHM(monthlyReport.totalEarly + monthlyReport.totalExcusedEarlyOutMins)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-slate-400">− Excused</span>
-                                        <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedEarlyOutMins)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                        <span className="font-black text-slate-600">= Chargeable</span>
-                                        <span className={`font-black ${monthlyReport.totalEarly > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalEarly)}</span>
-                                    </div>
-                                </div>
+                                {(() => {
+                                    const lateRecorded = monthlyReport.totalLate + monthlyReport.totalExcusedMins;
+                                    const latePct = lateRecorded > 0 ? (monthlyReport.totalLate / lateRecorded) * 100 : 0;
+                                    return (
+                                        <div className="p-4 space-y-2">
+                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Late Arrival</p>
+                                            {lateRecorded > 0 && (
+                                                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                                                    <div style={{ width: `${latePct}%` }} className="bg-red-500" />
+                                                    <div style={{ width: `${100 - latePct}%` }} className="bg-emerald-500" />
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-slate-400">Recorded late</span>
+                                                <span className="font-bold text-slate-700">{formatMinutesAsHM(lateRecorded)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-slate-400">− Excused</span>
+                                                <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedMins)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                                                <span className="font-black text-slate-600">= Chargeable</span>
+                                                <span className={`font-black ${monthlyReport.totalLate > 0 ? 'text-red-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalLate)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {(() => {
+                                    const earlyRecorded = monthlyReport.totalEarly + monthlyReport.totalExcusedEarlyOutMins;
+                                    const earlyPct = earlyRecorded > 0 ? (monthlyReport.totalEarly / earlyRecorded) * 100 : 0;
+                                    return (
+                                        <div className="p-4 space-y-2">
+                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Early Departure</p>
+                                            {earlyRecorded > 0 && (
+                                                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                                                    <div style={{ width: `${earlyPct}%` }} className="bg-amber-500" />
+                                                    <div style={{ width: `${100 - earlyPct}%` }} className="bg-emerald-500" />
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-slate-400">Recorded early-out</span>
+                                                <span className="font-bold text-slate-700">{formatMinutesAsHM(earlyRecorded)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-slate-400">− Excused</span>
+                                                <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedEarlyOutMins)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                                                <span className="font-black text-slate-600">= Chargeable</span>
+                                                <span className={`font-black ${monthlyReport.totalEarly > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalEarly)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <p className="px-4 pb-3 text-[10px] text-slate-400 font-medium">
                                 "Recorded" is derived (chargeable + excused) to show how much was logged before any excused allowance was applied — the attendance system doesn't return that raw figure directly.
                             </p>
                         </div>
 
-                        <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
-                            <div className="p-3 bg-slate-50 border-b border-slate-100">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Daily Breakdown</span>
-                            </div>
-                            <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                                <table className="w-full text-left border-collapse text-xs">
-                                    <thead className="sticky top-0 bg-white">
-                                        <tr className="text-slate-400 uppercase font-black tracking-wider text-[10px] border-b border-slate-100">
-                                            <th className="p-3">Date</th>
-                                            <th className="p-3">Sessions</th>
-                                            <th className="p-3">Mid-Day Gap</th>
-                                            <th className="p-3">Late</th>
-                                            <th className="p-3">Early Out</th>
-                                            <th className="p-3">OT</th>
-                                            <th className="p-3">Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {detailReportRows.map(day => (
-                                            <tr key={day.date} className="hover:bg-slate-50/50">
-                                                <td className="p-3 font-bold">{format(parseISO(day.date), 'dd MMM yyyy')}</td>
-                                                <td className="p-3 font-mono">
-                                                    {day.sessions.length > 0 ? (
-                                                        <div className="flex flex-col gap-1">
-                                                            {day.sessions.map((s, i) => (
-                                                                <span key={i} className="whitespace-nowrap">{s.checkIn} – {s.checkOut}</span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="whitespace-nowrap">{day.firstPunch} – {day.lastPunch}</span>
-                                                    )}
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className={day.midDayGapMins > 0 ? 'font-black text-slate-600' : 'text-slate-400'}>{day.midDayGapTime}</span>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className={day.lateMins > 0 ? 'font-black text-red-600' : 'text-slate-400'}>{day.lateTimeStr}</span>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className={day.earlyOutMins > 0 ? 'font-black text-amber-600' : 'text-slate-400'}>{day.earlyOutStr}</span>
-                                                </td>
-                                                <td className="p-3">{day.overTimeStr}</td>
-                                                <td className="p-3 text-slate-500">
-                                                    {day.isHoliday && <span className="mr-2 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">{day.holidayName || 'Holiday'}</span>}
-                                                    {day.isOutWork && <span className="mr-2 px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">Out-work: {day.outWorkReason}</span>}
-                                                    {day.isExcusedLate && (
-                                                        <span className="mr-2 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">
-                                                            Excused Late{cleanReason(day.excusedLateReason) ? `: ${cleanReason(day.excusedLateReason)}` : ''}
-                                                        </span>
-                                                    )}
-                                                    {day.isExcusedEarlyOut && (
-                                                        <span className="mr-2 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">
-                                                            Excused Early-Out{cleanReason(day.excusedEarlyOutReason) ? `: ${cleanReason(day.excusedEarlyOutReason)}` : ''}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {detailReportRows.length === 0 && (
-                                            <tr><td colSpan={7} className="p-8 text-center text-slate-400 font-bold">No days match this filter.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <DailyBreakdownTable rows={detailReportRows} empLeaves={monthlyReport.empLeaves} />
 
                         {monthlyReport.empLeaves.length > 0 && (
                             <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
