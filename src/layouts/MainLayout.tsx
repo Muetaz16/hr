@@ -159,9 +159,8 @@ const MainLayout: React.FC = () => {
         }
     };
 
-    // Roles that approve forms and therefore need a saved signature.
-    const SIGNATURE_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER', 'CHAIRMAN', 'HR_MANAGER', 'SUPER_ADMIN'];
-    const canManageSignature = SIGNATURE_ROLES.includes(currentUser?.role || '');
+    // Every user can view & manage their own signature.
+    const canManageSignature = !!currentUser;
 
     const handleSaveSignature = async (dataUrl: string | null) => {
         setIsSavingSignature(true);
@@ -258,14 +257,15 @@ const MainLayout: React.FC = () => {
                 {
                     label: 'Personnel Relations Department',
                     icon: HeartHandshake,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'],
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'],
+                    permissions: ['view_personnel_relations'],
                     children: [
-                        { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                        { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                        { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                        { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                        { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                        { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'view_lifecycle'] },
+                        { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'view_contracts', 'manage_contract_management'] },
+                        { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
+                        { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
+                        { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
                         { label: 'Performance Evaluation', path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
                         { label: 'Employee Control', path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
                     ]

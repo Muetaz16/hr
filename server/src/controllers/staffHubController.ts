@@ -68,11 +68,57 @@ async function notifyUsers(userIds: (string | null | undefined)[], title: string
     }
 }
 
+// Colleagues an employee may nominate as their leave "replacement" (cover): people in the same
+// department (or, if the employee sits directly under a division with no department, the same
+// division) who have a login account — so they can be notified, accept, and have a signature.
+// Excludes the requester themselves. Used both to validate a submitted nomination and to populate
+// the picker on the request form.
+async function getReplacementCandidates(employee: { id: string; userId: string | null; departmentId: string | null; divisionId: string | null; }) {
+    const scope = employee.departmentId
+        ? { departmentId: employee.departmentId }
+        : (employee.divisionId ? { divisionId: employee.divisionId } : null);
+    if (!scope) return [] as { userId: string; employeeId: string; fullName: string; position: string }[];
+
+    const rows = await prisma.employee.findMany({
+        where: {
+            ...scope,
+            enrollmentStatus: 'ACTIVE',
+            userId: { not: null },
+            id: { not: employee.id },
+        },
+        select: { id: true, userId: true, fullName: true, position: true, jobDescription: { select: { title: true } } },
+        orderBy: { fullName: 'asc' },
+    });
+    return rows
+        .filter(r => !!r.userId && r.userId !== employee.userId)
+        .map(r => ({ userId: r.userId as string, employeeId: r.id, fullName: r.fullName, position: r.jobDescription?.title || r.position || '' }));
+}
+
 // --- Leave & Permission Requests ---
+
+// GET /staff-hub/replacement-candidates?employeeId=... — colleagues the requester can nominate as
+// their leave replacement. An empty list means the requester is the only account in their
+// department, so the replacement step may be skipped.
+export const getReplacementCandidatesForEmployee = async (req: Request, res: Response) => {
+    try {
+        const employeeId = String(req.query.employeeId || '');
+        if (!employeeId) return res.status(400).json({ error: 'employeeId is required.' });
+        const employee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            select: { id: true, userId: true, departmentId: true, divisionId: true },
+        });
+        if (!employee) return res.status(404).json({ error: 'Employee not found.' });
+        const candidates = await getReplacementCandidates(employee);
+        res.json(candidates);
+    } catch (error) {
+        console.error('Error fetching replacement candidates:', error);
+        res.status(500).json({ error: 'Failed to fetch replacement candidates.' });
+    }
+};
 
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
-        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason } = req.body;
+        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId } = req.body;
         const file = (req as any).file;
 
         // Emergency leave requires a supporting document
@@ -144,6 +190,21 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
             }
 
+            // --- Replacement (cover) employee. Mandatory when the requester has an eligible
+            // colleague; auto-skipped when they're the only account in their department. A nominated
+            // replacement must accept before the approval chain unblocks, so the first approvers are
+            // notified only once acceptance happens (see decideReplacement).
+            const candidates = await getReplacementCandidates(employee);
+            const chosenReplacement = replacementUserId ? String(replacementUserId) : null;
+            if (chosenReplacement) {
+                if (!candidates.some(c => c.userId === chosenReplacement)) {
+                    return res.status(400).json({ error: 'The selected replacement is not a valid colleague in your department.' });
+                }
+            } else if (candidates.length > 0) {
+                return res.status(400).json({ error: 'Please nominate a replacement employee from your department.' });
+            }
+            const replacementStatus = chosenReplacement ? 'PENDING' : null;
+
             const request = await prisma.$transaction(async (tx) => {
                 const created = await tx.leaveRequest.create({
                     data: {
@@ -151,7 +212,9 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         startDate: new Date(startDate),
                         endDate: endDate ? new Date(endDate) : null,
                         startTime, endTime, reason, attachmentUrl, attachmentName,
-                        status: 'PENDING'
+                        status: 'PENDING',
+                        replacementUserId: chosenReplacement,
+                        replacementStatus,
                     }
                 });
                 await tx.leaveApprovalStep.createMany({
@@ -167,15 +230,25 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return created;
             });
 
-            // Notify the first-stage approver(s) that a request now awaits their decision.
-            const minSeq = Math.min(...steps.map(s => STAGE_SEQUENCE[s.stage]));
-            const firstApprovers = steps.filter(s => STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
-            await notifyUsers(
-                firstApprovers,
-                'New leave request to review',
-                `${employee.fullName} submitted a ${leaveTypeLabel(type)} request (${fmtRange(startDate, endDate || null)}).`,
-                '/approvals',
-            );
+            if (replacementStatus === 'PENDING' && chosenReplacement) {
+                // Chain is blocked until the replacement accepts — notify only them for now.
+                await notifyUsers(
+                    [chosenReplacement],
+                    'You were nominated as a leave replacement',
+                    `${employee.fullName} nominated you as their replacement for a ${leaveTypeLabel(type)} request (${fmtRange(startDate, endDate || null)}). Please review and accept to confirm.`,
+                    '/staff-hub',
+                );
+            } else {
+                // No replacement needed — notify the first-stage approver(s) immediately.
+                const minSeq = Math.min(...steps.map(s => STAGE_SEQUENCE[s.stage]));
+                const firstApprovers = steps.filter(s => STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
+                await notifyUsers(
+                    firstApprovers,
+                    'New leave request to review',
+                    `${employee.fullName} submitted a ${leaveTypeLabel(type)} request (${fmtRange(startDate, endDate || null)}).`,
+                    '/approvals',
+                );
+            }
 
             return res.json(request);
         }
@@ -341,6 +414,12 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'You are not the assigned approver for this step.' });
         }
 
+        // The approval chain is blocked until the nominated replacement (cover) employee accepts.
+        // Rejection is still allowed (a manager may cancel the request outright).
+        if (decision === 'APPROVE' && step.leaveRequest.replacementStatus === 'PENDING') {
+            return res.status(400).json({ error: 'This request is awaiting the replacement employee\'s acceptance before it can be approved.' });
+        }
+
         // The General Manager must attach a supporting document to grant the final approval.
         const file = (req as any).file;
         if (step.stage === 'GENERAL_MANAGER' && decision === 'APPROVE' && !file && !step.leaveRequest.finalDocumentUrl) {
@@ -490,7 +569,16 @@ export const getMyPendingSteps = async (req: Request, res: Response) => {
         if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
         const myPending = await prisma.leaveApprovalStep.findMany({
-            where: { approverUserId: userId, status: 'PENDING', leaveRequest: { status: 'PENDING' } },
+            where: {
+                approverUserId: userId,
+                status: 'PENDING',
+                leaveRequest: {
+                    status: 'PENDING',
+                    // Hide requests still waiting on the replacement employee's acceptance — they
+                    // aren't actionable by approvers yet.
+                    OR: [{ replacementStatus: null }, { replacementStatus: 'APPROVED' }],
+                },
+            },
             include: { leaveRequest: { include: { employee: true } } },
             orderBy: { createdAt: 'asc' },
         });
@@ -512,6 +600,117 @@ export const getMyPendingSteps = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching my pending approval steps:', error);
         res.status(500).json({ error: 'Failed to fetch pending approvals' });
+    }
+};
+
+// GET /staff-hub/my-replacement-requests — leave requests where the signed-in user has been
+// nominated as the replacement (cover) and hasn't yet responded. These block their colleague's
+// approval chain until accepted, so they surface as an action item on the Staff Hub.
+export const getMyReplacementRequests = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+        const requests = await prisma.leaveRequest.findMany({
+            where: { replacementUserId: userId, replacementStatus: 'PENDING', status: 'PENDING' },
+            include: { employee: { select: { fullName: true, staffId: true, position: true } } },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching my replacement requests:', error);
+        res.status(500).json({ error: 'Failed to fetch replacement requests' });
+    }
+};
+
+// PATCH /staff-hub/requests/:id/replacement-decision — the nominated replacement accepts or
+// declines. Accepting stamps their signature on the form and unblocks the approval chain (the
+// first-stage approvers are notified). Declining rejects the whole request.
+export const decideReplacement = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { decision } = req.body as { decision?: string };
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+        if (decision !== 'ACCEPT' && decision !== 'DECLINE') {
+            return res.status(400).json({ error: 'decision must be ACCEPT or DECLINE.' });
+        }
+
+        const request = await prisma.leaveRequest.findUnique({
+            where: { id },
+            include: { employee: { select: { fullName: true, userId: true } } },
+        });
+        if (!request) return res.status(404).json({ error: 'Leave request not found.' });
+        if (request.replacementUserId !== userId) {
+            return res.status(403).json({ error: 'You are not the nominated replacement for this request.' });
+        }
+        if (request.replacementStatus !== 'PENDING' || request.status !== 'PENDING') {
+            return res.status(400).json({ error: 'This nomination has already been resolved.' });
+        }
+
+        // The signature that will be stamped on the form comes from the replacement's saved profile
+        // signature — they must have one before accepting.
+        if (decision === 'ACCEPT') {
+            const me = await prisma.user.findUnique({ where: { id: userId }, select: { signature: true } });
+            if (!me?.signature) {
+                return res.status(400).json({ error: 'Please create your signature (My Signature) before accepting — it will be added to the leave form.' });
+            }
+        }
+
+        const rangeLabel = fmtRange(request.startDate, request.endDate);
+        const requesterUserIds = [request.employee?.userId, request.userId];
+
+        if (decision === 'DECLINE') {
+            await prisma.$transaction(async (tx) => {
+                await tx.leaveRequest.update({
+                    where: { id },
+                    data: { replacementStatus: 'REJECTED', replacementDecidedAt: new Date(), status: 'REJECTED' },
+                });
+                await tx.leaveApprovalStep.updateMany({
+                    where: { leaveRequestId: id, status: 'PENDING' },
+                    data: { status: 'SKIPPED' },
+                });
+            });
+            await notifyUsers(
+                requesterUserIds,
+                'Replacement declined',
+                `Your replacement declined to cover your ${leaveTypeLabel(request.type)} request (${rangeLabel}), so it was cancelled. Nominate someone else and submit again.`,
+                '/staff-hub',
+            );
+            return res.json({ replacementStatus: 'REJECTED', status: 'REJECTED' });
+        }
+
+        // ACCEPT — unblock the chain and notify the first-stage approver(s).
+        await prisma.leaveRequest.update({
+            where: { id },
+            data: { replacementStatus: 'APPROVED', replacementDecidedAt: new Date() },
+        });
+
+        const firstPending = await prisma.leaveApprovalStep.findFirst({
+            where: { leaveRequestId: id, status: 'PENDING' },
+            orderBy: { sequence: 'asc' },
+        });
+        if (firstPending) {
+            const firstApprovers = await prisma.leaveApprovalStep.findMany({
+                where: { leaveRequestId: id, status: 'PENDING', sequence: firstPending.sequence },
+                select: { approverUserId: true },
+            });
+            await notifyUsers(
+                firstApprovers.map(s => s.approverUserId),
+                'New leave request to review',
+                `${request.employee?.fullName || 'An employee'} submitted a ${leaveTypeLabel(request.type)} request (${rangeLabel}).`,
+                '/approvals',
+            );
+        }
+        await notifyUsers(
+            requesterUserIds,
+            'Replacement accepted',
+            `Your replacement accepted to cover your ${leaveTypeLabel(request.type)} request (${rangeLabel}). It's now with your approvers.`,
+            '/staff-hub',
+        );
+        return res.json({ replacementStatus: 'APPROVED' });
+    } catch (error) {
+        console.error('Error deciding replacement:', error);
+        res.status(500).json({ error: 'Failed to record replacement decision' });
     }
 };
 
@@ -586,6 +785,7 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             include: {
                 employee: { include: { department: true, division: true, jobDescription: { select: { title: true } } } },
                 user: { select: { signature: true } },
+                replacementUser: { select: { fullName: true, signature: true } },
                 approvalSteps: {
                     orderBy: { sequence: 'asc' },
                     include: { approver: { select: { fullName: true, signature: true } } },
@@ -679,6 +879,23 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             UNPAID_LEAVE: 'Unpaid Leave',
         };
 
+        // Residency classification (Employee.contractType) -> bilingual label (English / Arabic) so
+        // حالة الإقامة reads on the bilingual form.
+        const residencyLabelMap: Record<string, { en: string; ar: string }> = {
+            'RESDANT': { en: 'Resident', ar: 'محلي' },
+            'DIRCT NONE RESDANT': { en: 'Direct Non-Resident', ar: 'غير محلي مباشر' },
+            'NONE RESDANT': { en: 'Service Provider', ar: 'مزود خدمة' },
+        };
+        const residencyPair = residencyLabelMap[emp.contractType || ''];
+        const residencyLabel = residencyPair
+            ? `${residencyPair.en} / ${residencyPair.ar}`
+            : (emp.contractType || '');
+        // "Employee Contract" (عقد الموظف) row shows the work type: Full Time / Part Time.
+        const workTypeLabel = emp.contractWorkType || 'Full Time';
+
+        // The replacement signature is only shown once the nominee has accepted.
+        const replacementAccepted = request.replacementStatus === 'APPROVED';
+
         const buf = generateLeaveRequestFormDocx({
             employeeName: emp.fullName || '',
             idNo: emp.staffId || '',
@@ -687,8 +904,8 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             position: (emp as any).jobDescription?.title || emp.position || '',
             contractStartDate: fmt(emp.contractStartDate),
             contractEndDate: fmt(emp.contractEndDate),
-            employeeContract: emp.contractNumber || emp.contractType || '',
-            residencyStatus: emp.contractType || '',
+            employeeContract: workTypeLabel,
+            residencyStatus: residencyLabel,
             typeOfLeave: leaveTypeLabelMap[request.type] || String(request.type).replace(/_/g, ' '),
             from: fmt(request.startDate),
             to: fmt(request.endDate || request.startDate),
@@ -696,15 +913,17 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             startWorkingDate: fmt(resume),
             employeeSignature: request.user?.signature || null,
             employeeSignatureDate: fmt(request.createdAt),
-            replacementName: '',
+            replacementName: (request as any).replacementUser?.fullName || '',
+            replacementSignature: replacementAccepted ? ((request as any).replacementUser?.signature || null) : null,
+            replacementSignatureDate: replacementAccepted && request.replacementDecidedAt ? fmt(request.replacementDecidedAt) : '',
             annualEntitlement: String(metrics.earnedHolidays),
-            annualDeducted: request.type === 'PAID_HOLIDAY' ? String(days) : '',
+            annualDeducted: request.type === 'PAID_HOLIDAY' ? String(days) : '0',
             annualRemaining: String(metrics.remainingHolidays),
             unpaidEntitlement: '14',
-            unpaidDeducted: request.type === 'UNPAID_LEAVE' ? String(days) : '',
+            unpaidDeducted: request.type === 'UNPAID_LEAVE' ? String(days) : '0',
             unpaidRemaining: String(metrics.remainingUnpaidHolidays),
             emergencyEntitlement: '3',
-            emergencyDeducted: request.type === 'EMERGENCY_LEAVE' ? String(days) : '',
+            emergencyDeducted: request.type === 'EMERGENCY_LEAVE' ? String(days) : '0',
             emergencyRemaining: String(metrics.remainingEmergencyHolidays),
             headAttendance: toApprover(headAttendanceStep),
             directSupervisor: toApprover(directStep),

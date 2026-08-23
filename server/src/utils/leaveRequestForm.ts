@@ -101,6 +101,8 @@ export interface LeaveFormData {
     employeeSignature?: string | null; // requester's signature
     employeeSignatureDate?: string;
     replacementName?: string;
+    replacementSignature?: string | null; // replacement (cover) employee's signature, once they accept
+    replacementSignatureDate?: string;
     // Balance table (entitlement / deducted / remaining)
     annualEntitlement: string; annualDeducted: string; annualRemaining: string;
     unpaidEntitlement: string; unpaidDeducted: string; unpaidRemaining: string;
@@ -203,6 +205,16 @@ export const generateLeaveRequestFormDocx = (data: LeaveFormData): Buffer => {
         if (li >= 0) {
             placeSignature(data.employeeSignature, li + 1, 'Employee Signature');
             if (data.employeeSignatureDate) fillIdx(li + 1, ` ${data.employeeSignatureDate}`);
+        }
+    }
+
+    // Replacement (cover) employee's signature — filled only once they accept (value cell of the
+    // "Replacement Signature and Date" row).
+    {
+        const li = findLabel('Replacement Signature');
+        if (li >= 0) {
+            placeSignature(data.replacementSignature, li + 1, 'Replacement Signature');
+            if (data.replacementSignatureDate) fillIdx(li + 1, ` ${data.replacementSignatureDate}`);
         }
     }
 

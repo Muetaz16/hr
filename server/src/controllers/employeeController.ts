@@ -54,25 +54,67 @@ export const calculateHolidayMetrics = (
     };
 };
 
+// Roles / permission that grant company-wide visibility of FULL employee data. Everyone else only
+// sees full data for employees inside their own org branch (a head) or their own record; other
+// records are returned at directory level (name/position/org unit) so the org chart still works.
+const GLOBAL_FULL_EMP_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN'];
+
+// Sensitive fields stripped from records the caller isn't allowed to see in full.
+const SENSITIVE_EMP_FIELDS = [
+    'baseSalary', 'passportNumber', 'passportPlaceOfIssue', 'passportExpiryDate', 'nationalId',
+    'contractNumber', 'bonusHolidays', 'holidaysUsed', 'emergencyHolidaysUsed', 'unpaidHolidaysUsed',
+    'bankName', 'bankBranchName', 'bankAccountNumber', 'personalPhone', 'personalEmail',
+    'emergencyContactNumber', 'residentialAddress', 'dateOfBirth', 'idCardNumber',
+];
+
+// Resolve which employees the caller may see in FULL. Returns `seeAll` (company-wide) and, for a
+// head, an `inBranch(emp)` predicate matching their own unit/department/division/directorate.
+async function resolveEmployeeScope(user: NonNullable<AuthRequest['user']>): Promise<{
+    seeAll: boolean;
+    inBranch: (emp: { unitId: string | null; departmentId: string | null; divisionId: string | null; directorateId: string | null; userId: string | null; }) => boolean;
+}> {
+    const perms: string[] = (user as any).permissions || [];
+    if (user.role === 'SUPER_ADMIN' || GLOBAL_FULL_EMP_ROLES.includes(user.role) || perms.includes('view_employees')) {
+        return { seeAll: true, inBranch: () => true };
+    }
+
+    // Head branch scope. HEAD_DIRECTOR has no directorateId on the User, so derive it from their
+    // linked Employee record (mirrors the leave-approval chain + Dashboard scoping).
+    let directorateId: string | null = null;
+    if (user.role === 'HEAD_DIRECTOR') {
+        const me = await prisma.employee.findFirst({ where: { userId: user.id }, select: { directorateId: true } });
+        directorateId = me?.directorateId ?? null;
+    }
+    const deptIds: string[] = (user as any).departmentIds || [];
+
+    return {
+        seeAll: false,
+        inBranch: (emp) => {
+            switch (user.role) {
+                case 'HEAD_UNIT': return !!user.unitId && emp.unitId === user.unitId;
+                case 'HEAD_DEPARTMENT':
+                case 'HEAD_OFFICE': return !!user.departmentId && emp.departmentId === user.departmentId;
+                case 'HEAD_DIVISION': return !!user.divisionId && emp.divisionId === user.divisionId;
+                case 'HEAD_DIRECTOR':
+                    return (!!directorateId && emp.directorateId === directorateId)
+                        || (!!emp.departmentId && deptIds.includes(emp.departmentId));
+                default: return false;
+            }
+        },
+    };
+}
+
 export const getAllEmployees = async (req: AuthRequest, res: Response) => {
     try {
-        const where: any = {};
-        
-        const { id: userId, role, departmentId, unitId, departmentIds } = req.user!;
-        
-        console.log(`[GET_ALL_EMPLOYEES] User: ${userId}, Role: ${role}, Dept: ${departmentId}, Unit: ${unitId}`);
-
-        // Allow full visibility for all roles (requested for Organization Structure)
-        // Sensitive data is pruned below for non-HR/Admin roles.
-
-        console.log(`[GET_ALL_EMPLOYEES] Filter:`, JSON.stringify(where));
-
+        const { id: userId } = req.user!;
+        // Everyone still receives the full roster at DIRECTORY level (needed for the org chart and
+        // people pickers); FULL data is pruned per-record below based on the caller's scope.
         const employees = await prisma.employee.findMany({
-            where,
+            where: {},
             include: { user: { select: { permissions: true } }, jobDescription: true }
         });
 
-        const isSensitiveRole = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(role);
+        const scope = await resolveEmployeeScope(req.user!);
 
         const employeesWithHolidays = employees.map(emp => {
             const data: any = {
@@ -81,17 +123,14 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
                 ...calculateHolidayMetrics(emp.contractStartDate, (emp as any).holidaysUsed, (emp as any).bonusHolidays, (emp as any).emergencyHolidaysUsed, (emp as any).unpaidHolidaysUsed)
             };
 
-            // Prune sensitive data for non-administrative roles or other people's records
-            if (!isSensitiveRole && emp.userId !== userId) {
-                delete data.baseSalary;
-                delete data.passportNumber;
-                delete data.nationality;
-                delete data.contractNumber;
-                delete data.bonusHolidays;
-                delete data.holidaysUsed;
-                // Keep name, role, department, position, etc. for Org Chart
+            // Full data only for: company-wide viewers, employees inside the caller's branch, or the
+            // caller's own record. Everyone else is pruned to directory level (name/position/org unit).
+            const fullAllowed = scope.seeAll || emp.userId === userId || scope.inBranch(emp as any);
+            if (!fullAllowed) {
+                for (const f of SENSITIVE_EMP_FIELDS) delete data[f];
+                // Keep name, role, department, division, unit, position, photo for the Org Chart.
             }
-            
+
             return data;
         });
         res.json(employeesWithHolidays);
@@ -101,7 +140,7 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const getEmployeeById = async (req: Request, res: Response) => {
+export const getEmployeeById = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
         const employee = await prisma.employee.findUnique({
@@ -117,11 +156,23 @@ export const getEmployeeById = async (req: Request, res: Response) => {
         if (!employee) {
             return res.status(404).json({ error: 'Employee not found' });
         }
-        res.json({
+
+        const data: any = {
             ...employee,
             permissions: (employee as any).user?.permissions || [],
             ...calculateHolidayMetrics(employee.contractStartDate, (employee as any).holidaysUsed, (employee as any).bonusHolidays, (employee as any).emergencyHolidaysUsed, (employee as any).unpaidHolidaysUsed)
-        });
+        };
+
+        // Same scope rule as the list: full record only for company-wide viewers, the caller's own
+        // record, or an employee inside the caller's branch. Otherwise prune to directory level.
+        const scope = await resolveEmployeeScope(req.user!);
+        const fullAllowed = scope.seeAll || employee.userId === req.user!.id || scope.inBranch(employee as any);
+        if (!fullAllowed) {
+            for (const f of SENSITIVE_EMP_FIELDS) delete data[f];
+            delete data.contracts;
+        }
+
+        res.json(data);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employee' });
     }

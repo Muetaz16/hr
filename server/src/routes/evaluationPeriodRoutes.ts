@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { authenticateToken, authorizeRoles, authorizeAccess } from '../middleware/auth';
 import {
     getEvaluationPeriods,
     enableEvaluationPeriod,
@@ -11,7 +11,7 @@ const router = express.Router();
 router.use(authenticateToken); // Protect all routes
 
 router.get('/', getEvaluationPeriods);
-router.post('/', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER'), enableEvaluationPeriod);
-router.delete('/:id', authorizeRoles('SUPER_ADMIN'), disableEvaluationPeriod);
+router.post('/', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER'], ['manage_evaluation_control']), enableEvaluationPeriod);
+router.delete('/:id', authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']), disableEvaluationPeriod);
 
 export default router;

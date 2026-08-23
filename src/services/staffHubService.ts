@@ -16,6 +16,11 @@ export interface LeaveRequest {
     finalDocumentName?: string;
     managerNote?: string;
     hrNote?: string;
+    // Replacement (cover) employee nomination. replacementStatus: null = not required |
+    // PENDING (awaiting the nominee) | APPROVED | REJECTED.
+    replacementUserId?: string | null;
+    replacementStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+    replacementDecidedAt?: string | null;
     // PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only ever use PENDING/COMPLETED/REJECTED going
     // forward (see LeaveApprovalStep below for their per-stage chain); the APPROVED_BY_* values
     // remain valid for the other request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) and older history.
@@ -104,6 +109,23 @@ export const staffHubService = {
     },
     async getMyRequests(employeeId: string) {
         const response = await api.get(`/staff-hub/requests/employee/${employeeId}`);
+        return response.data;
+    },
+    // Colleagues the requester may nominate as their leave replacement (same department, has a
+    // login). Empty list => requester is the only account in their department, so it may be skipped.
+    async getReplacementCandidates(employeeId: string): Promise<{ userId: string; employeeId: string; fullName: string; position: string }[]> {
+        const response = await api.get('/staff-hub/replacement-candidates', { params: { employeeId } });
+        return response.data;
+    },
+    // Leave requests where I've been nominated as the replacement and haven't responded yet.
+    async getMyReplacementRequests(): Promise<LeaveRequestWithEmployee[]> {
+        const response = await api.get('/staff-hub/my-replacement-requests');
+        return response.data;
+    },
+    // Accept or decline a replacement nomination. Accepting stamps my signature on the form and
+    // unblocks my colleague's approval chain.
+    async decideReplacement(requestId: string, decision: 'ACCEPT' | 'DECLINE') {
+        const response = await api.patch(`/staff-hub/requests/${requestId}/replacement-decision`, { decision });
         return response.data;
     },
     async getPendingRequests(filters: { departmentId?: string; groupId?: string; unitId?: string; divisionId?: string; status?: string }) {

@@ -12,7 +12,7 @@ import {
     deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation,
     finalizeEvaluations, getFinalizationsByMonth, getEvaluationHistoryForEmployee
 } from '../controllers/evaluationController';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { authenticateToken, authorizeRoles, authorizeAccess } from '../middleware/auth';
 import { MANAGER_ROLES } from '../utils/evaluationAssignments';
 
 const router = Router();
@@ -25,65 +25,71 @@ router.use(authenticateToken);
 // routes below, which enforce ownership per-request instead).
 const EVALUATOR_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', ...MANAGER_ROLES];
 const authorizeEvaluators = authorizeRoles(...EVALUATOR_ROLES);
+// Writing an evaluation requires the `submit_evaluations` permission (or an evaluator role, or
+// `manage_evaluation_control`). Previously these POSTs were open to any authenticated user.
+const authorizeEvalWrite = authorizeAccess(EVALUATOR_ROLES, ['submit_evaluations', 'manage_evaluation_control']);
+// Deleting / finalizing evaluation data is an admin/control action.
+const authorizeEvalControl = authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['manage_evaluation_control']);
+const authorizeEvalDelete = authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']);
 
 // HR
 router.get('/hr', getHREvaluation); // ?employeeId=x&month=y
 router.get('/hr/month/:month', authorizeEvaluators, getHREvaluationsByMonth);
-router.post('/hr', saveHREvaluation);
-router.post('/hr/recompute-presence', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'), recomputePresence);
+router.post('/hr', authorizeEvalWrite, saveHREvaluation);
+router.post('/hr/recompute-presence', authorizeEvalControl, recomputePresence);
 
 // Unit
 router.get('/unit', getUnitEvaluation);
 router.get('/unit/month/:month', authorizeEvaluators, getUnitEvaluationsByMonth);
-router.post('/unit', saveUnitEvaluation);
+router.post('/unit', authorizeEvalWrite, saveUnitEvaluation);
 
 // Dept
 router.get('/dept', getDeptEvaluation);
 router.get('/dept/month/:month', authorizeEvaluators, getDeptEvaluationsByMonth);
-router.post('/dept', saveDeptEvaluation);
+router.post('/dept', authorizeEvalWrite, saveDeptEvaluation);
 
 // Division
 router.get('/division', getDivisionEvaluation);
 router.get('/division/month/:month', authorizeEvaluators, getDivisionEvaluationsByMonth);
-router.post('/division', saveDivisionEvaluation);
+router.post('/division', authorizeEvalWrite, saveDivisionEvaluation);
 
 // Director
 router.get('/director', getDirectorEvaluation);
 router.get('/director/month/:month', authorizeEvaluators, getDirectorEvaluationsByMonth);
-router.post('/director', saveDirectorEvaluation);
-router.post('/director/lock', lockEvaluation);
+router.post('/director', authorizeEvalWrite, saveDirectorEvaluation);
+router.post('/director/lock', authorizeEvalWrite, lockEvaluation);
 
 // GM
 router.get('/gm', getGMEvaluation);
 router.get('/gm/month/:month', authorizeEvaluators, getGMEvaluationsByMonth);
-router.post('/gm', saveGMEvaluation);
+router.post('/gm', authorizeEvalWrite, saveGMEvaluation);
 
 // Chairman
 router.get('/chairman', getChairmanEvaluation);
 router.get('/chairman/month/:month', authorizeEvaluators, getChairmanEvaluationsByMonth);
-router.post('/chairman', saveChairmanEvaluation);
+router.post('/chairman', authorizeEvalWrite, saveChairmanEvaluation);
 
 // Employee history (Lifecycle tree) — access check happens inside the controller itself,
 // matching the single-record GET routes above rather than route-level middleware.
 router.get('/employee/:employeeId/history', getEvaluationHistoryForEmployee);
 
 // Finalize (save/freeze) — body: { month, employeeId?, departmentId? }
-router.post('/finalize', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'), finalizeEvaluations);
+router.post('/finalize', authorizeEvalControl, finalizeEvaluations);
 router.get('/finalizations/month/:month', authorizeEvaluators, getFinalizationsByMonth);
 
 // Personnel
 router.get('/personnel', getPersonnelEvaluation);
 router.get('/personnel/month/:month', authorizeEvaluators, getPersonnelEvaluationsByMonth);
-router.post('/personnel', savePersonnelEvaluation);
+router.post('/personnel', authorizeEvalWrite, savePersonnelEvaluation);
 
-// Delete Routes (Super Admin Only)
-router.delete('/hr/:id', authorizeRoles('SUPER_ADMIN'), deleteHREvaluation);
-router.delete('/unit/:id', authorizeRoles('SUPER_ADMIN'), deleteUnitEvaluation);
-router.delete('/dept/:id', authorizeRoles('SUPER_ADMIN'), deleteDeptEvaluation);
-router.delete('/division/:id', authorizeRoles('SUPER_ADMIN'), deleteDivisionEvaluation);
-router.delete('/director/:id', authorizeRoles('SUPER_ADMIN'), deleteDirectorEvaluation);
-router.delete('/gm/:id', authorizeRoles('SUPER_ADMIN'), deleteGMEvaluation);
-router.delete('/chairman/:id', authorizeRoles('SUPER_ADMIN'), deleteChairmanEvaluation);
-router.delete('/personnel/:id', authorizeRoles('SUPER_ADMIN'), deletePersonnelEvaluation);
+// Delete Routes (Super Admin, or the Evaluation Control permission)
+router.delete('/hr/:id', authorizeEvalDelete, deleteHREvaluation);
+router.delete('/unit/:id', authorizeEvalDelete, deleteUnitEvaluation);
+router.delete('/dept/:id', authorizeEvalDelete, deleteDeptEvaluation);
+router.delete('/division/:id', authorizeEvalDelete, deleteDivisionEvaluation);
+router.delete('/director/:id', authorizeEvalDelete, deleteDirectorEvaluation);
+router.delete('/gm/:id', authorizeEvalDelete, deleteGMEvaluation);
+router.delete('/chairman/:id', authorizeEvalDelete, deleteChairmanEvaluation);
+router.delete('/personnel/:id', authorizeEvalDelete, deletePersonnelEvaluation);
 
 export default router;

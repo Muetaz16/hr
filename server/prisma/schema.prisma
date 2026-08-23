@@ -39,6 +39,7 @@ model User {
   leaveDirApprovals        LeaveRequest[]         @relation("LeaveDirApprovals")
   leaveUnitApprovals       LeaveRequest[]         @relation("LeaveUnitApprovals")
   leaveRequests            LeaveRequest[]
+  leaveReplacements        LeaveRequest[]         @relation("LeaveReplacement")
   leaveApprovalSteps       LeaveApprovalStep[]    @relation("LeaveApprovalStepApprover")
   notifications            Notification[]
   personnelEvaluations     PersonnelEvaluation[]  @relation("PersonnelEvaluationsSubmittedBy")
@@ -643,6 +644,14 @@ model LeaveRequest {
   managerNote          String?
   hrNote               String?
   status               String    @default("PENDING")
+  // Replacement (cover) employee the requester nominates. The nominee must accept before the
+  // manager approval chain unblocks; their saved signature is then stamped on the form.
+  // replacementStatus: null = not required (requester had no eligible colleague) |
+  // PENDING | APPROVED | REJECTED.
+  replacementUserId    String?
+  replacementStatus    String?
+  replacementDecidedAt DateTime?
+  replacementUser      User?     @relation("LeaveReplacement", fields: [replacementUserId], references: [id])
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deptApprovedById     String?
@@ -660,6 +669,7 @@ model LeaveRequest {
   @@index([employeeId])
   @@index([userId])
   @@index([status])
+  @@index([replacementUserId])
 }
 
 // Per-approver-per-stage tracking for the leave-request approval chain (Unit head -> Department/

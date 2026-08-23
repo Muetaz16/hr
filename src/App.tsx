@@ -104,7 +104,9 @@ function App() {
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
-                  <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
+                    <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
+                  </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'approve_attendance']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>

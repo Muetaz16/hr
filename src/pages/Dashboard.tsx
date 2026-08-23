@@ -46,9 +46,8 @@ const Dashboard: React.FC = () => {
     const navigate = useNavigate();
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
 
-    // Signature card state (heads/approvers can view & manage their signature here).
-    const SIGNATURE_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER', 'CHAIRMAN', 'HR_MANAGER', 'SUPER_ADMIN'];
-    const canManageSignature = SIGNATURE_ROLES.includes(currentUser?.role || '');
+    // Signature card state. Every user can view & manage their own signature.
+    const canManageSignature = !!currentUser;
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [isSavingSignature, setIsSavingSignature] = useState(false);
 

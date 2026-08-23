@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { staffHubService } from '../services/staffHubService';
-import type { LeaveRequest } from '../services/staffHubService';
+import type { LeaveRequest, LeaveRequestWithEmployee } from '../services/staffHubService';
 import { employeeService } from '../services/employeeService';
 import {
     Calendar,
@@ -17,7 +17,9 @@ import {
     Clock,
     XCircle,
     MinusCircle,
-    FileDown
+    FileDown,
+    UserCheck,
+    Info
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -45,6 +47,15 @@ const StaffHub: React.FC = () => {
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [employeeId, setEmployeeId] = useState<string | null>(null);
     const [employeeRecord, setEmployeeRecord] = useState<Employee | null>(null);
+    // Replacement (cover) employee nomination.
+    const [replacementCandidates, setReplacementCandidates] = useState<{ userId: string; employeeId: string; fullName: string; position: string }[]>([]);
+    const [replacementUserId, setReplacementUserId] = useState('');
+    // Requests where I've been nominated as someone's replacement and must accept/decline.
+    const [myReplacementRequests, setMyReplacementRequests] = useState<LeaveRequestWithEmployee[]>([]);
+    const [deciding, setDeciding] = useState<string | null>(null);
+
+    // Leave types that use the org approval chain and therefore require a replacement.
+    const CHAIN_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
 
     const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
     const isManager = managerRoles.includes(currentUser?.role || '');
@@ -70,6 +81,7 @@ const StaffHub: React.FC = () => {
             reason: ''
         });
         setRequestFile(null);
+        setReplacementUserId('');
     };
 
     useEffect(() => {
@@ -87,11 +99,17 @@ const StaffHub: React.FC = () => {
                 setEmployeeId(me.id);
                 setEmployeeRecord(me);
 
-                const requestData = await staffHubService.getMyRequests(me.id).catch(err => {
-                    console.error("Staff Hub requests load failure:", err);
-                    return [];
-                });
+                const [requestData, candidates, replacementReqs] = await Promise.all([
+                    staffHubService.getMyRequests(me.id).catch(err => {
+                        console.error("Staff Hub requests load failure:", err);
+                        return [];
+                    }),
+                    staffHubService.getReplacementCandidates(me.id).catch(() => []),
+                    staffHubService.getMyReplacementRequests().catch(() => []),
+                ]);
                 setRequests(requestData);
+                setReplacementCandidates(candidates);
+                setMyReplacementRequests(replacementReqs);
             }
         } catch (error) {
             console.error("Staff Hub critical failure:", error);
@@ -111,6 +129,14 @@ const StaffHub: React.FC = () => {
             return;
         }
 
+        // A replacement is mandatory for chain leave types when the requester has an eligible
+        // colleague; it's only skippable when there's nobody else in their department.
+        const needsReplacement = CHAIN_TYPES.includes(newRequest.type) && replacementCandidates.length > 0;
+        if (needsReplacement && !replacementUserId) {
+            toast.error(t('err_replacement_required', { defaultValue: 'Please choose a replacement employee from your department.' }));
+            return;
+        }
+
         try {
             const formData = new FormData();
             formData.append('employeeId', employeeId);
@@ -121,6 +147,7 @@ const StaffHub: React.FC = () => {
             if (newRequest.startTime) formData.append('startTime', newRequest.startTime);
             if (newRequest.endTime) formData.append('endTime', newRequest.endTime);
             if (newRequest.reason) formData.append('reason', newRequest.reason);
+            if (needsReplacement && replacementUserId) formData.append('replacementUserId', replacementUserId);
             if (requestFile) formData.append('attachment', requestFile);
 
             await staffHubService.createRequest(formData);
@@ -130,6 +157,21 @@ const StaffHub: React.FC = () => {
             fetchInitialData();
         } catch (error: any) {
             toast.error(error?.response?.data?.error || t('err_submit_req'));
+        }
+    };
+
+    const handleReplacementDecision = async (requestId: string, decision: 'ACCEPT' | 'DECLINE') => {
+        setDeciding(requestId);
+        try {
+            await staffHubService.decideReplacement(requestId, decision);
+            toast.success(decision === 'ACCEPT'
+                ? t('replacement_accepted_toast', { defaultValue: 'Accepted — your signature will be added to the leave form.' })
+                : t('replacement_declined_toast', { defaultValue: 'Declined. The request was cancelled.' }));
+            setMyReplacementRequests(prev => prev.filter(r => r.id !== requestId));
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || t('err_generic', { defaultValue: 'Something went wrong.' }));
+        } finally {
+            setDeciding(null);
         }
     };
 
@@ -181,6 +223,49 @@ const StaffHub: React.FC = () => {
                  </div>
              </div>
 
+            {/* Replacement nominations awaiting my acceptance — these block a colleague's leave chain. */}
+            {myReplacementRequests.length > 0 && (
+                <section className="glass-card p-6 rounded-3xl border-2 border-amber-200 bg-amber-50/40">
+                    <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-amber-600" />
+                        {t("replacement_requests_title", { defaultValue: 'Replacement Requests For You' })}
+                    </h2>
+                    <p className="text-sm text-slate-500 mb-5">
+                        {t("replacement_requests_subtitle", { defaultValue: 'A colleague nominated you to cover their leave. Accepting adds your saved signature to their form and lets their approvals proceed.' })}
+                    </p>
+                    <div className="space-y-3">
+                        {myReplacementRequests.map(req => (
+                            <div key={req.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-white/70 border border-amber-100 rounded-2xl">
+                                <div className="min-w-0">
+                                    <p className="font-bold text-slate-800 truncate">{req.employee?.fullName || t('a_colleague', { defaultValue: 'A colleague' })}</p>
+                                    <p className="text-xs text-slate-500">
+                                        {t(req.type.toLowerCase())} · {req.startDate?.slice(0, 10)}{req.endDate ? ` → ${req.endDate.slice(0, 10)}` : ''}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        onClick={() => handleReplacementDecision(req.id, 'ACCEPT')}
+                                        disabled={deciding === req.id}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        {t("accept", { defaultValue: 'Accept' })}
+                                    </button>
+                                    <button
+                                        onClick={() => handleReplacementDecision(req.id, 'DECLINE')}
+                                        disabled={deciding === req.id}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 font-bold text-sm hover:bg-red-50 transition-colors disabled:opacity-50"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                        {t("decline", { defaultValue: 'Decline' })}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* My Requests */}
             <section className="glass-card p-6 rounded-3xl flex flex-col">
                 <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -205,6 +290,14 @@ const StaffHub: React.FC = () => {
                                 {req.endDate && <span className="text-slate-300">→</span>}
                                 {req.endDate && format(new Date(req.endDate), 'MMM dd')}
                             </div>
+                            {/* Blocked on the replacement's acceptance — the approval chain won't start
+                                until they accept. */}
+                            {req.status === 'PENDING' && req.replacementStatus === 'PENDING' && (
+                                <div className="mt-2 flex items-center gap-2 text-[11px] font-bold text-amber-600">
+                                    <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{t('awaiting_replacement', { defaultValue: 'Waiting for replacement to accept' })}</span>
+                                </div>
+                            )}
                             {/* Approval trail — shows exactly where the request sits in the chain. The
                                 first still-pending step is the desk it's on right now. */}
                             {req.approvalSteps && req.approvalSteps.length > 0 && (() => {
@@ -278,6 +371,12 @@ const StaffHub: React.FC = () => {
                             </button>
                         </div>
                         <form onSubmit={handleSubmitRequest} className="p-8 space-y-6">
+                            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                                <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-xs font-medium text-amber-800 leading-relaxed">
+                                    {t("exception_request_note", { defaultValue: 'Note: Exception requests can be done outside the system, and must be aligned with company policy.' })}
+                                </p>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2 space-y-2">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("request_type")}</label>
@@ -291,7 +390,6 @@ const StaffHub: React.FC = () => {
                                         <option value="EMERGENCY_LEAVE">{t("emergency_leave")}</option>
                                         <option value="LATE_COMING">{t("late_coming")}</option>
                                         <option value="EARLY_LEAVING">{t("early_leaving")}</option>
-                                        <option value="HOURS_LEAVE">{t("few_hours_permission")}</option>
                                     </select>
                                 </div>
 
@@ -353,6 +451,39 @@ const StaffHub: React.FC = () => {
                                         />
                                     </div>
                                 ) : null}
+
+                                {/* Replacement (cover) employee — required for chain leave types when
+                                    the requester has a colleague; skipped when they're the only one. */}
+                                {CHAIN_TYPES.includes(newRequest.type) && (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                            {t("replacement_employee", { defaultValue: 'Replacement Employee' })}
+                                        </label>
+                                        {replacementCandidates.length > 0 ? (
+                                            <>
+                                                <select
+                                                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                    value={replacementUserId}
+                                                    onChange={e => setReplacementUserId(e.target.value)}
+                                                >
+                                                    <option value="">{t("select_replacement", { defaultValue: 'Select a colleague…' })}</option>
+                                                    {replacementCandidates.map(c => (
+                                                        <option key={c.userId} value={c.userId}>
+                                                            {c.fullName}{c.position ? ` — ${c.position}` : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                                    {t("replacement_hint", { defaultValue: 'They will be notified and must accept to add their signature before your request goes to approvals.' })}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-50 rounded-2xl p-4">
+                                                {t("replacement_none_available", { defaultValue: "You're the only account in your department, so no replacement is needed." })}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="col-span-2 space-y-2">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("reason_note")}</label>
