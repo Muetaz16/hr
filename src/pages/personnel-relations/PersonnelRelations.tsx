@@ -197,6 +197,23 @@ const PersonnelRelations: React.FC = () => {
 
     const activeTab = getActiveTab();
 
+    // Per-section access. A user must hold the SECTION's own permission to see inside it — not just
+    // to act. Sections they aren't assigned to are hidden entirely (locked panel below), matching
+    // the nav gating in MainLayout. canAccess bypasses SUPER_ADMIN and treats permissions as
+    // authoritative for anyone who has any.
+    const TAB_ACCESS: Record<string, { roles: string[]; perms: string[] }> = {
+        'lifecycle': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_lifecycle'] },
+        'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
+        'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
+        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
+        'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
+        'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
+        'evaluations': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], perms: ['manage_evaluation_control', 'view_evaluations'] },
+        'employee-control': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_employees', 'manage_employees'] },
+    };
+    const tabAccess = TAB_ACCESS[activeTab];
+    const canSeeActiveTab = !tabAccess || canAccess(currentUser, tabAccess.roles, tabAccess.perms);
+
     // Modals
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
     const [isActionFormModalOpen, setIsActionFormModalOpen] = useState(false);
@@ -723,6 +740,28 @@ const PersonnelRelations: React.FC = () => {
 
     if (isLoadingEmps) {
         return <div className="p-12 text-center animate-pulse text-[#511d29] font-black uppercase tracking-widest text-sm">Loading Personnel Relations...</div>;
+    }
+
+    // Not assigned to this section → don't reveal its contents at all.
+    if (!canSeeActiveTab) {
+        return (
+            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-8">
+                <div className="border-b-2 border-[#511d29]/10 pb-6">
+                    <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">Personnel Relations Department</h1>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                        <Lock className="w-7 h-7 text-slate-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-slate-700">Access Restricted</h2>
+                        <p className="text-slate-500 mt-1 max-w-md">
+                            You aren't assigned to this section. Ask an administrator to grant you the matching permission in Access Management.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (

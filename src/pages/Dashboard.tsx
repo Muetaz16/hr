@@ -276,18 +276,28 @@ const Dashboard: React.FC = () => {
                 { label: t('active_employees'), value: scopedEmps.length.toString(), icon: Users, change: t('current'), color: 'text-primary-600', bg: 'bg-primary-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_employees' },
                 { label: 'Evaluation Ratio', value: `${evalPercent}%`, icon: CheckCircle2, change: `${finishedEvals}/${scopedEmps.length}`, color: 'text-green-600', bg: 'bg-green-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_evaluations' },
                 { label: 'Evaluations Awaiting', value: evaluationPendingCount.toString(), icon: FileText, change: 'Action Required', color: 'text-orange-600', bg: 'bg-orange-50', visible: ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permission: 'view_hr_evaluations' },
-                { label: 'System Alerts', value: totalPendingAction.toString(), icon: Activity, change: 'Critical', color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN', 'HR_MANAGER'], permission: 'manage_users' },
-            ].filter(s => 
-                (!s.visible || s.visible.includes(currentUser.role)) || 
+                { id: 'system_alerts', label: 'System Alerts', value: totalPendingAction.toString(), icon: Activity, change: 'Critical', color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN', 'HR_MANAGER'], permission: 'manage_users' },
+            ].filter(s =>
+                (!s.visible || s.visible.includes(currentUser.role)) ||
                 (s.permission && currentUser.permissions?.includes(s.permission))
             );
+
+            // Breakdown behind the "System Alerts" counter, so clicking it shows what's outstanding.
+            const showsContracts = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser.role);
+            const systemAlerts = {
+                total: totalPendingAction,
+                evaluations: evaluationPendingCount,
+                tasks: (actualTaskCount as number) || 0,
+                expiringContracts: showsContracts ? (expiringSoonList as any[]).length : 0,
+            };
 
             return {
                 stats,
                 orgInfo: { department: myDept, group: myGroup, positionName, managedEntity },
                 analyticsData,
                 analyticsDepts,
-                myEmployeeData
+                myEmployeeData,
+                systemAlerts
             };
         },
         enabled: !!currentUser,
@@ -299,6 +309,8 @@ const Dashboard: React.FC = () => {
     const analyticsData = data?.analyticsData || [];
     const analyticsDepts = data?.analyticsDepts || [];
     const myEmployeeData = data?.myEmployeeData || null;
+    const systemAlerts = data?.systemAlerts || { total: 0, evaluations: 0, tasks: 0, expiringContracts: 0 };
+    const [showAlerts, setShowAlerts] = useState(false);
 
     if (isLoading) {
         return (
@@ -432,7 +444,9 @@ const Dashboard: React.FC = () => {
                 {stats.map((stat: any, idx: number) => (
                     <div
                         key={idx}
-                        className="glass-card p-8 rounded-[32px] hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative overflow-hidden"
+                        onClick={stat.id === 'system_alerts' ? () => setShowAlerts(true) : undefined}
+                        role={stat.id === 'system_alerts' ? 'button' : undefined}
+                        className={`glass-card p-8 rounded-[32px] hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative overflow-hidden ${stat.id === 'system_alerts' ? 'cursor-pointer' : ''}`}
                     >
                         {/* Subtle background icon watermark */}
                         <stat.icon className="absolute -bottom-6 -right-6 w-32 h-32 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-500" />
@@ -449,9 +463,53 @@ const Dashboard: React.FC = () => {
                         <p className="text-4xl font-outfit font-black text-slate-800 tracking-tighter group-hover:text-primary-600 transition-colors">
                             {stat.value}
                         </p>
+                        {stat.id === 'system_alerts' && (
+                            <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
+                                {t('view_details', { defaultValue: 'View details' })} <ArrowRight className="w-3 h-3" />
+                            </span>
+                        )}
                     </div>
                 ))}
             </div>
+
+            {/* System Alerts breakdown — what makes up the counter, with click-through to each area. */}
+            <Modal
+                isOpen={showAlerts}
+                onClose={() => setShowAlerts(false)}
+                title={t('system_alerts', { defaultValue: 'System Alerts' })}
+            >
+                <div className="space-y-3">
+                    <p className="text-sm text-slate-500 font-medium">
+                        {t('system_alerts_subtitle', { defaultValue: 'Outstanding items that need attention across the system.' })}
+                    </p>
+                    {([
+                        { key: 'evaluations', label: t('evaluations_awaiting', { defaultValue: 'Evaluations awaiting action' }), value: systemAlerts.evaluations, icon: FileText, to: '/evaluations' },
+                        { key: 'tasks', label: t('pending_tasks', { defaultValue: 'Pending tasks' }), value: systemAlerts.tasks, icon: CheckCircle2, to: '/staff-hub' },
+                        { key: 'contracts', label: t('expiring_contracts', { defaultValue: 'Contracts expiring soon' }), value: systemAlerts.expiringContracts, icon: Calendar, to: '/contract-management' },
+                    ] as const).map(row => (
+                        <button
+                            key={row.key}
+                            type="button"
+                            onClick={() => { setShowAlerts(false); navigate(row.to); }}
+                            className="w-full flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors text-left"
+                        >
+                            <div className={`p-3 rounded-xl shrink-0 ${row.value > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+                                <row.icon className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-bold text-slate-700 text-sm">{row.label}</p>
+                                <p className="text-xs text-slate-400">{row.value > 0 ? t('needs_attention', { defaultValue: 'Needs attention' }) : t('all_clear', { defaultValue: 'All clear' })}</p>
+                            </div>
+                            <span className={`text-2xl font-outfit font-black ${row.value > 0 ? 'text-red-600' : 'text-slate-300'}`}>{row.value}</span>
+                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                        </button>
+                    ))}
+                    <div className="flex items-center justify-between pt-2 px-1">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('total', { defaultValue: 'Total' })}</span>
+                        <span className="text-lg font-outfit font-black text-slate-800">{systemAlerts.total}</span>
+                    </div>
+                </div>
+            </Modal>
 
             {/* My Signature Section */}
             {canManageSignature && (
