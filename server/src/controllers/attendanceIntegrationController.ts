@@ -77,6 +77,7 @@ export const getAttendanceSummary = async (req: Request, res: Response) => {
         const data: any = await response.json();
 
         const employees = await prisma.employee.findMany({
+            // Transferred (inter-company) staff ARE still tracked in attendance.
             where: { staffId: { not: null } },
             select: { id: true, staffId: true, fullName: true, departmentId: true, position: true },
         });

@@ -26,6 +26,7 @@ export const reconcilePresenceScores = async (): Promise<void> => {
         if (day < RUN_FROM_DAY) return;
 
         const employees = await prisma.employee.findMany({
+            // Transferred (inter-company) staff remain in attendance/presence tracking.
             where: { bioId: { not: null } },
             select: { id: true, bioId: true },
         });

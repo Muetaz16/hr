@@ -73,10 +73,19 @@ async function notifyUsers(userIds: (string | null | undefined)[], title: string
 // division) who have a login account — so they can be notified, accept, and have a signature.
 // Excludes the requester themselves. Used both to validate a submitted nomination and to populate
 // the picker on the request form.
-async function getReplacementCandidates(employee: { id: string; userId: string | null; departmentId: string | null; divisionId: string | null; }) {
-    const scope = employee.departmentId
-        ? { departmentId: employee.departmentId }
-        : (employee.divisionId ? { divisionId: employee.divisionId } : null);
+async function getReplacementCandidates(
+    employee: { id: string; userId: string | null; departmentId: string | null; divisionId: string | null; },
+    requester?: { role?: string | null; divisionId?: string | null },
+) {
+    // A Head of Division may nominate anyone in their whole division; everyone else is limited to
+    // their own department.
+    const divisionWide = requester?.role === 'HEAD_DIVISION';
+    const divisionId = employee.divisionId ?? requester?.divisionId ?? null;
+    const scope = (divisionWide && divisionId)
+        ? { divisionId }
+        : (employee.departmentId
+            ? { departmentId: employee.departmentId }
+            : (divisionId ? { divisionId } : null));
     if (!scope) return [] as { userId: string; employeeId: string; fullName: string; position: string }[];
 
     const rows = await prisma.employee.findMany({
@@ -108,7 +117,8 @@ export const getReplacementCandidatesForEmployee = async (req: Request, res: Res
             select: { id: true, userId: true, departmentId: true, divisionId: true },
         });
         if (!employee) return res.status(404).json({ error: 'Employee not found.' });
-        const candidates = await getReplacementCandidates(employee);
+        const requester = (req as AuthRequest).user;
+        const candidates = await getReplacementCandidates(employee, { role: requester?.role, divisionId: (requester as any)?.divisionId });
         res.json(candidates);
     } catch (error) {
         console.error('Error fetching replacement candidates:', error);
@@ -190,18 +200,17 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
             }
 
-            // --- Replacement (cover) employee. Mandatory when the requester has an eligible
-            // colleague; auto-skipped when they're the only account in their department. A nominated
-            // replacement must accept before the approval chain unblocks, so the first approvers are
-            // notified only once acceptance happens (see decideReplacement).
-            const candidates = await getReplacementCandidates(employee);
+            // --- Replacement (cover) employee. Optional: the requester may nominate a colleague, or
+            // choose "N/A" (no replacement) in which case no replacement approval is required. A
+            // nominated replacement must accept before the approval chain unblocks, so the first
+            // approvers are notified only once acceptance happens (see decideReplacement).
+            const requester = (req as AuthRequest).user;
             const chosenReplacement = replacementUserId ? String(replacementUserId) : null;
             if (chosenReplacement) {
+                const candidates = await getReplacementCandidates(employee, { role: requester?.role, divisionId: (requester as any)?.divisionId });
                 if (!candidates.some(c => c.userId === chosenReplacement)) {
-                    return res.status(400).json({ error: 'The selected replacement is not a valid colleague in your department.' });
+                    return res.status(400).json({ error: 'The selected replacement is not a valid colleague in your scope.' });
                 }
-            } else if (candidates.length > 0) {
-                return res.status(400).json({ error: 'Please nominate a replacement employee from your department.' });
             }
             const replacementStatus = chosenReplacement ? 'PENDING' : null;
 

@@ -161,9 +161,14 @@ model Employee {
   email                  String?                @unique
   role                   String                 @default("EMPLOYEE")
   // "ACTIVE" for fully-enrolled employees; "PENDING_ENROLLMENT" for stubs imported from BioTime
-  // that still need a Job Description / role / department (and a login account) assigned by HR.
+  // that still need a Job Description / role / department (and a login account) assigned by HR;
+  // "TRANSFERRED" for staff moved to another company (data retained + visible, but excluded from
+  // evaluation, payroll, attendance and active counts).
   // Pending employees are excluded from payroll and evaluation lists until enrollment completes.
   enrollmentStatus       String                 @default("ACTIVE")
+  // Set when an inter-company transfer is accepted: destination company name + date.
+  transferredCompany     String?
+  transferredAt          DateTime?
   departmentId           String?
   groupId                String?
   baseSalary             Float                  @default(0)
@@ -335,6 +340,18 @@ model PersonnelActionForm {
   newPlaceOfWork      String?
   reportsTo           String?
 
+  // Inter-company transfer (actionType = "INTER_COMPANY_TRANSFER"). The destination is another
+  // company outside this system, so its org placement is captured as free text and the four factors
+  // are entered on the form (not read from the Employee record).
+  newCompany          String?
+  newDivisionName     String?
+  newDepartmentName   String?
+  newUnitName         String?
+  englishFactor       Float?
+  positionFactor      Float?
+  locationFactor      Float?
+  skillFactor         Float?
+
   typeOfTransfer      String?
   effectiveDate       DateTime?
   justification       String?
@@ -350,6 +367,24 @@ model PersonnelActionForm {
 
   @@index([employeeId])
   @@index([status])
+}
+
+// System activity log — one row per state-changing action (create/update/delete). The acting
+// user's name/role are snapshotted so history survives even if the user is later removed.
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userName   String?
+  userRole   String?
+  action     String   // human label, e.g. "Created announcement"
+  details    String?  // who/what the action was about, e.g. "for Hazem Adam Hussein (IPH-0125-001)"
+  method     String   // POST | PUT | PATCH | DELETE
+  path       String   // request path (no query string)
+  statusCode Int?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
 }
 
 model Contract {

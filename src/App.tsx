@@ -22,6 +22,7 @@ const EmployeeFormPage = lazy(() => import('./pages/admin/EmployeeForm'));
 const UsersPage = lazy(() => import('./pages/admin/Users'));
 const UserFormPage = lazy(() => import('./pages/admin/UserForm'));
 const FunctionalHatsPage = lazy(() => import('./pages/admin/FunctionalHats'));
+const SystemLogsPage = lazy(() => import('./pages/admin/SystemLogs'));
 const TimeTrackingPage = lazy(() => import('./pages/TimeTracking'));
 const EvaluationsPage = lazy(() => import('./pages/Evaluations'));
 const PayrollPage = lazy(() => import('./pages/Payroll'));
@@ -163,6 +164,9 @@ function App() {
                     <Route path="/users/new" element={<UserFormPage />} />
                     <Route path="/users/:id/edit" element={<UserFormPage />} />
                     <Route path="/access/hats" element={<FunctionalHatsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_logs']} />}>
+                    <Route path="/system-logs" element={<SystemLogsPage />} />
                   </Route>
                 </Route>
               </Route>

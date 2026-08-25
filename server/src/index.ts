@@ -35,6 +35,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Activity log — records every successful state-changing request (uses req.user populated by each
+// router's authenticateToken, read at response-finish time). Mounted before the routers.
+import { auditLogger } from './middleware/audit';
+app.use(auditLogger);
+
 if (!process.env.JWT_SECRET) {
     console.error("!!! CRITICAL ERROR: JWT_SECRET IS MISSING !!!");
 }
@@ -63,6 +68,7 @@ import publicRoutes from './routes/publicRoutes';
 import attendanceIntegrationRoutes from './routes/attendanceIntegrationRoutes';
 import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
 import personnelActionRoutes from './routes/personnelActionRoutes';
+import auditLogRoutes from './routes/auditLogRoutes';
 import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
 import { initPresenceScoreScheduler } from './jobs/presenceScoreCron';
 import { initEvaluationFinalizeScheduler } from './jobs/evaluationFinalizeCron';
@@ -97,6 +103,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/attendance-integration', attendanceIntegrationRoutes);
 app.use('/api/attendance-settings', attendanceSettingsRoutes);
 app.use('/api/personnel-actions', personnelActionRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

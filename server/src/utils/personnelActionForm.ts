@@ -6,16 +6,20 @@ import PizZip from 'pizzip';
 // We fill the Employee Information (current placement) and Transfer Details (target placement, driven
 // by the chosen Job Description) by locating each printed label and rewriting the cell after it. The
 // approval/acknowledgement signature cells are left blank for physical signing.
+// Internal transfers use "Personnel Action Form.docx"; inter-company transfers use the richer
+// "Personnel Action Form to company.docx" (extra approval rows for both companies). Both share the
+// same Employee Information + Transfer Details label layout, so the same fill logic serves both.
 const TEMPLATE_NAME = 'Personnel Action Form.docx';
-const TEMPLATE_CANDIDATES = [
-    path.join(__dirname, '../../../public', TEMPLATE_NAME),
-    path.join(process.cwd(), 'public', TEMPLATE_NAME),
-    path.join(process.cwd(), '../public', TEMPLATE_NAME),
-];
+export const INTER_COMPANY_TEMPLATE_NAME = 'Personnel Action Form to company.docx';
 
-const resolveTemplate = (): string => {
-    for (const p of TEMPLATE_CANDIDATES) if (fs.existsSync(p)) return p;
-    throw new Error(`Personnel action form template (public/${TEMPLATE_NAME}) was not found.`);
+const resolveTemplate = (templateName: string): string => {
+    const candidates = [
+        path.join(__dirname, '../../../public', templateName),
+        path.join(process.cwd(), 'public', templateName),
+        path.join(process.cwd(), '../public', templateName),
+    ];
+    for (const p of candidates) if (fs.existsSync(p)) return p;
+    throw new Error(`Personnel action form template (public/${templateName}) was not found.`);
 };
 
 const escapeXml = (v: string): string =>
@@ -72,8 +76,8 @@ export interface PersonnelActionData {
     effectivityDate: string;
 }
 
-export const generatePersonnelActionDocx = (data: PersonnelActionData): Buffer => {
-    const zip = new PizZip(fs.readFileSync(resolveTemplate()));
+export const generatePersonnelActionDocx = (data: PersonnelActionData, templateName: string = TEMPLATE_NAME): Buffer => {
+    const zip = new PizZip(fs.readFileSync(resolveTemplate(templateName)));
     const docPath = 'word/document.xml';
     let xml = zip.file(docPath)?.asText();
     if (!xml) throw new Error('Malformed personnel action template: word/document.xml missing.');

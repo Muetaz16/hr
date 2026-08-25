@@ -106,6 +106,11 @@ const MainLayout: React.FC = () => {
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [isSavingSignature, setIsSavingSignature] = useState(false);
+    // Global search (command palette): jump to accessible pages + employee lookup.
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchIdx, setSearchIdx] = useState(0);
+    const [searchEmployees, setSearchEmployees] = useState<Array<{ id: string; fullName: string; staffId?: string }>>([]);
 
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
         const saved = localStorage.getItem('iph-theme');
@@ -229,28 +234,18 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_hr', { defaultValue: 'HR & Personnel' }),
             items: [
                 {
-                    label: t('nav_hr', { defaultValue: 'HR Management' }),
-                    icon: Users,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER'],
-                    children: [
-                        { label: t('nav_employees'), path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_employees', 'manage_employees'] },
-                        { label: t('nav_lifecycle_control', { defaultValue: 'Lifecycle Control' }), path: '/lifecycle-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_lifecycle', 'manage_lifecycle_control'] },
-                        { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_contracts', 'manage_contract_management'] },
-                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
-                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                    ]
-                },
-                {
-                    label: 'Attendance & Leave Requests',
+                    label: t('nav_attendance_payroll', { defaultValue: 'Attendance & Payroll' }),
                     icon: Clock,
                     roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
-                    permissions: ['view_time_tracking', 'manage_time_tracking'],
+                    permissions: ['view_time_tracking', 'manage_time_tracking', 'view_payroll', 'manage_payroll'],
                     children: [
                         { label: 'Overview', path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: 'Exceptions', path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: 'Daily Logging', path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: 'Employees', path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: 'Settings', path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
                     ]
                 },
@@ -301,6 +296,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
+                        { label: t('nav_system_logs', { defaultValue: 'Activity Log' }), path: '/system-logs', roles: ['SUPER_ADMIN'], permissions: ['view_logs'] },
                     ]
                 }
             ]
@@ -310,6 +306,54 @@ const MainLayout: React.FC = () => {
     const toggleSubMenu = (label: string) => {
         if (!isSidebarOpen) setIsSidebarOpen(true);
         setOpenSubMenus(prev => ({ ...prev, [label]: !prev[label] }));
+    };
+
+    // --- Global search ---------------------------------------------------------------------------
+    // Employee lookup is only offered to users who can actually open the Employees admin page.
+    const canSearchEmployees = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['view_employees', 'manage_employees']);
+
+    // Load the roster once, the first time a permitted user opens search.
+    useEffect(() => {
+        if (searchOpen && canSearchEmployees && searchEmployees.length === 0) {
+            employeeService.getAllEmployees()
+                .then((list: any[]) => setSearchEmployees(list.map(e => ({ id: e.id, fullName: e.fullName, staffId: e.staffId }))))
+                .catch(() => { /* ignore */ });
+        }
+    }, [searchOpen, canSearchEmployees]);
+
+    // Accessible destinations drawn from the SAME nav config, so a result can never point at a page
+    // the current user isn't allowed to open.
+    const searchablePages: { label: string; path: string; group: string }[] = [];
+    for (const group of navGroups) {
+        for (const item of group.items) {
+            if ('path' in item && item.path && canAccess(currentUser, item.roles, item.permissions)) {
+                searchablePages.push({ label: item.label, path: item.path, group: group.title });
+            }
+            if ('children' in item && item.children) {
+                for (const child of item.children) {
+                    if (child.path && canAccess(currentUser, child.roles, child.permissions)) {
+                        searchablePages.push({ label: child.label, path: child.path, group: item.label });
+                    }
+                }
+            }
+        }
+    }
+
+    const searchTerm = searchQuery.trim().toLowerCase();
+    const pageMatches = searchTerm ? searchablePages.filter(p => p.label.toLowerCase().includes(searchTerm)).slice(0, 6) : [];
+    const empMatches = (searchTerm && canSearchEmployees)
+        ? searchEmployees.filter(e => (e.fullName || '').toLowerCase().includes(searchTerm) || (e.staffId || '').toLowerCase().includes(searchTerm)).slice(0, 6)
+        : [];
+    const searchResults: Array<{ type: 'page' | 'emp'; label: string; sub?: string; path: string }> = [
+        ...pageMatches.map(p => ({ type: 'page' as const, label: p.label, sub: p.group, path: p.path })),
+        ...empMatches.map(e => ({ type: 'emp' as const, label: e.fullName, sub: e.staffId, path: `/employees?q=${encodeURIComponent(e.fullName)}` })),
+    ];
+
+    const goToSearchResult = (r: { path: string }) => {
+        setSearchQuery('');
+        setSearchOpen(false);
+        setSearchIdx(0);
+        navigate(r.path);
     };
 
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
@@ -560,19 +604,62 @@ const MainLayout: React.FC = () => {
                             )}
                         </button>
 
-                        {/* Search Bar */}
-                        <div className="relative hidden xl:block">
+                        {/* Global Search */}
+                        <div className="relative hidden xl:block global-search-container">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <Search className={`h-4 w-4 transition-colors duration-300 ${themeMode === 'dark' ? 'text-[#e3c4a2]/50' : 'text-slate-400'}`} />
                             </div>
                             <input
                                 type="text"
+                                value={searchQuery}
                                 placeholder={t('search_placeholder')}
+                                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); setSearchIdx(0); }}
+                                onFocus={() => setSearchOpen(true)}
+                                onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+                                onKeyDown={e => {
+                                    if (e.key === 'ArrowDown') { e.preventDefault(); setSearchIdx(i => Math.min(i + 1, searchResults.length - 1)); }
+                                    else if (e.key === 'ArrowUp') { e.preventDefault(); setSearchIdx(i => Math.max(i - 1, 0)); }
+                                    else if (e.key === 'Enter') { e.preventDefault(); if (searchResults[searchIdx]) goToSearchResult(searchResults[searchIdx]); }
+                                    else if (e.key === 'Escape') { setSearchOpen(false); (e.target as HTMLInputElement).blur(); }
+                                }}
                                 className={`block w-72 pl-11 pr-4 py-2.5 rounded-2xl text-sm font-medium transition-all duration-300 border
                                     ${themeMode === 'dark'
                                         ? 'bg-[#541c2c]/50 text-white placeholder:text-[#e3c4a2]/50 border-[#e3c4a2]/10 focus:ring-2 focus:ring-primary-500/35 focus:bg-[#300a15]'
                                         : 'bg-slate-50 text-slate-900 placeholder:text-slate-400 border-slate-200 focus:ring-2 focus:ring-primary-500/20 focus:bg-white'}`}
                             />
+                            {searchOpen && searchTerm && (
+                                <div className={`absolute z-50 mt-2 w-80 max-h-96 overflow-auto rounded-2xl border shadow-2xl py-1.5
+                                    ${themeMode === 'dark' ? 'bg-[#2a0f16] border-[#e3c4a2]/15' : 'bg-white border-slate-200'}`}>
+                                    {searchResults.length === 0 ? (
+                                        <div className={`px-4 py-3 text-sm font-medium ${themeMode === 'dark' ? 'text-[#e3c4a2]/50' : 'text-slate-400'}`}>
+                                            {t('no_results', { defaultValue: 'No results' })}
+                                        </div>
+                                    ) : searchResults.map((r, i) => (
+                                        <button
+                                            key={`${r.type}-${r.path}-${i}`}
+                                            type="button"
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => goToSearchResult(r)}
+                                            onMouseEnter={() => setSearchIdx(i)}
+                                            className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors
+                                                ${i === searchIdx
+                                                    ? (themeMode === 'dark' ? 'bg-[#541c2c]/60' : 'bg-slate-100')
+                                                    : (themeMode === 'dark' ? 'hover:bg-[#541c2c]/40' : 'hover:bg-slate-50')}`}
+                                        >
+                                            {r.type === 'page'
+                                                ? <Search className={`w-4 h-4 shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/60' : 'text-slate-400'}`} />
+                                                : <Users className={`w-4 h-4 shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/60' : 'text-slate-400'}`} />}
+                                            <span className="flex-1 min-w-0">
+                                                <span className={`block text-sm font-bold truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-700'}`}>{r.label}</span>
+                                                {r.sub && <span className={`block text-[11px] truncate ${themeMode === 'dark' ? 'text-[#e3c4a2]/40' : 'text-slate-400'}`}>{r.sub}</span>}
+                                            </span>
+                                            <span className={`text-[9px] uppercase font-black tracking-widest shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/30' : 'text-slate-300'}`}>
+                                                {r.type === 'page' ? t('page', { defaultValue: 'Page' }) : t('employee', { defaultValue: 'Employee' })}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Notifications */}

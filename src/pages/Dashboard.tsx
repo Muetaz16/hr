@@ -115,28 +115,30 @@ const Dashboard: React.FC = () => {
 
             // const urgentContractsCount = (expiringSoonList as any[]).length;
 
-            // Filter employees based on scope
-            let scopedEmps = emps;
+            // Filter employees based on scope. Transferred (inter-company) staff are excluded from
+            // active counts and evaluation ratios.
+            const activeEmps = (emps as any[]).filter(e => e.enrollmentStatus !== 'TRANSFERRED');
+            let scopedEmps = activeEmps;
             if (currentUser.role === 'HEAD_DIRECTOR') {
                 if (myEmployeeData?.directorateId) {
-                    scopedEmps = emps.filter(e => e.directorateId === myEmployeeData.directorateId);
+                    scopedEmps = activeEmps.filter(e => e.directorateId === myEmployeeData.directorateId);
                 } else if (currentUser.departmentIds && currentUser.departmentIds.length > 0) {
-                    scopedEmps = emps.filter(e => currentUser.departmentIds?.includes(e.departmentId));
+                    scopedEmps = activeEmps.filter(e => currentUser.departmentIds?.includes(e.departmentId));
                 } else if (currentUser.departmentId) {
-                    scopedEmps = emps.filter(e => e.departmentId === currentUser.departmentId);
+                    scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
                 } else if (currentUser.groupId) {
-                    scopedEmps = emps.filter(e => e.groupId === currentUser.groupId);
+                    scopedEmps = activeEmps.filter(e => e.groupId === currentUser.groupId);
                 }
             } else if (currentUser.role === 'HEAD_DIVISION') {
                 if (myEmployeeData?.divisionId) {
-                    scopedEmps = emps.filter(e => e.divisionId === myEmployeeData.divisionId);
+                    scopedEmps = activeEmps.filter(e => e.divisionId === myEmployeeData.divisionId);
                 } else {
                     scopedEmps = [];
                 }
             } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
-                scopedEmps = emps.filter(e => e.departmentId === currentUser.departmentId);
+                scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
             } else if (currentUser.role === 'HEAD_UNIT' && (currentUser as any).unitId) {
-                scopedEmps = emps.filter(e => e.unitId === (currentUser as any).unitId);
+                scopedEmps = activeEmps.filter(e => e.unitId === (currentUser as any).unitId);
             }
 
             // Analytics Data Preparation (Only for Super Admin / HR)

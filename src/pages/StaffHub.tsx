@@ -129,13 +129,9 @@ const StaffHub: React.FC = () => {
             return;
         }
 
-        // A replacement is mandatory for chain leave types when the requester has an eligible
-        // colleague; it's only skippable when there's nobody else in their department.
-        const needsReplacement = CHAIN_TYPES.includes(newRequest.type) && replacementCandidates.length > 0;
-        if (needsReplacement && !replacementUserId) {
-            toast.error(t('err_replacement_required', { defaultValue: 'Please choose a replacement employee from your department.' }));
-            return;
-        }
+        // Replacement is optional: a chosen colleague must accept (and sign); "N/A" (empty) means no
+        // replacement and no replacement approval.
+        const hasReplacement = CHAIN_TYPES.includes(newRequest.type) && !!replacementUserId;
 
         try {
             const formData = new FormData();
@@ -147,7 +143,7 @@ const StaffHub: React.FC = () => {
             if (newRequest.startTime) formData.append('startTime', newRequest.startTime);
             if (newRequest.endTime) formData.append('endTime', newRequest.endTime);
             if (newRequest.reason) formData.append('reason', newRequest.reason);
-            if (needsReplacement && replacementUserId) formData.append('replacementUserId', replacementUserId);
+            if (hasReplacement) formData.append('replacementUserId', replacementUserId);
             if (requestFile) formData.append('attachment', requestFile);
 
             await staffHubService.createRequest(formData);
@@ -459,29 +455,23 @@ const StaffHub: React.FC = () => {
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                                             {t("replacement_employee", { defaultValue: 'Replacement Employee' })}
                                         </label>
-                                        {replacementCandidates.length > 0 ? (
-                                            <>
-                                                <select
-                                                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
-                                                    value={replacementUserId}
-                                                    onChange={e => setReplacementUserId(e.target.value)}
-                                                >
-                                                    <option value="">{t("select_replacement", { defaultValue: 'Select a colleague…' })}</option>
-                                                    {replacementCandidates.map(c => (
-                                                        <option key={c.userId} value={c.userId}>
-                                                            {c.fullName}{c.position ? ` — ${c.position}` : ''}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <p className="text-[11px] text-slate-400 leading-relaxed">
-                                                    {t("replacement_hint", { defaultValue: 'They will be notified and must accept to add their signature before your request goes to approvals.' })}
-                                                </p>
-                                            </>
-                                        ) : (
-                                            <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-50 rounded-2xl p-4">
-                                                {t("replacement_none_available", { defaultValue: "You're the only account in your department, so no replacement is needed." })}
-                                            </p>
-                                        )}
+                                        <select
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                            value={replacementUserId}
+                                            onChange={e => setReplacementUserId(e.target.value)}
+                                        >
+                                            <option value="">{t("replacement_na", { defaultValue: 'N/A — No replacement needed' })}</option>
+                                            {replacementCandidates.map(c => (
+                                                <option key={c.userId} value={c.userId}>
+                                                    {c.fullName}{c.position ? ` — ${c.position}` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                                            {replacementUserId
+                                                ? t("replacement_hint", { defaultValue: 'They will be notified and must accept to add their signature before your request goes to approvals.' })
+                                                : t("replacement_na_hint", { defaultValue: 'No replacement — the request goes straight to approvals, no replacement acceptance required.' })}
+                                        </p>
                                     </div>
                                 )}
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, regenerateAllStaffIds, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument, generateContractRenewalForm } from '../controllers/employeeController';
+import { getAllEmployees, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, getExpiringContracts, getMyEmployeeRecord, renewContract, terminateEmployee, getNextStaffId, regenerateAllStaffIds, uploadEmployeeDocument, getEmployeeDocuments, addEmployeeDocument, deleteEmployeeDocument, generateContractRenewalForm, generateHandoverSummary } from '../controllers/employeeController';
 import { authenticateToken, authorizeRoles, authorizePermissions, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
@@ -34,6 +34,9 @@ router.get('/:id', getEmployeeById);
 router.post('/', authorizeAccess(['HR_MANAGER'], ['register_employees']), createEmployee);
 router.put('/:id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['edit_employees']), updateEmployee);
 router.delete('/:id', authorizeAccess(['HR_MANAGER'], ['edit_employees']), deleteEmployee);
+
+// Lifecycle handover summary (IPH letterhead) — for HR / Personnel Relations use.
+router.get('/:id/handover-summary', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_personnel_relations', 'manage_personnel_actions', 'view_lifecycle']), generateHandoverSummary);
 
 // Contract Lifecycle
 router.get('/:id/renewal-form', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_contracts', 'manage_contract_management']), generateContractRenewalForm);

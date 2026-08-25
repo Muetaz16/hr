@@ -40,11 +40,13 @@ const HREvaluations: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [emps, evalsList, depts] = await Promise.all([
+            const [allEmps, evalsList, depts] = await Promise.all([
                 employeeService.getAllEmployees(),
                 getHREvaluationsByMonth(selectedMonth),
                 departmentService.getAllDepartments()
             ]);
+            // Only ACTIVE staff are evaluated — exclude transferred (inter-company) and pending stubs.
+            const emps = allEmps.filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED' && e.enrollmentStatus !== 'PENDING_ENROLLMENT');
 
             setEmployees(emps);
 

@@ -62,12 +62,13 @@ const PayrollPage: React.FC = () => {
 
 
 
-            // Filter based on user scope - HR Manager sees everyone, others are scoped
-            let scopedEmps = emps;
+            // Transferred (inter-company) staff are excluded from payroll.
+            const activeEmps = emps.filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED');
+            let scopedEmps = activeEmps;
             if (currentUser?.role === 'HEAD_DIRECTOR' && currentUser.groupId) {
-                scopedEmps = emps.filter(e => e.groupId === currentUser.groupId);
+                scopedEmps = activeEmps.filter(e => e.groupId === currentUser.groupId);
             } else if (currentUser?.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
-                scopedEmps = emps.filter(e => e.departmentId === currentUser.departmentId);
+                scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
             }
 
             setEmployees(scopedEmps);
@@ -92,8 +93,8 @@ const PayrollPage: React.FC = () => {
                 getHREvaluationsByMonth(selectedMonth)
             ]);
 
-            // 2. Process each employee
-            const promises = emps.map(async (emp) => {
+            // 2. Process each employee (transferred staff are excluded from payroll)
+            const promises = emps.filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED').map(async (emp) => {
                 // The two evaluators required for THIS employee (skip-level rule).
                 const requiredLevels = getRequiredLevels(emp as OrgPlacement);
                 const [lvlA, lvlB] = [requiredLevels[0], requiredLevels[1]];
