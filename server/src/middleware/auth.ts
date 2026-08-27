@@ -34,12 +34,19 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
                 departmentIds: true,
                 permissions: true,
                 functionalHatIds: true,
-                groupId: true
+                groupId: true,
+                employee: { select: { enrollmentStatus: true } },
             }
         });
 
         if (!user) {
             return res.status(401).json({ error: 'User no longer exists' });
+        }
+
+        // Re-checked on every request (not just at login) so separation takes effect immediately
+        // even for a token issued before it happened, instead of waiting out the 24h expiry.
+        if (user.employee?.enrollmentStatus === 'SEPARATED') {
+            return res.status(403).json({ error: 'This account has been deactivated following separation from the company.' });
         }
 
         // Authorization runs on the merged EFFECTIVE set (position + hats + grants)

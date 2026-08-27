@@ -2,9 +2,9 @@ import api from './apiClient';
 import type { Employee, EmployeeDocument } from '../types';
 
 export const employeeService = {
-    async getAllEmployees(): Promise<Employee[]> {
+    async getAllEmployees(opts?: { includeSeparated?: boolean }): Promise<Employee[]> {
         try {
-            const response = await api.get('/employees');
+            const response = await api.get('/employees', { params: opts?.includeSeparated ? { includeSeparated: 'true' } : undefined });
             return response.data;
         } catch (e) {
             console.error("getAllEmployees FAILED in frontend:", e);

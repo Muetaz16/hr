@@ -27,7 +27,9 @@ import {
     Megaphone,
     HeartHandshake,
     Clock,
-    PenTool
+    PenTool,
+    AlertTriangle,
+    UserMinus
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -198,6 +200,8 @@ const MainLayout: React.FC = () => {
             items: [
                 { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }), path: '/staff-hub', icon: Zap, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_report_incident', { defaultValue: 'Report an Incident' }), path: '/report-incident', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_resignation_request', { defaultValue: 'Resignation Request' }), path: '/resignation-request', icon: UserMinus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
@@ -222,7 +226,7 @@ const MainLayout: React.FC = () => {
         {
             title: t('nav_group_ops', { defaultValue: 'Operations' }),
             items: [
-                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'], permissions: ['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'approve_attendance'] },
+                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance'] },
             ]
         },
         {

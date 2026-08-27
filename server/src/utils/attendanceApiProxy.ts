@@ -121,6 +121,23 @@ export async function createBioTimeLeaveRecord(params: { empCode: string; leaveT
     }
 }
 
+// Registers a disciplinary suspension in BioTime once a Suspension-type disciplinary action closes.
+// A day covered by a suspension is excluded from that employee's absence count and reports as
+// unpaid (totalWorkMins: 0) rather than a normal paid day. Fail-soft, never throws — same
+// convention as createBioTimeLeaveRecord above.
+export async function createBioTimeSuspension(params: { empCode: string; startDate: Date | string; endDate: Date | string; reason: string }): Promise<BioTimeResult> {
+    try {
+        const response = await fetch(new URL('/api/system-settings/suspensions', ATTENDANCE_API_BASE).toString(), jsonPost(params));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { success: false, message: (data as any)?.message || `BioTime returned ${response.status}` };
+        }
+        return { success: true, message: (data as any)?.message };
+    } catch (error: any) {
+        return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
+    }
+}
+
 // Registers an excused late / excused early-out in BioTime once an approved attendance-permission
 // request completes, so the employee isn't penalised. Fail-soft, never throws.
 async function postExcused(path: string, params: { empCode: string; date: Date | string; excusedMinutes: number; reason?: string }): Promise<BioTimeResult> {

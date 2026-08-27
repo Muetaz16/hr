@@ -24,7 +24,6 @@ import { evaluationService } from '../services/evaluationService';
 import { timeService } from '../services/timeService';
 import { departmentService, groupService } from '../services/departmentService';
 import { unitService } from '../services/unitService';
-import { staffHubService } from '../services/staffHubService';
 import { getHREvaluation } from '../services/hrEvaluationService';
 import { isEvaluationEnabled } from '../services/evaluationPeriodService';
 
@@ -81,7 +80,7 @@ const Dashboard: React.FC = () => {
             const hasEmpView = currentUser.permissions?.includes('view_employees') || currentUser.permissions?.includes('manage_employees');
             const isManager = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'].includes(currentUser.role) || hasEmpView;
 
-            const [emps, depts, groups, units, _timeRecords, expiringSoonList, staffTaskCount] = await Promise.all([
+            const [emps, depts, groups, units, _timeRecords, expiringSoonList, myEmployeeResult] = await Promise.all([
                 isManager ? employeeService.getAllEmployees().catch(() => []) : Promise.resolve([]),
                 departmentService.getAllDepartments().catch(() => []),
                 groupService.getAllGroups().catch(() => []),
@@ -93,25 +92,16 @@ const Dashboard: React.FC = () => {
                 (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('view_lifecycle') || currentUser.permissions?.includes('manage_lifecycle_control'))
                     ? employeeService.getExpiringContracts(7).catch(() => [])
                     : Promise.resolve([]),
-                // Fetch Staff Tasks & Employee Record for the current user
+                // Fetch the current user's own Employee record (needed for org-scoping below)
                 (async () => {
                     try {
                         const me = await employeeService.getMyEmployeeRecord();
-                        if (me) {
-                            const myTasks = await staffHubService.getMyTasks(currentUser.id, me.departmentId);
-                            return {
-                                count: myTasks.filter((t: any) => t.status !== 'COMPLETED').length,
-                                employee: me
-                            };
-                        }
-                        return { count: 0, employee: null };
-                    } catch { return { count: 0, employee: null }; }
+                        return { employee: me || null };
+                    } catch { return { employee: null }; }
                 })()
             ]);
 
-            const userTaskData: any = staffTaskCount;
-            const myEmployeeData = userTaskData.employee;
-            const actualTaskCount = userTaskData.count;
+            const myEmployeeData = (myEmployeeResult as any).employee;
 
             // const urgentContractsCount = (expiringSoonList as any[]).length;
 
@@ -266,8 +256,8 @@ const Dashboard: React.FC = () => {
             }
 
             // Refined Pending Counts
-            let totalPendingAction = evaluationPendingCount + (actualTaskCount as number);
-            
+            let totalPendingAction = evaluationPendingCount;
+
             if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL') {
                 totalPendingAction += (expiringSoonList as any[]).length;
             }
@@ -287,7 +277,6 @@ const Dashboard: React.FC = () => {
             const systemAlerts = {
                 total: totalPendingAction,
                 evaluations: evaluationPendingCount,
-                tasks: (actualTaskCount as number) || 0,
                 expiringContracts: showsContracts ? (expiringSoonList as any[]).length : 0,
             };
 
@@ -309,7 +298,7 @@ const Dashboard: React.FC = () => {
     const analyticsData = data?.analyticsData || [];
     const analyticsDepts = data?.analyticsDepts || [];
     const myEmployeeData = data?.myEmployeeData || null;
-    const systemAlerts = data?.systemAlerts || { total: 0, evaluations: 0, tasks: 0, expiringContracts: 0 };
+    const systemAlerts = data?.systemAlerts || { total: 0, evaluations: 0, expiringContracts: 0 };
     const [showAlerts, setShowAlerts] = useState(false);
 
     if (isLoading) {
@@ -484,7 +473,6 @@ const Dashboard: React.FC = () => {
                     </p>
                     {([
                         { key: 'evaluations', label: t('evaluations_awaiting', { defaultValue: 'Evaluations awaiting action' }), value: systemAlerts.evaluations, icon: FileText, to: '/evaluations' },
-                        { key: 'tasks', label: t('pending_tasks', { defaultValue: 'Pending tasks' }), value: systemAlerts.tasks, icon: CheckCircle2, to: '/staff-hub' },
                         { key: 'contracts', label: t('expiring_contracts', { defaultValue: 'Contracts expiring soon' }), value: systemAlerts.expiringContracts, icon: Calendar, to: '/contract-management' },
                     ] as const).map(row => (
                         <button

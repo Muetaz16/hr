@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarCheck, Timer, Filter, AlertTriangle } from 'lucide-react';
+import { CalendarCheck, Timer, Filter, AlertTriangle, ShieldOff } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { attendanceService } from '../services/attendanceService';
 import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
@@ -21,7 +21,7 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: strin
 
 const todayStr = () => format(new Date(), 'yyyy-MM-dd');
 
-type DayFilter = 'all' | 'late' | 'earlyOut' | 'holiday' | 'outWork' | 'excused';
+type DayFilter = 'all' | 'late' | 'earlyOut' | 'holiday' | 'outWork' | 'excused' | 'suspended';
 
 const MyAttendancePage: React.FC = () => {
     const [start, setStart] = useState(todayStr);
@@ -44,6 +44,7 @@ const MyAttendancePage: React.FC = () => {
             case 'holiday': return day.isHoliday;
             case 'outWork': return day.isOutWork;
             case 'excused': return day.isExcusedLate || day.isExcusedEarlyOut;
+            case 'suspended': return day.isSuspended;
             default: return true;
         }
     });
@@ -82,6 +83,7 @@ const MyAttendancePage: React.FC = () => {
                             <option value="holiday">Holidays</option>
                             <option value="outWork">Out-Work</option>
                             <option value="excused">Excused (Late/Early-Out)</option>
+                            <option value="suspended">Suspended</option>
                         </select>
                     </div>
                 )}
@@ -104,6 +106,12 @@ const MyAttendancePage: React.FC = () => {
                             label="Absent Days"
                             value={filledReportData.filter(d => resolveDayStatus(d, report.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'absent').length}
                             color="bg-red-50 text-red-600"
+                        />
+                        <StatCard
+                            icon={ShieldOff}
+                            label="Suspended Days"
+                            value={filledReportData.filter(d => resolveDayStatus(d, report.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'suspended').length}
+                            color="bg-purple-50 text-purple-600"
                         />
                         <StatCard
                             icon={CalendarCheck}

@@ -78,7 +78,7 @@ export const getAllRecruitmentRequests = async (req: Request, res: Response) => 
                 unit: { select: { id: true, name: true } },
                 department: { select: { id: true, name: true } },
                 division: { select: { id: true, name: true } },
-                jobDescription: { select: { id: true, title: true, plannedCount: true, workLocations: true, _count: { select: { employees: true } } } },
+                jobDescription: { select: { id: true, title: true, plannedCount: true, workLocations: true, _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } },
                 deptApprovedBy: { select: { id: true, fullName: true } },
                 hrApprovedBy: { select: { id: true, fullName: true } },
                 gmApprovedBy: { select: { id: true, fullName: true } },
@@ -130,7 +130,7 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
             }
             const jd = await prisma.jobDescription.findUnique({
                 where: { id: cleanJdId },
-                include: { _count: { select: { employees: true } } }
+                include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
             });
             if (!jd) return res.status(404).json({ error: 'Selected Job Description not found.' });
             const filled = jd._count.employees;

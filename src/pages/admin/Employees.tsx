@@ -79,7 +79,7 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
             // propagate so react-query flags isError and we can show a retry UI, rather
             // than silently rendering an empty table. Secondary data (departments, units,
             // payroll, evaluations) stays resilient so a single outage doesn't blank the page.
-            const emps = await employeeService.getAllEmployees();
+            const emps = await employeeService.getAllEmployees({ includeSeparated: true });
 
             const [depts, uns, divs, dirs, pRecords] = await Promise.all([
                 departmentService.getAllDepartments().catch((e) => { console.error("depts error", e); return []; }),

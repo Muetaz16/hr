@@ -30,11 +30,15 @@ const HREvaluationsPage = lazy(() => import('./pages/hr/HREvaluations'));
 const ContractDetailPage = lazy(() => import('./pages/ContractDetail'));
 const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
+const ReportIncidentPage = lazy(() => import('./pages/ReportIncident'));
+const ResignationRequestPage = lazy(() => import('./pages/ResignationRequest'));
 const MyAttendancePage = lazy(() => import('./pages/MyAttendance'));
 const EvaluationDetailPage = lazy(() => import('./pages/EvaluationDetail'));
 const AnnouncementsFeedPage = lazy(() => import('./pages/AnnouncementsFeed'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
 const PersonnelRelationsPage = lazy(() => import('./pages/personnel-relations/PersonnelRelations'));
+const DisciplinaryCaseDetailPage = lazy(() => import('./pages/personnel-relations/DisciplinaryCaseDetailPage'));
+const OffboardingCaseDetailPage = lazy(() => import('./pages/personnel-relations/OffboardingCaseDetailPage'));
 const AttendancePage = lazy(() => import('./pages/Attendance'));
 const ApprovalsPage = lazy(() => import('./pages/Approvals'));
 const ApprovedLeavesPage = lazy(() => import('./pages/ApprovedLeaves'));
@@ -100,14 +104,18 @@ function App() {
                     <Route path="/contract-management" element={<ContractManagementPage />} />
                   </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
+                  <Route path="/report-incident" element={<ReportIncidentPage />} />
+                  <Route path="/resignation-request" element={<ResignationRequestPage />} />
                   <Route path="/my-attendance" element={<MyAttendancePage />} />
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
                     <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
+                    <Route path="/personnel-relations/disciplinary/:caseId" element={<DisciplinaryCaseDetailPage />} />
+                    <Route path="/personnel-relations/offboarding/:caseId" element={<OffboardingCaseDetailPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'approve_attendance']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>
                   <Route path="/attendance" element={<Navigate to="/attendance/overview" replace />} />

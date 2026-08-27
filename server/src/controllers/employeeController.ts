@@ -109,8 +109,14 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
         const { id: userId } = req.user!;
         // Everyone still receives the full roster at DIRECTORY level (needed for the org chart and
         // people pickers); FULL data is pruned per-record below based on the caller's scope.
+        // Separated employees are excluded by default — payroll runs, evaluation lists, org
+        // headcount, and every people-picker across the app source from this same endpoint, and
+        // none of them should include someone no longer employed. Pass ?includeSeparated=true for
+        // the handful of full-record management pages (Employee Directory, Lifecycle Control) that
+        // still need to browse/search separated employees' historical records.
+        const includeSeparated = req.query.includeSeparated === 'true';
         const employees = await prisma.employee.findMany({
-            where: {},
+            where: includeSeparated ? {} : { enrollmentStatus: { not: 'SEPARATED' } },
             include: { user: { select: { permissions: true } }, jobDescription: true }
         });
 
@@ -474,7 +480,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             if (cleanUnitId) {
                 const unit = await tx.unit.findUnique({
                     where: { id: cleanUnitId },
-                    include: { _count: { select: { employees: true } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
                 });
 
                 if (unit && unit.headcount > 0) {
@@ -489,7 +495,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             if (cleanJobDescriptionId) {
                 const jobDescription = await tx.jobDescription.findUnique({
                     where: { id: cleanJobDescriptionId },
-                    include: { _count: { select: { employees: true } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
                 });
 
                 if (!jobDescription) {
@@ -515,7 +521,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 const dir = await tx.directorate.findUnique({ where: { id: cleanDirectorateId } });
                 if (dir && dir.positionFactor) dynamicPositionFactor = dir.positionFactor;
             } else if (role === 'HEAD_UNIT' && cleanUnitId) {
-                const unit = await tx.unit.findUnique({ where: { id: cleanUnitId }, include: { _count: { select: { employees: true } } } });
+                const unit = await tx.unit.findUnique({ where: { id: cleanUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } });
                 if (unit) {
                     dynamicPositionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
                 }
@@ -646,36 +652,7 @@ export const createEmployee = async (req: Request, res: Response) => {
 
             const employee = await tx.employee.create({ data });
 
-            // 3. Auto-create Onboarding Asset Request (Laptop)
-            const requesterId = (req as AuthRequest).user?.id;
-            if (requesterId) {
-                await tx.assetRequest.create({
-                    data: {
-                        employeeId: employee.id,
-                        requesterId,
-                        itemType: 'LAPTOP',
-                        status: 'PENDING',
-                        priority: 'NORMAL',
-                        notes: 'Automatically generated during employee registration.'
-                    }
-                });
-
-                // 3.5 Auto-create Support Ticket if a User account was created
-                if (userId) {
-                    await tx.supportTicket.create({
-                        data: {
-                            requesterId: userId,
-                            title: `New Account: ${fullName}`,
-                            description: `System account for ${fullName} (${email}) has been created. Role: ${role || 'EMPLOYEE'}. Please verify permissions and provide initial training.`,
-                            category: 'IT',
-                            priority: 'HIGH',
-                            status: 'OPEN'
-                        }
-                    });
-                }
-            }
-
-            // 4. Create Initial Contract Record
+            // 3. Create Initial Contract Record
             await tx.contract.create({
                 data: {
                     employeeId: employee.id,
@@ -781,7 +758,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             if (cleanUnitId && cleanUnitId !== currentEmp?.unitId) {
                 const unit = await prisma.unit.findUnique({
                     where: { id: cleanUnitId },
-                    include: { _count: { select: { employees: true } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
                 });
 
                 if (unit && unit.headcount > 0) {
@@ -803,7 +780,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             if (cleanJobDescriptionId && cleanJobDescriptionId !== currentEmpJD?.jobDescriptionId) {
                 const jobDescription = await prisma.jobDescription.findUnique({
                     where: { id: cleanJobDescriptionId },
-                    include: { _count: { select: { employees: true } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
                 });
 
                 if (!jobDescription) {
@@ -925,7 +902,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             const dir = await prisma.directorate.findUnique({ where: { id: targetDirId } });
             if (dir && dir.positionFactor) data.positionFactor = dir.positionFactor;
         } else if (targetRole === 'HEAD_UNIT' && targetUnitId) {
-            const unit = await prisma.unit.findUnique({ where: { id: targetUnitId }, include: { _count: { select: { employees: true } } } });
+            const unit = await prisma.unit.findUnique({ where: { id: targetUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } });
             if (unit) {
                 data.positionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
             }

@@ -20,6 +20,8 @@ export interface AttendanceSummaryEmployee {
     emergencyLeaveDays: number;
     holidayDays: number;
     outWorkDays: number;
+    suspensionDays: number;
+    absenceDays: number;
     totalExcusedMins: number;
     totalExcusedEarlyOutMins: number;
     employeeId: string | null;
@@ -79,6 +81,8 @@ export interface DailyAttendanceResult {
     holidayName: string | null;
     isOutWork: boolean;
     outWorkReason: string | null;
+    isSuspended: boolean;
+    suspensionReason: string | null;
     isExcusedLate: boolean;
     excusedLateReason: string | null;
     isExcusedEarlyOut: boolean;

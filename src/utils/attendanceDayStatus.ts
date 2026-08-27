@@ -17,7 +17,7 @@ const isBlankPunch = (v?: string | null) => BLANK_PUNCH_VALUES.has((v ?? '').tri
 // UTC-midnight day shift depending on the browser's local offset.
 const dayKey = (iso: string) => (iso || '').slice(0, 10);
 
-export type DayStatusKind = 'holiday' | 'outWork' | 'onLeavePaid' | 'onLeaveUnpaid' | 'absent' | 'incomplete' | 'present';
+export type DayStatusKind = 'suspended' | 'holiday' | 'outWork' | 'onLeavePaid' | 'onLeaveUnpaid' | 'absent' | 'incomplete' | 'present';
 
 export interface DayStatus {
     kind: DayStatusKind;
@@ -35,6 +35,10 @@ export interface DayStatus {
 // but only has coverage for the "-600" shade of each bucket (a "-700" text color falls through
 // uncovered and silently inherits the dark-theme's default text color instead).
 export const DAY_STATUS_META: Record<DayStatusKind, { rowClassName: string; textClassName: string }> = {
+    // Purple, not the red/rose already used by 'absent' — a confirmed disciplinary suspension is a
+    // materially different fact from an unauthorized absence and must never read the same in this
+    // table (rose also renders identically to red in dark mode, so it wouldn't be distinct either).
+    suspended: { rowClassName: 'bg-purple-50', textClassName: 'text-purple-600' },
     holiday: { rowClassName: 'bg-amber-50', textClassName: 'text-amber-600' },
     outWork: { rowClassName: 'bg-indigo-50', textClassName: 'text-indigo-600' },
     onLeavePaid: { rowClassName: 'bg-blue-50', textClassName: 'text-blue-600' },
@@ -53,6 +57,7 @@ function makeBlankDay(key: string): DailyAttendanceResult {
         totalLeaveMins: 0, totalLeaveTime: '0m', sessions: [],
         midDayGapMins: 0, midDayGapTime: '0m', lateMins: 0, earlyOutMins: 0, otMins: 0, totalWorkMins: 0,
         isHoliday: false, holidayName: null, isOutWork: false, outWorkReason: null,
+        isSuspended: false, suspensionReason: null,
         isExcusedLate: false, excusedLateReason: null, isExcusedEarlyOut: false, excusedEarlyOutReason: null,
         lateTimeStr: '0m', earlyOutStr: '0m', overTimeStr: '0m',
     };
@@ -98,17 +103,24 @@ function findLeaveForDay(key: string, leaves: EmployeeLeaveRecord[]): EmployeeLe
 }
 
 /**
- * Resolves the ONE status a day is in. Holiday / Out-Work / On-Leave days are schedule facts
- * that make the day's punch columns meaningless regardless of what punch data (if any) came
- * back for them, so they take priority over the punch-based checks below — a holiday with
- * zero punches must never read as Absent. Only when none of those apply do we look at the
- * actual punches to tell Absent (none at all) from Incomplete (only one side recorded) apart.
+ * Resolves the ONE status a day is in. A confirmed disciplinary Suspension is HR's own
+ * authoritative fact and takes priority over everything else — it must never be silently
+ * overridden even if the upstream API also happens to mark that same day Holiday/Out-Work/On-
+ * Leave. Holiday / Out-Work / On-Leave days are themselves schedule facts that make the day's
+ * punch columns meaningless regardless of what punch data (if any) came back for them, so they
+ * take priority over the punch-based checks below — a holiday with zero punches must never read
+ * as Absent. Only when none of those apply do we look at the actual punches to tell Absent (none
+ * at all) from Incomplete (only one side recorded) apart.
  */
 export function resolveDayStatus(day: DailyAttendanceResult, leaves: EmployeeLeaveRecord[], todayKey: string): DayStatus {
     const key = dayKey(day.date);
     const leave = findLeaveForDay(key, leaves);
     const isWeeklyOff = WEEKLY_OFF_DAYS.includes(new Date(day.date).getDay());
 
+    if (day.isSuspended) {
+        const suspendReason = cleanReason(day.suspensionReason);
+        return { kind: 'suspended', reason: suspendReason ? `Suspended — ${suspendReason}` : 'Suspended' };
+    }
     if (day.isHoliday) return { kind: 'holiday', reason: day.holidayName || 'Holiday' };
     if (day.isOutWork) {
         const outReason = cleanReason(day.outWorkReason);

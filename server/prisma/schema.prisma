@@ -23,7 +23,6 @@ model User {
   functionalHatIds         String[]               @default([]) // FunctionalHat ids the user holds (many); each adds its permissions
   signature                String?
   announcements            Announcement[]
-  requestedAssets          AssetRequest[]         @relation("AssetRequester")
   deptEvaluations          DepartmentEvaluation[] @relation("DeptEvaluationsSubmittedBy")
   directorEvaluations      DirectorEvaluation[]   @relation("DirectorEvaluationsSubmittedBy")
   divisionEvaluations      DivisionEvaluation[]   @relation("DivisionEvaluationsSubmittedBy")
@@ -51,11 +50,12 @@ model User {
   candidatesScreened       Candidate[]            @relation("CandidateScreener")
   candidatesHrEvaluated    Candidate[]            @relation("CandidateHrEvaluator")
   candidatesTechEvaluated  Candidate[]            @relation("CandidateTechEvaluator")
-  assignedTasks            StaffTask[]            @relation("TasksAssignedTo")
-  authoredTasks            StaffTask[]            @relation("TasksAuthoredBy")
-  supportTickets           SupportTicket[]        @relation("TicketRequester")
-  assignedSupportTickets   SupportTicket[]        @relation("TicketAssignee")
   unitEvaluations          UnitEvaluation[]       @relation("UnitEvaluationsSubmittedBy")
+  disciplinaryReports              DisciplinaryCase[]   @relation("DisciplinaryReportedBy")
+  disciplinaryIncidentReports      DisciplinaryCase[]   @relation("DisciplinaryIncidentReportCompletedBy")
+  disciplinaryNoticesToExplain     DisciplinaryCase[]   @relation("DisciplinaryNoticeToExplainCompletedBy")
+  disciplinaryInvestigations       DisciplinaryCase[]   @relation("DisciplinaryInvestigationCompletedBy")
+  disciplinaryActionsCompleted     DisciplinaryCase[]   @relation("DisciplinaryActionCompletedBy")
 }
 
 model Group {
@@ -84,7 +84,6 @@ model Department {
   employees           Employee[]
   evaluationPeriods   EvaluationPeriod[]
   recruitmentRequests RecruitmentRequest[]
-  StaffTask           StaffTask[]
   units               Unit[]
   divisionId          String?
   isOffice            Boolean              @default(false)
@@ -163,7 +162,11 @@ model Employee {
   // "ACTIVE" for fully-enrolled employees; "PENDING_ENROLLMENT" for stubs imported from BioTime
   // that still need a Job Description / role / department (and a login account) assigned by HR.
   // Pending employees are excluded from payroll and evaluation lists until enrollment completes.
+  // "SEPARATED" once an OffboardingCase for this employee reaches CLOSED (voluntary resignation or
+  // involuntary termination/non-renewal/retrenchment) — excludes them from active-employee views
+  // (e.g. disciplinaryController.getAttendanceCandidates already filters on ACTIVE only).
   enrollmentStatus       String                 @default("ACTIVE")
+  separationDate         DateTime?
   departmentId           String?
   groupId                String?
   baseSalary             Float                  @default(0)
@@ -255,10 +258,11 @@ model Employee {
   interviewEvaluationUrl String? // Service Provider onboarding: interview evaluation form
   jobDescriptionId       String?
   jobDescription         JobDescription?        @relation(fields: [jobDescriptionId], references: [id])
-  assetRequests          AssetRequest[]
   contracts              Contract[]
   documents              EmployeeDocument[]
   personnelActionForms   PersonnelActionForm[]
+  disciplinaryCases      DisciplinaryCase[]
+  offboardingCases       OffboardingCase[]
   departmentEvaluations  DepartmentEvaluation[]
   directorEvaluations    DirectorEvaluation[]
   divisionEvaluations    DivisionEvaluation[]
@@ -350,6 +354,216 @@ model PersonnelActionForm {
 
   @@index([employeeId])
   @@index([status])
+}
+
+// A single disciplinary case, evolving through the company's real 4-stage process — confirmed
+// directly against the official .docx templates (public/*.docx): each stage is one cycle of
+// generate the form -> collect physical signature(s) -> upload the signed copy -> advance. The
+// Investigation Result template already prints the Panel/Head-of-HR/Administrative-Director
+// signature lines on that one document, so there is no separate system-level approval gate for
+// them — just the one upload. `source` distinguishes a normal human-filed report from a case
+// opened via the attendance-candidates screen (which starts directly at `DISCIPLINARY_ACTION`,
+// since the violation — tardiness count — is already objectively proven by system data).
+model DisciplinaryCase {
+  id                  String    @id @default(uuid())
+
+  employeeId          String
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  caseNumber          String    @unique // "IR No" — IPH-CCHR-FRM-INCREP-000 style, incrementing, assigned at creation
+  source              String    @default("EMPLOYEE_REPORT") // EMPLOYEE_REPORT | SYSTEM_ATTENDANCE
+  reportedById        String?   // the logged-in filer, kept for internal accountability (null only for SYSTEM_ATTENDANCE cases)
+  reportedBy          User?     @relation("DisciplinaryReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  reportedByName      String?   // optional — the original submitter's name, for internal reference only
+  reportedByEmail     String?   // optional contact email, for internal reference only
+  reportedDate        DateTime? // "Date Reported" on the Incident Report form — editable, defaults to submission day
+  preparedByName      String?   // "Prepared by" on the printed form — whoever finalizes the Incident Report document (usually HR), distinct from the original reporter
+  preparedByNameAr    String?   // Arabic translation of the preparer's name
+
+  subjectPositionTitle   String?  // snapshot of the subject employee's position at intake time (auto-filled, editable)
+  subjectPositionTitleAr String?  // Arabic translation — filled in by HR if the reporter only gave one language
+  subjectDepartment      String?  // snapshot of the subject employee's department at intake time (auto-filled, editable)
+  subjectDepartmentAr    String?  // Arabic translation
+
+  incidentDate        DateTime?
+  incidentPlace       String?
+  incidentPlaceAr     String?   // Arabic translation of the incident place
+  incidentDescription String?
+  incidentDescriptionAr String? // Arabic translation of the incident description
+  violationId         String?   // unknown at intake — confirmed at Investigation Result (or set directly for SYSTEM_ATTENDANCE)
+  category            String?   // MINOR | SERIOUS | MAJOR — set once violationId is confirmed
+  offenseNumber       Int?      // computed once, at Investigation Result completion (or at attendance auto-execute)
+
+  // Set only when a case is dismissed at Incident Report stage instead of proceeding to Notice to
+  // Explain — distinguishes an intake dismissal from a normal NON_VIOLATION investigation closure
+  // (that path always sets investigationOutcome; this one never does).
+  closureReason       String?
+
+  stage               String    @default("INCIDENT_REPORT") // INCIDENT_REPORT | NOTICE_TO_EXPLAIN | INVESTIGATION_RESULT | DISCIPLINARY_ACTION | CLOSED
+
+  // Stage 1 — Incident Report: one generate+upload cycle
+  incidentReportDocumentUrl   String?
+  incidentReportDocumentName  String?
+  incidentReportCompletedAt   DateTime?
+  incidentReportCompletedById String?
+  incidentReportCompletedBy   User?     @relation("DisciplinaryIncidentReportCompletedBy", fields: [incidentReportCompletedById], references: [id], onDelete: SetNull)
+
+  // Stage 2 — Notice to Explain
+  noticeToExplainDescription   String?   // HR's formal rewrite of the incident description for the printed notice — the original intake description is untouched
+  noticeToExplainDescriptionAr String?   // Arabic version of the formal rewrite
+  noticeToExplainDocumentUrl   String?
+  noticeToExplainDocumentName  String?
+  noticeToExplainCompletedAt   DateTime?
+  noticeToExplainCompletedById String?
+  noticeToExplainCompletedBy   User?     @relation("DisciplinaryNoticeToExplainCompletedBy", fields: [noticeToExplainCompletedById], references: [id], onDelete: SetNull)
+
+  // Stage 3 — Investigation Result (Panel/Head-of-HR/Admin-Director sign-off is on this ONE document)
+  investigationOutcome        String?   // NON_VIOLATION | MINOR | SERIOUS | MAJOR
+  investigationResult         String?
+  investigationResultAr       String?
+  investigationRecommendation String?
+  investigationRecommendationAr String?
+  investigationActionTaken    String?
+  investigationActionTakenAr  String?
+  investigationDocumentUrl    String?
+  investigationDocumentName   String?
+  investigationCompletedAt    DateTime?
+  investigationCompletedById  String?
+  investigationCompletedBy    User?     @relation("DisciplinaryInvestigationCompletedBy", fields: [investigationCompletedById], references: [id], onDelete: SetNull)
+
+  // Stage 4 — Notice of Disciplinary Action (skipped straight to for SYSTEM_ATTENDANCE cases)
+  actionType             String?   // VERBAL_WARNING | WRITTEN_WARNING | SUSPENSION_3_DAYS | SUSPENSION_5_DAYS | SUSPENSION_7_DAYS | SUSPENSION_10_DAYS | TERMINATION
+  actionEffectiveDate    DateTime?
+  actionAdditionalInfo   String?
+  actionDocumentUrl      String?
+  actionDocumentName     String?
+  actionCompletedAt      DateTime?
+  actionCompletedById    String?
+  actionCompletedBy      User?     @relation("DisciplinaryActionCompletedBy", fields: [actionCompletedById], references: [id], onDelete: SetNull)
+
+  closedAt            DateTime?
+
+  createdByName       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  evidence            DisciplinaryEvidence[]
+
+  @@index([employeeId])
+  @@index([stage])
+  @@index([source])
+  @@index([violationId])
+}
+
+model DisciplinaryEvidence {
+  id             String           @id @default(uuid())
+  caseId         String
+  case           DisciplinaryCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fileUrl        String
+  fileName       String?
+  uploadedByName String?
+  createdAt      DateTime         @default(now())
+
+  @@index([caseId])
+}
+
+model OffboardingCase {
+  id                  String    @id @default(uuid())
+
+  employeeId          String
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  caseNumber          String    @unique // "IPH-CCHR-FRM-OFFBRD-000" style, same convention as disciplinary
+
+  type                String    // VOLUNTARY | INVOLUNTARY
+  // The 4 real separation types, each reachable through its own path: EMPLOYEE_RESIGNATION (self-
+  // service Resignation Request, or manually recorded by HR) | DISCIPLINARY_TERMINATION (auto-created
+  // when a Disciplinary Action reaches Termination) | TERMINATION (HR manually records a termination
+  // with no disciplinary case behind it) | CONTRACT_NON_RENEWAL_EMPLOYEE | CONTRACT_NON_RENEWAL_COMPANY
+  source              String
+  // Set only when source = DISCIPLINARY_TERMINATION — the Disciplinary Action whose TERMINATION
+  // penalty auto-created this case. Loose reference (no relation) since a DisciplinaryCase is never
+  // deleted once closed and this is purely informational/cross-link, matching how violationId
+  // references the static catalog "by convention" rather than a DB FK elsewhere in this schema.
+  linkedDisciplinaryCaseId String?
+  reason              String?
+
+  // RESIGNATION_REQUEST (voluntary only — involuntary cases start straight at CLEARANCE, since the
+  // Disciplinary Action's own Notice already serves as the separation notice) | CLEARANCE |
+  // SEPARATION_LETTER | CLOSED
+  stage               String    @default("RESIGNATION_REQUEST")
+
+  // Stage 1 — Resignation Request (voluntary only): one generate+upload cycle. Intake fields below
+  // mirror the real Google Form 1:1 — identity fields (name/unit/department/position) are NOT stored
+  // here since they're read live off the Employee relation at display/generation time.
+  resignationFiledAt        DateTime?
+  resignationReason         String?   // "Reason for Resignation" — short text, as typed by the employee
+  // The printed form is bilingual, but the employee only ever types one language — same convention
+  // as disciplinary's incidentDescription/incidentDescriptionAr: HR adds the other language's
+  // version before generating the official document (see generateStageForm's RESIGNATION_REQUEST
+  // branch), and it's persisted here for next time.
+  resignationReasonAr       String?
+  // "Head of Division" is NOT stored — resolved live at generation time from the org structure
+  // (User.role = 'HEAD_DIVISION' + divisionId), same lookup leaveApprovalChain.ts already uses.
+  resignationLetterText     String?   // "Resignation Letter" — required long text (the letter's own written content), as typed by the employee
+  resignationLetterTextAr   String?   // HR-provided translation, same convention as resignationReasonAr
+  resignationAttachmentUrls  String[] @default([]) // optional "Additional Attachments" — up to 10 files
+  resignationAttachmentNames String[] @default([])
+  resignationEffectiveDate  DateTime? // set from the Exit Interview's "Effective Date of Resignation" once submitted
+  resignationDocumentUrl    String?
+  resignationDocumentName   String?
+  resignationCompletedAt    DateTime?
+  finalWorkingDate          DateTime?
+
+  // Stage 2 — Employee Clearance (both types) — the 6-way sign-off (Head of Unit, Head of
+  // Department, IT, Assets, Finance & Treasury, Head of HR) is one document, one physical-signature
+  // round, one upload — same convention as every other multi-approver disciplinary stage.
+  dateOfSeparation        DateTime?
+  clearanceDocumentUrl    String?
+  clearanceDocumentName   String?
+  clearanceCompletedAt    DateTime?
+
+  // Exit interview — in-system replacement for the external Google Form, field-for-field. Mandatory
+  // for every case except source = DISCIPLINARY_TERMINATION (enforced in completeSeparationLetter).
+  exitInterviewSubmittedAt    DateTime?
+  exitInterviewReasonCategory String?   // one of REASON_FOR_LEAVING's values; 'OTHERS' pairs with exitInterviewReasonOther
+  exitInterviewReasonOther    String?
+  // 8-category rating scale, each one of 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
+  exitInterviewRatingManagement       String?
+  exitInterviewRatingCompanyCulture   String?
+  exitInterviewRatingPolicies         String?
+  exitInterviewRatingWorkingConditions String?
+  exitInterviewRatingCareerDevelopment String?
+  exitInterviewRatingSalary           String?
+  exitInterviewRatingBenefits         String?
+  exitInterviewRatingTraining         String?
+  exitInterviewAppreciatedMost        String?
+  exitInterviewLikedLeast             String?
+  exitInterviewImprovementSuggestions String?
+  exitInterviewInterestedInReemployment Boolean?
+  exitInterviewWouldRecommend Boolean?
+  exitInterviewContactEmail   String?
+  exitInterviewContactNumber  String?
+
+  // Stage 3 — Separation Letter (both types) — the document submitted to Payroll for final-pay;
+  // completing this closes the case.
+  separationDocumentUrl   String?
+  separationDocumentName  String?
+  separationCompletedAt   DateTime?
+
+  // Certificate of Employment — on-demand, not a gated workflow stage; only enabled once
+  // clearanceCompletedAt is set.
+  certificateIssuedAt     DateTime?
+  certificateDocumentUrl  String?
+
+  closedAt            DateTime?
+
+  createdByName       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([employeeId])
+  @@index([stage])
 }
 
 model Contract {
@@ -701,29 +915,6 @@ model LeaveApprovalStep {
   @@unique([leaveRequestId, sequence, approverUserId])
 }
 
-model StaffTask {
-  id           String      @id @default(uuid())
-  authorId     String?
-  assigneeId   String?
-  departmentId String?
-  title        String
-  content      String?
-  deadline     DateTime?
-  priority     String      @default("NORMAL")
-  status       String      @default("PENDING")
-  category     String      @default("ASSIGNED") // "ASSIGNED" or "SELF_REPORT"
-  isReviewed   Boolean     @default(false)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  assignee     User?       @relation("TasksAssignedTo", fields: [assigneeId], references: [id])
-  author       User?       @relation("TasksAuthoredBy", fields: [authorId], references: [id])
-  department   Department? @relation(fields: [departmentId], references: [id])
-
-  @@index([assigneeId])
-  @@index([status])
-  @@index([category])
-}
-
 model Announcement {
   id             String    @id @default(uuid())
   authorId       String?
@@ -749,44 +940,6 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
-}
-
-model AssetRequest {
-  id          String   @id @default(uuid())
-  employeeId  String
-  requesterId String
-  itemType    String
-  status      String   @default("PENDING")
-  priority    String   @default("NORMAL")
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  requester   User     @relation("AssetRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-
-  @@index([employeeId])
-  @@index([status])
-}
-
-model SupportTicket {
-  id          String   @id @default(uuid())
-  requesterId String
-  title       String
-  description String
-  category    String
-  priority    String   @default("NORMAL")
-  status      String   @default("OPEN")
-  resolution  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  requester   User     @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  assigneeId        String?
-  assignee          User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  estimatedReadyAt  DateTime?
-
-  @@index([requesterId])
-  @@index([status])
-  @@index([assigneeId])
 }
 
 model RecruitmentRequest {

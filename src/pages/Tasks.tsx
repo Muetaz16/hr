@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
-import { staffHubService } from '../services/staffHubService';
 import { getHREvaluation } from '../services/hrEvaluationService';
 import { isEvaluationEnabled } from '../services/evaluationPeriodService';
 import type { Employee, UserRole } from '../types';
@@ -16,9 +15,7 @@ import {
     Clock,
     User,
     AlertTriangle,
-    FileSignature,
-    ClipboardList,
-    Zap
+    FileSignature
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 
@@ -30,14 +27,13 @@ const TasksPage: React.FC = () => {
     const [pendingTasks, setPendingTasks] = useState<{
         emp: Employee,
         status: string,
-        type: 'evaluation' | 'contract' | 'staff_task',
+        type: 'evaluation' | 'contract',
         id: string,
         data?: any
     }[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const currentMonth = format(new Date(), 'yyyy-MM');
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
-    const isManager = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'].includes(currentUser?.role || '');
 
     useEffect(() => {
         fetchTasks();
@@ -122,43 +118,7 @@ const TasksPage: React.FC = () => {
             const evalResults = await Promise.all(evalPromises);
             const evaluationTasks = evalResults.filter((t): t is any => t !== null);
 
-            // 4. Fetch Staff Tasks (Assigned to me)
-            let staffTasksList: any[] = [];
-            try {
-                const me = await employeeService.getMyEmployeeRecord();
-                if (me) {
-                    const myTasks = await staffHubService.getMyTasks(currentUser.id, me.departmentId || 'undefined');
-                    staffTasksList = myTasks.filter((t: any) => t.status !== 'COMPLETED' && t.category === 'ASSIGNED').map((t: any) => ({
-                        emp: me,
-                        status: t.status,
-                        type: 'staff_task' as const,
-                        id: `staff-${t.id}`,
-                        data: t
-                    }));
-
-                    // 5. If Manager, fetch unreviewed SELF_REPORT tasks from team
-                    if (isManager) {
-                        const teamTasks = await staffHubService.getScopedTasks();
-                        const unreviewed = teamTasks.filter((t: any) => 
-                            t.category === 'SELF_REPORT' && 
-                            t.status === 'COMPLETED' && 
-                            !t.isReviewed &&
-                            t.assigneeId !== currentUser.id // Don't show my own in "team review"
-                        ).map((t: any) => ({
-                            emp: { fullName: t.assignee?.fullName || 'Employee', id: t.assigneeId, staffId: 'N/A' },
-                            status: t.status,
-                            type: 'staff_task' as const,
-                            id: `staff-review-${t.id}`,
-                            data: { ...t, isReview: true }
-                        }));
-                        staffTasksList = [...staffTasksList, ...unreviewed];
-                    }
-                }
-            } catch (staffError) {
-                console.warn('[Tasks] Could not fetch staff hub tasks:', staffError);
-            }
-
-            setPendingTasks([...evaluationTasks, ...contractTasks, ...staffTasksList]);
+            setPendingTasks([...evaluationTasks, ...contractTasks]);
 
         } catch (error) {
             console.error("Error fetching tasks:", error);
@@ -170,8 +130,6 @@ const TasksPage: React.FC = () => {
     const handleAction = (task: any) => {
         if (task.type === 'contract') {
             navigate(`/contracts/${task.emp.id}`);
-        } else if (task.type === 'staff_task') {
-            navigate('/staff-hub');
         } else {
             navigate('/evaluations');
         }
@@ -224,21 +182,18 @@ const TasksPage: React.FC = () => {
                     filteredTasks.map((task) => {
                         const { emp, status, type, id } = task;
                         const isContract = type === 'contract';
-                        const isStaffTask = type === 'staff_task';
                         return (
                             <div key={id} className="glass-card p-1 rounded-3xl hover:shadow-2xl transition-all duration-300 group">
                                 <div className="bg-white/40 backdrop-blur-sm p-5 rounded-[20px] flex items-center justify-between border border-white/50 group-hover:bg-white/60 transition-colors">
                                     <div className="flex items-center gap-5">
                                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-md
                                             ${isContract ? 'bg-rose-500/10 text-red-400 border border-rose-500/25 shadow-rose-950/20' :
-                                                isStaffTask ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-emerald-950/20' :
                                                 'bg-gradient-to-br from-[#541c2c] to-[#aa7a51] text-[#e3c4a2] shadow-[#300a15]/50'}
                                         `}>
-                                            {isContract ? <FileSignature className="w-8 h-8" /> : 
-                                             isStaffTask ? <ClipboardList className="w-8 h-8" /> : emp.fullName.charAt(0)}
+                                            {isContract ? <FileSignature className="w-8 h-8" /> : emp.fullName.charAt(0)}
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-lg text-slate-800 mb-1">{isStaffTask ? task.data.title : emp.fullName}</h3>
+                                            <h3 className="font-bold text-lg text-slate-800 mb-1">{emp.fullName}</h3>
                                             <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
                                                 <span className="flex items-center px-2 py-1 bg-slate-100/50 rounded-lg border border-slate-200/50">
                                                     <User className="w-3 h-3 mr-1.5" /> {emp.staffId || 'ID: N/A'}
@@ -246,11 +201,6 @@ const TasksPage: React.FC = () => {
                                                 {isContract ? (
                                                     <span className="flex items-center text-red-500 px-2 py-1 bg-red-50/50 rounded-lg border border-red-100/50">
                                                         <AlertTriangle className="w-3 h-3 mr-1.5" /> {t('urgent')}
-                                                    </span>
-                                                ) : isStaffTask ? (
-                                                    <span className={`flex items-center px-2 py-1 rounded-lg border ${task.data?.isReview ? 'text-blue-500 bg-blue-50/50 border-blue-100/50' : 'text-emerald-500 bg-emerald-50/50 border-emerald-100/50'}`}>
-                                                        {task.data?.isReview ? <CheckCircle2 className="w-3 h-3 mr-1.5" /> : <Zap className="w-3 h-3 mr-1.5" />}
-                                                        {task.data?.isReview ? t('review_work') : t('staff_hub')}
                                                     </span>
                                                 ) : (
                                                     <span className="flex items-center text-orange-500 px-2 py-1 bg-orange-50/50 rounded-lg border border-orange-100/50">
@@ -265,8 +215,7 @@ const TasksPage: React.FC = () => {
                                         <div className="text-right hidden sm:block">
                                             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t('status_label')}</span>
                                             <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
-                                                isContract ? 'bg-red-50 text-red-700 border-red-100' : 
-                                                isStaffTask ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                                isContract ? 'bg-red-50 text-red-700 border-red-100' :
                                                 'bg-indigo-50 text-indigo-700 border-indigo-100'
                                             }`}>
                                                 {status}

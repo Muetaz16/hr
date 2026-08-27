@@ -223,7 +223,7 @@ export const decidePersonnelAction = async (req: Request, res: Response) => {
         // assigning a JD. Skip the check if the employee is already on this JD.
         if (paf.newJobDescriptionId) {
             const [jd, employee] = await Promise.all([
-                prisma.jobDescription.findUnique({ where: { id: paf.newJobDescriptionId }, include: { _count: { select: { employees: true } } } }),
+                prisma.jobDescription.findUnique({ where: { id: paf.newJobDescriptionId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } }),
                 prisma.employee.findUnique({ where: { id: paf.employeeId }, select: { jobDescriptionId: true } }),
             ]);
             if (!jd) return res.status(404).json({ error: 'Target Job Description no longer exists.' });

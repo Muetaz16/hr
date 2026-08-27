@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, CalendarDays, Percent, Settings as SettingsIcon } from 'lucide-react';
+import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, ShieldOff, CalendarDays, Percent, Settings as SettingsIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { attendanceService, type AttendanceSummaryEmployee, type BioTimeEmployee } from '../services/attendanceService';
@@ -40,7 +40,7 @@ type SettingsSubTab = 'hours' | 'leave-types' | 'holidays' | 'multipliers';
 // explicit date range, defaulting to today, rather than leaving it up to their default.
 const todayStr = () => format(new Date(), 'yyyy-MM-dd');
 
-type SummaryFilter = 'all' | 'late' | 'earlyOut' | 'onLeave' | 'unmatched';
+type SummaryFilter = 'all' | 'late' | 'earlyOut' | 'onLeave' | 'suspended' | 'unmatched';
 
 // The attendance system exposes no lookup endpoint for positions — these 4 are the fixed set
 // found live on the running roster (GET /api/attendance).
@@ -89,6 +89,7 @@ const AttendancePage: React.FC = () => {
             case 'late': return row.totalLateMins > 0;
             case 'earlyOut': return row.totalEarlyOutMins > 0;
             case 'onLeave': return row.paidLeaveDays > 0 || row.unpaidLeaveDays > 0 || row.emergencyLeaveDays > 0;
+            case 'suspended': return row.suspensionDays > 0;
             case 'unmatched': return !row.employeeId;
             default: return true;
         }
@@ -131,7 +132,7 @@ const AttendancePage: React.FC = () => {
     const getSettingValue = (key: string) => settingsSnapshot?.systemSettings.find(s => s.key === key)?.value;
     const systemSettingsList = settingsSnapshot?.systemSettings || [];
     const leaveTypesList = settingsSnapshot?.leaveTypes || [];
-    type DetailFilter = 'all' | 'late' | 'earlyOut' | 'holiday' | 'outWork' | 'excused';
+    type DetailFilter = 'all' | 'late' | 'earlyOut' | 'holiday' | 'outWork' | 'excused' | 'suspended';
     const [detailFilter, setDetailFilter] = useState<DetailFilter>('all');
     // The attendance system only returns rows it has data for — filling the gaps first (before
     // the filter below) is what lets a genuine no-show day be caught as Absent at all.
@@ -145,6 +146,7 @@ const AttendancePage: React.FC = () => {
             case 'holiday': return day.isHoliday;
             case 'outWork': return day.isOutWork;
             case 'excused': return day.isExcusedLate || day.isExcusedEarlyOut;
+            case 'suspended': return day.isSuspended;
             default: return true;
         }
     });
@@ -698,6 +700,7 @@ const AttendancePage: React.FC = () => {
                                     <option value="late">Late Only</option>
                                     <option value="earlyOut">Early-Out Only</option>
                                     <option value="onLeave">On Leave</option>
+                                    <option value="suspended">Suspended</option>
                                     <option value="unmatched">Unmatched to IPH Record</option>
                                 </select>
                             </div>
@@ -766,6 +769,12 @@ const AttendancePage: React.FC = () => {
                                                         <p className="text-[10px] text-slate-500 mt-0.5">
                                                             {row.holidayDays > 0 && <>Holiday: {row.holidayDays}d </>}
                                                             {row.outWorkDays > 0 && <>Out-Work: {row.outWorkDays}d</>}
+                                                        </p>
+                                                    )}
+                                                    {(row.suspensionDays > 0 || row.absenceDays > 0) && (
+                                                        <p className="text-[10px] mt-0.5">
+                                                            {row.suspensionDays > 0 && <span className="text-purple-600 font-bold">Suspended: {row.suspensionDays}d </span>}
+                                                            {row.absenceDays > 0 && <span className="text-red-600 font-bold">Absent: {row.absenceDays}d</span>}
                                                         </p>
                                                     )}
                                                 </td>
@@ -1445,6 +1454,7 @@ const AttendancePage: React.FC = () => {
                             <option value="holiday">Holidays</option>
                             <option value="outWork">Out-Work</option>
                             <option value="excused">Excused (Late/Early-Out)</option>
+                            <option value="suspended">Suspended</option>
                         </select>
                     </div>
                 </div>
@@ -1459,6 +1469,12 @@ const AttendancePage: React.FC = () => {
                                 label="Absent Days"
                                 value={filledDetailReportData.filter(d => resolveDayStatus(d, monthlyReport.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'absent').length}
                                 color="bg-red-50 text-red-600"
+                            />
+                            <StatCard
+                                icon={ShieldOff}
+                                label="Suspended Days"
+                                value={filledDetailReportData.filter(d => resolveDayStatus(d, monthlyReport.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'suspended').length}
+                                color="bg-purple-50 text-purple-600"
                             />
                             <StatCard
                                 icon={CalendarCheck}

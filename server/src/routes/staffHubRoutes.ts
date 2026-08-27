@@ -44,13 +44,6 @@ router.patch('/requests/:id/replacement-decision', staffHubController.decideRepl
 router.get('/requests/my-pending-steps', staffHubController.getMyPendingSteps);
 router.patch('/requests/:requestId/steps/:stepId/decision', requestUpload.single('document'), staffHubController.decideApprovalStep);
 
-// Tasks
-router.post('/tasks', staffHubController.createTask);
-router.patch('/tasks/:id/status', staffHubController.updateTaskStatus);
-router.get('/tasks/scoped', staffHubController.getScopedTasks);
-router.get('/tasks/user/:userId/:departmentId?', staffHubController.getTasksForUser);
-router.patch('/tasks/:id/review', staffHubController.reviewTask);
-
 const uploadDir = path.join(__dirname, '../../uploads/announcements');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });

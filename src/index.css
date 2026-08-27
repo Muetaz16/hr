@@ -602,7 +602,29 @@ body.dark-theme table tbody td div[class*="bg-blue-"] {
   border: 1px solid rgba(59, 130, 246, 0.35) !important;
 }
 
-/* 7. General Inline Highlights and Sub-text coloring inside status cells */
+/* 7. Purple / Disciplinary Suspension Status Badges */
+body.dark-theme .bg-purple-50,
+body.dark-theme .bg-purple-100,
+body.dark-theme .text-purple-600,
+body.dark-theme .border-purple-100,
+body.dark-theme .border-purple-200 {
+  background-color: rgba(147, 51, 234, 0.15) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(147, 51, 234, 0.35) !important;
+}
+
+body.dark-theme table tbody td span.bg-purple-50,
+body.dark-theme table tbody td div.bg-purple-50,
+body.dark-theme table tbody td span.bg-purple-100,
+body.dark-theme table tbody td div.bg-purple-100,
+body.dark-theme table tbody td span[class*="bg-purple-"],
+body.dark-theme table tbody td div[class*="bg-purple-"] {
+  background-color: rgba(147, 51, 234, 0.15) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(147, 51, 234, 0.35) !important;
+}
+
+/* 8. General Inline Highlights and Sub-text coloring inside status cells */
 body.dark-theme .text-red-400, 
 body.dark-theme .text-red-500, 
 body.dark-theme .text-rose-500, 

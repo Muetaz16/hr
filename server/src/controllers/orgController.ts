@@ -10,7 +10,7 @@ export const getDepartments = async (req: Request, res: Response) => {
         const departments = await prisma.department.findMany({
             include: {
                 _count: {
-                    select: { employees: true }
+                    select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } }
                 },
                 division: true
             }
@@ -120,7 +120,7 @@ export const getDivisions = async (req: Request, res: Response) => {
         const divisions = await prisma.division.findMany({
             include: {
                 _count: {
-                    select: { departments: true, employees: true }
+                    select: { departments: true, employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } }
                 }
             }
         });

@@ -42,6 +42,7 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'manage_personnel_actions', group: 'Personnel Relations', label: 'Manage Personnel Action Forms' },
     { id: 'manage_rewards', group: 'Personnel Relations', label: 'Manage Rewards & Recognition' },
     { id: 'manage_disciplinary', group: 'Personnel Relations', label: 'Manage Disciplinary Actions' },
+    { id: 'edit_disciplinary_report', group: 'Personnel Relations', label: 'Edit Disciplinary Report After Stage 1' },
     { id: 'manage_offboarding', group: 'Personnel Relations', label: 'Manage Offboarding' },
     // Payroll & Time
     { id: 'view_payroll', group: 'Payroll & Time', label: 'View Payroll' },
@@ -51,7 +52,6 @@ export const PERMISSIONS: PermissionDef[] = [
     // Operations & Approvals
     { id: 'manage_leaves', group: 'Operations & Approvals', label: 'Approve Leaves' },
     { id: 'approve_attendance', group: 'Operations & Approvals', label: 'Head of Attendance Approval' },
-    { id: 'manage_tasks', group: 'Operations & Approvals', label: 'Manage Tasks' },
     { id: 'manage_announcements', group: 'Operations & Approvals', label: 'Post Announcements' },
     { id: 'manager_approvals', group: 'Operations & Approvals', label: 'Full Mgr Approvals' },
     // Evaluations
@@ -59,9 +59,6 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'submit_evaluations', group: 'Evaluations', label: 'Submit Evaluations' },
     { id: 'view_hr_evaluations', group: 'Evaluations', label: 'Manage HR Evals' },
     { id: 'manage_evaluation_control', group: 'Evaluations', label: 'Evaluation Control' },
-    // IT & Operational Services
-    { id: 'manage_onboarding', group: 'IT & Operational Services', label: 'Manage Onboarding (Assets)' },
-    { id: 'manage_it_issues', group: 'IT & Operational Services', label: 'Manage IT Support Tickets' },
     // Administration
     { id: 'manage_groups', group: 'Administration', label: 'Manage Groups' },
     { id: 'manage_departments', group: 'Administration', label: 'Manage Depts' },
@@ -96,11 +93,11 @@ export type Position = typeof POSITIONS[number];
 // full company roster. Scope enforcement lives server-side in employeeController.resolveEmployeeScope.
 export const POSITION_DEFAULTS: Record<string, string[]> = {
     EMPLOYEE: [],
-    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manage_tasks', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment'],
-    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
-    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_tasks', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
+    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment'],
+    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
+    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
+    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
+    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
     GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     SUPER_ADMIN: ALL_PERMISSION_IDS,
@@ -121,7 +118,7 @@ export const SYSTEM_HATS: HatSeed[] = [
             'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding',
             'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking',
             'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
-            'manage_evaluation_control', 'manage_onboarding', 'manage_job_descriptions',
+            'manage_evaluation_control', 'manage_job_descriptions',
         ],
     },
     {
@@ -146,7 +143,7 @@ export const SYSTEM_HATS: HatSeed[] = [
         key: 'PERSONNEL',
         name: 'Personnel',
         description: 'HR data-entry: register/edit employees, onboarding, IT issues, personnel actions.',
-        permissions: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'submit_evaluations', 'view_lifecycle', 'view_personnel_relations', 'manage_personnel_actions', 'manage_onboarding', 'manage_it_issues'],
+        permissions: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'submit_evaluations', 'view_lifecycle', 'view_personnel_relations', 'manage_personnel_actions'],
     },
 ];
 

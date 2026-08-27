@@ -17,7 +17,7 @@ export const getAllJobDescriptions = async (req: Request, res: Response) => {
                 division: { select: { id: true, name: true } },
                 department: { select: { id: true, name: true } },
                 unit: { select: { id: true, name: true } },
-                _count: { select: { employees: true } }
+                _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } }
             },
             orderBy: { title: 'asc' }
         });

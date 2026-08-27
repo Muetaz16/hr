@@ -63,25 +63,6 @@ export interface LeaveApprovalStep {
     approver?: { fullName: string };
 }
 
-export interface StaffTask {
-    id: string;
-    authorId: string;
-    assigneeId?: string;
-    departmentId?: string;
-    title: string;
-    content?: string;
-    deadline?: string;
-    priority: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
-    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE';
-    category: 'ASSIGNED' | 'SELF_REPORT';
-    isReviewed: boolean;
-    createdAt: string;
-    updatedAt: string;
-    author?: { fullName: string; role: string };
-    assignee?: { fullName: string; role: string };
-    department?: { name: string };
-}
-
 export interface Announcement {
     id: string;
     authorId: string;
@@ -165,29 +146,6 @@ export const staffHubService = {
         const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, { decision, note });
         return response.data;
     },
-
-    // Tasks
-    async createTask(data: Partial<StaffTask>) {
-        const response = await api.post('/staff-hub/tasks', data);
-        return response.data;
-    },
-    async updateTaskStatus(id: string, status: string) {
-        const response = await api.patch(`/staff-hub/tasks/${id}/status`, { status });
-        return response.data;
-    },
-    async getMyTasks(userId: string, departmentId: string) {
-        const response = await api.get(`/staff-hub/tasks/user/${userId}/${departmentId}`);
-        return response.data;
-    },
-    async getScopedTasks(status?: string) {
-        const response = await api.get('/staff-hub/tasks/scoped', { params: { status } });
-        return response.data;
-    },
-    async reviewTask(id: string) {
-        const response = await api.patch(`/staff-hub/tasks/${id}/review`);
-        return response.data;
-    },
-
 
     // Announcements
     async createAnnouncement(data: FormData | Partial<Announcement>) {

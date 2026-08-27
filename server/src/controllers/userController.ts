@@ -198,26 +198,12 @@ export async function purgeUserAndRelations(id: string) {
                 where: { directorApprovedById: id },
                 data: { directorApprovedById: null }
             }),
-            // 3. Clear Task assignments and authorship
-            prisma.staffTask.updateMany({
-                where: { authorId: id },
-                data: { authorId: null }
-            }),
-            prisma.staffTask.updateMany({
-                where: { assigneeId: id },
-                data: { assigneeId: null }
-            }),
-            // 4. Clear Support Ticket assignments
-            prisma.supportTicket.updateMany({
-                where: { assigneeId: id },
-                data: { assigneeId: null }
-            }),
-            // 5. Clear Announcements
+            // 3. Clear Announcements
             prisma.announcement.updateMany({
                 where: { authorId: id },
                 data: { authorId: null }
             }),
-            // 6. Clear Evaluations submitted by user
+            // 4. Clear Evaluations submitted by user
             prisma.hREvaluation.updateMany({
                 where: { submittedById: id },
                 data: { submittedById: null }
@@ -250,12 +236,12 @@ export async function purgeUserAndRelations(id: string) {
                 where: { submittedById: id },
                 data: { submittedById: null }
             }),
-            // 7. Clear Evaluation Periods enabled by user
+            // 5. Clear Evaluation Periods enabled by user
             prisma.evaluationPeriod.updateMany({
                 where: { enabledById: id },
                 data: { enabledById: null }
             }),
-            // 8. Clear Recruitment approvals (nullable) done by this user
+            // 6. Clear Recruitment approvals (nullable) done by this user
             prisma.recruitmentRequest.updateMany({
                 where: { deptApprovedById: id },
                 data: { deptApprovedById: null }
@@ -268,7 +254,7 @@ export async function purgeUserAndRelations(id: string) {
                 where: { hrApprovedById: id },
                 data: { hrApprovedById: null }
             }),
-            // 9. Clear Candidate relations (all nullable) touched by this user
+            // 7. Clear Candidate relations (all nullable) touched by this user
             prisma.candidate.updateMany({
                 where: { createdById: id },
                 data: { createdById: null }
@@ -285,7 +271,7 @@ export async function purgeUserAndRelations(id: string) {
                 where: { techEvalById: id },
                 data: { techEvalById: null }
             }),
-            // 10. Delete records strictly owned by user.
+            // 8. Delete records strictly owned by user.
             // Recruitment requests keep a REQUIRED requester, so they can't be detached —
             // remove the ones this user raised so the account can be deleted.
             prisma.recruitmentRequest.deleteMany({
@@ -297,9 +283,7 @@ export async function purgeUserAndRelations(id: string) {
             prisma.leaveRequest.deleteMany({
                 where: { userId: id }
             }),
-            // SupportTicket.requester and AssetRequest.requester are onDelete: Cascade,
-            // so those rows are removed automatically with the user.
-            // 11. Final Delete
+            // 9. Final Delete
             prisma.user.delete({ where: { id } })
         ]);
 }

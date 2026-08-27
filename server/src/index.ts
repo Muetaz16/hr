@@ -53,7 +53,6 @@ import timeRoutes from './routes/timeRoutes';
 import evaluationPeriodRoutes from './routes/evaluationPeriodRoutes';
 import staffHubRoutes from './routes/staffHubRoutes';
 import unitRoutes from './routes/unitRoutes';
-import operationsRoutes from './routes/operationsRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
 import salaryStructureRoutes from './routes/salaryStructureRoutes';
 import jobDescriptionRoutes from './routes/jobDescriptionRoutes';
@@ -63,9 +62,12 @@ import publicRoutes from './routes/publicRoutes';
 import attendanceIntegrationRoutes from './routes/attendanceIntegrationRoutes';
 import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
 import personnelActionRoutes from './routes/personnelActionRoutes';
+import disciplinaryRoutes from './routes/disciplinaryRoutes';
+import offboardingRoutes from './routes/offboardingRoutes';
 import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
 import { initPresenceScoreScheduler } from './jobs/presenceScoreCron';
 import { initEvaluationFinalizeScheduler } from './jobs/evaluationFinalizeCron';
+import { initOffboardingSeparationScheduler } from './jobs/offboardingSeparationCron';
 
 // Health check endpoint (Public)
 app.get('/api/health', async (req, res) => {
@@ -88,7 +90,6 @@ app.use('/api/time', timeRoutes);
 app.use('/api/evaluation-periods', evaluationPeriodRoutes);
 app.use('/api/staff-hub', staffHubRoutes);
 app.use('/api/units', unitRoutes);
-app.use('/api/operations', operationsRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/salary-structures', salaryStructureRoutes);
 app.use('/api/job-descriptions', jobDescriptionRoutes);
@@ -97,6 +98,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/attendance-integration', attendanceIntegrationRoutes);
 app.use('/api/attendance-settings', attendanceSettingsRoutes);
 app.use('/api/personnel-actions', personnelActionRoutes);
+app.use('/api/disciplinary-cases', disciplinaryRoutes);
+app.use('/api/offboarding-cases', offboardingRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)
@@ -114,4 +117,5 @@ app.listen(Number(port), '0.0.0.0', () => {
     initEvaluationPeriodScheduler();
     initPresenceScoreScheduler();
     initEvaluationFinalizeScheduler();
+    initOffboardingSeparationScheduler();
 });

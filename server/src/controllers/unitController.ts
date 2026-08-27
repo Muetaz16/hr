@@ -7,9 +7,9 @@ export const getUnits = async (req: express.Request, res: express.Response) => {
     //
     try {
         const units = await prisma.unit.findMany({
-            include: { 
+            include: {
                 department: true,
-                _count: { select: { employees: true } }
+                _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } }
             }
         });
         res.json(units);

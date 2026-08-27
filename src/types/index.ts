@@ -165,7 +165,8 @@ export interface Employee {
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
     bioId?: number; // BioTime attendance system's own numeric employee id, once auto-provisioned
-    enrollmentStatus?: string; // "ACTIVE" | "PENDING_ENROLLMENT" (BioTime-imported stub awaiting enrolment)
+    enrollmentStatus?: string; // "ACTIVE" | "PENDING_ENROLLMENT" (BioTime-imported stub awaiting enrolment) | "SEPARATED" (offboarding closed and separation date reached)
+    separationDate?: string | null; // set alongside enrollmentStatus = "SEPARATED"
     position?: string;
     placeOfWork?: string; // Office / Site — locked from the job description at onboarding
     fullNameArabic?: string;

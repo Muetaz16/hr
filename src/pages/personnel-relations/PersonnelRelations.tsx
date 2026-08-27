@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
 import { personnelActionService, type PersonnelActionForm } from '../../services/personnelActionService';
@@ -10,6 +10,9 @@ import { directorateService } from '../../services/directorateService';
 import { timeService } from '../../services/timeService';
 import { staffHubService } from '../../services/staffHubService';
 import { evaluationService, type EvaluationHistoryMonth } from '../../services/evaluationService';
+import { disciplinaryService, type DisciplinaryCase, type DisciplinaryActionType, type DisciplinaryStage, type DisciplinaryOutcome } from '../../services/disciplinaryService';
+import { offboardingService, type OffboardingCase, type OffboardingStage } from '../../services/offboardingService';
+import { DISCIPLINARY_CATEGORY_LABELS, DISCIPLINARY_ACTION_LABELS, DISCIPLINARY_VIOLATIONS, VIOLATIONS_BY_ID, type DisciplinaryCategory } from '../../constants/disciplinaryViolations';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -173,8 +176,31 @@ const Field = ({ emp, label, k, type, dir }: { emp: Employee; label: string; k: 
     if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
     return <Row label={label} value={v} dir={dir} />;
 };
+const DISCIPLINARY_STAGE_COLUMNS: { key: DisciplinaryStage; label: string }[] = [
+    { key: 'INCIDENT_REPORT', label: 'Incident Report' },
+    { key: 'NOTICE_TO_EXPLAIN', label: 'Notice to Explain' },
+    { key: 'INVESTIGATION_RESULT', label: 'Investigation Result' },
+    { key: 'DISCIPLINARY_ACTION', label: 'Disciplinary Action' },
+];
+const OFFBOARDING_STAGE_COLUMNS: { key: OffboardingStage; label: string }[] = [
+    { key: 'RESIGNATION_REQUEST', label: 'Resignation Request' },
+    { key: 'CLEARANCE', label: 'Employee Clearance' },
+    { key: 'SEPARATION_LETTER', label: 'Separation Letter' },
+];
+
+// Mirrors offboardingController.ts's SEPARATION_REASON_LABELS — the reason shown here in an
+// employee's own file for why they left, one of the 4 real separation types.
+const OFFBOARDING_SOURCE_LABELS: Record<string, string> = {
+    EMPLOYEE_RESIGNATION: 'Resignation',
+    DISCIPLINARY_TERMINATION: 'Termination',
+    TERMINATION: 'Termination',
+    CONTRACT_NON_RENEWAL_EMPLOYEE: 'Contract Non-Renewal (by Employee)',
+    CONTRACT_NON_RENEWAL_COMPANY: 'Contract Non-Renewal (by Company)',
+};
+
 const PersonnelRelations: React.FC = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const currentPath = location.pathname;
     const queryClient = useQueryClient();
     const { currentUser } = useAuth();
@@ -236,7 +262,6 @@ const PersonnelRelations: React.FC = () => {
     const [renewFile, setRenewFile] = useState<File | null>(null);
     const [renewSubmitting, setRenewSubmitting] = useState(false);
     const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
-    const [isDisciplinaryModalOpen, setIsDisciplinaryModalOpen] = useState(false);
     const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
 
     // Lifecycle tab — search/filter + read-only detail view
@@ -309,6 +334,27 @@ const PersonnelRelations: React.FC = () => {
         queryFn: () => evaluationService.getEvaluationHistory(detailEmp!.id),
         enabled: !!detailEmp,
     });
+    // New — confirmed disciplinary record, part of the employee's permanent file. Only cases that
+    // actually completed the Disciplinary Action stage (actionCompletedAt set) count as "confirmed
+    // against the employee" — excludes cases still in progress, dismissed at intake, and
+    // investigations that concluded Non Violation. Gated client-side on manage_disciplinary so a
+    // viewer without it never fires a request that would just 403.
+    const canSeeDisciplinaryRecord = canAccess(currentUser, [], ['manage_disciplinary']);
+    const { data: detailDisciplinaryCases = [] } = useQuery({
+        queryKey: ['employee-disciplinary-history', detailEmp?.id],
+        queryFn: () => disciplinaryService.getByEmployee(detailEmp!.id),
+        enabled: !!detailEmp && canSeeDisciplinaryRecord,
+    });
+    const detailDisciplinaryRecord = detailDisciplinaryCases.filter(c => !!c.actionCompletedAt);
+
+    // Separation details for a SEPARATED employee's detail view — fetched on demand, only for
+    // someone actually separated (everyone else has no offboarding case worth showing here).
+    const { data: detailOffboardingCases = [] } = useQuery({
+        queryKey: ['employee-offboarding-cases', detailEmp?.id],
+        queryFn: () => offboardingService.list({ employeeId: detailEmp!.id }),
+        enabled: !!detailEmp && detailEmp.enrollmentStatus === 'SEPARATED',
+    });
+    const detailSeparationCase = detailOffboardingCases.find(c => c.stage === 'CLOSED') || detailOffboardingCases[0];
 
     // Replace/upload one of the fixed document slots (CV, degree, etc.) directly from this screen.
     const handleFixedDocUpload = async (empId: string, key: string, file?: File) => {
@@ -370,6 +416,26 @@ const PersonnelRelations: React.FC = () => {
         }
     });
 
+    // Separated employees don't disappear from history — the Lifecycle tab (and the "View Employee
+    // File" deep-link every disciplinary/offboarding case's detail page uses) must still be able to
+    // find and open their record. A separate roster from the one above, which every "pick an
+    // employee for a NEW action" dropdown deliberately keeps excluding them from.
+    const { data: employeesIncludingSeparated = [] } = useQuery({
+        queryKey: ['relations-employees-all'],
+        queryFn: () => employeeService.getAllEmployees({ includeSeparated: true }),
+    });
+
+    // Deep-link support: other pages (e.g. a disciplinary case's "View Employee File" action) link
+    // straight to /personnel-relations/lifecycle?employeeId=... — once the roster is loaded, open
+    // that employee's detail view automatically instead of requiring a manual search.
+    useEffect(() => {
+        if (currentPath.indexOf('/lifecycle') === -1) return;
+        const employeeId = new URLSearchParams(location.search).get('employeeId');
+        if (!employeeId || detailEmp) return;
+        const match = (employeesIncludingSeparated as Employee[]).find(e => e.id === employeeId);
+        if (match) setDetailEmp(match);
+    }, [currentPath, location.search, employeesIncludingSeparated, detailEmp]);
+
     // Contract Renewals — only employees whose contract ends within 30 days (or has already
     // lapsed and hasn't been renewed yet), not every employee who merely has an end date on file.
     const contractsNeedingRenewal = employees
@@ -398,6 +464,85 @@ const PersonnelRelations: React.FC = () => {
         queryKey: ['personnel-actions'],
         queryFn: () => personnelActionService.list(),
     });
+    const { data: disciplinaryCases = [] } = useQuery({
+        queryKey: ['disciplinary-cases'],
+        queryFn: () => disciplinaryService.list(),
+        enabled: activeTab === 'disciplinary',
+    });
+    const [disciplinaryView, setDisciplinaryView] = useState<'board' | 'attendance'>('board');
+    const [showClosedCases, setShowClosedCases] = useState(false);
+    const { data: offboardingCases = [] } = useQuery({
+        queryKey: ['offboarding-cases'],
+        queryFn: () => offboardingService.list(),
+        enabled: activeTab === 'offboarding',
+    });
+    const [showClosedOffboardingCases, setShowClosedOffboardingCases] = useState(false);
+    // Searchable employee picker, same pattern as ReportIncident.tsx's "Subject employee/s" field —
+    // type-ahead against the roster instead of a plain <select> (impractical once the roster gets
+    // into the hundreds).
+    const [involuntaryEmployeeQuery, setInvoluntaryEmployeeQuery] = useState('');
+    const [involuntaryEmployee, setInvoluntaryEmployee] = useState<Employee | null>(null);
+    const [showInvoluntarySuggestions, setShowInvoluntarySuggestions] = useState(false);
+    const involuntaryBlurTimeout = useRef<number | null>(null);
+    const involuntarySuggestions = useMemo(() => {
+        const q = involuntaryEmployeeQuery.trim().toLowerCase();
+        if (!q || involuntaryEmployee) return [];
+        return (employees as Employee[])
+            .filter((emp: any) => emp.fullName.toLowerCase().includes(q) || (emp.staffId || '').toLowerCase().includes(q))
+            .slice(0, 8);
+    }, [involuntaryEmployeeQuery, involuntaryEmployee, employees]);
+    const selectInvoluntaryEmployee = (emp: Employee) => {
+        setInvoluntaryEmployee(emp);
+        setInvoluntaryEmployeeQuery(emp.fullName);
+        setShowInvoluntarySuggestions(false);
+    };
+    const handleInvoluntaryEmployeeChange = (value: string) => {
+        setInvoluntaryEmployeeQuery(value);
+        if (involuntaryEmployee && value !== involuntaryEmployee.fullName) setInvoluntaryEmployee(null);
+        setShowInvoluntarySuggestions(true);
+    };
+    const [involuntarySource, setInvoluntarySource] = useState<'TERMINATION' | 'EMPLOYEE_RESIGNATION' | 'CONTRACT_NON_RENEWAL_EMPLOYEE' | 'CONTRACT_NON_RENEWAL_COMPANY'>('CONTRACT_NON_RENEWAL_COMPANY');
+    const [involuntaryReason, setInvoluntaryReason] = useState('');
+    const [involuntaryDate, setInvoluntaryDate] = useState('');
+
+    // Recent 25th-to-24th cycles (most recent first), for the Attendance Candidates month picker —
+    // HR previously had no way to browse past cycles, only ever seeing "now". Approximated
+    // client-side (mirrors currentCycleMonth()'s server-side logic); exact Africa/Tripoli-timezone
+    // precision isn't needed just to populate a recent-months picklist.
+    const attendanceMonthOptions = useMemo(() => {
+        const now = new Date();
+        let y = now.getFullYear();
+        let m = now.getMonth() + 1;
+        if (now.getDate() >= 25) { m += 1; if (m > 12) { m = 1; y += 1; } }
+        const options: { value: string; label: string }[] = [];
+        for (let i = 0; i < 12; i++) {
+            const value = `${y}-${String(m).padStart(2, '0')}`;
+            const endDate = new Date(y, m - 1, 24);
+            const startDate = new Date(y, m - 2, 25);
+            const fmt = (d: Date) => d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+            options.push({ value, label: `${fmt(startDate)} – ${fmt(endDate)}, ${y}` });
+            m -= 1;
+            if (m < 1) { m = 12; y -= 1; }
+        }
+        return options;
+    }, []);
+    const [attendanceMonth, setAttendanceMonth] = useState(() => attendanceMonthOptions[0].value);
+
+    const attendanceCandidatesQuery = useQuery({
+        queryKey: ['disciplinary-attendance-candidates', attendanceMonth],
+        queryFn: () => disciplinaryService.getAttendanceCandidates(attendanceMonth),
+        enabled: activeTab === 'disciplinary' && disciplinaryView === 'attendance',
+    });
+    const handleExecuteAttendanceCase = async (employeeId: string, violationId: string) => {
+        try {
+            await disciplinaryService.executeAttendanceCase(employeeId, violationId, attendanceMonth);
+            toast.success('Disciplinary case opened at the Disciplinary Action stage.');
+            queryClient.invalidateQueries({ queryKey: ['disciplinary-attendance-candidates'] });
+            queryClient.invalidateQueries({ queryKey: ['disciplinary-cases'] });
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || 'Failed to execute the disciplinary case.');
+        }
+    };
     const { data: jobDescriptions = [] } = useQuery({
         queryKey: ['relations-jds'],
         queryFn: jobDescriptionService.getAllJobDescriptions,
@@ -442,7 +587,7 @@ const PersonnelRelations: React.FC = () => {
         return a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' });
     };
 
-    const filteredLifecycleEmployees = (employees as Employee[]).filter(emp => {
+    const filteredLifecycleEmployees = (employeesIncludingSeparated as Employee[]).filter(emp => {
         const matchesSearch = emp.fullName.toLowerCase().includes(lifecycleSearch.toLowerCase()) ||
             (emp.staffId || '').toLowerCase().includes(lifecycleSearch.toLowerCase()) ||
             (emp.passportNumber || '').toLowerCase().includes(lifecycleSearch.toLowerCase());
@@ -504,11 +649,6 @@ const PersonnelRelations: React.FC = () => {
         XLSX.writeFile(wb, `IPH_Personnel_Relations_Lifecycle_${format(new Date(), 'yyyyMMdd')}.xlsx`);
         toast.success('Lifecycle report exported.');
     };
-
-    const [incidents] = useState<any[]>([
-        { id: 'INC-2026-001', name: 'John Doe', type: 'Late Attendance Pattern', date: '2026-08-02', severity: 'Low', status: 'Notice to Explain Issued' },
-        { id: 'INC-2026-002', name: 'Sara Connor', type: 'Unexcused Absence', date: '2026-07-29', severity: 'Medium', status: 'Investigation Completed' }
-    ]);
 
     const [clearances] = useState<any[]>([
         { id: 1, name: 'Michael Scott', type: 'Voluntary (Resignation)', date: '2026-08-15', clearance: { IT: true, HR: true, Finance: false }, payrollStatus: 'Withheld' },
@@ -732,12 +872,6 @@ const PersonnelRelations: React.FC = () => {
         setIsNominateModalOpen(false);
     };
 
-    const handleDisciplinarySubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        toast.success('Disciplinary action log created.');
-        setIsDisciplinaryModalOpen(false);
-    };
-
     if (isLoadingEmps) {
         return <div className="p-12 text-center animate-pulse text-[#511d29] font-black uppercase tracking-widest text-sm">Loading Personnel Relations...</div>;
     }
@@ -876,8 +1010,8 @@ const PersonnelRelations: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle(emp.contractStatus)}`}>
-                                                    {emp.contractStatus || 'Active'}
+                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle(emp.enrollmentStatus === 'SEPARATED' ? 'Terminated' : emp.contractStatus)}`}>
+                                                    {emp.enrollmentStatus === 'SEPARATED' ? 'Separated' : (emp.contractStatus || 'Active')}
                                                 </span>
                                             </td>
                                             <td className="p-4">{emp.joinDate ? format(parseISO(emp.joinDate), 'yyyy-MM-dd') : 'N/A'}</td>
@@ -1134,161 +1268,283 @@ const PersonnelRelations: React.FC = () => {
                             <div>
                                 <h3 className="font-outfit font-black text-lg text-red-700 uppercase">Disciplinary Action Workflows</h3>
                                 <p className="text-sm text-slate-600 mt-1">
-                                    Manage formal disciplinary processes from incident logs to official action notices.
+                                    Incident Report → Notice to Explain → Investigation Result → Notice of Disciplinary Action.
+                                    Any employee can file an incident report from the "Report an Incident" page.
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => setIsDisciplinaryModalOpen(true)}
-                            className="px-4 py-2 bg-red-700 text-white text-xs font-black uppercase tracking-widest hover:bg-red-800"
-                        >
-                            + Log Incident Report
-                        </button>
-                    </div>
-
-                    {/* Steps diagram / card links */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <DisciplinaryStepCard step="1" title="Incident Report" desc="Formal reporting of a policy breach or performance warning." />
-                        <DisciplinaryStepCard step="2" title="Notice to Explain" desc="Notice served to the employee to explain their side of the incident." />
-                        <DisciplinaryStepCard step="3" title="Investigation Report" desc="Detailed facts finding log submitted by Personnel Relations." />
-                        <DisciplinaryStepCard step="4" title="Notice of Action" desc="Final warning, suspension, or formal disciplinary decision." />
-                    </div>
-
-                    {/* Incidents Table */}
-                    <div className="bg-white border border-red-700/10 rounded-xl overflow-hidden shadow-sm">
-                        <div className="p-4 border-b border-red-700/10 bg-red-50/20">
-                            <span className="text-xs font-black text-red-700 uppercase tracking-wider">Active Cases Log</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setDisciplinaryView('board')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${disciplinaryView === 'board' ? 'bg-red-700 text-white' : 'bg-white border border-red-700/20 text-red-700'}`}
+                            >
+                                Cases Board
+                            </button>
+                            <button
+                                onClick={() => setDisciplinaryView('attendance')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${disciplinaryView === 'attendance' ? 'bg-red-700 text-white' : 'bg-white border border-red-700/20 text-red-700'}`}
+                            >
+                                Attendance Candidates
+                            </button>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
-                                <thead>
-                                    <tr className="bg-red-700/5 text-red-700 uppercase font-black tracking-wider text-[10px] border-b border-red-700/10">
-                                        <th className="p-4">Case ID</th>
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Incident Details</th>
-                                        <th className="p-4">Severity</th>
-                                        <th className="p-4">Current Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-red-700/5 font-medium text-slate-700">
-                                    {incidents.map((inc) => (
-                                        <tr key={inc.id} className="hover:bg-slate-50/50">
-                                            <td className="p-4 font-bold text-red-700">{inc.id}</td>
-                                            <td className="p-4 font-bold">{inc.name}</td>
-                                            <td className="p-4">{inc.type}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-0.5 text-[9px] font-black rounded ${
-                                                    inc.severity === 'Low' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
-                                                }`}>
-                                                    {inc.severity}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 font-bold text-slate-600">{inc.status}</td>
-                                        </tr>
+                    </div>
+
+                    {disciplinaryView === 'board' && (
+                        <>
+                            {DISCIPLINARY_STAGE_COLUMNS.map(col => {
+                                const cases = disciplinaryCases.filter(c => c.stage === col.key);
+                                return (
+                                    <div key={col.key} className="bg-white border border-red-700/10 rounded-xl overflow-hidden shadow-sm">
+                                        <div className="p-3 border-b border-red-700/10 bg-red-50/20 flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-red-700 uppercase tracking-wider">{col.label}</span>
+                                            <span className="text-[10px] font-black text-red-700/60">{cases.length}</span>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse text-xs">
+                                                <thead>
+                                                    <tr className="bg-red-700/5 text-red-700 uppercase font-black tracking-wider text-[10px] border-b border-red-700/10">
+                                                        <th className="p-3">Case #</th>
+                                                        <th className="p-3">Employee</th>
+                                                        <th className="p-3">Category</th>
+                                                        <th className="p-3">Source</th>
+                                                        <th className="p-3"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                                    {cases.length === 0 && (
+                                                        <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                                    )}
+                                                    {cases.map(c => (
+                                                        <tr key={c.id} className="hover:bg-red-50/10">
+                                                            <td className="p-3 text-slate-400">{c.caseNumber}</td>
+                                                            <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
+                                                            <td className="p-3">
+                                                                <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${
+                                                                    !c.category ? 'bg-slate-100 text-slate-500' : c.category === 'MINOR' ? 'bg-amber-100 text-amber-800' : c.category === 'SERIOUS' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
+                                                                }`}>
+                                                                    {c.category ? DISCIPLINARY_CATEGORY_LABELS[c.category as DisciplinaryCategory] : 'Pending Investigation'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3">{c.source === 'SYSTEM_ATTENDANCE' ? 'Attendance' : 'Report'}</td>
+                                                            <td className="p-3 text-right">
+                                                                <button
+                                                                    onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
+                                                                    className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-800"
+                                                                >
+                                                                    Details
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <button onClick={() => setShowClosedCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                                    <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                                        Closed Cases ({disciplinaryCases.filter(c => c.stage === 'CLOSED').length})
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedCases ? 'rotate-180' : ''}`} />
+                                </button>
+                                {showClosedCases && (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <tbody className="divide-y divide-slate-100">
+                                                {disciplinaryCases.filter(c => c.stage === 'CLOSED').map(c => (
+                                                    <tr key={c.id} className="hover:bg-slate-50/50">
+                                                        <td className="p-3 px-4 text-slate-400">{c.caseNumber}</td>
+                                                        <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
+                                                        <td className="p-3 px-4">
+                                                            <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${c.closureReason ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                                                {c.closureReason ? 'Dismissed' : 'Resolved'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
+                                                        <td className="p-3 px-4 text-right">
+                                                            <button
+                                                                onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
+                                                                className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
+                                                            >
+                                                                Details
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        {disciplinaryCases.filter(c => c.stage === 'CLOSED').length === 0 && (
+                                            <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {disciplinaryView === 'attendance' && (
+                        <div className="bg-white border border-red-700/10 rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-4 border-b border-red-700/10 bg-red-50/20 flex items-center justify-between gap-4">
+                                <div>
+                                    <span className="text-xs font-black text-red-700 uppercase tracking-wider">
+                                        Attendance Candidates {attendanceCandidatesQuery.data ? `(${attendanceCandidatesQuery.data.cycleStart} → ${attendanceCandidatesQuery.data.cycleEnd})` : ''}
+                                    </span>
+                                    <p className="text-[11px] text-slate-500 mt-1">
+                                        Employees who triggered an attendance-based violation this cycle (5+ late arrivals, an unauthorized full-day absence, or 3+ consecutive unauthorized absent days). Nothing is executed automatically — review and execute per employee.
+                                    </p>
+                                </div>
+                                <select
+                                    value={attendanceMonth}
+                                    onChange={e => setAttendanceMonth(e.target.value)}
+                                    className="flex-shrink-0 px-3 py-2 text-xs font-bold border border-red-700/20 rounded-lg bg-white text-red-700"
+                                >
+                                    {attendanceMonthOptions.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                                     ))}
-                                </tbody>
-                            </table>
+                                </select>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                    <thead>
+                                        <tr className="bg-red-700/5 text-red-700 uppercase font-black tracking-wider text-[10px] border-b border-red-700/10">
+                                            <th className="p-4">Employee</th>
+                                            <th className="p-4">Violation</th>
+                                            <th className="p-4">Detail</th>
+                                            <th className="p-4"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-red-700/5 font-medium text-slate-700">
+                                        {attendanceCandidatesQuery.isLoading && (
+                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">Computing candidates…</td></tr>
+                                        )}
+                                        {!attendanceCandidatesQuery.isLoading && (attendanceCandidatesQuery.data?.candidates.length || 0) === 0 && (
+                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">No employees currently meet any attendance-violation threshold.</td></tr>
+                                        )}
+                                        {attendanceCandidatesQuery.data?.candidates.map(cand => (
+                                            <tr key={`${cand.employeeId}-${cand.violationId}`} className="hover:bg-slate-50/50">
+                                                <td className="p-4 font-bold">{cand.employeeName}{cand.staffId ? ` (${cand.staffId})` : ''}</td>
+                                                <td className="p-4">{cand.violationLabel}</td>
+                                                <td className="p-4">{cand.detail}</td>
+                                                <td className="p-4">
+                                                    <button
+                                                        onClick={() => handleExecuteAttendanceCase(cand.employeeId, cand.violationId)}
+                                                        className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-800"
+                                                    >
+                                                        Execute
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
             {activeTab === 'offboarding' && (
                 <div className="space-y-6">
-                    {/* CRITICAL WARNING */}
                     <div className="bg-red-50 border-2 border-red-500/30 p-6 rounded-lg flex items-start gap-4">
                         <div className="w-12 h-12 bg-red-600 text-white flex items-center justify-center rounded-lg flex-shrink-0">
                             <ShieldAlert className="w-6 h-6 animate-pulse" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                             <h3 className="font-outfit font-black text-lg text-red-700 uppercase">Payroll Withholding Notice</h3>
                             <p className="text-sm text-red-950 mt-1 font-bold">
                                 Offboarding is directly connected with Payroll. The Company has the right to withhold the last payment of the employee without proper clearance and offboarding documentation.
                             </p>
                         </div>
+                        <button
+                            onClick={() => setIsOffboardingModalOpen(true)}
+                            className="flex-shrink-0 px-4 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d]"
+                        >
+                            Initiate Offboarding
+                        </button>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Voluntary */}
-                        <div className="bg-white border border-[#511d29]/20 p-6 rounded-xl shadow-sm space-y-4">
-                            <h4 className="text-md font-black text-[#511d29] uppercase border-b border-[#511d29]/10 pb-2">Voluntary Resignation</h4>
-                            <ul className="space-y-2 text-xs font-semibold text-slate-700">
-                                <li className="flex items-center gap-2 text-emerald-700">
-                                    <CheckCircle2 size={16} /> Resignation Letter Submission & Verification
-                                </li>
-                                <li className="flex items-center gap-2 text-emerald-700">
-                                    <CheckCircle2 size={16} /> Exit Interview Feedback Log
-                                </li>
-                                <li className="flex items-center gap-2 text-slate-500">
-                                    <Clock size={16} className="text-amber-500" /> Complete Employee Clearance Form (IT, Assets, Finance)
-                                </li>
-                            </ul>
-                        </div>
+                    {OFFBOARDING_STAGE_COLUMNS.map(col => {
+                        const cases = offboardingCases.filter(c => c.stage === col.key);
+                        return (
+                            <div key={col.key} className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
+                                <div className="p-3 border-b border-[#511d29]/10 bg-red-50/20 flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-[#511d29] uppercase tracking-wider">{col.label}</span>
+                                    <span className="text-[10px] font-black text-[#511d29]/60">{cases.length}</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
+                                                <th className="p-3">Case #</th>
+                                                <th className="p-3">Employee</th>
+                                                <th className="p-3">Type</th>
+                                                <th className="p-3">Source</th>
+                                                <th className="p-3"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                            {cases.length === 0 && (
+                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                            )}
+                                            {cases.map(c => (
+                                                <tr key={c.id} className="hover:bg-red-50/10">
+                                                    <td className="p-3 text-slate-400">{c.caseNumber}</td>
+                                                    <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
+                                                    <td className="p-3">{c.type === 'VOLUNTARY' ? 'Voluntary' : 'Involuntary'}</td>
+                                                    <td className="p-3">{c.source.replace(/_/g, ' ')}</td>
+                                                    <td className="p-3 text-right">
+                                                        <button
+                                                            onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
+                                                            className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
+                                                        >
+                                                            Details
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        );
+                    })}
 
-                        {/* Involuntary */}
-                        <div className="bg-white border border-red-700/20 p-6 rounded-xl shadow-sm space-y-4">
-                            <h4 className="text-md font-black text-red-700 uppercase border-b border-red-700/10 pb-2">Involuntary Termination</h4>
-                            <ul className="space-y-2 text-xs font-semibold text-slate-700">
-                                <li className="flex items-center gap-2 text-emerald-700">
-                                    <CheckCircle2 size={16} /> Formal Termination/Redundancy Notice Issued
-                                </li>
-                                <li className="flex items-center gap-2 text-slate-500">
-                                    <Clock size={16} className="text-amber-500" /> Exit Interview (Optional/Documented)
-                                </li>
-                                <li className="flex items-center gap-2 text-slate-500">
-                                    <Clock size={16} className="text-amber-500" /> Clearance Form Sign-off & Handover
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    {/* Clearance Checklist Table */}
-                    <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
-                        <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Active Clearance Cases</span>
-                            <button
-                                onClick={() => setIsOffboardingModalOpen(true)}
-                                className="px-3 py-1 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d]"
-                            >
-                                Initiate Offboarding
-                            </button>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
-                                <thead>
-                                    <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Type</th>
-                                        <th className="p-4">Effective Date</th>
-                                        <th className="p-4">Clearance Status</th>
-                                        <th className="p-4">Last Salary Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
-                                    {clearances.map((c) => (
-                                        <tr key={c.id} className="hover:bg-slate-50/50">
-                                            <td className="p-4 font-bold">{c.name}</td>
-                                            <td className="p-4">{c.type}</td>
-                                            <td className="p-4 font-bold">{c.date}</td>
-                                            <td className="p-4">
-                                                <div className="flex gap-2">
-                                                    <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${c.clearance.IT ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>IT</span>
-                                                    <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${c.clearance.HR ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>HR</span>
-                                                    <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${c.clearance.Finance ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>Finance</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${
-                                                    c.payrollStatus === 'Withheld' ? 'bg-red-100 text-red-800 animate-pulse' : 'bg-amber-100 text-amber-800'
-                                                }`}>
-                                                    {c.payrollStatus}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <button onClick={() => setShowClosedOffboardingCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                                Closed Cases ({offboardingCases.filter(c => c.stage === 'CLOSED').length})
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedOffboardingCases ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showClosedOffboardingCases && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <tbody className="divide-y divide-slate-100">
+                                        {offboardingCases.filter(c => c.stage === 'CLOSED').map(c => (
+                                            <tr key={c.id} className="hover:bg-slate-50/50">
+                                                <td className="p-3 px-4 text-slate-400">{c.caseNumber}</td>
+                                                <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
+                                                <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
+                                                <td className="p-3 px-4 text-right">
+                                                    <button
+                                                        onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
+                                                        className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
+                                                    >
+                                                        Details
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {offboardingCases.filter(c => c.stage === 'CLOSED').length === 0 && (
+                                    <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1555,57 +1811,83 @@ const PersonnelRelations: React.FC = () => {
                 </form>
             </Modal>
 
-            {/* Modal 4: Disciplinary Log */}
-            <Modal isOpen={isDisciplinaryModalOpen} onClose={() => setIsDisciplinaryModalOpen(false)} title="Log Incident / Policy Breach" maxWidth="max-w-md">
-                <form onSubmit={handleDisciplinarySubmit} className="space-y-4 text-xs font-semibold text-slate-700">
-                    <div>
-                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Select Employee</label>
-                        <select className="w-full p-2 border border-red-700/20 bg-white">
-                            {employees.map((e: any) => (
-                                <option key={e.id} value={e.id}>{e.fullName}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Incident Type</label>
-                        <select className="w-full p-2 border border-red-700/20 bg-white">
-                            <option>Incident Report</option>
-                            <option>Notice to Explain request</option>
-                            <option>Investigation Report draft</option>
-                            <option>Notice of Disciplinary Action</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Incident Details</label>
-                        <textarea rows={3} required placeholder="Describe breach details..." className="w-full p-2 border border-red-700/20 bg-white" />
-                    </div>
-
-                    <button type="submit" className="w-full py-3 bg-red-700 text-white font-black uppercase tracking-widest hover:bg-red-800">
-                        Create Disciplinary Log
-                    </button>
-                </form>
-            </Modal>
-
             {/* Modal 5: Offboarding Log */}
-            <Modal isOpen={isOffboardingModalOpen} onClose={() => setIsOffboardingModalOpen(false)} title="Initiate Offboarding Process" maxWidth="max-w-md">
-                <form onSubmit={(e) => { e.preventDefault(); toast.success('Offboarding case registered. IT, HR, and Finance clearance processes initialized.'); setIsOffboardingModalOpen(false); }} className="space-y-4 text-xs font-semibold text-slate-700">
-                    <div>
+            <Modal isOpen={isOffboardingModalOpen} onClose={() => setIsOffboardingModalOpen(false)} title="Initiate Offboarding Manually" maxWidth="max-w-md">
+                <form
+                    onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!involuntaryEmployee) return toast.error('Select the employee from the suggestions.');
+                        try {
+                            const created = await offboardingService.createManualCase({
+                                employeeId: involuntaryEmployee.id, source: involuntarySource,
+                                reason: involuntaryReason || undefined, dateOfSeparation: involuntaryDate || undefined,
+                            });
+                            const startedAt = involuntarySource === 'EMPLOYEE_RESIGNATION' ? 'Resignation Request' : 'Clearance';
+                            toast.success(`Offboarding case ${created.caseNumber} opened at ${startedAt}.`);
+                            setIsOffboardingModalOpen(false);
+                            setInvoluntaryEmployeeQuery(''); setInvoluntaryEmployee(null); setInvoluntaryReason(''); setInvoluntaryDate('');
+                            queryClient.invalidateQueries({ queryKey: ['offboarding-cases'] });
+                        } catch (err: any) {
+                            toast.error(err?.response?.data?.error || 'Failed to create the offboarding case.');
+                        }
+                    }}
+                    className="space-y-4 text-xs font-semibold text-slate-700"
+                >
+                    <p className="text-[10px] text-slate-400 font-normal normal-case">
+                        Use this only when the case didn't come through its own dedicated path — a disciplinary
+                        action reaching Termination, or the employee's own Resignation Request page — already
+                        open their offboarding case automatically.
+                    </p>
+                    <div className="relative">
                         <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            {employees.map((e: any) => (
-                                <option key={e.id} value={e.id}>{e.fullName}</option>
-                            ))}
-                        </select>
+                        <input
+                            type="text"
+                            value={involuntaryEmployeeQuery}
+                            onChange={e => handleInvoluntaryEmployeeChange(e.target.value)}
+                            onFocus={() => setShowInvoluntarySuggestions(true)}
+                            onBlur={() => { involuntaryBlurTimeout.current = window.setTimeout(() => setShowInvoluntarySuggestions(false), 150); }}
+                            placeholder="Start typing the employee's name…"
+                            className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
+                            autoComplete="off"
+                        />
+                        {showInvoluntarySuggestions && involuntarySuggestions.length > 0 && (
+                            <ul className="absolute z-10 mt-1 w-full bg-white border border-[#511d29]/20 rounded shadow-md max-h-56 overflow-auto">
+                                {involuntarySuggestions.map((emp: any) => (
+                                    <li key={emp.id}>
+                                        <button
+                                            type="button"
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => selectInvoluntaryEmployee(emp)}
+                                            className="w-full text-left px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
+                                        >
+                                            {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Offboarding Type</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option value="VOLUNTARY">Voluntary (Resignation Letter, Exit Interview)</option>
-                            <option value="INVOLUNTARY">Involuntary (Termination, Direct Exit)</option>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Reason</label>
+                        <select value={involuntarySource} onChange={e => setInvoluntarySource(e.target.value as typeof involuntarySource)} className="w-full p-2 border border-[#511d29]/20 bg-white">
+                            <option value="TERMINATION">Termination</option>
+                            <option value="EMPLOYEE_RESIGNATION">Resignation</option>
+                            <option value="CONTRACT_NON_RENEWAL_COMPANY">Contract Non-Renewal (by Company)</option>
+                            <option value="CONTRACT_NON_RENEWAL_EMPLOYEE">Contract Non-Renewal (by Employee)</option>
                         </select>
+                    </div>
+
+                    {involuntarySource !== 'EMPLOYEE_RESIGNATION' && (
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Date of separation</label>
+                            <input type="date" value={involuntaryDate} onChange={e => setInvoluntaryDate(e.target.value)} className="w-full p-2 border border-[#511d29]/20 bg-white" />
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Notes (optional)</label>
+                        <textarea value={involuntaryReason} onChange={e => setInvoluntaryReason(e.target.value)} rows={2} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                     </div>
 
                     <div className="bg-red-50 p-3 border border-red-200 text-[10px] text-red-700 font-bold uppercase">
@@ -1706,13 +1988,45 @@ const PersonnelRelations: React.FC = () => {
                                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-sm text-[11px] font-bold text-white/90">
                                                 <Landmark className="w-3 h-3 opacity-70" />{orgUnitName(emp)}
                                             </span>
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${emp.contractStatus === 'Active' || !emp.contractStatus ? 'bg-emerald-400/20 border-emerald-300/30 text-emerald-50' : 'bg-white/10 border-white/15 text-white/80'}`}>
-                                                <span className="w-1.5 h-1.5 rounded-full bg-current" />{emp.contractStatus || 'Active'}
-                                            </span>
+                                            {emp.enrollmentStatus === 'SEPARATED' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-rose-500/20 border-rose-300/30 text-rose-50">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />Separated
+                                                </span>
+                                            ) : (
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${emp.contractStatus === 'Active' || !emp.contractStatus ? 'bg-emerald-400/20 border-emerald-300/30 text-emerald-50' : 'bg-white/10 border-white/15 text-white/80'}`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{emp.contractStatus || 'Active'}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {emp.enrollmentStatus === 'SEPARATED' && (
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+                                    <div className="flex items-center gap-2 font-black text-rose-700 uppercase text-xs tracking-widest">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500" /> Separation Details
+                                    </div>
+                                    <div>
+                                        <span className="block text-[10px] font-black uppercase text-rose-400">Separation Date</span>
+                                        <span className="font-bold text-rose-800">{emp.separationDate ? format(parseISO(emp.separationDate), 'dd MMM yyyy') : '—'}</span>
+                                    </div>
+                                    {detailSeparationCase && (
+                                        <>
+                                            <div>
+                                                <span className="block text-[10px] font-black uppercase text-rose-400">Reason</span>
+                                                <span className="font-bold text-rose-800">{OFFBOARDING_SOURCE_LABELS[detailSeparationCase.source] || detailSeparationCase.source}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => navigate(`/personnel-relations/offboarding/${detailSeparationCase.id}`)}
+                                                className="ml-auto text-rose-700 hover:underline font-black text-xs uppercase tracking-wider"
+                                            >
+                                                View Offboarding Case ({detailSeparationCase.caseNumber}) →
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
 
                             {/* The information tree — one collapsible branch per category, file-explorer
                                 style. See TreeBranch/expandedNodes above for how expand state works. */}
@@ -2078,6 +2392,50 @@ const PersonnelRelations: React.FC = () => {
                                     </div>
                                 </TreeBranch>
 
+                                {/* New — confirmed disciplinary record, permanently part of the employee's file
+                                    once a case actually completes the Disciplinary Action stage against them. */}
+                                <TreeBranch
+                                    isOpen={expandedNodes.has('disciplinary')} onToggle={() => toggleNode('disciplinary')}
+                                    icon={AlertOctagon}
+                                    title="Disciplinary Record"
+                                    color="bg-red-50 text-red-700"
+                                    count={canSeeDisciplinaryRecord ? detailDisciplinaryRecord.length : undefined}
+                                    restricted={!canSeeDisciplinaryRecord ? 'Restricted to Personnel Relations' : undefined}
+                                >
+                                    {detailDisciplinaryRecord.length === 0 ? (
+                                        <div className="text-sm font-bold text-slate-300">No confirmed disciplinary actions on record.</div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {[...detailDisciplinaryRecord].sort((a, b) => new Date(b.actionCompletedAt || 0).getTime() - new Date(a.actionCompletedAt || 0).getTime()).map(dc => (
+                                                <div key={dc.id} className="px-4 py-3 rounded-2xl bg-red-50/50 border border-red-100 space-y-1">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <p className="text-xs font-black text-slate-700">
+                                                            {dc.violationId ? VIOLATIONS_BY_ID[dc.violationId]?.description || dc.violationId : 'Violation not specified'}
+                                                        </p>
+                                                        <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-red-100 text-red-700 shrink-0">
+                                                            {dc.category ? DISCIPLINARY_CATEGORY_LABELS[dc.category as DisciplinaryCategory] : ''}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        {dc.actionType ? DISCIPLINARY_ACTION_LABELS[dc.actionType] : '—'}
+                                                        {dc.offenseNumber ? ` · Offense #${dc.offenseNumber}` : ''}
+                                                        {dc.actionEffectiveDate ? ` · Effective ${fmt(dc.actionEffectiveDate)}` : ''}
+                                                    </p>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <p className="text-[10px] text-slate-400">{dc.caseNumber}</p>
+                                                        <button
+                                                            onClick={() => navigate(`/personnel-relations/disciplinary/${dc.id}`)}
+                                                            className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
+                                                        >
+                                                            View case <ExternalLink className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </TreeBranch>
+
                                 <TreeBranch isOpen={expandedNodes.has('factors')} onToggle={() => toggleNode('factors')} icon={TrendingUp} title="System & Scoring Factors" color="bg-slate-100 text-slate-600">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                                         <Field emp={emp} label="Position Factor" k="positionFactor" />
@@ -2158,14 +2516,6 @@ const RewardCard = ({ title, desc }: { title: string, desc: string }) => (
         </div>
         <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{title}</h4>
         <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
-    </div>
-);
-
-const DisciplinaryStepCard = ({ step, title, desc }: { step: string, title: string, desc: string }) => (
-    <div className="bg-white border border-red-700/10 p-5 rounded-xl shadow-sm space-y-2 relative">
-        <div className="absolute top-3 right-4 text-3xl font-black text-red-700/10">{step}</div>
-        <h4 className="text-xs font-black text-red-700 uppercase tracking-wider">{title}</h4>
-        <p className="text-[11px] text-slate-500 leading-relaxed">{desc}</p>
     </div>
 );
 

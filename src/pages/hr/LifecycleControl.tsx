@@ -118,7 +118,7 @@ const LifecycleControl: React.FC = () => {
 
     const { data: employees = [], isLoading } = useQuery({
         queryKey: ['employees-lifecycle'],
-        queryFn: employeeService.getAllEmployees
+        queryFn: () => employeeService.getAllEmployees({ includeSeparated: true })
     });
 
     const { data: departments = [] } = useQuery({
