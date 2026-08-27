@@ -5,7 +5,7 @@ import { generateJobOfferDocx } from '../utils/jobOffer';
 import { generateEvaluationDocx } from '../utils/jobEvaluation';
 import { generateHiringLetterDocx } from '../utils/hiringLetter';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const cleanStr = (v: any): string | null => (v === '' || v === 'null' || v === 'undefined' || v == null) ? null : String(v);
 

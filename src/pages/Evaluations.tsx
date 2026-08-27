@@ -83,7 +83,10 @@ const EvaluationsPage: React.FC = () => {
             setMe(placement);
 
             // Everyone works from the full roster; visibility is decided by the skip-level rule.
-            const allEmployees = await employeeService.getAllEmployees();
+            // Only ACTIVE staff are evaluated — transferred (inter-company) and pending-enrollment
+            // employees are excluded (mirrors the backend evaluatee pool: enrollmentStatus ACTIVE).
+            const allEmployees = (await employeeService.getAllEmployees())
+                .filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED' && e.enrollmentStatus !== 'PENDING_ENROLLMENT');
 
             const isAdminLike = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser.role);
             const visible = isAdminLike

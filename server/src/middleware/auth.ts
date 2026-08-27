@@ -7,7 +7,7 @@ export interface AuthRequest extends Request {
     user?: any;
 }
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];

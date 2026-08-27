@@ -3,11 +3,12 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import { presetForRole } from '../utils/rolePresets';
-import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
+import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode, ATTENDANCE_API_BASE } from '../utils/attendanceApiProxy';
 import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
+import { generateEmployeeSummaryDocx, type SummaryItem } from '../utils/employeeSummaryForm';
 import { purgeUserAndRelations } from './userController';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // BioTime has exactly 4 fixed positions (no lookup endpoint — discovered by inspecting its live
 // roster): Resident=4, Non-Resident=5, Exception=6, Higher-Management=7. Exception and
@@ -181,6 +182,119 @@ export const getEmployeeById = async (req: AuthRequest, res: Response) => {
         res.json(data);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employee' });
+    }
+};
+
+// GET /employees/:id/handover-summary — a one-page Word summary on the IPH letterhead for an
+// inter-company transfer: profile, remaining leave balances, this-month attendance/leave figures
+// (from the latest HR evaluation) and the last finalized evaluation score.
+export const generateHandoverSummary = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const emp: any = await prisma.employee.findUnique({
+            where: { id },
+            include: { department: true, division: true, unit: true, jobDescription: { select: { title: true } } },
+        });
+        if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+        const metrics = calculateHolidayMetrics(emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed);
+
+        const [latestHr, finals] = await Promise.all([
+            prisma.hREvaluation.findFirst({ where: { employeeId: id }, orderBy: { month: 'desc' } }),
+            prisma.evaluationFinalization.findMany({ where: { employeeId: id }, orderBy: { month: 'desc' }, take: 3 }),
+        ]);
+
+        const fmt = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString().split('T')[0] : '—');
+        const residencyMap: Record<string, string> = {
+            'RESDANT': 'Resident / محلي',
+            'DIRCT NONE RESDANT': 'Direct Non-Resident / غير محلي مباشر',
+            'NONE RESDANT': 'Service Provider / مزود خدمة',
+        };
+        const n = (v: number | null | undefined) => (v === null || v === undefined ? '—' : String(v));
+        const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${v.toFixed(1)}%`);
+
+        // Attendance runs on a 25→24 cycle: the "last month" period is the 25th of the prior month
+        // through the 24th of the most recently completed month. Worked/overtime hours for that
+        // window come live from the attendance system (fail-soft: "—" if it's unreachable).
+        const iso = (dt: Date) => dt.toISOString().split('T')[0];
+        const nowD = new Date();
+        const cycleEnd = new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() + (nowD.getUTCDate() >= 24 ? 0 : -1), 24));
+        const cycleStart = new Date(Date.UTC(cycleEnd.getUTCFullYear(), cycleEnd.getUTCMonth() - 1, 25));
+        const prettyRange = (() => {
+            const f = (d: Date) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+            return `${f(cycleStart)} – ${f(cycleEnd)}`;
+        })();
+        let workedHrs = '—';
+        let overtimeHrs = '—';
+        if (emp.staffId) {
+            try {
+                const url = new URL('/api/attendance/summary', ATTENDANCE_API_BASE);
+                url.searchParams.set('start', iso(cycleStart));
+                url.searchParams.set('end', iso(cycleEnd));
+                const r = await fetch(url.toString());
+                if (r.ok) {
+                    const data: any = await r.json();
+                    const row = (data.employees || []).find((e: any) => e.empCode === emp.staffId);
+                    if (row) {
+                        if (typeof row.totalWorkMins === 'number') workedHrs = (row.totalWorkMins / 60).toFixed(1);
+                        if (typeof row.totalApprovedOTMins === 'number') overtimeHrs = (row.totalApprovedOTMins / 60).toFixed(1);
+                    }
+                }
+            } catch { /* attendance system unreachable — leave as — */ }
+        }
+
+        // Last 3 months of finalized evaluation + their average.
+        const last3 = finals; // already newest-first, max 3
+        const avg3 = last3.length ? last3.reduce((s, f) => s + (f.finalScore || 0), 0) / last3.length : null;
+
+        const items: SummaryItem[] = [
+            { kind: 'section', label: 'Employee Information', ar: 'معلومات الموظف' },
+            { kind: 'field', label: 'Employee Name', value: emp.fullName || '', ar: 'اسم الموظف' },
+            { kind: 'field', label: 'Staff ID', value: emp.staffId || '', ar: 'الرقم الوظيفي' },
+            { kind: 'field', label: 'Division', value: emp.division?.name || '', ar: 'الإدارة' },
+            { kind: 'field', label: 'Department', value: emp.department?.name || '', ar: 'القسم' },
+            { kind: 'field', label: 'Position', value: emp.jobDescription?.title || emp.position || '', ar: 'المسمى الوظيفي' },
+            { kind: 'field', label: 'Residency Status', value: residencyMap[emp.contractType || ''] || emp.contractType || '', ar: 'حالة الإقامة' },
+            { kind: 'field', label: 'Employee Contract', value: emp.contractWorkType || '', ar: 'عقد الموظف' },
+            { kind: 'field', label: 'Join Date', value: fmt(emp.joinDate), ar: 'تاريخ الالتحاق' },
+            { kind: 'field', label: 'Contract Start', value: fmt(emp.contractStartDate), ar: 'بداية العقد' },
+            { kind: 'field', label: 'Contract End', value: fmt(emp.contractEndDate), ar: 'نهاية العقد' },
+
+            { kind: 'section', label: 'Leave Balances (Remaining)', ar: 'أرصدة الإجازات المتبقية' },
+            { kind: 'field', label: 'Annual Leave', value: n(metrics.remainingHolidays), ar: 'الإجازة السنوية' },
+            { kind: 'field', label: 'Emergency Leave', value: n(metrics.remainingEmergencyHolidays), ar: 'الإجازة الطارئة' },
+            { kind: 'field', label: 'Unpaid Leave', value: n(metrics.remainingUnpaidHolidays), ar: 'إجازة بدون أجر' },
+
+            { kind: 'section', label: 'Attendance (Last Month)', ar: 'الحضور (الشهر الماضي)' },
+            { kind: 'field', label: 'Period', value: prettyRange, ar: 'الفترة (25 إلى 24)' },
+            { kind: 'field', label: 'Total Working Hours', value: workedHrs, ar: 'إجمالي ساعات العمل' },
+            { kind: 'field', label: 'Overtime Hours', value: overtimeHrs, ar: 'ساعات العمل الإضافي' },
+            { kind: 'field', label: 'Presence Score (/20)', value: n(latestHr?.presenceScore), ar: 'درجة الحضور' },
+
+            { kind: 'section', label: 'Evaluation (Last 3 Months)', ar: 'التقييم (آخر 3 أشهر)' },
+            ...last3.map((f) => ({ kind: 'field' as const, label: f.month, value: pct(f.finalScore), ar: 'التقييم الشهري' })),
+            { kind: 'field', label: 'Average (Last 3 Months)', value: pct(avg3), ar: 'المعدل (آخر 3 أشهر)' },
+        ];
+        if (last3.length === 0) {
+            // No finalized evaluations yet — show a single placeholder line instead of an empty section.
+            items.push({ kind: 'field', label: 'No finalized evaluations', value: '—', ar: 'لا يوجد تقييم معتمد' });
+        }
+
+        const buf = generateEmployeeSummaryDocx({
+            titleEn: 'Employee Handover Summary',
+            titleAr: 'ملخص بيانات الموظف',
+            subtitleLeft: emp.transferredCompany ? `Transfer to: ${emp.transferredCompany}` : 'Employee Summary',
+            subtitleRight: `IPH — ${new Date().toISOString().split('T')[0]}`,
+            items,
+        });
+
+        const safe = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="Employee_Summary_${safe}.docx"`);
+        res.send(buf);
+    } catch (error: any) {
+        console.error('Error generating handover summary:', error);
+        res.status(500).json({ error: 'Failed to generate the employee summary.' });
     }
 };
 

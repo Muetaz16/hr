@@ -19,6 +19,12 @@ export const payrollService = {
         return response.data;
     },
 
+    // Generate the official IPH Monthly (Efficiency) Evaluation Word form for one employee + month.
+    async generateEvaluationDoc(employeeId: string, month: string): Promise<Blob> {
+        const response = await api.get(`/payroll/evaluation-doc/${employeeId}/${month}`, { responseType: 'blob' });
+        return response.data;
+    },
+
     async generateCSV(month: string): Promise<string> {
         const results = await this.getPayrollByMonth(month);
         const employeesResponse = await api.get('/employees');

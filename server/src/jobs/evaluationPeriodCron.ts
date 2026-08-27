@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import { sendCompletionReminders, sendPeriodOpenedNotifications } from './evaluationPeriodNotifications';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Libya doesn't observe DST, so a fixed IANA zone is safe to hardcode — the
 // server itself may be hosted anywhere, so we can't rely on its local time.

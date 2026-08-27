@@ -4,7 +4,7 @@ import { canEvaluate, EvalLevel, OrgPlacement } from '../utils/evaluationHierarc
 import { computeAndStorePresence } from '../utils/presenceScoring';
 import { finalizeOneEmployee, reFinalizeEmployee } from '../utils/evaluationFinalize';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Helper to map DB HR Evaluation to Frontend format
 const mapHREvalFromDB = (evalData: any) => {

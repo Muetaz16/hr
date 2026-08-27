@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export const getUnits = async (req: express.Request, res: express.Response) => {
     //

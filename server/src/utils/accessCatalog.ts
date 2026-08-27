@@ -67,6 +67,7 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'manage_units', group: 'Administration', label: 'Manage Units' },
     { id: 'manage_job_descriptions', group: 'Administration', label: 'Manage Job Descriptions' },
     { id: 'manage_users', group: 'Administration', label: 'Manage System Users' },
+    { id: 'view_logs', group: 'Administration', label: 'View Activity Log' },
 ];
 
 export const ALL_PERMISSION_IDS: string[] = PERMISSIONS.map(p => p.id);

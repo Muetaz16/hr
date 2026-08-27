@@ -19,6 +19,15 @@ export interface PersonnelActionForm {
     newJobGrade?: string | null;
     newPlaceOfWork?: string | null;
     reportsTo?: string | null;
+    // Inter-company transfer (actionType === 'INTER_COMPANY_TRANSFER') — free-text destination + factors.
+    newCompany?: string | null;
+    newDivisionName?: string | null;
+    newDepartmentName?: string | null;
+    newUnitName?: string | null;
+    englishFactor?: number | null;
+    positionFactor?: number | null;
+    locationFactor?: number | null;
+    skillFactor?: number | null;
     typeOfTransfer?: string | null;
     effectiveDate?: string | null;
     justification?: string | null;
@@ -47,6 +56,13 @@ export const personnelActionService = {
         return response.data;
     },
 
+    // Create an inter-company transfer (free-text destination + entered factors). Accepting it marks
+    // the employee TRANSFERRED.
+    async createInterCompany(data: any): Promise<PersonnelActionForm> {
+        const response = await api.post('/personnel-actions/inter-company', data);
+        return response.data;
+    },
+
     // Generate the filled Personnel Action Form (.docx) as a Blob for download.
     async generateForm(id: string): Promise<Blob> {
         const response = await api.get(`/personnel-actions/${id}/form`, { responseType: 'blob' });
@@ -54,7 +70,7 @@ export const personnelActionService = {
     },
 
     // Accept (applies the transfer) or reject the form. Accept requires the signed document URL.
-    async decide(id: string, data: { decision: 'ACCEPT' | 'REJECT'; documentUrl?: string; documentName?: string }): Promise<PersonnelActionForm> {
+    async decide(id: string, data: { decision: 'ACCEPT' | 'REJECT'; documentUrl?: string; documentName?: string; newCompany?: string }): Promise<PersonnelActionForm> {
         const response = await api.post(`/personnel-actions/${id}/decide`, data);
         return response.data;
     },

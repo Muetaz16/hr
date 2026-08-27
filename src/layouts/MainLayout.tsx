@@ -99,6 +99,19 @@ const MainLayout: React.FC = () => {
     };
     const handleMarkAllRead = async () => { await notificationService.markAllRead().catch(() => {}); refetchNotifs(); };
 
+    // Compact relative timestamp for the notification list (just now / 5m / 3h / 2d / date).
+    const timeAgo = (dateStr: string) => {
+        const diff = Math.max(0, Date.now() - new Date(dateStr).getTime());
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return t('just_now', { defaultValue: 'just now' });
+        if (mins < 60) return `${mins}m`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days}d`;
+        return new Date(dateStr).toLocaleDateString();
+    };
+
     // Profile Dropdown & Password Modal State
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -108,6 +121,11 @@ const MainLayout: React.FC = () => {
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [isSavingSignature, setIsSavingSignature] = useState(false);
+    // Global search (command palette): jump to accessible pages + employee lookup.
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchIdx, setSearchIdx] = useState(0);
+    const [searchEmployees, setSearchEmployees] = useState<Array<{ id: string; fullName: string; staffId?: string }>>([]);
 
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
         const saved = localStorage.getItem('iph-theme');
@@ -233,22 +251,10 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_hr', { defaultValue: 'HR & Personnel' }),
             items: [
                 {
-                    label: t('nav_hr', { defaultValue: 'HR Management' }),
-                    icon: Users,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER'],
-                    children: [
-                        { label: t('nav_employees'), path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_employees', 'manage_employees'] },
-                        { label: t('nav_lifecycle_control', { defaultValue: 'Lifecycle Control' }), path: '/lifecycle-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_lifecycle', 'manage_lifecycle_control'] },
-                        { label: t('nav_contract_management'), path: '/contract-management', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_contracts', 'manage_contract_management'] },
-                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
-                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                    ]
-                },
-                {
-                    label: 'Attendance & Leave Requests',
+                    label: t('nav_attendance_payroll', { defaultValue: 'Attendance & Payroll' }),
                     icon: Clock,
                     roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
-                    permissions: ['view_time_tracking', 'manage_time_tracking'],
+                    permissions: ['view_time_tracking', 'manage_time_tracking', 'view_payroll', 'manage_payroll'],
                     children: [
                         { label: 'Overview', path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
@@ -267,26 +273,12 @@ const MainLayout: React.FC = () => {
                         { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
                         { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
                         { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: 'Promotion Management', path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
                         { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
                         { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
                         { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
-                        { label: 'Performance Evaluation', path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
+                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
                         { label: 'Employee Control', path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
-                    ]
-                }
-            ]
-        },
-        {
-            title: t('nav_group_evaluations', { defaultValue: 'Evaluations' }),
-            items: [
-                {
-                    label: t('nav_evaluations'),
-                    icon: ClipboardCheck,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL', 'HR_MANAGER'],
-                    children: [
-                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['view_evaluations'] },
-                        { label: t('nav_hr_evaluations'), path: '/hr-evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_hr_evaluations', 'manage_evaluation_control'] },
-                        { label: t('nav_evaluation_control'), path: '/evaluation-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_evaluation_control'] },
                     ]
                 }
             ]
@@ -305,6 +297,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
+                        { label: t('nav_system_logs', { defaultValue: 'Activity Log' }), path: '/system-logs', roles: ['SUPER_ADMIN'], permissions: ['view_logs'] },
                     ]
                 }
             ]
@@ -314,6 +307,54 @@ const MainLayout: React.FC = () => {
     const toggleSubMenu = (label: string) => {
         if (!isSidebarOpen) setIsSidebarOpen(true);
         setOpenSubMenus(prev => ({ ...prev, [label]: !prev[label] }));
+    };
+
+    // --- Global search ---------------------------------------------------------------------------
+    // Employee lookup is only offered to users who can actually open the Employees admin page.
+    const canSearchEmployees = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['view_employees', 'manage_employees']);
+
+    // Load the roster once, the first time a permitted user opens search.
+    useEffect(() => {
+        if (searchOpen && canSearchEmployees && searchEmployees.length === 0) {
+            employeeService.getAllEmployees()
+                .then((list: any[]) => setSearchEmployees(list.map(e => ({ id: e.id, fullName: e.fullName, staffId: e.staffId }))))
+                .catch(() => { /* ignore */ });
+        }
+    }, [searchOpen, canSearchEmployees]);
+
+    // Accessible destinations drawn from the SAME nav config, so a result can never point at a page
+    // the current user isn't allowed to open.
+    const searchablePages: { label: string; path: string; group: string }[] = [];
+    for (const group of navGroups) {
+        for (const item of group.items) {
+            if ('path' in item && item.path && canAccess(currentUser, item.roles, item.permissions)) {
+                searchablePages.push({ label: item.label, path: item.path, group: group.title });
+            }
+            if ('children' in item && item.children) {
+                for (const child of item.children) {
+                    if (child.path && canAccess(currentUser, child.roles, child.permissions)) {
+                        searchablePages.push({ label: child.label, path: child.path, group: item.label });
+                    }
+                }
+            }
+        }
+    }
+
+    const searchTerm = searchQuery.trim().toLowerCase();
+    const pageMatches = searchTerm ? searchablePages.filter(p => p.label.toLowerCase().includes(searchTerm)).slice(0, 6) : [];
+    const empMatches = (searchTerm && canSearchEmployees)
+        ? searchEmployees.filter(e => (e.fullName || '').toLowerCase().includes(searchTerm) || (e.staffId || '').toLowerCase().includes(searchTerm)).slice(0, 6)
+        : [];
+    const searchResults: Array<{ type: 'page' | 'emp'; label: string; sub?: string; path: string }> = [
+        ...pageMatches.map(p => ({ type: 'page' as const, label: p.label, sub: p.group, path: p.path })),
+        ...empMatches.map(e => ({ type: 'emp' as const, label: e.fullName, sub: e.staffId, path: `/employees?q=${encodeURIComponent(e.fullName)}` })),
+    ];
+
+    const goToSearchResult = (r: { path: string }) => {
+        setSearchQuery('');
+        setSearchOpen(false);
+        setSearchIdx(0);
+        navigate(r.path);
     };
 
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
@@ -545,7 +586,7 @@ const MainLayout: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-3">
                         <LanguageSwitcher />
 
                         {/* Theme Toggle Button */}
@@ -564,33 +605,79 @@ const MainLayout: React.FC = () => {
                             )}
                         </button>
 
-                        {/* Search Bar */}
-                        <div className="relative hidden xl:block">
+                        {/* Global Search */}
+                        <div className="relative hidden xl:block global-search-container">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <Search className={`h-4 w-4 transition-colors duration-300 ${themeMode === 'dark' ? 'text-[#e3c4a2]/50' : 'text-slate-400'}`} />
                             </div>
                             <input
                                 type="text"
+                                value={searchQuery}
                                 placeholder={t('search_placeholder')}
+                                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); setSearchIdx(0); }}
+                                onFocus={() => setSearchOpen(true)}
+                                onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+                                onKeyDown={e => {
+                                    if (e.key === 'ArrowDown') { e.preventDefault(); setSearchIdx(i => Math.min(i + 1, searchResults.length - 1)); }
+                                    else if (e.key === 'ArrowUp') { e.preventDefault(); setSearchIdx(i => Math.max(i - 1, 0)); }
+                                    else if (e.key === 'Enter') { e.preventDefault(); if (searchResults[searchIdx]) goToSearchResult(searchResults[searchIdx]); }
+                                    else if (e.key === 'Escape') { setSearchOpen(false); (e.target as HTMLInputElement).blur(); }
+                                }}
                                 className={`block w-72 pl-11 pr-4 py-2.5 rounded-2xl text-sm font-medium transition-all duration-300 border
                                     ${themeMode === 'dark'
                                         ? 'bg-[#541c2c]/50 text-white placeholder:text-[#e3c4a2]/50 border-[#e3c4a2]/10 focus:ring-2 focus:ring-primary-500/35 focus:bg-[#300a15]'
                                         : 'bg-slate-50 text-slate-900 placeholder:text-slate-400 border-slate-200 focus:ring-2 focus:ring-primary-500/20 focus:bg-white'}`}
                             />
+                            {searchOpen && searchTerm && (
+                                <div className={`absolute z-50 mt-2 w-80 max-h-96 overflow-auto rounded-2xl border shadow-2xl py-1.5
+                                    ${themeMode === 'dark' ? 'bg-[#2a0f16] border-[#e3c4a2]/15' : 'bg-white border-slate-200'}`}>
+                                    {searchResults.length === 0 ? (
+                                        <div className={`px-4 py-3 text-sm font-medium ${themeMode === 'dark' ? 'text-[#e3c4a2]/50' : 'text-slate-400'}`}>
+                                            {t('no_results', { defaultValue: 'No results' })}
+                                        </div>
+                                    ) : searchResults.map((r, i) => (
+                                        <button
+                                            key={`${r.type}-${r.path}-${i}`}
+                                            type="button"
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => goToSearchResult(r)}
+                                            onMouseEnter={() => setSearchIdx(i)}
+                                            className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors
+                                                ${i === searchIdx
+                                                    ? (themeMode === 'dark' ? 'bg-[#541c2c]/60' : 'bg-slate-100')
+                                                    : (themeMode === 'dark' ? 'hover:bg-[#541c2c]/40' : 'hover:bg-slate-50')}`}
+                                        >
+                                            {r.type === 'page'
+                                                ? <Search className={`w-4 h-4 shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/60' : 'text-slate-400'}`} />
+                                                : <Users className={`w-4 h-4 shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/60' : 'text-slate-400'}`} />}
+                                            <span className="flex-1 min-w-0">
+                                                <span className={`block text-sm font-bold truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-700'}`}>{r.label}</span>
+                                                {r.sub && <span className={`block text-[11px] truncate ${themeMode === 'dark' ? 'text-[#e3c4a2]/40' : 'text-slate-400'}`}>{r.sub}</span>}
+                                            </span>
+                                            <span className={`text-[9px] uppercase font-black tracking-widest shrink-0 ${themeMode === 'dark' ? 'text-[#e3c4a2]/30' : 'text-slate-300'}`}>
+                                                {r.type === 'page' ? t('page', { defaultValue: 'Page' }) : t('employee', { defaultValue: 'Employee' })}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Notifications */}
                         <div className="relative notif-dropdown-container">
                             <button
                                 onClick={() => setNotifOpen(o => !o)}
-                                className={`relative p-2.5 rounded-2xl active:scale-90 transition-all duration-300
-                                    ${themeMode === 'dark'
-                                        ? 'hover:bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white'
-                                        : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                                title={t('notifications', { defaultValue: 'Notifications' })}
+                                className={`relative p-2.5 rounded-2xl transition-all duration-300 active:scale-90 border flex items-center justify-center
+                                    ${notifOpen
+                                        ? (themeMode === 'dark' ? 'bg-[#541c2c] text-white border-[#e3c4a2]/25' : 'bg-primary-50 text-primary-700 border-primary-200')
+                                        : (themeMode === 'dark'
+                                            ? 'bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white border-[#e3c4a2]/15'
+                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200')}`}
                             >
                                 <Bell className="w-5 h-5" />
                                 {unreadCount > 0 && (
-                                    <span className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-black text-white bg-red-500 border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)]
+                                    <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-black text-white bg-red-500 border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)]
                                         ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`}>
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
@@ -600,10 +687,17 @@ const MainLayout: React.FC = () => {
                             {notifOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                                    <div className={`absolute right-0 mt-4 w-96 max-w-[90vw] rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-top-2 duration-200 overflow-hidden
+                                    <div className={`absolute right-0 mt-4 w-96 max-w-[90vw] rounded-3xl shadow-2xl border z-50 animate-in slide-in-from-top-2 duration-200 overflow-hidden
                                         ${themeMode === 'dark' ? 'bg-[#300a15]/95 border-[#e3c4a2]/15' : 'bg-white border-slate-100'}`}>
-                                        <div className={`flex items-center justify-between px-4 py-3 border-b ${themeMode === 'dark' ? 'border-[#e3c4a2]/10' : 'border-slate-100'}`}>
-                                            <span className={`text-sm font-black ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('notifications', { defaultValue: 'Notifications' })}</span>
+                                        <div className={`flex items-center justify-between px-5 py-4 border-b ${themeMode === 'dark' ? 'border-[#e3c4a2]/10' : 'border-slate-100'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-black ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('notifications', { defaultValue: 'Notifications' })}</span>
+                                                {unreadCount > 0 && (
+                                                    <span className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-black">
+                                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {unreadCount > 0 && (
                                                 <button onClick={handleMarkAllRead} className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase tracking-widest">
                                                     {t('mark_all_read', { defaultValue: 'Mark all read' })}
@@ -612,18 +706,30 @@ const MainLayout: React.FC = () => {
                                         </div>
                                         <div className="max-h-96 overflow-y-auto">
                                             {notifications.length === 0 ? (
-                                                <div className="px-4 py-10 text-center text-xs font-bold text-slate-400">{t('no_notifications', { defaultValue: 'No notifications yet.' })}</div>
+                                                <div className="px-4 py-12 flex flex-col items-center justify-center gap-3 text-center">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${themeMode === 'dark' ? 'bg-[#541c2c]/40 text-[#e3c4a2]/50' : 'bg-slate-100 text-slate-300'}`}>
+                                                        <Bell className="w-6 h-6" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-400">{t('no_notifications', { defaultValue: 'No notifications yet.' })}</span>
+                                                </div>
                                             ) : notifications.map(n => (
                                                 <button key={n.id} onClick={() => handleNotifClick(n)}
-                                                    className={`w-full text-left px-4 py-3 border-b transition-colors flex gap-3
+                                                    className={`w-full text-left px-4 py-3.5 border-b transition-colors flex gap-3 items-start group/notif
                                                         ${themeMode === 'dark' ? 'border-[#e3c4a2]/5 hover:bg-[#541c2c]/40' : 'border-slate-50 hover:bg-slate-50'}
                                                         ${!n.isRead ? (themeMode === 'dark' ? 'bg-[#541c2c]/20' : 'bg-indigo-50/40') : ''}`}>
-                                                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.isRead ? 'bg-transparent' : 'bg-indigo-500'}`} />
-                                                    <div className="min-w-0">
-                                                        <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>
-                                                        <p className={`text-[11px] font-medium ${themeMode === 'dark' ? 'text-[#e3c4a2]/70' : 'text-slate-500'}`}>{n.content}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                                                    <div className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0
+                                                        ${!n.isRead
+                                                            ? 'bg-indigo-500/15 text-indigo-500'
+                                                            : (themeMode === 'dark' ? 'bg-[#541c2c]/40 text-[#e3c4a2]/50' : 'bg-slate-100 text-slate-400')}`}>
+                                                        <Bell className="w-4 h-4" />
+                                                        {!n.isRead && <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`} />}
                                                     </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>
+                                                        <p className={`text-[11px] font-medium line-clamp-2 ${themeMode === 'dark' ? 'text-[#e3c4a2]/70' : 'text-slate-500'}`}>{n.content}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{timeAgo(n.createdAt)}</p>
+                                                    </div>
+                                                    {n.link && <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 mt-1 opacity-0 group-hover/notif:opacity-100 transition-opacity" />}
                                                 </button>
                                             ))}
                                         </div>

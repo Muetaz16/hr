@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
-import { generatePersonnelActionDocx } from '../utils/personnelActionForm';
+import { generatePersonnelActionDocx, INTER_COMPANY_TEMPLATE_NAME } from '../utils/personnelActionForm';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const formatFormDate = (value: Date | string | null | undefined): string => {
     if (!value) return '';
@@ -46,6 +46,19 @@ const resolveJdPlacement = async (jd: any) => {
         directorateId = div?.directorateId ?? directorateId;
     }
     return { unitId, departmentId, divisionId, directorateId };
+};
+
+// The employee's CURRENT direct head ("Reports to" on top of the form) — the nearest head above
+// them in the org: unit head → department/office head → division head → directorate head.
+const currentHeadName = async (emp: any): Promise<string> => {
+    const find = async (roles: string[], field: string, id: string | null | undefined) =>
+        id ? prisma.employee.findFirst({ where: { role: { in: roles }, [field]: id, id: { not: emp.id } }, select: { fullName: true } }) : null;
+    const head =
+        (await find(['HEAD_UNIT'], 'unitId', emp.unitId))
+        || (await find(['HEAD_DEPARTMENT', 'HEAD_OFFICE'], 'departmentId', emp.departmentId))
+        || (await find(['HEAD_DIVISION'], 'divisionId', emp.divisionId))
+        || (await find(['HEAD_DIRECTOR'], 'directorateId', emp.directorateId));
+    return head?.fullName || '';
 };
 
 const orgNames = async (p: { divisionId: string | null; departmentId: string | null; unitId: string | null }) => {
@@ -110,6 +123,64 @@ export const createPersonnelAction = async (req: Request, res: Response) => {
     }
 };
 
+// POST /api/personnel-actions/inter-company — create an inter-company transfer. The destination is
+// another company outside this system, so the new placement is captured as FREE TEXT and the four
+// factors are entered on the form. Accepting it marks the employee TRANSFERRED (data retained).
+export const createInterCompanyTransfer = async (req: Request, res: Response) => {
+    try {
+        const {
+            employeeId, newCompany, newDivisionName, newDepartmentName, newUnitName,
+            newPositionTitle, newJobCategory, newJobGrade, reportsTo, newPlaceOfWork,
+            englishFactor, positionFactor, locationFactor, skillFactor,
+            typeOfTransfer, effectiveDate, justification,
+        } = req.body;
+        if (!employeeId) return res.status(400).json({ error: 'An employee is required.' });
+
+        const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+        if (!employee) return res.status(404).json({ error: 'Employee not found.' });
+
+        const current = await currentOrgNames(employee);
+        const num = (v: any) => (v === '' || v === null || v === undefined ? null : Number(v));
+
+        const paf = await prisma.personnelActionForm.create({
+            data: {
+                employeeId,
+                actionType: 'INTER_COMPANY_TRANSFER',
+                status: 'PENDING',
+                currentDivision: current.division,
+                currentDepartment: current.department,
+                currentUnit: current.unit,
+                currentPosition: employee.position || null,
+                currentJobCategory: employee.jobCategory || null,
+                currentJobGrade: employee.jobGrade || null,
+                currentPlaceOfWork: employee.placeOfWork || null,
+                // Free-text destination placement (another company).
+                newCompany: newCompany || null,
+                newDivisionName: newDivisionName || null,
+                newDepartmentName: newDepartmentName || null,
+                newUnitName: newUnitName || null,
+                newPositionTitle: newPositionTitle || null,
+                newJobCategory: newJobCategory || null,
+                newJobGrade: newJobGrade || null,
+                newPlaceOfWork: newPlaceOfWork || null,
+                reportsTo: reportsTo || null,
+                englishFactor: num(englishFactor),
+                positionFactor: num(positionFactor),
+                locationFactor: num(locationFactor),
+                skillFactor: num(skillFactor),
+                typeOfTransfer: typeOfTransfer || null,
+                effectiveDate: effectiveDate ? new Date(effectiveDate) : null,
+                justification: justification || null,
+                createdByName: (req as AuthRequest).user?.fullName || null,
+            },
+        });
+        res.status(201).json(paf);
+    } catch (error: any) {
+        console.error('Error creating inter-company transfer:', error);
+        res.status(500).json({ error: 'Failed to create inter-company transfer', details: error.message });
+    }
+};
+
 // GET /api/personnel-actions
 export const listPersonnelActions = async (req: Request, res: Response) => {
     try {
@@ -150,8 +221,16 @@ export const generatePersonnelActionFormDoc = async (req: Request, res: Response
         const paf = await prisma.personnelActionForm.findUnique({ where: { id }, include: { employee: true } });
         if (!paf) return res.status(404).json({ error: 'Personnel action form not found.' });
 
-        const newNames = await orgNames({ divisionId: paf.newDivisionId, departmentId: paf.newDepartmentId, unitId: paf.newUnitId });
+        const isInterCompany = paf.actionType === 'INTER_COMPANY_TRANSFER';
+        // Inter-company transfers store the destination placement as free text and carry their own
+        // entered factors; internal transfers resolve names from the target JD's org ids and show the
+        // employee's current factors.
+        const newNames = isInterCompany
+            ? { division: paf.newDivisionName || '', department: paf.newDepartmentName || '', unit: paf.newUnitName || '' }
+            : await orgNames({ divisionId: paf.newDivisionId, departmentId: paf.newDepartmentId, unitId: paf.newUnitId });
         const emp: any = paf.employee;
+        // "Reports to" (top / current) = the employee's existing head before the transfer.
+        const currentReportsTo = await currentHeadName(emp);
 
         const buffer = generatePersonnelActionDocx({
             employeeId: emp.staffId || '',
@@ -162,7 +241,7 @@ export const generatePersonnelActionFormDoc = async (req: Request, res: Response
             currentPosition: paf.currentPosition || '',
             currentJobCategory: paf.currentJobCategory || '',
             currentJobGrade: paf.currentJobGrade || '',
-            currentReportsTo: '',
+            currentReportsTo,
             currentWorkLocation: paf.currentPlaceOfWork || '',
             newDivision: newNames.division,
             newDepartment: newNames.department,
@@ -172,14 +251,13 @@ export const generatePersonnelActionFormDoc = async (req: Request, res: Response
             newJobGrade: paf.newJobGrade || '',
             newReportsTo: paf.reportsTo || '',
             newPlaceOfWork: paf.newPlaceOfWork || '',
-            // Factors are informational on the form — taken from the employee's current record.
-            englishFactor: factorStr(emp.languageFactor),
-            positionFactor: factorStr(emp.positionFactor),
-            locationFactor: factorStr(emp.siteFactor),
-            skillFactor: factorStr(emp.skillFactor),
+            englishFactor: isInterCompany ? factorStr(paf.englishFactor) : factorStr(emp.languageFactor),
+            positionFactor: isInterCompany ? factorStr(paf.positionFactor) : factorStr(emp.positionFactor),
+            locationFactor: isInterCompany ? factorStr(paf.locationFactor) : factorStr(emp.siteFactor),
+            skillFactor: isInterCompany ? factorStr(paf.skillFactor) : factorStr(emp.skillFactor),
             typeOfTransfer: paf.typeOfTransfer || '',
             effectivityDate: formatFormDate(paf.effectiveDate),
-        });
+        }, isInterCompany ? INTER_COMPANY_TEMPLATE_NAME : undefined);
 
         const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -198,7 +276,7 @@ export const generatePersonnelActionFormDoc = async (req: Request, res: Response
 export const decidePersonnelAction = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { decision, documentUrl, documentName } = req.body;
+        const { decision, documentUrl, documentName, newCompany } = req.body;
         const deciderName = (req as AuthRequest).user?.fullName || null;
 
         const paf = await prisma.personnelActionForm.findUnique({ where: { id } });
@@ -218,6 +296,42 @@ export const decidePersonnelAction = async (req: Request, res: Response) => {
 
         if (decision !== 'ACCEPT') return res.status(400).json({ error: 'decision must be ACCEPT or REJECT.' });
         if (!documentUrl) return res.status(400).json({ error: 'Attach the signed form before accepting.' });
+
+        // --- Inter-company transfer: the employee leaves for another company. We DON'T re-org them
+        // (their placement stays as historical data); we mark them TRANSFERRED so they're retained &
+        // visible but excluded from evaluation / payroll / attendance / active counts.
+        if (paf.actionType === 'INTER_COMPANY_TRANSFER') {
+            const destinationCompany = (newCompany && String(newCompany).trim()) || paf.newCompany || null;
+            const result = await prisma.$transaction(async (tx) => {
+                await tx.employee.update({
+                    where: { id: paf.employeeId },
+                    data: {
+                        enrollmentStatus: 'TRANSFERRED',
+                        transferredCompany: destinationCompany,
+                        transferredAt: new Date(),
+                        contractStatus: 'Inactive',
+                    },
+                });
+                await tx.employeeDocument.create({
+                    data: {
+                        employeeId: paf.employeeId,
+                        name: `Signed Inter-Company Transfer Form (${new Date().toLocaleDateString()})`,
+                        fileUrl: documentUrl,
+                        fileName: documentName?.trim() || null,
+                        uploadedByName: deciderName,
+                    },
+                });
+                return tx.personnelActionForm.update({
+                    where: { id },
+                    data: {
+                        status: 'ACCEPTED', decidedByName: deciderName, decidedAt: new Date(),
+                        documentUrl, documentName: documentName || null,
+                        newCompany: destinationCompany,
+                    },
+                });
+            });
+            return res.json(result);
+        }
 
         // Enforce the Job Description staffing plan — same rule the rest of the system uses when
         // assigning a JD. Skip the check if the employee is already on this JD.

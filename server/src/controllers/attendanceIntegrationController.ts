@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import { ATTENDANCE_API_BASE, proxy, jsonPost, findBioTimeEmpIdByCode, fetchBioTimeRoster } from '../utils/attendanceApiProxy';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Resolves the logged-in user's own Employee record — same lookup chain as
 // employeeController.getMyEmployeeRecord's primary path (by userId, falling back to email).
@@ -77,6 +77,7 @@ export const getAttendanceSummary = async (req: Request, res: Response) => {
         const data: any = await response.json();
 
         const employees = await prisma.employee.findMany({
+            // Transferred (inter-company) staff ARE still tracked in attendance.
             where: { staffId: { not: null } },
             select: { id: true, staffId: true, fullName: true, departmentId: true, position: true },
         });

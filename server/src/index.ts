@@ -10,7 +10,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5001;
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 const SERVER_VERSION = "2026-03-17-V3"; // Updated to verify reload
 
 // Cross-Origin Resource Sharing
@@ -34,6 +34,11 @@ app.use((req, res, next) => {
     console.log(`[REQ][${SERVER_VERSION}] ${req.method} ${req.url}`);
     next();
 });
+
+// Activity log — records every successful state-changing request (uses req.user populated by each
+// router's authenticateToken, read at response-finish time). Mounted before the routers.
+import { auditLogger } from './middleware/audit';
+app.use(auditLogger);
 
 if (!process.env.JWT_SECRET) {
     console.error("!!! CRITICAL ERROR: JWT_SECRET IS MISSING !!!");
@@ -64,6 +69,8 @@ import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
 import personnelActionRoutes from './routes/personnelActionRoutes';
 import disciplinaryRoutes from './routes/disciplinaryRoutes';
 import offboardingRoutes from './routes/offboardingRoutes';
+import auditLogRoutes from './routes/auditLogRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
 import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
 import { initPresenceScoreScheduler } from './jobs/presenceScoreCron';
 import { initEvaluationFinalizeScheduler } from './jobs/evaluationFinalizeCron';
@@ -100,6 +107,8 @@ app.use('/api/attendance-settings', attendanceSettingsRoutes);
 app.use('/api/personnel-actions', personnelActionRoutes);
 app.use('/api/disciplinary-cases', disciplinaryRoutes);
 app.use('/api/offboarding-cases', offboardingRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups
 
 // Global Error Handler (Health & Security)

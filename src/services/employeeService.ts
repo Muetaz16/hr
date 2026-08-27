@@ -41,6 +41,13 @@ export const employeeService = {
         return response.data;
     },
 
+    // Generate the one-page employee handover summary (IPH letterhead): profile, leave balances,
+    // this-month attendance figures and last evaluation — for an inter-company transfer. Blob download.
+    async generateHandoverSummary(id: string): Promise<Blob> {
+        const response = await api.get(`/employees/${id}/handover-summary`, { responseType: 'blob' });
+        return response.data;
+    },
+
     async getEmployeesByDepartment(deptId: string): Promise<Employee[]> {
         const response = await api.get('/employees');
         const all: Employee[] = response.data;

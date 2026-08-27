@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { ATTENDANCE_API_BASE } from './attendanceApiProxy';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Same weights/caps as the manual-entry formula in src/services/hrEvaluationService.ts
 // (calculatePresenceScore) — mirrored here since frontend/backend code isn't shared in

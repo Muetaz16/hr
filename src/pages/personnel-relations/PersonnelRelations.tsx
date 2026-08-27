@@ -13,6 +13,7 @@ import { evaluationService, type EvaluationHistoryMonth } from '../../services/e
 import { disciplinaryService, type DisciplinaryCase, type DisciplinaryActionType, type DisciplinaryStage, type DisciplinaryOutcome } from '../../services/disciplinaryService';
 import { offboardingService, type OffboardingCase, type OffboardingStage } from '../../services/offboardingService';
 import { DISCIPLINARY_CATEGORY_LABELS, DISCIPLINARY_ACTION_LABELS, DISCIPLINARY_VIOLATIONS, VIOLATIONS_BY_ID, type DisciplinaryCategory } from '../../constants/disciplinaryViolations';
+import { payrollService } from '../../services/payrollService';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -71,7 +72,7 @@ import EmployeesPage from '../admin/Employees';
 // jumping/scrolling on every branch toggle. Expand state lives in the parent and is
 // passed in as isOpen/onToggle rather than read from a nodeKey here, so this component
 // has no closure dependencies at all.
-const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', count, level = 0, restricted, isOpen, onToggle, children }: any) => {
+const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', count, level = 0, restricted, isOpen, onToggle, action, children }: any) => {
     if (restricted) {
         return (
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 flex items-center gap-2.5" style={{ marginLeft: level * 20 }}>
@@ -83,16 +84,19 @@ const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', 
     }
     return (
         <div className="rounded-xl border border-slate-100 bg-white shadow-sm" style={{ marginLeft: level * 20 }}>
-            <button
-                type="button"
-                onClick={onToggle}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-slate-50/70 transition-colors rounded-xl"
-            >
-                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em] flex-1">{title}</h4>
-                {count !== undefined && <span className="text-[10px] font-black text-slate-400 shrink-0">{count}</span>}
-            </button>
+            <div className="w-full flex items-center gap-2 pr-2 hover:bg-slate-50/70 transition-colors rounded-xl">
+                <button
+                    type="button"
+                    onClick={onToggle}
+                    className="flex-1 min-w-0 flex items-center gap-2.5 px-4 py-3 text-left"
+                >
+                    {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                    {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em] flex-1 min-w-0">{title}</h4>
+                    {count !== undefined && <span className="text-[10px] font-black text-slate-400 shrink-0">{count}</span>}
+                </button>
+                {action && <div className="shrink-0">{action}</div>}
+            </div>
             {isOpen && <div className="px-4 pb-4 pt-1 border-t border-slate-50">{children}</div>}
         </div>
     );
@@ -213,6 +217,7 @@ const PersonnelRelations: React.FC = () => {
         if (currentPath.includes('/lifecycle')) return 'lifecycle';
         if (currentPath.includes('/renewals')) return 'renewals';
         if (currentPath.includes('/action-forms')) return 'action-forms';
+        if (currentPath.includes('/promotions')) return 'promotions';
         if (currentPath.includes('/rewards')) return 'rewards';
         if (currentPath.includes('/disciplinary')) return 'disciplinary';
         if (currentPath.includes('/offboarding')) return 'offboarding';
@@ -231,6 +236,7 @@ const PersonnelRelations: React.FC = () => {
         'lifecycle': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_lifecycle'] },
         'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
         'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
+        'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
         'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
         'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
         'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
@@ -246,16 +252,29 @@ const PersonnelRelations: React.FC = () => {
     // Personnel Action Form (internal transfer) — driven by the target Job Description.
     const emptyPaf = {
         employeeId: '', newJobDescriptionId: '', newJobGrade: '', newPlaceOfWork: '',
-        reportsTo: '', typeOfTransfer: 'Internal', effectiveDate: '', newJobCategory: '',
+        reportsTo: '', typeOfTransfer: '', effectiveDate: '', newJobCategory: '',
     };
     const [pafForm, setPafForm] = useState({ ...emptyPaf });
     const [pafSubmitting, setPafSubmitting] = useState(false);
     // Filter the Target Position list. Encoded as "<type>:<id>" — dir: directorate, div: division, off: office.
     const [pafJdScope, setPafJdScope] = useState('');
+    // Inter-company transfer — free-text destination (another company) + entered factors.
+    const emptyIc = {
+        employeeId: '', newCompany: '', newDivisionName: '', newDepartmentName: '', newUnitName: '',
+        newPositionTitle: '', newJobCategory: '', newJobGrade: '', reportsTo: '', newPlaceOfWork: '',
+        englishFactor: '', positionFactor: '', locationFactor: '', skillFactor: '',
+        typeOfTransfer: '', effectiveDate: '', justification: '',
+    };
+    const [icForm, setIcForm] = useState({ ...emptyIc });
+    const [isIcModalOpen, setIsIcModalOpen] = useState(false);
+    const [icSubmitting, setIcSubmitting] = useState(false);
     const [decidePaf, setDecidePaf] = useState<PersonnelActionForm | null>(null);
     const [decideFile, setDecideFile] = useState<File | null>(null);
+    const [decideNewCompany, setDecideNewCompany] = useState('');
     const [decideBusy, setDecideBusy] = useState<string | null>(null);
     const [pafGenBusy, setPafGenBusy] = useState<string | null>(null);
+    // Which employee+month evaluation form is currently being exported (key: `${employeeId}:${month}`).
+    const [evalDocBusy, setEvalDocBusy] = useState<string | null>(null);
     const [isRenewalModalOpen, setIsRenewalModalOpen] = useState(false);
     // Initiate Renewal form: the proposed new contract + the signed contract file to attach.
     const [renewForm, setRenewForm] = useState({ startDate: '', endDate: '', salary: 0, contractNumber: '', notes: '' });
@@ -688,6 +707,53 @@ const PersonnelRelations: React.FC = () => {
         setIsActionFormModalOpen(true);
     };
 
+    const openCreateIc = () => {
+        setIcForm({ ...emptyIc });
+        setIsIcModalOpen(true);
+    };
+
+    // Start a promotion for a specific employee from the Promotion Management tab: opens the
+    // Personnel Action Form (internal transfer) modal pre-seeded with this employee and the
+    // transfer type set to "Promotion". The remaining steps (target position, new grade, review,
+    // signature, accept) are the existing Personnel Action workflow.
+    const startPromotionFor = (employeeId: string) => {
+        setPafForm({ ...emptyPaf, employeeId, typeOfTransfer: 'Promotion' });
+        setPafJdScope('');
+        setIsActionFormModalOpen(true);
+    };
+
+    // Promotion threshold used across the app: interns cross at 3, everyone else at 18.
+    const promotionThresholdFor = (jobGrade?: string | null) => (jobGrade === 'Intern' ? 3 : 18);
+
+    // Employees flagged for promotion — HR was notified (promotionNotified) OR their Evaluation
+    // Index already reached the threshold for their grade. Highest index first.
+    const promotionCandidates = [...(employees as any[])]
+        .filter(e => {
+            if (e.enrollmentStatus === 'TRANSFERRED') return false;
+            const points = e.evaluationPoints || 0;
+            return e.promotionNotified || points >= promotionThresholdFor(e.jobGrade);
+        })
+        .sort((a, b) => (b.evaluationPoints || 0) - (a.evaluationPoints || 0));
+
+    // Create an inter-company transfer (free-text destination). Stored PENDING; generated/signed/
+    // uploaded, then Accept marks the employee TRANSFERRED.
+    const handleIcSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!icForm.employeeId) { toast.error('Select an employee.'); return; }
+        if (!icForm.newCompany.trim()) { toast.error('Enter the destination company.'); return; }
+        setIcSubmitting(true);
+        try {
+            await personnelActionService.createInterCompany(icForm);
+            queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
+            toast.success('Inter-company transfer created. Generate it to collect signatures.');
+            setIsIcModalOpen(false);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Failed to create the transfer.');
+        } finally {
+            setIcSubmitting(false);
+        }
+    };
+
     // Resolve which division / department a Job Description belongs to (JDs are scoped to one level,
     // so a unit-level JD's division comes from its department's division, etc.). Used to filter the
     // Target Position picker by division and group it by department.
@@ -764,10 +830,38 @@ const PersonnelRelations: React.FC = () => {
         }
     };
 
+    // Download the official IPH Monthly (Efficiency) Evaluation Word form for one employee + month,
+    // filled live from that month's HR / manager / personnel evaluations.
+    const downloadEvalForm = async (employeeId: string, month: string, employeeName: string) => {
+        const key = `${employeeId}:${month}`;
+        setEvalDocBusy(key);
+        try {
+            const blob = await payrollService.generateEvaluationDoc(employeeId, month);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Monthly_Evaluation_${(employeeName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}_${month}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Evaluation form generated.');
+        } catch (error: any) {
+            let msg = 'Failed to generate the evaluation form.';
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setEvalDocBusy(null);
+        }
+    };
+
     // Accept (applies the transfer, requires the signed file) or reject a pending form.
     const handleDecide = async (decision: 'ACCEPT' | 'REJECT') => {
         if (!decidePaf) return;
         if (decision === 'ACCEPT' && !decideFile) { toast.error('Attach the signed form to accept.'); return; }
+        const isInterCompany = decidePaf.actionType === 'INTER_COMPANY_TRANSFER';
+        const newCompany = (decideNewCompany || decidePaf.newCompany || '').trim();
+        if (decision === 'ACCEPT' && isInterCompany && !newCompany) { toast.error('Enter the company the employee is transferring to.'); return; }
         setDecideBusy(decision);
         try {
             let documentUrl: string | undefined;
@@ -777,13 +871,16 @@ const PersonnelRelations: React.FC = () => {
                 documentUrl = uploaded.url;
                 documentName = uploaded.name;
             }
-            await personnelActionService.decide(decidePaf.id, { decision, documentUrl, documentName });
+            await personnelActionService.decide(decidePaf.id, { decision, documentUrl, documentName, newCompany: isInterCompany ? newCompany : undefined });
             queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
             queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
             queryClient.invalidateQueries({ queryKey: ['employee-documents', decidePaf.employeeId] });
-            toast.success(decision === 'ACCEPT' ? 'Transfer accepted and applied to the employee.' : 'Form rejected.');
+            toast.success(decision === 'ACCEPT'
+                ? (isInterCompany ? 'Transfer accepted — employee marked as Transferred.' : 'Transfer accepted and applied to the employee.')
+                : 'Form rejected.');
             setDecidePaf(null);
             setDecideFile(null);
+            setDecideNewCompany('');
         } catch (err: any) {
             toast.error(err.response?.data?.error || 'Failed to process the decision.');
         } finally {
@@ -844,6 +941,7 @@ const PersonnelRelations: React.FC = () => {
     // Generate the Contract Renewal Form (.docx) with the employee's info auto-filled, then trigger
     // a browser download so HR can print it and collect the physical approval signatures.
     const [renewalFormBusy, setRenewalFormBusy] = useState<string | null>(null);
+    const [summaryBusy, setSummaryBusy] = useState<string | null>(null);
     const handleGenerateRenewalForm = async (emp: any) => {
         setRenewalFormBusy(emp.id);
         try {
@@ -863,6 +961,29 @@ const PersonnelRelations: React.FC = () => {
             toast.error(msg);
         } finally {
             setRenewalFormBusy(null);
+        }
+    };
+
+    // Generate the one-page employee handover summary (IPH letterhead) as a Word download.
+    const handleGenerateSummary = async (emp: any) => {
+        setSummaryBusy(emp.id);
+        try {
+            const blob = await employeeService.generateHandoverSummary(emp.id);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Employee_Summary_${(emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Employee summary generated.');
+        } catch (error: any) {
+            let msg = 'Failed to generate the summary.';
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setSummaryBusy(null);
         }
     };
 
@@ -1010,9 +1131,20 @@ const PersonnelRelations: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle(emp.enrollmentStatus === 'SEPARATED' ? 'Terminated' : emp.contractStatus)}`}>
-                                                    {emp.enrollmentStatus === 'SEPARATED' ? 'Separated' : (emp.contractStatus || 'Active')}
-                                                </span>
+                                                {emp.enrollmentStatus === 'SEPARATED' ? (
+                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle('Terminated')}`}>
+                                                        Separated
+                                                    </span>
+                                                ) : (emp as any).enrollmentStatus === 'TRANSFERRED' ? (
+                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded border bg-[#aa7a51]/15 text-[#8f6544] border-[#aa7a51]/30"
+                                                        title={(emp as any).transferredCompany ? `Transferred to ${(emp as any).transferredCompany}` : 'Transferred'}>
+                                                        Transferred{(emp as any).transferredCompany ? ` → ${(emp as any).transferredCompany}` : ''}
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle(emp.contractStatus)}`}>
+                                                        {emp.contractStatus || 'Active'}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="p-4">{emp.joinDate ? format(parseISO(emp.joinDate), 'yyyy-MM-dd') : 'N/A'}</td>
                                             <td className="p-4 text-right">
@@ -1137,12 +1269,18 @@ const PersonnelRelations: React.FC = () => {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={openCreatePaf}
                                 className="px-4 py-2 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] inline-flex items-center gap-2"
                             >
                                 <Plus className="w-4 h-4" /> Create Internal Transfer
+                            </button>
+                            <button
+                                onClick={openCreateIc}
+                                className="px-4 py-2 bg-[#aa7a51] text-white text-xs font-black uppercase tracking-widest hover:bg-[#8f6544] inline-flex items-center gap-2"
+                            >
+                                <ExternalLink className="w-4 h-4" /> Create Inter-Company Transfer
                             </button>
                         </div>
                     </div>
@@ -1165,9 +1303,12 @@ const PersonnelRelations: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
                                     {personnelActions.map((paf) => {
-                                        const toName = units.find((u: any) => u.id === paf.newUnitId)?.name
-                                            || departments.find((d: any) => d.id === paf.newDepartmentId)?.name
-                                            || divisions.find((d: any) => d.id === paf.newDivisionId)?.name || '—';
+                                        const isIc = paf.actionType === 'INTER_COMPANY_TRANSFER';
+                                        const toName = isIc
+                                            ? (paf.newCompany || paf.newDivisionName || paf.newDepartmentName || '—')
+                                            : (units.find((u: any) => u.id === paf.newUnitId)?.name
+                                                || departments.find((d: any) => d.id === paf.newDepartmentId)?.name
+                                                || divisions.find((d: any) => d.id === paf.newDivisionId)?.name || '—');
                                         const fromName = paf.currentUnit || paf.currentDepartment || paf.currentDivision || '—';
                                         const badge = paf.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800'
                                             : paf.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800';
@@ -1175,7 +1316,12 @@ const PersonnelRelations: React.FC = () => {
                                             <tr key={paf.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4">
                                                     <p className="font-bold text-slate-800">{paf.employee?.fullName || '—'}</p>
-                                                    <p className="text-[10px] text-slate-500">{paf.newPositionTitle || paf.typeOfTransfer || 'Internal Transfer'}</p>
+                                                    <p className="text-[10px] text-slate-500">
+                                                        <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${isIc ? 'bg-[#aa7a51]/15 text-[#8f6544]' : 'bg-[#511d29]/10 text-[#511d29]'}`}>
+                                                            {isIc ? 'Inter-Company' : 'Internal'}
+                                                        </span>
+                                                        {paf.newPositionTitle || paf.typeOfTransfer || 'Transfer'}
+                                                    </p>
                                                 </td>
                                                 <td className="p-4">
                                                     <span className="inline-flex items-center gap-1.5 text-slate-600">
@@ -1573,6 +1719,78 @@ const PersonnelRelations: React.FC = () => {
                 )
             )}
 
+            {activeTab === 'promotions' && (
+                <div className="space-y-6">
+                    {/* Intro */}
+                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
+                        <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
+                            <Award className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                            <h2 className="text-lg font-black text-[#511d29]">Promotion Management</h2>
+                            <p className="text-slate-500 text-sm font-medium mt-0.5">
+                                Track promotion-eligible employees and start a promotion. Interns become eligible on tenure;
+                                juniors and above once their Evaluation Index reaches the threshold.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Eligible candidates */}
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-black text-[#511d29] uppercase tracking-wider flex items-center gap-2">
+                                <TrendingUp className="w-4 h-4" /> Promotion-Eligible Employees
+                            </h3>
+                            <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded bg-amber-50 text-amber-700 border border-amber-100">
+                                {promotionCandidates.length} eligible
+                            </span>
+                        </div>
+
+                        {promotionCandidates.length === 0 ? (
+                            <div className="p-12 text-center text-slate-400 text-sm font-bold">
+                                No employees are currently flagged for promotion.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+                                {promotionCandidates.map((e: any) => {
+                                    const threshold = promotionThresholdFor(e.jobGrade);
+                                    const points = e.evaluationPoints || 0;
+                                    const pct = Math.min(100, (points / threshold) * 100);
+                                    const basis = e.jobGrade === 'Intern' ? 'Tenure / Evaluation Index' : 'Evaluation Index';
+                                    return (
+                                        <div key={e.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="text-sm font-black text-slate-700 truncate">{e.fullName || '—'}</p>
+                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-slate-100 text-slate-500">{e.jobGrade || 'Employee'}</span>
+                                                    {e.promotionNotified && (
+                                                        <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-50 text-emerald-600 border border-emerald-100">Notified</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 font-bold mt-0.5">{e.staffId || ''}{e.position ? ` · ${e.position}` : ''}</p>
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <div className="h-1.5 w-40 max-w-full rounded-full bg-slate-100 overflow-hidden">
+                                                        <div className="h-full rounded-full bg-[#aa7a51]" style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-500">{points.toFixed(2)} / {threshold} · {basis}</span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => startPromotionFor(e.id)}
+                                                className="shrink-0 px-4 py-2.5 rounded-lg bg-[#511d29] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#3a151d] transition inline-flex items-center justify-center gap-1.5"
+                                            >
+                                                <Award className="w-3.5 h-3.5" /> Start Promotion
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* MODALS */}
             {/* Modal 1: Create Internal Transfer (Personnel Action Form) */}
             <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title="Create Internal Transfer" maxWidth="max-w-xl">
@@ -1702,6 +1920,16 @@ const PersonnelRelations: React.FC = () => {
                             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                     </div>
 
+                    <div className="space-y-1.5">
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Type of Transfer <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
+                        <select value={pafForm.typeOfTransfer} onChange={e => setPafForm({ ...pafForm, typeOfTransfer: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
+                            <option value="">— Select —</option>
+                            <option value="Lateral transfer">Lateral transfer / نقل على نفس الدرجة</option>
+                            <option value="Promotion">Promotion / ترقية</option>
+                        </select>
+                    </div>
+
                     <button type="submit" disabled={pafSubmitting}
                         className="w-full py-3.5 rounded-xl bg-[#511d29] text-white font-black uppercase tracking-widest shadow-sm hover:bg-[#3a151d] disabled:opacity-60 disabled:cursor-not-allowed transition inline-flex items-center justify-center gap-2">
                         {pafSubmitting ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Transfer Form</>)}
@@ -1709,8 +1937,95 @@ const PersonnelRelations: React.FC = () => {
                 </form>
             </Modal>
 
+            {/* Modal 1c: Create Inter-Company Transfer (free-text destination + factors) */}
+            <Modal isOpen={isIcModalOpen} onClose={() => setIsIcModalOpen(false)} title="Create Inter-Company Transfer" maxWidth="max-w-xl">
+                <form onSubmit={handleIcSubmit} className="space-y-5 text-xs font-semibold text-slate-700">
+                    <p className="flex items-start gap-2 text-[11px] font-medium text-slate-500 leading-relaxed">
+                        <ExternalLink className="w-4 h-4 mt-0.5 shrink-0 text-[#aa7a51]" />
+                        Transfer an employee to another company. Fill the new placement (free text), generate the form for signatures, upload the signed copy, then accept — the employee becomes <b>Transferred</b> (data kept, remains in attendance, excluded from evaluation &amp; payroll).
+                    </p>
+
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
+                            <User className="w-3.5 h-3.5" /> Employee <span className="text-red-500">*</span>
+                        </label>
+                        <SearchSelect
+                            value={icForm.employeeId}
+                            onChange={(v) => setIcForm(prev => ({ ...prev, employeeId: v }))}
+                            placeholder="— Select employee —"
+                            emptyText="No employees match"
+                            options={[...employees]
+                                .sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || ''))
+                                .map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined }))}
+                        />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">New Company <span className="text-red-500">*</span> <span className="text-slate-400 font-bold normal-case">/ الشركة الجديدة</span></label>
+                        <input type="text" value={icForm.newCompany} onChange={e => setIcForm({ ...icForm, newCompany: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        {([
+                            ['newDivisionName', 'New Division', 'الادارة الجديدة'],
+                            ['newDepartmentName', 'New Department', 'القسم الجديد'],
+                            ['newUnitName', 'New Unit', 'الوحدة الجديدة'],
+                            ['newPositionTitle', 'New Position Title', 'المسمى الوظيفي الجديد'],
+                            ['newJobCategory', 'New Job Category', 'الفئة الوظيفة الجديدة'],
+                            ['newJobGrade', 'New Job Grade', 'درجة الوظيفة الجديدة'],
+                            ['reportsTo', 'Reports To', 'يقدم تقريره الي'],
+                            ['newPlaceOfWork', 'Place of Work', 'مكان العمل'],
+                        ] as const).map(([key, en, ar]) => (
+                            <div key={key} className="space-y-1.5">
+                                <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{en} <span className="text-slate-400 font-bold normal-case">/ {ar}</span></label>
+                                <input type="text" value={(icForm as any)[key]} onChange={e => setIcForm({ ...icForm, [key]: e.target.value })}
+                                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        {([
+                            ['englishFactor', 'English Factor', 'علاوة اللغة'],
+                            ['positionFactor', 'Factor for Position', 'علاوه وظيفة'],
+                            ['locationFactor', 'Factor for Location / Frontline', 'عامل الموقع/الخط الأمامي'],
+                            ['skillFactor', 'Skill Factor', 'عامل المهارة'],
+                        ] as const).map(([key, en, ar]) => (
+                            <div key={key} className="space-y-1.5">
+                                <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{en} <span className="text-slate-400 font-bold normal-case">/ {ar}</span></label>
+                                <input type="number" step="0.01" value={(icForm as any)[key]} onChange={e => setIcForm({ ...icForm, [key]: e.target.value })}
+                                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Type of Transfer <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
+                            <select value={icForm.typeOfTransfer} onChange={e => setIcForm({ ...icForm, typeOfTransfer: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
+                                <option value="">— Select —</option>
+                                <option value="Lateral transfer">Lateral transfer / نقل على نفس الدرجة</option>
+                                <option value="Promotion">Promotion / ترقية</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Effectivity Date <span className="text-slate-400 font-bold normal-case">/ تاريخ السريان</span></label>
+                            <input type="date" value={icForm.effectiveDate} onChange={e => setIcForm({ ...icForm, effectiveDate: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
+                        </div>
+                    </div>
+
+                    <button type="submit" disabled={icSubmitting}
+                        className="w-full py-3.5 rounded-xl bg-[#aa7a51] text-white font-black uppercase tracking-widest shadow-sm hover:bg-[#8f6544] disabled:opacity-60 disabled:cursor-not-allowed transition inline-flex items-center justify-center gap-2">
+                        {icSubmitting ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Inter-Company Transfer</>)}
+                    </button>
+                </form>
+            </Modal>
+
             {/* Modal 1b: Upload signed form + Accept/Reject */}
-            <Modal isOpen={!!decidePaf} onClose={() => { setDecidePaf(null); setDecideFile(null); }} title="Personnel Action — Decision" maxWidth="max-w-md">
+            <Modal isOpen={!!decidePaf} onClose={() => { setDecidePaf(null); setDecideFile(null); setDecideNewCompany(''); }} title="Personnel Action — Decision" maxWidth="max-w-md">
                 <div className="space-y-4 text-xs font-semibold text-slate-700">
                     <p className="text-slate-500">Employee: <span className="font-black text-[#511d29]">{decidePaf?.employee?.fullName}</span></p>
                     <div>
@@ -1720,8 +2035,19 @@ const PersonnelRelations: React.FC = () => {
                             className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
                         {decideFile && <p className="text-[10px] text-emerald-600 mt-1 font-bold">{decideFile.name}</p>}
                     </div>
+                    {decidePaf?.actionType === 'INTER_COMPANY_TRANSFER' && (
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Company <span className="text-red-500">*</span></label>
+                            <input type="text" placeholder="Company the employee is transferring to"
+                                value={decideNewCompany || decidePaf?.newCompany || ''}
+                                onChange={e => setDecideNewCompany(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
+                        </div>
+                    )}
                     <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">
-                        Accepting will move the employee into the target Job Description (division/department/unit/position/category) and file the signed form to their Lifecycle documents. Blocked if the JD is above its staffing plan.
+                        {decidePaf?.actionType === 'INTER_COMPANY_TRANSFER'
+                            ? 'Accepting marks the employee as Transferred to the new company: their data is kept and stays visible, and they remain in attendance, but they are excluded from evaluation and payroll. The signed form is filed to their Lifecycle documents.'
+                            : 'Accepting will move the employee into the target Job Description (division/department/unit/position/category) and file the signed form to their Lifecycle documents. Blocked if the JD is above its staffing plan.'}
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => handleDecide('REJECT')} disabled={!!decideBusy}
@@ -1999,6 +2325,15 @@ const PersonnelRelations: React.FC = () => {
                                             )}
                                         </div>
                                     </div>
+                                    <button
+                                        onClick={() => handleGenerateSummary(emp)}
+                                        disabled={summaryBusy === emp.id}
+                                        title="Download a one-page summary (profile, attendance, last evaluation, leave balances) on the IPH letterhead"
+                                        className="self-start shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white font-black text-[11px] uppercase tracking-widest hover:bg-white/25 transition-colors disabled:opacity-50 backdrop-blur-sm"
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        {summaryBusy === emp.id ? 'Generating…' : 'Extract Summary (Word)'}
+                                    </button>
                                 </div>
                             </div>
 
@@ -2252,19 +2587,30 @@ const PersonnelRelations: React.FC = () => {
                                                 <div className="space-y-2">
                                                     {detailTransfers.map((t) => {
                                                         const statusStyle = t.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-700' : t.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
+                                                        const isIc = t.actionType === 'INTER_COMPANY_TRANSFER';
                                                         const currentPlacement = [t.currentDivision, t.currentDepartment, t.currentUnit].filter(Boolean).join(' · ');
-                                                        const newPlacement = [nameOfOrgUnit(divisions, t.newDivisionId), nameOfOrgUnit(departments, t.newDepartmentId), nameOfOrgUnit(units, t.newUnitId)].filter(Boolean).join(' · ');
+                                                        // Inter-company moves are company → company (IPH → the new company); internal moves are
+                                                        // org-unit → org-unit resolved from the target JD's ids.
+                                                        const newPlacementIc = [t.newDivisionName, t.newDepartmentName, t.newUnitName].filter(Boolean).join(' · ');
+                                                        const newPlacement = isIc
+                                                            ? newPlacementIc
+                                                            : [nameOfOrgUnit(divisions, t.newDivisionId), nameOfOrgUnit(departments, t.newDepartmentId), nameOfOrgUnit(units, t.newUnitId)].filter(Boolean).join(' · ');
+                                                        const fromLabel = isIc ? `IPH${currentPlacement ? ` · ${currentPlacement}` : ''}` : (currentPlacement || '—');
+                                                        const toLabel = isIc ? `${t.newCompany || '—'}${newPlacementIc ? ` · ${newPlacementIc}` : ''}` : (newPlacement || t.newPositionTitle || '—');
+                                                        const typeLabel = isIc
+                                                            ? `Inter-Company${t.typeOfTransfer && t.typeOfTransfer !== 'Inter-Company' ? ` · ${t.typeOfTransfer}` : ''}${t.newPositionTitle ? ` · ${t.newPositionTitle}` : ''}`
+                                                            : `${t.typeOfTransfer || t.actionType}${t.newPositionTitle ? ` · ${t.newPositionTitle}` : ''}`;
                                                         const docHref = t.documentUrl ? (t.documentUrl.startsWith('http') ? t.documentUrl : `${SERVER_URL}${t.documentUrl}`) : '';
                                                         return (
                                                             <div key={t.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
                                                                 <div className="flex items-center justify-between gap-3">
-                                                                    <p className="text-xs font-black text-slate-700 truncate">{t.typeOfTransfer || t.actionType}{t.newPositionTitle ? ` · ${t.newPositionTitle}` : ''}</p>
+                                                                    <p className="text-xs font-black text-slate-700 truncate">{typeLabel}</p>
                                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{t.status}</span>
                                                                 </div>
                                                                 <p className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-                                                                    <span>{currentPlacement || '—'}</span>
+                                                                    <span className="font-bold">{fromLabel}</span>
                                                                     <ArrowRight className="w-3 h-3 shrink-0" />
-                                                                    <span>{newPlacement || t.newPositionTitle || '—'}</span>
+                                                                    <span className="font-bold text-[#511d29]">{toLabel}</span>
                                                                 </p>
                                                                 {t.justification && <p className="text-[11px] text-slate-500 italic">"{t.justification}"</p>}
                                                                 <p className="text-[10px] text-slate-400">
@@ -2325,8 +2671,22 @@ const PersonnelRelations: React.FC = () => {
                                                 });
                                                 const monthLabel = format(parseISO(`${m.month}-01`), 'MMM yyyy');
                                                 const statusLabel = m.finalization ? 'Finalized' : 'Provisional';
+                                                const evalKey = `${emp.id}:${m.month}`;
                                                 return (
-                                                    <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}>
+                                                    <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}
+                                                        action={
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => downloadEvalForm(emp.id, m.month, emp.fullName)}
+                                                                disabled={evalDocBusy === evalKey}
+                                                                title="Export this month's evaluation as the official Word form"
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" />
+                                                                {evalDocBusy === evalKey ? 'Generating…' : 'Export Form'}
+                                                            </button>
+                                                        }
+                                                    >
                                                         <EvaluationBreakdownView employee={emp} breakdown={breakdown} />
                                                     </TreeBranch>
                                                 );

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { EvalLevel, OrgPlacement, canEvaluate, getRequiredLevels, levelForRole } from './evaluationHierarchy';
 import { resolveManagerPlacement } from '../controllers/evaluationController';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Every role that acts as an evaluator at some level of the skip-level hierarchy.
 export const MANAGER_ROLES = [

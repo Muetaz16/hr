@@ -9,11 +9,8 @@ import {
     TrendingUp,
     ArrowRight,
     FileText,
-    Clock,
     CheckCircle2,
     Activity,
-    Building2,
-    Briefcase,
     BarChart3,
     Plane,
     ShieldCheck,
@@ -31,7 +28,9 @@ import { useNavigate } from 'react-router-dom';
 import { format, differenceInDays } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import EvaluationAnalytics from '../components/EvaluationAnalytics';
-import ContractNotifications from '../components/ContractNotifications';
+import DashboardInsights from '../components/DashboardInsights';
+import EmployeeDashboardPanels from '../components/EmployeeDashboardPanels';
+import { dashboardService } from '../services/dashboardService';
 import Skeleton from '../components/Skeleton';
 import JobDescriptionView from '../components/JobDescriptionView';
 import Modal from '../components/Modal';
@@ -105,28 +104,30 @@ const Dashboard: React.FC = () => {
 
             // const urgentContractsCount = (expiringSoonList as any[]).length;
 
-            // Filter employees based on scope
-            let scopedEmps = emps;
+            // Filter employees based on scope. Transferred (inter-company) staff are excluded from
+            // active counts and evaluation ratios.
+            const activeEmps = (emps as any[]).filter(e => e.enrollmentStatus !== 'TRANSFERRED');
+            let scopedEmps = activeEmps;
             if (currentUser.role === 'HEAD_DIRECTOR') {
                 if (myEmployeeData?.directorateId) {
-                    scopedEmps = emps.filter(e => e.directorateId === myEmployeeData.directorateId);
+                    scopedEmps = activeEmps.filter(e => e.directorateId === myEmployeeData.directorateId);
                 } else if (currentUser.departmentIds && currentUser.departmentIds.length > 0) {
-                    scopedEmps = emps.filter(e => currentUser.departmentIds?.includes(e.departmentId));
+                    scopedEmps = activeEmps.filter(e => currentUser.departmentIds?.includes(e.departmentId));
                 } else if (currentUser.departmentId) {
-                    scopedEmps = emps.filter(e => e.departmentId === currentUser.departmentId);
+                    scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
                 } else if (currentUser.groupId) {
-                    scopedEmps = emps.filter(e => e.groupId === currentUser.groupId);
+                    scopedEmps = activeEmps.filter(e => e.groupId === currentUser.groupId);
                 }
             } else if (currentUser.role === 'HEAD_DIVISION') {
                 if (myEmployeeData?.divisionId) {
-                    scopedEmps = emps.filter(e => e.divisionId === myEmployeeData.divisionId);
+                    scopedEmps = activeEmps.filter(e => e.divisionId === myEmployeeData.divisionId);
                 } else {
                     scopedEmps = [];
                 }
             } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
-                scopedEmps = emps.filter(e => e.departmentId === currentUser.departmentId);
+                scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
             } else if (currentUser.role === 'HEAD_UNIT' && (currentUser as any).unitId) {
-                scopedEmps = emps.filter(e => e.unitId === (currentUser as any).unitId);
+                scopedEmps = activeEmps.filter(e => e.unitId === (currentUser as any).unitId);
             }
 
             // Analytics Data Preparation (Only for Super Admin / HR)
@@ -292,6 +293,19 @@ const Dashboard: React.FC = () => {
         enabled: !!currentUser,
     });
 
+    // Company-wide analytics rollup — HR + executive audience. Fetched from the single
+    // server-side aggregation endpoint (mirrors the route's own authorization).
+    const canViewInsights =
+        ['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(currentUser?.role || '') ||
+        !!currentUser?.permissions?.includes('view_employees');
+
+    const { data: insights } = useQuery({
+        queryKey: ['dashboard-insights', currentUser?.id],
+        queryFn: () => dashboardService.getAnalytics(),
+        enabled: !!currentUser && canViewInsights,
+        staleTime: 5 * 60 * 1000,
+    });
+
     const stats = data?.stats || [];
     const orgInfo = data?.orgInfo || { department: '', group: '', positionName: '', managedEntity: '' };
     const { positionName, managedEntity } = orgInfo;
@@ -356,15 +370,38 @@ const Dashboard: React.FC = () => {
 
     const displayFirstName = (myEmployeeData?.fullName || currentUser?.fullName || '').split(' ')[0];
 
+    // Real contract progress — share of the contract term still remaining, derived from the
+    // actual start/end dates (replaces the old decorative fixed-width bar).
+    const contractProgress = (() => {
+        if (!myEmployeeData?.contractEndDate) return null;
+        const end = new Date(myEmployeeData.contractEndDate);
+        const now = new Date();
+        const remaining = Math.max(0, differenceInDays(end, now));
+        const start = myEmployeeData.contractStartDate ? new Date(myEmployeeData.contractStartDate) : null;
+        const total = start ? differenceInDays(end, start) : null;
+        const pct = total && total > 0
+            ? Math.min(100, Math.max(0, Math.round((remaining / total) * 100)))
+            : (remaining > 0 ? 100 : 0);
+        const barColor = remaining < 30 ? 'bg-red-500' : remaining < 90 ? 'bg-amber-400' : 'bg-emerald-400';
+        return { remaining, pct, barColor };
+    })();
+
     return (
         <div className="space-y-10 max-w-7xl mx-auto pb-12">
             {/* Hero Welcome Section */}
-            <div className={`relative overflow-hidden rounded-[40px] bg-gradient-to-br ${theme.gradient} p-10 lg:p-16 text-white shadow-2xl shadow-primary-600/15 group border border-white/10`}>
+            <div
+                className="relative overflow-hidden rounded-[40px] p-10 lg:p-16 text-white shadow-2xl shadow-primary-600/20 group border border-white/10"
+                style={{
+                    background: `radial-gradient(120% 130% at 82% 6%, ${theme.secondary}70 0%, ${theme.secondary}00 44%), radial-gradient(110% 120% at 0% 100%, ${theme.dark} 0%, ${theme.dark}00 55%), linear-gradient(140deg, ${theme.dark} 0%, ${theme.primary} 52%, ${theme.primary} 100%)`,
+                }}
+            >
+                {/* Top sheen + hover glow */}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-transparent pointer-events-none"></div>
                 <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-10 transition-opacity duration-1000"></div>
-                
-                {/* Animated Background Shapes */}
-                <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-white/10 blur-3xl rounded-full animate-pulse transition-all duration-1000 group-hover:scale-110"></div>
-                <div className="absolute bottom-[-20%] left-[-10%] w-80 h-80 bg-black/10 blur-[100px] rounded-full"></div>
+
+                {/* Soft accent blooms */}
+                <div className="absolute top-[-12%] right-[6%] w-96 h-96 bg-white/10 blur-3xl rounded-full animate-pulse transition-all duration-1000 group-hover:scale-110 pointer-events-none"></div>
+                <div className="absolute bottom-[-25%] left-[-10%] w-80 h-80 bg-black/20 blur-[100px] rounded-full pointer-events-none"></div>
 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-12">
                     <div className="max-w-2xl">
@@ -389,13 +426,21 @@ const Dashboard: React.FC = () => {
                             </div>
                         )}
                         
-                        <p className="text-white/80 text-xl leading-relaxed mb-10 font-medium max-w-lg">
+                        <p className="text-white/75 text-lg lg:text-xl leading-relaxed mb-6 font-medium max-w-lg">
                             {t('dashboard_update_msg')}
-                            <span className="block mt-2 text-white font-bold cursor-pointer hover:text-primary-100 transition-colors inline-flex items-center gap-2 group/msg" onClick={() => navigate('/approvals')}>
-                                {pendingReviewCount !== '...' ? pendingReviewCount : '0'} {t('pending_notifications')}
-                                <ArrowRight className="w-5 h-5 group-hover/msg:translate-x-1 transition-transform" />
-                            </span>
                         </p>
+
+                        <button
+                            type="button"
+                            onClick={() => navigate('/approvals')}
+                            className="inline-flex items-center gap-3 mb-10 pl-2 pr-5 py-2 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all hover:scale-[1.02] group/msg"
+                        >
+                            <span className="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 rounded-full bg-white text-slate-900 text-sm font-black">
+                                {pendingReviewCount !== '...' ? pendingReviewCount : '0'}
+                            </span>
+                            <span className="text-white font-bold text-sm">{t('pending_notifications')}</span>
+                            <ArrowRight className="w-4 h-4 text-white/80 group-hover/msg:translate-x-1 transition-transform" />
+                        </button>
 
                         <div className="flex flex-wrap gap-5">
                             <button
@@ -591,17 +636,16 @@ const Dashboard: React.FC = () => {
                                     <span className="font-bold text-slate-800">{renderDate(myEmployeeData.contractEndDate)}</span>
                                 </div>
                                 
-                                {myEmployeeData.contractEndDate && (
+                                {contractProgress && (
                                     <div className="mt-6 pt-6 border-t border-slate-100">
                                         <div className="flex justify-between items-end mb-2">
                                             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Time Remaining</span>
-                                            <span className={`text-lg font-black ${differenceInDays(new Date(myEmployeeData.contractEndDate), new Date()) < 30 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                {Math.max(0, differenceInDays(new Date(myEmployeeData.contractEndDate), new Date()))} Days
+                                            <span className={`text-lg font-black ${contractProgress.remaining < 30 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                {contractProgress.remaining} Days
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                                            {/* Decorative progress bar, can be computed based on total duration in future */}
-                                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: '75%' }}></div>
+                                            <div className={`h-full rounded-full transition-all duration-700 ${contractProgress.barColor}`} style={{ width: `${contractProgress.pct}%` }}></div>
                                         </div>
                                     </div>
                                 )}
@@ -642,8 +686,8 @@ const Dashboard: React.FC = () => {
                                         <span className="text-sm font-bold text-amber-600/50">used</span>
                                     </div>
                                     <div className="mt-4 text-[10px] font-black text-amber-700/60 uppercase tracking-widest flex justify-between items-center bg-amber-100/30 px-3 py-1.5 rounded-lg border border-amber-100/50">
-                                        <span>Collected:</span>
-                                        <span className="text-amber-700">3 Days</span>
+                                        <span>Remaining:</span>
+                                        <span className="text-amber-700">{Math.max(0, myEmployeeData.remainingEmergencyHolidays ?? (3 - (myEmployeeData.emergencyHolidaysUsed || 0)))} Days</span>
                                     </div>
                                 </div>
 
@@ -660,6 +704,20 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* My Requests + Announcements — personal panels for anyone with an employee record */}
+            {myEmployeeData && (
+                <EmployeeDashboardPanels
+                    employeeId={myEmployeeData.id}
+                    userId={currentUser?.id || ''}
+                    departmentId={myEmployeeData.departmentId}
+                />
+            )}
+
+            {/* Workforce Insights — server-aggregated, HR/executive audience */}
+            {canViewInsights && insights && (
+                <DashboardInsights data={insights} />
             )}
 
             {/* Analytics Section */}
@@ -679,87 +737,6 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
             )}
-
-            {/* Bottom Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                <section className="lg:col-span-2 glass-card rounded-[40px] p-10 relative group overflow-hidden border-none shadow-premium-shadow">
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-primary-50/50 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none group-hover:bg-blue-100/50 transition-colors duration-1000"></div>
-
-                    <div className="flex items-center justify-between mb-10 relative z-10">
-                        <div>
-                            <h2 className="text-2xl font-outfit font-black text-slate-800 tracking-tight">{t('organization_profile')}</h2>
-                            <p className="text-slate-500 text-sm font-medium">{t('organization_subtitle')}</p>
-                        </div>
-                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                            <TrendingUp className="w-6 h-6 text-slate-400" />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                        {[
-                            { label: t('department'), val: orgInfo.department, sub: 'Global Corporate Center', icon: Building2, color: 'from-blue-500 to-indigo-600' },
-                            { label: t('group_membership'), val: orgInfo.group, sub: 'Operation & Strategy Unit', icon: Briefcase, color: 'from-purple-500 to-fuchsia-600' }
-                        ].map((box, bIdx) => (
-                            <div key={bIdx} className="p-8 bg-white/60 backdrop-blur-xl rounded-[32px] border border-white/60 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-500 group/box">
-                                <span className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-5">{box.label}</span>
-                                <div className="flex items-center">
-                                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${box.color} text-white flex items-center justify-center mr-5 shadow-xl group-hover/box:rotate-6 transition-all duration-500`}>
-                                        <box.icon className="w-7 h-7" />
-                                    </div>
-                                    <div>
-                                        <p className="font-extrabold text-slate-800 text-xl tracking-tight leading-tight mb-1">{box.val}</p>
-                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider opacity-60">{box.sub}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                <section className="bg-slate-900 rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl border border-white/10 group">
-                    <div className="relative z-10 flex flex-col h-full">
-                        <div className="mb-10">
-                            <h2 className="text-2xl font-outfit font-black tracking-tight">{t('quick_actions')}</h2>
-                            <p className="text-slate-400 text-sm font-medium">{t('quick_actions_subtitle')}</p>
-                        </div>
-
-                        <div className="mb-10 group-hover:scale-[1.02] transition-transform duration-500">
-                            {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER') && (
-                                <ContractNotifications />
-                            )}
-                        </div>
-
-                        <div className="space-y-4 flex-1">
-                            {[
-                                { label: t('schedule_meeting'), icon: Calendar, color: 'bg-indigo-500/10 text-indigo-400' },
-                                { label: t('log_time_manually'), icon: Clock, color: 'bg-orange-500/10 text-orange-400' },
-                                { label: t('employee_search'), icon: Users, color: 'bg-emerald-500/10 text-emerald-400' }
-                            ].map((btn, bIdx) => (
-                                <button key={bIdx} className="w-full p-5 bg-white/5 hover:bg-white/10 rounded-[24px] transition-all text-left flex items-center group/act font-bold border border-white/5 hover:border-white/20 hover:scale-[1.02] active:scale-[0.98]">
-                                    <div className={`p-3 rounded-xl mr-5 group-hover/act:scale-110 transition-transform ${btn.color}`}>
-                                        <btn.icon className="w-5 h-5" />
-                                    </div>
-                                    <span className="text-slate-300 group-hover/act:text-white transition-colors">{btn.label}</span>
-                                    <ArrowRight className="ml-auto w-5 h-5 opacity-0 group-hover/act:opacity-100 transition-all group-hover/act:translate-x-1 text-slate-500" />
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="mt-12 pt-8 border-t border-white/10">
-                            <div className="flex items-center text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black mb-5">
-                                {t('system_status')}
-                            </div>
-                            <div className="flex items-center bg-white/5 rounded-2xl p-4 border border-white/5 backdrop-blur-xl">
-                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-4 shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-pulse"></div>
-                                <span className="text-sm font-bold text-slate-200 tracking-tight">{t('systems_operational')}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Decorative element */}
-                    <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-primary-500/10 blur-[100px] rounded-full group-hover:bg-primary-500/20 transition-colors duration-1000"></div>
-                </section>
-            </div>
 
             {/* My Signature Modal */}
             <Modal

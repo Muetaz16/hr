@@ -22,11 +22,9 @@ const EmployeeFormPage = lazy(() => import('./pages/admin/EmployeeForm'));
 const UsersPage = lazy(() => import('./pages/admin/Users'));
 const UserFormPage = lazy(() => import('./pages/admin/UserForm'));
 const FunctionalHatsPage = lazy(() => import('./pages/admin/FunctionalHats'));
-const TimeTrackingPage = lazy(() => import('./pages/TimeTracking'));
+const SystemLogsPage = lazy(() => import('./pages/admin/SystemLogs'));
 const EvaluationsPage = lazy(() => import('./pages/Evaluations'));
-const PayrollPage = lazy(() => import('./pages/Payroll'));
 const EvaluationControlPage = lazy(() => import('./pages/hr/EvaluationControl'));
-const HREvaluationsPage = lazy(() => import('./pages/hr/HREvaluations'));
 const ContractDetailPage = lazy(() => import('./pages/ContractDetail'));
 const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
@@ -93,9 +91,6 @@ function App() {
                     <Route path="/employees/new" element={<EmployeeFormPage />} />
                     <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
-                    <Route path="/time-tracking" element={<TimeTrackingPage />} />
-                  </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL']} allowedPermissions={['view_evaluations']} />}>
                     <Route path="/evaluations" element={<EvaluationsPage />} />
                   </Route>
@@ -138,12 +133,6 @@ function App() {
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['manage_evaluation_control']} />}>
                     <Route path="/evaluation-control" element={<EvaluationControlPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_hr_evaluations', 'manage_evaluation_control']} />}>
-                    <Route path="/hr-evaluations" element={<HREvaluationsPage />} />
-                  </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
-                    <Route path="/payroll" element={<PayrollPage />} />
-                  </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_lifecycle', 'manage_lifecycle_control']} />}>
                     <Route path="/lifecycle-control" element={<LifecycleControlPage />} />
                   </Route>
@@ -171,6 +160,9 @@ function App() {
                     <Route path="/users/new" element={<UserFormPage />} />
                     <Route path="/users/:id/edit" element={<UserFormPage />} />
                     <Route path="/access/hats" element={<FunctionalHatsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_logs']} />}>
+                    <Route path="/system-logs" element={<SystemLogsPage />} />
                   </Route>
                 </Route>
               </Route>

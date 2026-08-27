@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { generateJobDescriptionDocx, JobDescriptionVariant } from '../utils/jobDescriptionDoc';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const cleanId = (val: any): string | null => (val === '' || val === 'null' || val === 'undefined' || !val) ? null : val;
 

@@ -10,7 +10,7 @@ import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // The 3 leave types that go through balance/date validation and the new org-based approval
 // chain (LeaveApprovalStep). LATE_COMING/EARLY_LEAVING/HOURS_LEAVE keep using the old
@@ -73,10 +73,19 @@ async function notifyUsers(userIds: (string | null | undefined)[], title: string
 // division) who have a login account — so they can be notified, accept, and have a signature.
 // Excludes the requester themselves. Used both to validate a submitted nomination and to populate
 // the picker on the request form.
-async function getReplacementCandidates(employee: { id: string; userId: string | null; departmentId: string | null; divisionId: string | null; }) {
-    const scope = employee.departmentId
-        ? { departmentId: employee.departmentId }
-        : (employee.divisionId ? { divisionId: employee.divisionId } : null);
+async function getReplacementCandidates(
+    employee: { id: string; userId: string | null; departmentId: string | null; divisionId: string | null; },
+    requester?: { role?: string | null; divisionId?: string | null },
+) {
+    // A Head of Division may nominate anyone in their whole division; everyone else is limited to
+    // their own department.
+    const divisionWide = requester?.role === 'HEAD_DIVISION';
+    const divisionId = employee.divisionId ?? requester?.divisionId ?? null;
+    const scope = (divisionWide && divisionId)
+        ? { divisionId }
+        : (employee.departmentId
+            ? { departmentId: employee.departmentId }
+            : (divisionId ? { divisionId } : null));
     if (!scope) return [] as { userId: string; employeeId: string; fullName: string; position: string }[];
 
     const rows = await prisma.employee.findMany({
@@ -108,7 +117,8 @@ export const getReplacementCandidatesForEmployee = async (req: Request, res: Res
             select: { id: true, userId: true, departmentId: true, divisionId: true },
         });
         if (!employee) return res.status(404).json({ error: 'Employee not found.' });
-        const candidates = await getReplacementCandidates(employee);
+        const requester = (req as AuthRequest).user;
+        const candidates = await getReplacementCandidates(employee, { role: requester?.role, divisionId: (requester as any)?.divisionId });
         res.json(candidates);
     } catch (error) {
         console.error('Error fetching replacement candidates:', error);
@@ -193,18 +203,17 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
             }
 
-            // --- Replacement (cover) employee. Mandatory when the requester has an eligible
-            // colleague; auto-skipped when they're the only account in their department. A nominated
-            // replacement must accept before the approval chain unblocks, so the first approvers are
-            // notified only once acceptance happens (see decideReplacement).
-            const candidates = await getReplacementCandidates(employee);
+            // --- Replacement (cover) employee. Optional: the requester may nominate a colleague, or
+            // choose "N/A" (no replacement) in which case no replacement approval is required. A
+            // nominated replacement must accept before the approval chain unblocks, so the first
+            // approvers are notified only once acceptance happens (see decideReplacement).
+            const requester = (req as AuthRequest).user;
             const chosenReplacement = replacementUserId ? String(replacementUserId) : null;
             if (chosenReplacement) {
+                const candidates = await getReplacementCandidates(employee, { role: requester?.role, divisionId: (requester as any)?.divisionId });
                 if (!candidates.some(c => c.userId === chosenReplacement)) {
-                    return res.status(400).json({ error: 'The selected replacement is not a valid colleague in your department.' });
+                    return res.status(400).json({ error: 'The selected replacement is not a valid colleague in your scope.' });
                 }
-            } else if (candidates.length > 0) {
-                return res.status(400).json({ error: 'Please nominate a replacement employee from your department.' });
             }
             const replacementStatus = chosenReplacement ? 'PENDING' : null;
 
@@ -331,11 +340,23 @@ export const updateRequestStatus = async (req: Request, res: Response) => {
         const userId = (req as any).user?.id;
         
         // Logical check: Once rejected, it cannot be updated.
-        const current = await prisma.leaveRequest.findUnique({ 
+        const current = await prisma.leaveRequest.findUnique({
             where: { id },
-            include: { employee: true }
+            include: { employee: true, approvalSteps: { select: { id: true } } }
         });
-        if (current?.status === 'REJECTED') {
+        if (!current) {
+            return res.status(404).json({ error: 'Leave request not found.' });
+        }
+        // SECURITY: every leave type the app creates now runs on the per-step approval chain
+        // (LeaveApprovalStep) and must be decided ONLY through decideApprovalStep, which verifies
+        // the caller is the step's assigned approver and that it is genuinely their turn. This
+        // legacy status endpoint performs no such check, so refuse to act on any request that has
+        // approval steps — otherwise any authenticated user could PATCH it straight to COMPLETED,
+        // bypassing the chain and double-incrementing the employee's holiday balance.
+        if (current.approvalSteps.length > 0) {
+            return res.status(403).json({ error: 'This request is managed by its approval chain and can only be actioned by its assigned approvers.' });
+        }
+        if (current.status === 'REJECTED') {
             return res.status(400).json({ error: 'Rejected requests cannot be updated.' });
         }
 

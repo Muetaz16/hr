@@ -48,7 +48,8 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
     const navigate = useNavigate();
     const deptIdFilter = searchParams.get('deptId');
 
-    const [searchTerm, setSearchTerm] = useState('');
+    // Pre-fill from a `?q=` param (used by the global search to deep-link to a person).
+    const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
     // Row Selection
