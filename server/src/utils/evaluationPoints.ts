@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Extracted from the points/threshold/notification logic that used to live in
 // payrollController.ts's savePayrollResult (triggered by payroll compilation).

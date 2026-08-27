@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import { generatePersonnelActionDocx, INTER_COMPANY_TEMPLATE_NAME } from '../utils/personnelActionForm';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const formatFormDate = (value: Date | string | null | undefined): string => {
     if (!value) return '';

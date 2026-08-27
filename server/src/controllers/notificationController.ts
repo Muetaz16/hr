@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Internal helper — create a notification for one user (never throws into the caller's flow).
 export const notify = async (userId: string, title: string, content: string, link?: string) => {

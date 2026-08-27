@@ -10,7 +10,7 @@ import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // The 3 leave types that go through balance/date validation and the new org-based approval
 // chain (LeaveApprovalStep). LATE_COMING/EARLY_LEAVING/HOURS_LEAVE keep using the old
@@ -337,11 +337,23 @@ export const updateRequestStatus = async (req: Request, res: Response) => {
         const userId = (req as any).user?.id;
         
         // Logical check: Once rejected, it cannot be updated.
-        const current = await prisma.leaveRequest.findUnique({ 
+        const current = await prisma.leaveRequest.findUnique({
             where: { id },
-            include: { employee: true }
+            include: { employee: true, approvalSteps: { select: { id: true } } }
         });
-        if (current?.status === 'REJECTED') {
+        if (!current) {
+            return res.status(404).json({ error: 'Leave request not found.' });
+        }
+        // SECURITY: every leave type the app creates now runs on the per-step approval chain
+        // (LeaveApprovalStep) and must be decided ONLY through decideApprovalStep, which verifies
+        // the caller is the step's assigned approver and that it is genuinely their turn. This
+        // legacy status endpoint performs no such check, so refuse to act on any request that has
+        // approval steps — otherwise any authenticated user could PATCH it straight to COMPLETED,
+        // bypassing the chain and double-incrementing the employee's holiday balance.
+        if (current.approvalSteps.length > 0) {
+            return res.status(403).json({ error: 'This request is managed by its approval chain and can only be actioned by its assigned approvers.' });
+        }
+        if (current.status === 'REJECTED') {
             return res.status(400).json({ error: 'Rejected requests cannot be updated.' });
         }
 

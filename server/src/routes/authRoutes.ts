@@ -8,7 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { resolveEffectivePermissions } from '../utils/effectivePermissions';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 router.post('/login', login);
 router.post('/change-password', authenticateToken, changePassword);

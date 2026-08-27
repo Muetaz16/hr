@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // GET /api/audit-logs?q=&page=&limit=&method=&from=&to=
 // Paginated system activity log with a smart free-text search across user name/role, action, and

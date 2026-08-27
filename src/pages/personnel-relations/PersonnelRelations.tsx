@@ -10,6 +10,7 @@ import { directorateService } from '../../services/directorateService';
 import { timeService } from '../../services/timeService';
 import { staffHubService } from '../../services/staffHubService';
 import { evaluationService, type EvaluationHistoryMonth } from '../../services/evaluationService';
+import { payrollService } from '../../services/payrollService';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -68,7 +69,7 @@ import EmployeesPage from '../admin/Employees';
 // jumping/scrolling on every branch toggle. Expand state lives in the parent and is
 // passed in as isOpen/onToggle rather than read from a nodeKey here, so this component
 // has no closure dependencies at all.
-const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', count, level = 0, restricted, isOpen, onToggle, children }: any) => {
+const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', count, level = 0, restricted, isOpen, onToggle, action, children }: any) => {
     if (restricted) {
         return (
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 flex items-center gap-2.5" style={{ marginLeft: level * 20 }}>
@@ -80,16 +81,19 @@ const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', 
     }
     return (
         <div className="rounded-xl border border-slate-100 bg-white shadow-sm" style={{ marginLeft: level * 20 }}>
-            <button
-                type="button"
-                onClick={onToggle}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-slate-50/70 transition-colors rounded-xl"
-            >
-                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em] flex-1">{title}</h4>
-                {count !== undefined && <span className="text-[10px] font-black text-slate-400 shrink-0">{count}</span>}
-            </button>
+            <div className="w-full flex items-center gap-2 pr-2 hover:bg-slate-50/70 transition-colors rounded-xl">
+                <button
+                    type="button"
+                    onClick={onToggle}
+                    className="flex-1 min-w-0 flex items-center gap-2.5 px-4 py-3 text-left"
+                >
+                    {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                    {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em] flex-1 min-w-0">{title}</h4>
+                    {count !== undefined && <span className="text-[10px] font-black text-slate-400 shrink-0">{count}</span>}
+                </button>
+                {action && <div className="shrink-0">{action}</div>}
+            </div>
             {isOpen && <div className="px-4 pb-4 pt-1 border-t border-slate-50">{children}</div>}
         </div>
     );
@@ -187,6 +191,7 @@ const PersonnelRelations: React.FC = () => {
         if (currentPath.includes('/lifecycle')) return 'lifecycle';
         if (currentPath.includes('/renewals')) return 'renewals';
         if (currentPath.includes('/action-forms')) return 'action-forms';
+        if (currentPath.includes('/promotions')) return 'promotions';
         if (currentPath.includes('/rewards')) return 'rewards';
         if (currentPath.includes('/disciplinary')) return 'disciplinary';
         if (currentPath.includes('/offboarding')) return 'offboarding';
@@ -205,6 +210,7 @@ const PersonnelRelations: React.FC = () => {
         'lifecycle': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_lifecycle'] },
         'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
         'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
+        'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
         'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
         'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
         'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
@@ -241,6 +247,8 @@ const PersonnelRelations: React.FC = () => {
     const [decideNewCompany, setDecideNewCompany] = useState('');
     const [decideBusy, setDecideBusy] = useState<string | null>(null);
     const [pafGenBusy, setPafGenBusy] = useState<string | null>(null);
+    // Which employee+month evaluation form is currently being exported (key: `${employeeId}:${month}`).
+    const [evalDocBusy, setEvalDocBusy] = useState<string | null>(null);
     const [isRenewalModalOpen, setIsRenewalModalOpen] = useState(false);
     // Initiate Renewal form: the proposed new contract + the signed contract file to attach.
     const [renewForm, setRenewForm] = useState({ startDate: '', endDate: '', salary: 0, contractNumber: '', notes: '' });
@@ -564,6 +572,29 @@ const PersonnelRelations: React.FC = () => {
         setIsIcModalOpen(true);
     };
 
+    // Start a promotion for a specific employee from the Promotion Management tab: opens the
+    // Personnel Action Form (internal transfer) modal pre-seeded with this employee and the
+    // transfer type set to "Promotion". The remaining steps (target position, new grade, review,
+    // signature, accept) are the existing Personnel Action workflow.
+    const startPromotionFor = (employeeId: string) => {
+        setPafForm({ ...emptyPaf, employeeId, typeOfTransfer: 'Promotion' });
+        setPafJdScope('');
+        setIsActionFormModalOpen(true);
+    };
+
+    // Promotion threshold used across the app: interns cross at 3, everyone else at 18.
+    const promotionThresholdFor = (jobGrade?: string | null) => (jobGrade === 'Intern' ? 3 : 18);
+
+    // Employees flagged for promotion — HR was notified (promotionNotified) OR their Evaluation
+    // Index already reached the threshold for their grade. Highest index first.
+    const promotionCandidates = [...(employees as any[])]
+        .filter(e => {
+            if (e.enrollmentStatus === 'TRANSFERRED') return false;
+            const points = e.evaluationPoints || 0;
+            return e.promotionNotified || points >= promotionThresholdFor(e.jobGrade);
+        })
+        .sort((a, b) => (b.evaluationPoints || 0) - (a.evaluationPoints || 0));
+
     // Create an inter-company transfer (free-text destination). Stored PENDING; generated/signed/
     // uploaded, then Accept marks the employee TRANSFERRED.
     const handleIcSubmit = async (e: React.FormEvent) => {
@@ -656,6 +687,31 @@ const PersonnelRelations: React.FC = () => {
             toast.error(msg);
         } finally {
             setPafGenBusy(null);
+        }
+    };
+
+    // Download the official IPH Monthly (Efficiency) Evaluation Word form for one employee + month,
+    // filled live from that month's HR / manager / personnel evaluations.
+    const downloadEvalForm = async (employeeId: string, month: string, employeeName: string) => {
+        const key = `${employeeId}:${month}`;
+        setEvalDocBusy(key);
+        try {
+            const blob = await payrollService.generateEvaluationDoc(employeeId, month);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Monthly_Evaluation_${(employeeName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}_${month}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Evaluation form generated.');
+        } catch (error: any) {
+            let msg = 'Failed to generate the evaluation form.';
+            const data = error.response?.data;
+            if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
+            else if (data?.error) { msg = data.error; }
+            toast.error(msg);
+        } finally {
+            setEvalDocBusy(null);
         }
     };
 
@@ -1401,6 +1457,78 @@ const PersonnelRelations: React.FC = () => {
                         You don't have permission to view employee control.
                     </div>
                 )
+            )}
+
+            {activeTab === 'promotions' && (
+                <div className="space-y-6">
+                    {/* Intro */}
+                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
+                        <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
+                            <Award className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                            <h2 className="text-lg font-black text-[#511d29]">Promotion Management</h2>
+                            <p className="text-slate-500 text-sm font-medium mt-0.5">
+                                Track promotion-eligible employees and start a promotion. Interns become eligible on tenure;
+                                juniors and above once their Evaluation Index reaches the threshold.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Eligible candidates */}
+                    <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-black text-[#511d29] uppercase tracking-wider flex items-center gap-2">
+                                <TrendingUp className="w-4 h-4" /> Promotion-Eligible Employees
+                            </h3>
+                            <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded bg-amber-50 text-amber-700 border border-amber-100">
+                                {promotionCandidates.length} eligible
+                            </span>
+                        </div>
+
+                        {promotionCandidates.length === 0 ? (
+                            <div className="p-12 text-center text-slate-400 text-sm font-bold">
+                                No employees are currently flagged for promotion.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+                                {promotionCandidates.map((e: any) => {
+                                    const threshold = promotionThresholdFor(e.jobGrade);
+                                    const points = e.evaluationPoints || 0;
+                                    const pct = Math.min(100, (points / threshold) * 100);
+                                    const basis = e.jobGrade === 'Intern' ? 'Tenure / Evaluation Index' : 'Evaluation Index';
+                                    return (
+                                        <div key={e.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="text-sm font-black text-slate-700 truncate">{e.fullName || '—'}</p>
+                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-slate-100 text-slate-500">{e.jobGrade || 'Employee'}</span>
+                                                    {e.promotionNotified && (
+                                                        <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-50 text-emerald-600 border border-emerald-100">Notified</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 font-bold mt-0.5">{e.staffId || ''}{e.position ? ` · ${e.position}` : ''}</p>
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <div className="h-1.5 w-40 max-w-full rounded-full bg-slate-100 overflow-hidden">
+                                                        <div className="h-full rounded-full bg-[#aa7a51]" style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-500">{points.toFixed(2)} / {threshold} · {basis}</span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => startPromotionFor(e.id)}
+                                                className="shrink-0 px-4 py-2.5 rounded-lg bg-[#511d29] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#3a151d] transition inline-flex items-center justify-center gap-1.5"
+                                            >
+                                                <Award className="w-3.5 h-3.5" /> Start Promotion
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
 
             {/* MODALS */}
@@ -2225,8 +2353,22 @@ const PersonnelRelations: React.FC = () => {
                                                 });
                                                 const monthLabel = format(parseISO(`${m.month}-01`), 'MMM yyyy');
                                                 const statusLabel = m.finalization ? 'Finalized' : 'Provisional';
+                                                const evalKey = `${emp.id}:${m.month}`;
                                                 return (
-                                                    <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}>
+                                                    <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}
+                                                        action={
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => downloadEvalForm(emp.id, m.month, emp.fullName)}
+                                                                disabled={evalDocBusy === evalKey}
+                                                                title="Export this month's evaluation as the official Word form"
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" />
+                                                                {evalDocBusy === evalKey ? 'Generating…' : 'Export Form'}
+                                                            </button>
+                                                        }
+                                                    >
                                                         <EvaluationBreakdownView employee={emp} breakdown={breakdown} />
                                                     </TreeBranch>
                                                 );

@@ -8,7 +8,7 @@ import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
 import { generateEmployeeSummaryDocx, type SummaryItem } from '../utils/employeeSummaryForm';
 import { purgeUserAndRelations } from './userController';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // BioTime has exactly 4 fixed positions (no lookup endpoint — discovered by inspecting its live
 // roster): Resident=4, Non-Resident=5, Exception=6, Higher-Management=7. Exception and

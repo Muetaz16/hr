@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { resolveEffectivePermissions } from '../utils/effectivePermissions';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export const login = async (req: Request, res: Response) => {
     console.log(`[AUTH] Login attempt for email: ${req.body.email}`);

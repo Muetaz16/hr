@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { notify, notifyRoles } from './notificationController';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const cleanStr = (v: any): string | null =>
     (v === '' || v === 'null' || v === 'undefined' || v == null) ? null : String(v).trim();

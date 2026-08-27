@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { getRequiredLevels, EvalLevel, OrgPlacement } from './evaluationHierarchy';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Server-side mirror of src/utils/evaluationScoring.ts's buildEvaluationBreakdown() —
 // frontend/backend code isn't shared in this repo (same pattern as evaluationHierarchy.ts

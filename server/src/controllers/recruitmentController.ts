@@ -3,7 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { notify, notifyRoles } from './notificationController';
 import { generatePersonnelRequisitionDocx } from '../utils/personnelRequisition';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const cleanId = (val: any): string | null => (val === '' || val === 'null' || val === 'undefined' || !val) ? null : val;
 

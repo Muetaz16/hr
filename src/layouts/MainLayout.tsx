@@ -97,6 +97,19 @@ const MainLayout: React.FC = () => {
     };
     const handleMarkAllRead = async () => { await notificationService.markAllRead().catch(() => {}); refetchNotifs(); };
 
+    // Compact relative timestamp for the notification list (just now / 5m / 3h / 2d / date).
+    const timeAgo = (dateStr: string) => {
+        const diff = Math.max(0, Date.now() - new Date(dateStr).getTime());
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return t('just_now', { defaultValue: 'just now' });
+        if (mins < 60) return `${mins}m`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days}d`;
+        return new Date(dateStr).toLocaleDateString();
+    };
+
     // Profile Dropdown & Password Modal State
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -244,8 +257,6 @@ const MainLayout: React.FC = () => {
                         { label: 'Exceptions', path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: 'Daily Logging', path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: 'Employees', path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_time_tracking'), path: '/time-tracking', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_payroll'), path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: 'Settings', path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
                     ]
                 },
@@ -258,26 +269,12 @@ const MainLayout: React.FC = () => {
                         { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
                         { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
                         { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: 'Promotion Management', path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
                         { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
                         { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
                         { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
-                        { label: 'Performance Evaluation', path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
+                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
                         { label: 'Employee Control', path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
-                    ]
-                }
-            ]
-        },
-        {
-            title: t('nav_group_evaluations', { defaultValue: 'Evaluations' }),
-            items: [
-                {
-                    label: t('nav_evaluations'),
-                    icon: ClipboardCheck,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL', 'HR_MANAGER'],
-                    children: [
-                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/evaluations', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['view_evaluations'] },
-                        { label: t('nav_hr_evaluations'), path: '/hr-evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['view_hr_evaluations', 'manage_evaluation_control'] },
-                        { label: t('nav_evaluation_control'), path: '/evaluation-control', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_evaluation_control'] },
                     ]
                 }
             ]
@@ -585,7 +582,7 @@ const MainLayout: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-3">
                         <LanguageSwitcher />
 
                         {/* Theme Toggle Button */}
@@ -666,14 +663,17 @@ const MainLayout: React.FC = () => {
                         <div className="relative notif-dropdown-container">
                             <button
                                 onClick={() => setNotifOpen(o => !o)}
-                                className={`relative p-2.5 rounded-2xl active:scale-90 transition-all duration-300
-                                    ${themeMode === 'dark'
-                                        ? 'hover:bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white'
-                                        : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                                title={t('notifications', { defaultValue: 'Notifications' })}
+                                className={`relative p-2.5 rounded-2xl transition-all duration-300 active:scale-90 border flex items-center justify-center
+                                    ${notifOpen
+                                        ? (themeMode === 'dark' ? 'bg-[#541c2c] text-white border-[#e3c4a2]/25' : 'bg-primary-50 text-primary-700 border-primary-200')
+                                        : (themeMode === 'dark'
+                                            ? 'bg-[#541c2c]/50 text-[#e3c4a2]/70 hover:text-white border-[#e3c4a2]/15'
+                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200')}`}
                             >
                                 <Bell className="w-5 h-5" />
                                 {unreadCount > 0 && (
-                                    <span className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-black text-white bg-red-500 border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)]
+                                    <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-black text-white bg-red-500 border-2 shadow-[0_0_8px_rgba(239,68,68,0.5)]
                                         ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`}>
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
@@ -683,10 +683,17 @@ const MainLayout: React.FC = () => {
                             {notifOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                                    <div className={`absolute right-0 mt-4 w-96 max-w-[90vw] rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-top-2 duration-200 overflow-hidden
+                                    <div className={`absolute right-0 mt-4 w-96 max-w-[90vw] rounded-3xl shadow-2xl border z-50 animate-in slide-in-from-top-2 duration-200 overflow-hidden
                                         ${themeMode === 'dark' ? 'bg-[#300a15]/95 border-[#e3c4a2]/15' : 'bg-white border-slate-100'}`}>
-                                        <div className={`flex items-center justify-between px-4 py-3 border-b ${themeMode === 'dark' ? 'border-[#e3c4a2]/10' : 'border-slate-100'}`}>
-                                            <span className={`text-sm font-black ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('notifications', { defaultValue: 'Notifications' })}</span>
+                                        <div className={`flex items-center justify-between px-5 py-4 border-b ${themeMode === 'dark' ? 'border-[#e3c4a2]/10' : 'border-slate-100'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-black ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('notifications', { defaultValue: 'Notifications' })}</span>
+                                                {unreadCount > 0 && (
+                                                    <span className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-black">
+                                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {unreadCount > 0 && (
                                                 <button onClick={handleMarkAllRead} className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase tracking-widest">
                                                     {t('mark_all_read', { defaultValue: 'Mark all read' })}
@@ -695,18 +702,30 @@ const MainLayout: React.FC = () => {
                                         </div>
                                         <div className="max-h-96 overflow-y-auto">
                                             {notifications.length === 0 ? (
-                                                <div className="px-4 py-10 text-center text-xs font-bold text-slate-400">{t('no_notifications', { defaultValue: 'No notifications yet.' })}</div>
+                                                <div className="px-4 py-12 flex flex-col items-center justify-center gap-3 text-center">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${themeMode === 'dark' ? 'bg-[#541c2c]/40 text-[#e3c4a2]/50' : 'bg-slate-100 text-slate-300'}`}>
+                                                        <Bell className="w-6 h-6" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-400">{t('no_notifications', { defaultValue: 'No notifications yet.' })}</span>
+                                                </div>
                                             ) : notifications.map(n => (
                                                 <button key={n.id} onClick={() => handleNotifClick(n)}
-                                                    className={`w-full text-left px-4 py-3 border-b transition-colors flex gap-3
+                                                    className={`w-full text-left px-4 py-3.5 border-b transition-colors flex gap-3 items-start group/notif
                                                         ${themeMode === 'dark' ? 'border-[#e3c4a2]/5 hover:bg-[#541c2c]/40' : 'border-slate-50 hover:bg-slate-50'}
                                                         ${!n.isRead ? (themeMode === 'dark' ? 'bg-[#541c2c]/20' : 'bg-indigo-50/40') : ''}`}>
-                                                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.isRead ? 'bg-transparent' : 'bg-indigo-500'}`} />
-                                                    <div className="min-w-0">
-                                                        <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>
-                                                        <p className={`text-[11px] font-medium ${themeMode === 'dark' ? 'text-[#e3c4a2]/70' : 'text-slate-500'}`}>{n.content}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                                                    <div className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0
+                                                        ${!n.isRead
+                                                            ? 'bg-indigo-500/15 text-indigo-500'
+                                                            : (themeMode === 'dark' ? 'bg-[#541c2c]/40 text-[#e3c4a2]/50' : 'bg-slate-100 text-slate-400')}`}>
+                                                        <Bell className="w-4 h-4" />
+                                                        {!n.isRead && <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`} />}
                                                     </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>
+                                                        <p className={`text-[11px] font-medium line-clamp-2 ${themeMode === 'dark' ? 'text-[#e3c4a2]/70' : 'text-slate-500'}`}>{n.content}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{timeAgo(n.createdAt)}</p>
+                                                    </div>
+                                                    {n.link && <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 mt-1 opacity-0 group-hover/notif:opacity-100 transition-opacity" />}
                                                 </button>
                                             ))}
                                         </div>

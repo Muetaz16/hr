@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import { ATTENDANCE_API_BASE, proxy, jsonPost, findBioTimeEmpIdByCode, fetchBioTimeRoster } from '../utils/attendanceApiProxy';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Resolves the logged-in user's own Employee record — same lookup chain as
 // employeeController.getMyEmployeeRecord's primary path (by userId, falling back to email).

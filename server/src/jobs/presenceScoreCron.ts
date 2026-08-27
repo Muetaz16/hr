@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import { computeAndStorePresence } from '../utils/presenceScoring';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Same fixed zone as evaluationPeriodCron.ts — Libya doesn't observe DST, and the
 // server itself may be hosted anywhere, so we can't rely on its local time.

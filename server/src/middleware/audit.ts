@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from './auth';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const VERB: Record<string, string> = { POST: 'Created', PUT: 'Updated', PATCH: 'Updated', DELETE: 'Deleted' };
 

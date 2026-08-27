@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import { finalizeOneEmployee } from '../utils/evaluationFinalize';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Same fixed zone as the other evaluation crons — Libya doesn't observe DST.
 const TIMEZONE = 'Africa/Tripoli';

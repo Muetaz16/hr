@@ -3,7 +3,7 @@ import { OrgPlacement } from './evaluationHierarchy';
 import { computeFinalScore } from './evaluationScoring';
 import { awardEvaluationPoints } from './evaluationPoints';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export type FinalizeResult =
     | { status: 'finalized'; finalScore: number }

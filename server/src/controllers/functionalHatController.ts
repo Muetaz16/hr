@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ALL_PERMISSION_IDS } from '../utils/accessCatalog';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const sanitizePermissions = (perms: any): string[] =>
     Array.isArray(perms) ? perms.filter((p: any) => typeof p === 'string' && ALL_PERMISSION_IDS.includes(p)) : [];

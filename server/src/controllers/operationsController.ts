@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // --- Asset Requests (Onboarding) ---
 
