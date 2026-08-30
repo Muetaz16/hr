@@ -734,7 +734,7 @@ const AttendancePage: React.FC = () => {
                                             <tr key={row.empId} className="hover:bg-slate-50/50">
                                                 <td className="p-4">
                                                     <p className="font-bold text-slate-800">{row.matchedFullName || row.empName}</p>
-                                                    <p className="text-[10px] text-slate-500 font-mono">{row.empCode} · {row.position || row.positionName}</p>
+                                                    <p className="text-[10px] text-slate-500 font-mono">{row.empCode} · {row.positionName}</p>
                                                 </td>
                                                 <td className="p-4 font-bold">{formatMinutesAsHM(row.totalWorkMins)}</td>
                                                 <td className="p-4">

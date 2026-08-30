@@ -174,7 +174,6 @@ model Employee {
   transferredAt          DateTime?
   departmentId           String?
   groupId                String?
-  baseSalary             Float                  @default(0)
   joinDate               DateTime
   staffId                String?
   bioId                  Int?
@@ -204,6 +203,13 @@ model Employee {
   languageFactor         Float                  @default(1.0)
   evaluationPoints       Float                  @default(0)
   promotionNotified      Boolean                @default(false)
+  // Set when a PromotionCase closes (or backfilled from contractStartDate/joinDate at migration
+  // time) — "how long has this employee been at their CURRENT grade", which neither joinDate
+  // (company tenure) nor contractStartDate (can be reset by an unrelated renewal) reliably tracks.
+  // Drives the Trainee/Intern tenure-based promotion eligibility checks.
+  currentGradeSince      DateTime?
+  promotionCases         PromotionCase[]
+  rewardCases            RewardCase[]
   // --- Extended Identity Details (recruitment intake form) ---
   dateOfBirth                DateTime?
   placeOfBirth               String?
@@ -599,6 +605,114 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([userId])
+}
+
+// A single promotion, evolving through the company's real 2-stage process — same "generate form ->
+// collect physical signature(s) -> upload the signed copy -> advance" pattern as DisciplinaryCase/
+// OffboardingCase. A normal (non-exceptional) case always starts at NOTICE_OF_PROMOTION; an
+// exceptional one (HR manually promoting someone outside the normal eligibility flow) skips straight
+// to PROMOTION_REPORT. Closing the case (completing Promotion Report) is what actually applies the
+// grade change to the Employee record.
+model PromotionCase {
+  id                  String    @id @default(uuid())
+
+  employeeId          String
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  caseNumber          String    @unique // "IPH-CCHR-FRM-PROMOT-000" style, same convention as INCREP/OFFBRD
+
+  isExceptional       Boolean   @default(false)
+  toGrade             String    // target grade this case applies on close — fixed at creation, one of JOB_GRADES
+  basis               String?   // 'TENURE' | 'EVALUATION' | 'EXCEPTIONAL' — how eligibility was reached, display/audit only
+  reason              String?   // "Reason for Promotion" — printed on both forms
+  effectiveDate       DateTime? // "Effectivity Date:" printed field — does NOT drive currentGradeSince, see completePromotionReport
+  newJobTitle         String?
+  newJobCategory      String?
+
+  // Stage 2 — Promotion Report (skipped entirely for isExceptional cases, which start straight here
+  // instead). The overall rating is a live snapshot of Employee.evaluationPoints and the 3 monthly
+  // scores come from EvaluationFinalization — both computed at generation time, not typed by HR.
+  performanceMarch            String?
+  performanceApril            String?
+  performanceMay              String?
+  overallPerformanceRating    String?
+  promotionReportDocumentUrl  String?
+  promotionReportDocumentName String?
+  promotionReportCompletedAt  DateTime?
+
+  // NOTICE_OF_PROMOTION | PROMOTION_REPORT | CLOSED
+  stage               String    @default("NOTICE_OF_PROMOTION")
+
+  // Stage 1 — Notice of Promotion. Completing THIS stage no longer applies the grade change — that
+  // now happens when Promotion Report (the last stage) completes, see completePromotionReport.
+  noticeOfPromotionDocumentUrl  String?
+  noticeOfPromotionDocumentName String?
+  noticeOfPromotionCompletedAt  DateTime?
+
+  closedAt            DateTime?
+
+  createdByName       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([employeeId])
+  @@index([stage])
+}
+
+// Rewards & Recognition — one generate-letter -> collect signature -> upload-signed-copy -> confirm
+// cycle, same safety pattern as Disciplinary/Offboarding/Promotion (no bonusHolidays credit or other
+// side effect happens until `completedAt` is set) — a single-click instant grant was tried first and
+// replaced after the user flagged it as too error-prone for an action with real, hard-to-reverse
+// effects. A case with `completedAt` null is a DRAFT (candidate selected, nothing applied yet).
+model RewardCase {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  caseNumber String   @unique // "IPH-CCHR-FRM-REWARD-000" style, same convention as INCREP/OFFBRD/PROMOT
+
+  type       String   // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE
+
+  period         String?   // 'YYYY-MM' (Month/Attendance) or 'YYYY' (Employee of Year); null for Loyalty
+  milestoneYears Int?      // 5 or 10 — Loyalty only
+  milestoneDate  DateTime? // joinDate + milestoneYears, snapshotted at grant — Loyalty only
+
+  finalScoreSnapshot Float?  // the winning EvaluationFinalization.finalScore — Employee of Month only
+  notes              String? // tie-break reasoning / selection justification — any type
+
+  bonusLeaveDaysGranted Float  @default(0) // +1 (Month/Attendance) / +3 (Year) / 0 (Loyalty) — applied to Employee.bonusHolidays only once completed
+  bonusPercent          Float? // % of salary — Year (HR-entered) / Loyalty (fixed 5 or 10); null otherwise
+
+  // The signed Appreciation Letter (or whichever document HR collects signatures on) — completing
+  // the case (setting completedAt) is what actually applies bonusLeaveDaysGranted to the employee.
+  documentUrl  String?
+  documentName String?
+  completedAt  DateTime?
+
+  // Year (Certificate of Appreciation) / Loyalty (watch/plaque) — both HR-fulfilled outside the
+  // system, this is just an on/off "logged as done" flag, never a generated document. Only settable
+  // once the case itself is completed (the paperwork should be signed before the physical item is
+  // handed over).
+  physicalRewardFulfilledAt DateTime?
+  physicalRewardNote        String?
+
+  // Appreciation Letter — available on any award type per the PDF spec ("all rewards except the
+  // annual performance bonus trigger... Appreciation Letter"). Blocked pending template — see
+  // rewardForms.ts.
+  appreciationLetterUrl      String?
+  appreciationLetterName     String?
+  appreciationLetterIssuedAt DateTime?
+
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Two unique constraints, not one: Postgres treats NULL as distinct from NULL, so each is inert
+  // exactly for the types where its key column is always null — together they correctly dedupe every
+  // award type (period-based types via the first, Loyalty via the second).
+  @@unique([employeeId, type, period])
+  @@unique([employeeId, type, milestoneYears])
+  @@index([employeeId])
+  @@index([type])
 }
 
 model Contract {

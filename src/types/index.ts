@@ -161,7 +161,6 @@ export interface Employee {
     departmentId: string;
     unitId?: string;
     groupId: string;
-    baseSalary: number;
     joinDate: string;
     staffId?: string; // Manual Employee ID (e.g. EMP-001)
     bioId?: number; // BioTime attendance system's own numeric employee id, once auto-provisioned
@@ -240,7 +239,8 @@ export interface Employee {
     siteFactor?: number;
     languageFactor?: number;
     evaluationPoints?: number;
-    promotionNotified?: boolean; // one-shot flag: HR already notified once evaluationPoints crossed the promotion threshold
+    promotionNotified?: boolean; // dead field — superseded by the live PromotionCase eligibility system
+    currentGradeSince?: string; // when the employee entered their current jobGrade — anchors tenure-based promotion eligibility
 
     // Contract Details
     contractStartDate?: string;

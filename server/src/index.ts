@@ -69,6 +69,8 @@ import attendanceSettingsRoutes from './routes/attendanceSettingsRoutes';
 import personnelActionRoutes from './routes/personnelActionRoutes';
 import disciplinaryRoutes from './routes/disciplinaryRoutes';
 import offboardingRoutes from './routes/offboardingRoutes';
+import promotionRoutes from './routes/promotionRoutes';
+import rewardRoutes from './routes/rewardRoutes';
 import auditLogRoutes from './routes/auditLogRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import { initEvaluationPeriodScheduler } from './jobs/evaluationPeriodCron';
@@ -107,6 +109,8 @@ app.use('/api/attendance-settings', attendanceSettingsRoutes);
 app.use('/api/personnel-actions', personnelActionRoutes);
 app.use('/api/disciplinary-cases', disciplinaryRoutes);
 app.use('/api/offboarding-cases', offboardingRoutes);
+app.use('/api/promotion-cases', promotionRoutes);
+app.use('/api/reward-cases', rewardRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', userRoutes); // For users, departments, and groups

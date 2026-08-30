@@ -72,7 +72,6 @@ const EmployeeForm: React.FC = () => {
         unitId: '',
         groupId: '',
         role: 'EMPLOYEE',
-        baseSalary: 0,
         joinDate: new Date().toISOString().split('T')[0],
         staffId: '',
         position: '',
@@ -161,6 +160,9 @@ const EmployeeForm: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
     const [fetchedHourlyRate, setFetchedHourlyRate] = useState<number | null>(null);
+    // Live preview only — payroll/salary is not stored on Employee (it's derived from
+    // SalaryStructure and will live in the dedicated Payroll module), so this never gets submitted.
+    const [previewBaseSalary, setPreviewBaseSalary] = useState(0);
     const [deptSearchTerm, setDeptSearchTerm] = useState('');
     const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const deptRef = useRef<HTMLDivElement>(null);
@@ -514,7 +516,7 @@ const EmployeeForm: React.FC = () => {
                     const data = res.data;
                     if (data) {
                         const monthly = data.monthlyRate || (data.hourlyRate * 208);
-                        setFormData(prev => ({ ...prev, baseSalary: monthly }));
+                        setPreviewBaseSalary(monthly);
                         setFetchedHourlyRate(data.hourlyRate);
                     }
                 })
@@ -551,7 +553,7 @@ const EmployeeForm: React.FC = () => {
         }
     }, [formData.contractType, formData.languageFactor]);
 
-    const displayBaseSalary = formData.baseSalary || (fetchedHourlyRate ? fetchedHourlyRate * 208 : 0);
+    const displayBaseSalary = previewBaseSalary || (fetchedHourlyRate ? fetchedHourlyRate * 208 : 0);
     const posSkill = Math.max(formData.positionFactor || 1.0, formData.skillFactor || 1.0);
     const site = formData.siteFactor || 1.0;
     const lang = formData.languageFactor || 1.0;

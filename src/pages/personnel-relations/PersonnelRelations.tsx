@@ -12,6 +12,9 @@ import { staffHubService } from '../../services/staffHubService';
 import { evaluationService, type EvaluationHistoryMonth } from '../../services/evaluationService';
 import { disciplinaryService, type DisciplinaryCase, type DisciplinaryActionType, type DisciplinaryStage, type DisciplinaryOutcome } from '../../services/disciplinaryService';
 import { offboardingService, type OffboardingCase, type OffboardingStage } from '../../services/offboardingService';
+import { promotionService, type PromotionStage, type PromotionCase } from '../../services/promotionService';
+import { rewardService, type RewardCase } from '../../services/rewardService';
+import { getPromotionRule, monthsSince, EVALUATION_INDEX_THRESHOLD } from '../../utils/jobGrades';
 import { DISCIPLINARY_CATEGORY_LABELS, DISCIPLINARY_ACTION_LABELS, DISCIPLINARY_VIOLATIONS, VIOLATIONS_BY_ID, type DisciplinaryCategory } from '../../constants/disciplinaryViolations';
 import { payrollService } from '../../services/payrollService';
 import { SERVER_URL } from '../../services/apiClient';
@@ -63,6 +66,7 @@ import JobDescriptionView from '../../components/JobDescriptionView';
 import EvaluationControl from '../hr/EvaluationControl';
 import EvaluationsPage from '../Evaluations';
 import EmployeesPage from '../admin/Employees';
+import RewardsTab, { REWARD_TYPE_LABELS } from './RewardsTab';
 
 // Collapsible tree node — file-explorer style. Module-scope (not defined inside
 // PersonnelRelations' render) so its identity is stable across renders: a component
@@ -177,7 +181,6 @@ const Row = ({ label, value, dir }: { label: string; value?: any; dir?: 'rtl' | 
 const Field = ({ emp, label, k, type, dir }: { emp: Employee; label: string; k: string; type?: string; dir?: 'rtl' | 'ltr' }) => {
     let v: any = (emp as any)[k];
     if (type === 'date') v = v ? format(parseISO(v as string), 'dd MMM yyyy') : '';
-    if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
     return <Row label={label} value={v} dir={dir} />;
 };
 const DISCIPLINARY_STAGE_COLUMNS: { key: DisciplinaryStage; label: string }[] = [
@@ -191,7 +194,15 @@ const OFFBOARDING_STAGE_COLUMNS: { key: OffboardingStage; label: string }[] = [
     { key: 'CLEARANCE', label: 'Employee Clearance' },
     { key: 'SEPARATION_LETTER', label: 'Separation Letter' },
 ];
-
+const PROMOTION_STAGE_COLUMNS: { key: PromotionStage; label: string }[] = [
+    { key: 'NOTICE_OF_PROMOTION', label: 'Notice of Promotion' },
+    { key: 'PROMOTION_REPORT', label: 'Promotion Report' },
+];
+const BASIS_LABELS: Record<string, string> = {
+    TENURE: 'Tenure',
+    EVALUATION: 'Evaluation Index',
+    EXCEPTIONAL: 'Exceptional',
+};
 // Mirrors offboardingController.ts's SEPARATION_REASON_LABELS — the reason shown here in an
 // employee's own file for why they left, one of the 4 real separation types.
 const OFFBOARDING_SOURCE_LABELS: Record<string, string> = {
@@ -236,7 +247,7 @@ const PersonnelRelations: React.FC = () => {
         'lifecycle': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_lifecycle'] },
         'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
         'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
-        'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
+        'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER'], perms: ['manage_promotions'] },
         'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
         'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
         'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
@@ -277,10 +288,9 @@ const PersonnelRelations: React.FC = () => {
     const [evalDocBusy, setEvalDocBusy] = useState<string | null>(null);
     const [isRenewalModalOpen, setIsRenewalModalOpen] = useState(false);
     // Initiate Renewal form: the proposed new contract + the signed contract file to attach.
-    const [renewForm, setRenewForm] = useState({ startDate: '', endDate: '', salary: 0, contractNumber: '', notes: '' });
+    const [renewForm, setRenewForm] = useState({ startDate: '', endDate: '', contractNumber: '', notes: '' });
     const [renewFile, setRenewFile] = useState<File | null>(null);
     const [renewSubmitting, setRenewSubmitting] = useState(false);
-    const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
     const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
 
     // Lifecycle tab — search/filter + read-only detail view
@@ -375,6 +385,26 @@ const PersonnelRelations: React.FC = () => {
     });
     const detailSeparationCase = detailOffboardingCases.find(c => c.stage === 'CLOSED') || detailOffboardingCases[0];
 
+    // New — this employee's promotion history. The backend route is gated behind manage_promotions
+    // (see promotionRoutes.ts), so mirror that here the same way canSeeDisciplinaryRecord does below
+    // — check client-side before firing the request rather than letting it 403.
+    const canSeePromotionRecord = canAccess(currentUser, [], ['manage_promotions']);
+    const { data: detailPromotionCases = [] } = useQuery({
+        queryKey: ['employee-promotion-cases', detailEmp?.id],
+        queryFn: () => promotionService.list({ employeeId: detailEmp!.id }),
+        enabled: !!detailEmp && canSeePromotionRecord,
+    });
+
+    // New — this employee's reward case history (Employee of the Month, Attendance Excellence,
+    // Employee of the Year, Loyalty Milestone). Same gating as the Promotion Record above —
+    // reward-cases routes are gated behind manage_rewards (see rewardRoutes.ts).
+    const canSeeRewardsRecord = canAccess(currentUser, [], ['manage_rewards']);
+    const { data: detailRewardCases = [] } = useQuery({
+        queryKey: ['employee-reward-cases', detailEmp?.id],
+        queryFn: () => rewardService.list({ employeeId: detailEmp!.id }),
+        enabled: !!detailEmp && canSeeRewardsRecord,
+    });
+
     // Replace/upload one of the fixed document slots (CV, degree, etc.) directly from this screen.
     const handleFixedDocUpload = async (empId: string, key: string, file?: File) => {
         if (!file) return;
@@ -455,6 +485,16 @@ const PersonnelRelations: React.FC = () => {
         if (match) setDetailEmp(match);
     }, [currentPath, location.search, employeesIncludingSeparated, detailEmp]);
 
+    // Keep an already-open detail view in sync with the roster — e.g. completing a promotion case
+    // updates the employee's jobGrade/evaluationPoints server-side; once that refetches here, this
+    // re-syncs detailEmp instead of letting it keep showing the snapshot captured when it was opened.
+    useEffect(() => {
+        if (!detailEmp) return;
+        const fresh = (employeesIncludingSeparated as Employee[]).find(e => e.id === detailEmp.id)
+            || (employees as Employee[]).find(e => e.id === detailEmp.id);
+        if (fresh && fresh !== detailEmp) setDetailEmp(fresh);
+    }, [employeesIncludingSeparated, employees]);
+
     // Contract Renewals — only employees whose contract ends within 30 days (or has already
     // lapsed and hasn't been renewed yet), not every employee who merely has an end date on file.
     const contractsNeedingRenewal = employees
@@ -523,6 +563,55 @@ const PersonnelRelations: React.FC = () => {
     const [involuntarySource, setInvoluntarySource] = useState<'TERMINATION' | 'EMPLOYEE_RESIGNATION' | 'CONTRACT_NON_RENEWAL_EMPLOYEE' | 'CONTRACT_NON_RENEWAL_COMPANY'>('CONTRACT_NON_RENEWAL_COMPANY');
     const [involuntaryReason, setInvoluntaryReason] = useState('');
     const [involuntaryDate, setInvoluntaryDate] = useState('');
+
+    const { data: promotionCandidates = [] } = useQuery({
+        queryKey: ['promotion-candidates'],
+        queryFn: () => promotionService.getCandidates(),
+        enabled: activeTab === 'promotions',
+    });
+    const { data: promotionCases = [] } = useQuery({
+        queryKey: ['promotion-cases'],
+        queryFn: () => promotionService.list(),
+        enabled: activeTab === 'promotions',
+    });
+    const [showClosedPromotionCases, setShowClosedPromotionCases] = useState(false);
+    const [isExceptionalPromotionModalOpen, setIsExceptionalPromotionModalOpen] = useState(false);
+    const openCaseFromCandidate = async (employeeId: string) => {
+        try {
+            const created = await promotionService.createFromCandidate(employeeId);
+            toast.success(`Promotion case ${created.caseNumber} opened.`);
+            queryClient.invalidateQueries({ queryKey: ['promotion-cases'] });
+            queryClient.invalidateQueries({ queryKey: ['promotion-candidates'] });
+            navigate(`/personnel-relations/promotions/${created.id}`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || 'Failed to open the promotion case.');
+        }
+    };
+    // Searchable employee picker for "Add Exceptional Promotion", same pattern as the offboarding
+    // manual-case modal above.
+    const [exceptionalEmployeeQuery, setExceptionalEmployeeQuery] = useState('');
+    const [exceptionalEmployee, setExceptionalEmployee] = useState<Employee | null>(null);
+    const [showExceptionalSuggestions, setShowExceptionalSuggestions] = useState(false);
+    const exceptionalBlurTimeout = useRef<number | null>(null);
+    const exceptionalSuggestions = useMemo(() => {
+        const q = exceptionalEmployeeQuery.trim().toLowerCase();
+        if (!q || exceptionalEmployee) return [];
+        return (employees as Employee[])
+            .filter((emp: any) => emp.fullName.toLowerCase().includes(q) || (emp.staffId || '').toLowerCase().includes(q))
+            .slice(0, 8);
+    }, [exceptionalEmployeeQuery, exceptionalEmployee, employees]);
+    const selectExceptionalEmployee = (emp: Employee) => {
+        setExceptionalEmployee(emp);
+        setExceptionalEmployeeQuery(emp.fullName);
+        setShowExceptionalSuggestions(false);
+        setExceptionalToGrade('');
+    };
+    const handleExceptionalEmployeeChange = (value: string) => {
+        setExceptionalEmployeeQuery(value);
+        if (exceptionalEmployee && value !== exceptionalEmployee.fullName) { setExceptionalEmployee(null); setExceptionalToGrade(''); }
+        setShowExceptionalSuggestions(true);
+    };
+    const [exceptionalToGrade, setExceptionalToGrade] = useState<string>('');
 
     // Recent 25th-to-24th cycles (most recent first), for the Attendance Candidates month picker —
     // HR previously had no way to browse past cycles, only ever seeing "now". Approximated
@@ -712,29 +801,6 @@ const PersonnelRelations: React.FC = () => {
         setIsIcModalOpen(true);
     };
 
-    // Start a promotion for a specific employee from the Promotion Management tab: opens the
-    // Personnel Action Form (internal transfer) modal pre-seeded with this employee and the
-    // transfer type set to "Promotion". The remaining steps (target position, new grade, review,
-    // signature, accept) are the existing Personnel Action workflow.
-    const startPromotionFor = (employeeId: string) => {
-        setPafForm({ ...emptyPaf, employeeId, typeOfTransfer: 'Promotion' });
-        setPafJdScope('');
-        setIsActionFormModalOpen(true);
-    };
-
-    // Promotion threshold used across the app: interns cross at 3, everyone else at 18.
-    const promotionThresholdFor = (jobGrade?: string | null) => (jobGrade === 'Intern' ? 3 : 18);
-
-    // Employees flagged for promotion — HR was notified (promotionNotified) OR their Evaluation
-    // Index already reached the threshold for their grade. Highest index first.
-    const promotionCandidates = [...(employees as any[])]
-        .filter(e => {
-            if (e.enrollmentStatus === 'TRANSFERRED') return false;
-            const points = e.evaluationPoints || 0;
-            return e.promotionNotified || points >= promotionThresholdFor(e.jobGrade);
-        })
-        .sort((a, b) => (b.evaluationPoints || 0) - (a.evaluationPoints || 0));
-
     // Create an inter-company transfer (free-text destination). Stored PENDING; generated/signed/
     // uploaded, then Accept marks the employee TRANSFERRED.
     const handleIcSubmit = async (e: React.FormEvent) => {
@@ -889,7 +955,8 @@ const PersonnelRelations: React.FC = () => {
     };
 
     // Open the Initiate Renewal modal, pre-filling the new contract as: start = day after the
-    // current contract ends, end = start + 6 months (editable), salary carried from the record.
+    // current contract ends, end = start + 6 months (editable). Salary is derived server-side from
+    // the salary structure table at renewal time — never entered here.
     const openRenewalModal = (emp: any) => {
         const start = emp.contractEndDate ? addDays(parseISO(emp.contractEndDate), 1) : new Date();
         const end = addDays(addMonths(start, 6), -1); // 6 months minus a day → an exact 6-month term
@@ -897,7 +964,6 @@ const PersonnelRelations: React.FC = () => {
         setRenewForm({
             startDate: format(start, 'yyyy-MM-dd'),
             endDate: format(end, 'yyyy-MM-dd'),
-            salary: emp.baseSalary || 0,
             contractNumber: '',
             notes: '',
         });
@@ -919,7 +985,6 @@ const PersonnelRelations: React.FC = () => {
             await employeeService.renewContract(selectedEmployee.id, {
                 startDate: renewForm.startDate,
                 endDate: renewForm.endDate,
-                salary: renewForm.salary,
                 contractNumber: renewForm.contractNumber || null,
                 type: selectedEmployee.contractType || null,
                 notes: renewForm.notes || null,
@@ -987,11 +1052,6 @@ const PersonnelRelations: React.FC = () => {
         }
     };
 
-    const handleNominateSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        toast.success('Award nomination logged successfully.');
-        setIsNominateModalOpen(false);
-    };
 
     if (isLoadingEmps) {
         return <div className="p-12 text-center animate-pulse text-[#511d29] font-black uppercase tracking-widest text-sm">Loading Personnel Relations...</div>;
@@ -1370,39 +1430,7 @@ const PersonnelRelations: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'rewards' && (
-                <div className="space-y-6">
-                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
-                                <Award className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Rewards & Recognition</h3>
-                                <p className="text-sm text-slate-600 mt-1">
-                                    Recognize exceptional contributions. **All rewards are triggered based on the Employee's Performance Evaluation.**
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => setIsNominateModalOpen(true)}
-                            className="px-4 py-2 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d]"
-                        >
-                            + Log Nomination
-                        </button>
-                    </div>
-
-                    {/* Cards grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <RewardCard title="Employee of the Month" desc="Awarded to an employee demonstrating stellar performance, task completions, and teamwork during the month." />
-                        <RewardCard title="Employee of the Year" desc="Awarded annually to an outstanding employee with consistent record-breaking performances and values alignment." />
-                        <RewardCard title="Excellence & Timeliness Award" desc="Recognizes personnel with zero-attendance leaks, fast task resolution rates, and exceptional punctuality." />
-                        <RewardCard title="Loyalty Award" desc="Honors long-standing employees for their long service tenure, contribution milestones, and company trust." />
-                        <RewardCard title="Exceptional Performance Award" desc="For special acts of problem-solving, cost-reduction leadership, or emergency project resolutions." />
-                        <RewardCard title="Bi-Annual Bonus" desc="Performance-related financial bonus calculated and triggered directly after mid-year and year-end evaluations." />
-                    </div>
-                </div>
-            )}
+            {activeTab === 'rewards' && <RewardsTab />}
 
             {activeTab === 'disciplinary' && (
                 <div className="space-y-6">
@@ -1729,62 +1757,128 @@ const PersonnelRelations: React.FC = () => {
                         <div className="flex-1">
                             <h2 className="text-lg font-black text-[#511d29]">Promotion Management</h2>
                             <p className="text-slate-500 text-sm font-medium mt-0.5">
-                                Track promotion-eligible employees and start a promotion. Interns become eligible on tenure;
-                                juniors and above once their Evaluation Index reaches the threshold.
+                                Track promotion-eligible employees and open a promotion case. Trainees and Interns become
+                                eligible on tenure; every grade above that once its Evaluation Index reaches {EVALUATION_INDEX_THRESHOLD}.
                             </p>
                         </div>
+                        <button
+                            onClick={() => setIsExceptionalPromotionModalOpen(true)}
+                            className="flex-shrink-0 px-4 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d]"
+                        >
+                            Add Exceptional Promotion
+                        </button>
                     </div>
 
-                    {/* Eligible candidates */}
-                    <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-                            <h3 className="text-sm font-black text-[#511d29] uppercase tracking-wider flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4" /> Promotion-Eligible Employees
-                            </h3>
-                            <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded bg-amber-50 text-amber-700 border border-amber-100">
-                                {promotionCandidates.length} eligible
-                            </span>
-                        </div>
-
-                        {promotionCandidates.length === 0 ? (
-                            <div className="p-12 text-center text-slate-400 text-sm font-bold">
-                                No employees are currently flagged for promotion.
+                    {PROMOTION_STAGE_COLUMNS.map(col => {
+                        const cases = promotionCases.filter(c => c.stage === col.key);
+                        // Notice of Promotion is the intake stage (stage 1) — an eligible employee IS
+                        // a Notice of Promotion candidate, so live candidates (no case opened yet) are
+                        // listed alongside cases already at this stage rather than in a separate
+                        // panel. getCandidates already excludes anyone with an open case, so there's
+                        // no overlap to dedupe against `cases`.
+                        const candidateRows = col.key === 'NOTICE_OF_PROMOTION' ? promotionCandidates : [];
+                        const rowCount = cases.length + candidateRows.length;
+                        return (
+                            <div key={col.key} className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
+                                <div className="p-3 border-b border-[#511d29]/10 bg-red-50/20 flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-[#511d29] uppercase tracking-wider">{col.label}</span>
+                                    <span className="text-[10px] font-black text-[#511d29]/60">{rowCount}</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
+                                                <th className="p-3">Case #</th>
+                                                <th className="p-3">Employee</th>
+                                                <th className="p-3">Grade</th>
+                                                <th className="p-3">Basis</th>
+                                                <th className="p-3"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                            {rowCount === 0 && (
+                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                            )}
+                                            {cases.map(c => (
+                                                <tr key={c.id} className="hover:bg-red-50/10">
+                                                    <td className="p-3 text-slate-400">{c.caseNumber}</td>
+                                                    <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
+                                                    <td className="p-3">{c.employee?.jobGrade || '—'} → {c.toGrade}</td>
+                                                    <td className="p-3">{BASIS_LABELS[c.basis || ''] || c.basis || '—'}</td>
+                                                    <td className="p-3 text-right">
+                                                        <button
+                                                            onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
+                                                            className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
+                                                        >
+                                                            Details
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {candidateRows.map(cand => {
+                                                const isTenure = cand.basis === 'TENURE';
+                                                const progress = cand.progress as any;
+                                                return (
+                                                    <tr key={cand.employeeId} className="hover:bg-amber-50/30 bg-amber-50/10">
+                                                        <td className="p-3 text-amber-600 font-bold uppercase text-[10px]">Eligible — no case yet</td>
+                                                        <td className="p-3 font-bold">{cand.employee.fullName || '—'}</td>
+                                                        <td className="p-3">{cand.employee.jobGrade || '—'} → {cand.toGrade}</td>
+                                                        <td className="p-3">
+                                                            {BASIS_LABELS[cand.basis] || cand.basis}
+                                                            <span className="block text-[10px] text-slate-400 font-bold">
+                                                                {isTenure ? `${progress.months} / ${progress.required} months` : `${progress.points.toFixed(2)} / ${progress.required}`}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-right">
+                                                            <button
+                                                                onClick={() => openCaseFromCandidate(cand.employeeId)}
+                                                                className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-700"
+                                                            >
+                                                                Details
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        ) : (
-                            <div className="divide-y divide-slate-100">
-                                {promotionCandidates.map((e: any) => {
-                                    const threshold = promotionThresholdFor(e.jobGrade);
-                                    const points = e.evaluationPoints || 0;
-                                    const pct = Math.min(100, (points / threshold) * 100);
-                                    const basis = e.jobGrade === 'Intern' ? 'Tenure / Evaluation Index' : 'Evaluation Index';
-                                    return (
-                                        <div key={e.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <p className="text-sm font-black text-slate-700 truncate">{e.fullName || '—'}</p>
-                                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-slate-100 text-slate-500">{e.jobGrade || 'Employee'}</span>
-                                                    {e.promotionNotified && (
-                                                        <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-50 text-emerald-600 border border-emerald-100">Notified</span>
-                                                    )}
-                                                </div>
-                                                <p className="text-[11px] text-slate-400 font-bold mt-0.5">{e.staffId || ''}{e.position ? ` · ${e.position}` : ''}</p>
-                                                <div className="mt-2 flex items-center gap-2">
-                                                    <div className="h-1.5 w-40 max-w-full rounded-full bg-slate-100 overflow-hidden">
-                                                        <div className="h-full rounded-full bg-[#aa7a51]" style={{ width: `${pct}%` }} />
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-slate-500">{points.toFixed(2)} / {threshold} · {basis}</span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => startPromotionFor(e.id)}
-                                                className="shrink-0 px-4 py-2.5 rounded-lg bg-[#511d29] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#3a151d] transition inline-flex items-center justify-center gap-1.5"
-                                            >
-                                                <Award className="w-3.5 h-3.5" /> Start Promotion
-                                            </button>
-                                        </div>
-                                    );
-                                })}
+                        );
+                    })}
+
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <button onClick={() => setShowClosedPromotionCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                                Closed Cases ({promotionCases.filter(c => c.stage === 'CLOSED').length})
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedPromotionCases ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showClosedPromotionCases && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <tbody className="divide-y divide-slate-100">
+                                        {promotionCases.filter(c => c.stage === 'CLOSED').map(c => (
+                                            <tr key={c.id} className="hover:bg-slate-50/50">
+                                                <td className="p-3 px-4 text-slate-400">{c.caseNumber}</td>
+                                                <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
+                                                <td className="p-3 px-4 text-slate-500">Promoted to {c.toGrade}</td>
+                                                <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
+                                                <td className="p-3 px-4 text-right">
+                                                    <button
+                                                        onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
+                                                        className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
+                                                    >
+                                                        Details
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {promotionCases.filter(c => c.stage === 'CLOSED').length === 0 && (
+                                    <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                )}
                             </div>
                         )}
                     </div>
@@ -2102,41 +2196,6 @@ const PersonnelRelations: React.FC = () => {
                 </form>
             </Modal>
 
-            {/* Modal 3: Log Nomination */}
-            <Modal isOpen={isNominateModalOpen} onClose={() => setIsNominateModalOpen(false)} title="Reward Nomination" maxWidth="max-w-md">
-                <form onSubmit={handleNominateSubmit} className="space-y-4 text-xs font-semibold text-slate-700">
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Nominee</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            {employees.map((e: any) => (
-                                <option key={e.id} value={e.id}>{e.fullName}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Reward Category</label>
-                        <select className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option>Employee of the Month</option>
-                            <option>Employee of the Year</option>
-                            <option>Excellence and Timeliness Award</option>
-                            <option>Loyalty Award</option>
-                            <option>Exceptional Performance Award</option>
-                            <option>Bi-Annual Bonus nomination</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Evaluation Details / Achievement</label>
-                        <textarea rows={3} required placeholder="Justify nomination based on evaluation score" className="w-full p-2 border border-[#511d29]/20 bg-white" />
-                    </div>
-
-                    <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
-                        Log Nomination
-                    </button>
-                </form>
-            </Modal>
-
             {/* Modal 5: Offboarding Log */}
             <Modal isOpen={isOffboardingModalOpen} onClose={() => setIsOffboardingModalOpen(false)} title="Initiate Offboarding Manually" maxWidth="max-w-md">
                 <form
@@ -2222,6 +2281,82 @@ const PersonnelRelations: React.FC = () => {
 
                     <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
                         Initialize Offboarding
+                    </button>
+                </form>
+            </Modal>
+
+            <Modal isOpen={isExceptionalPromotionModalOpen} onClose={() => setIsExceptionalPromotionModalOpen(false)} title="Add Exceptional Promotion" maxWidth="max-w-md">
+                <form
+                    onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!exceptionalEmployee) return toast.error('Select the employee from the suggestions.');
+                        if (!exceptionalToGrade) return toast.error('Select the target job grade.');
+                        try {
+                            const created = await promotionService.createExceptional({
+                                employeeId: exceptionalEmployee.id, toGrade: exceptionalToGrade,
+                            });
+                            toast.success(`Promotion case ${created.caseNumber} opened at Promotion Report.`);
+                            setIsExceptionalPromotionModalOpen(false);
+                            setExceptionalEmployeeQuery(''); setExceptionalEmployee(null); setExceptionalToGrade('');
+                            queryClient.invalidateQueries({ queryKey: ['promotion-cases'] });
+                            navigate(`/personnel-relations/promotions/${created.id}`);
+                        } catch (err: any) {
+                            toast.error(err?.response?.data?.error || 'Failed to create the exceptional promotion.');
+                        }
+                    }}
+                    className="space-y-4 text-xs font-semibold text-slate-700"
+                >
+                    <p className="text-[10px] text-slate-400 font-normal normal-case">
+                        Use this to promote an employee outside the normal tenure/Evaluation Index eligibility rules.
+                        The case skips straight to Promotion Report.
+                    </p>
+                    <div className="relative">
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
+                        <input
+                            type="text"
+                            value={exceptionalEmployeeQuery}
+                            onChange={e => handleExceptionalEmployeeChange(e.target.value)}
+                            onFocus={() => setShowExceptionalSuggestions(true)}
+                            onBlur={() => { exceptionalBlurTimeout.current = window.setTimeout(() => setShowExceptionalSuggestions(false), 150); }}
+                            placeholder="Start typing the employee's name…"
+                            className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
+                            autoComplete="off"
+                        />
+                        {showExceptionalSuggestions && exceptionalSuggestions.length > 0 && (
+                            <ul className="absolute z-10 mt-1 w-full bg-white border border-[#511d29]/20 rounded shadow-md max-h-56 overflow-auto">
+                                {exceptionalSuggestions.map((emp: any) => (
+                                    <li key={emp.id}>
+                                        <button
+                                            type="button"
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => selectExceptionalEmployee(emp)}
+                                            className="w-full text-left px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
+                                        >
+                                            {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Target Job Grade</label>
+                        <select
+                            value={exceptionalToGrade}
+                            onChange={e => setExceptionalToGrade(e.target.value)}
+                            disabled={!exceptionalEmployee}
+                            className="w-full p-2 border border-[#511d29]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                        >
+                            <option value="">— Select grade —</option>
+                            {exceptionalEmployee && JOB_GRADES
+                                .filter((g, idx) => idx > JOB_GRADES.indexOf(exceptionalEmployee.jobGrade))
+                                .map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
+                        Create Exceptional Promotion
                     </button>
                 </form>
             </Modal>
@@ -2512,7 +2647,7 @@ const PersonnelRelations: React.FC = () => {
                                             <Field emp={emp} label="Job Grade" k="jobGrade" />
                                             <Field emp={emp} label="Contract Type" k="contractType" />
                                             <Field emp={emp} label="Status" k="contractStatus" />
-                                            <Field emp={emp} label="Base Salary" k="baseSalary" />
+                                            <Row label="In Current Grade Since" value={fmt(emp.currentGradeSince)} />
                                             <Row label="Join Date" value={fmt(firstContractStartDate)} />
                                             <Field emp={emp} label="Contract Start" k="contractStartDate" type="date" />
                                             <Field emp={emp} label="Contract End" k="contractEndDate" type="date" />
@@ -2644,13 +2779,15 @@ const PersonnelRelations: React.FC = () => {
                                 >
                                     <div className="space-y-2">
                                         {detailEvalHistory.allowed && (() => {
-                                            const promotionThreshold = emp.jobGrade === 'Intern' ? 3 : 18;
+                                            const rule = getPromotionRule(emp.jobGrade);
                                             const points = emp.evaluationPoints || 0;
                                             return (
                                                 <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100">
                                                     <span className="text-xs font-black text-amber-700 flex items-center gap-1.5">★ Evaluation Index: {points.toFixed(2)}</span>
                                                     <span className="text-[10px] font-bold text-amber-600/70 uppercase tracking-wider">
-                                                        {points.toFixed(2)} / {promotionThreshold} to promotion{emp.promotionNotified ? ' · Promotion notified' : ''}
+                                                        {!rule ? 'Top grade reached' : rule.type === 'EVALUATION'
+                                                            ? `${points.toFixed(2)} / ${rule.threshold} to promotion (${rule.nextGrade})`
+                                                            : `${Math.max(0, monthsSince(emp.currentGradeSince || emp.contractStartDate || emp.joinDate))} / ${rule.months} months to promotion (${rule.nextGrade})`}
                                                     </span>
                                                 </div>
                                             );
@@ -2693,6 +2830,111 @@ const PersonnelRelations: React.FC = () => {
                                             })
                                         )}
                                     </div>
+                                </TreeBranch>
+
+                                {/* New — this employee's promotion case history. Gated on manage_promotions,
+                                    same pattern as the Confirmed Disciplinary Record above. */}
+                                <TreeBranch
+                                    isOpen={expandedNodes.has('promotions')} onToggle={() => toggleNode('promotions')}
+                                    icon={Award} title="Promotion Record" color="bg-yellow-50 text-yellow-700"
+                                    count={canSeePromotionRecord ? detailPromotionCases.length : undefined}
+                                    restricted={!canSeePromotionRecord ? 'Restricted to Personnel Relations' : undefined}
+                                >
+                                    {detailPromotionCases.length === 0 ? (
+                                        <div className="text-sm font-bold text-slate-300">No promotion records yet.</div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {[...detailPromotionCases]
+                                                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                                                .map((c: PromotionCase) => {
+                                                    const stageLabel = c.stage === 'CLOSED' ? 'Closed' : (PROMOTION_STAGE_COLUMNS.find(s => s.key === c.stage)?.label || c.stage);
+                                                    const statusStyle = c.stage === 'CLOSED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+                                                    return (
+                                                        <div key={c.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <p className="text-xs font-black text-slate-700 truncate">{c.caseNumber}{c.isExceptional ? ' · Exceptional' : ''}</p>
+                                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{stageLabel}</span>
+                                                            </div>
+                                                            <p className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                                                                {c.stage === 'CLOSED' ? (
+                                                                    <span className="font-bold text-emerald-700">Promoted to {c.toGrade}</span>
+                                                                ) : (
+                                                                    <>
+                                                                        <span className="font-bold">{emp.jobGrade || '—'}</span>
+                                                                        <ArrowRight className="w-3 h-3 shrink-0" />
+                                                                        <span className="font-bold text-[#511d29]">{c.toGrade}</span>
+                                                                    </>
+                                                                )}
+                                                                {c.basis && <span className="text-slate-400">· {BASIS_LABELS[c.basis] || c.basis}</span>}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400">
+                                                                Filed {fmt(c.createdAt)}
+                                                                {c.effectiveDate ? ` · Effective ${fmt(c.effectiveDate)}` : ''}
+                                                                {c.stage === 'CLOSED' && c.closedAt ? ` · Closed ${fmt(c.closedAt)}` : ''}
+                                                                {c.createdByName ? ` · Filed by ${c.createdByName}` : ''}
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
+                                                                className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
+                                                            >
+                                                                View Case <ExternalLink className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
+                                </TreeBranch>
+
+                                {/* New — this employee's reward case history. Gated on manage_rewards,
+                                    same pattern as the Promotion Record above. */}
+                                <TreeBranch
+                                    isOpen={expandedNodes.has('rewards')} onToggle={() => toggleNode('rewards')}
+                                    icon={Award} title="Rewards Record" color="bg-emerald-50 text-emerald-700"
+                                    count={canSeeRewardsRecord ? detailRewardCases.length : undefined}
+                                    restricted={!canSeeRewardsRecord ? 'Restricted to Personnel Relations' : undefined}
+                                >
+                                    {detailRewardCases.length === 0 ? (
+                                        <div className="text-sm font-bold text-slate-300">No reward records yet.</div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {[...detailRewardCases]
+                                                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                                                .map((c: RewardCase) => {
+                                                    const statusStyle = c.completedAt ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+                                                    const detailParts: string[] = [];
+                                                    if (c.period) detailParts.push(c.period);
+                                                    if (c.milestoneYears) detailParts.push(`${c.milestoneYears}-year milestone`);
+                                                    if (c.finalScoreSnapshot != null) detailParts.push(`Score ${c.finalScoreSnapshot.toFixed(2)}%`);
+                                                    if (c.bonusPercent != null) detailParts.push(`${c.bonusPercent}% bonus — Pending Payroll Integration`);
+                                                    return (
+                                                        <div key={c.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <p className="text-xs font-black text-slate-700 truncate">{c.caseNumber} · {REWARD_TYPE_LABELS[c.type]}</p>
+                                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{c.completedAt ? 'Completed' : 'Draft'}</span>
+                                                            </div>
+                                                            {detailParts.length > 0 && (
+                                                                <p className="text-[11px] text-slate-500">{detailParts.join(' · ')}</p>
+                                                            )}
+                                                            <p className="text-[10px] text-slate-400">
+                                                                Filed {fmt(c.createdAt)}
+                                                                {c.completedAt ? ` · Completed ${fmt(c.completedAt)}` : ''}
+                                                                {c.physicalRewardFulfilledAt ? ' · Gift Fulfilled' : ''}
+                                                                {c.createdByName ? ` · Filed by ${c.createdByName}` : ''}
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/personnel-relations/rewards/${c.id}`)}
+                                                                className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
+                                                            >
+                                                                View Case <ExternalLink className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
                                 </TreeBranch>
 
                                 <TreeBranch isOpen={expandedNodes.has('attendance')} onToggle={() => toggleNode('attendance')} icon={CalendarDays} title="Attendance & Leave" color="bg-amber-50 text-amber-600">
@@ -2868,15 +3110,5 @@ const PersonnelRelations: React.FC = () => {
         </div>
     );
 };
-
-const RewardCard = ({ title, desc }: { title: string, desc: string }) => (
-    <div className="bg-white border border-[#511d29]/15 p-5 rounded-xl shadow-sm space-y-3 relative overflow-hidden group hover:border-[#511d29]/30 transition-all hover:shadow-md">
-        <div className="w-10 h-10 bg-[#f5ebd9] text-[#511d29] flex items-center justify-center rounded-lg">
-            <Award className="w-5 h-5" />
-        </div>
-        <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{title}</h4>
-        <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
-    </div>
-);
 
 export default PersonnelRelations;

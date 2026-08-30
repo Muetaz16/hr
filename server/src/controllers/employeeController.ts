@@ -62,11 +62,29 @@ const GLOBAL_FULL_EMP_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERA
 
 // Sensitive fields stripped from records the caller isn't allowed to see in full.
 const SENSITIVE_EMP_FIELDS = [
-    'baseSalary', 'passportNumber', 'passportPlaceOfIssue', 'passportExpiryDate', 'nationalId',
+    'passportNumber', 'passportPlaceOfIssue', 'passportExpiryDate', 'nationalId',
     'contractNumber', 'bonusHolidays', 'holidaysUsed', 'emergencyHolidaysUsed', 'unpaidHolidaysUsed',
     'bankName', 'bankBranchName', 'bankAccountNumber', 'personalPhone', 'personalEmail',
     'emergencyContactNumber', 'residentialAddress', 'dateOfBirth', 'idCardNumber',
 ];
+
+// Pay is out of scope for Employee/personnel-relations entirely (it will live in a dedicated
+// Payroll module) — this is used only to snapshot a Contract's own `salary` at creation/renewal
+// time from SalaryStructure (jobCategory + jobGrade + salaryStructureType), never exposed as an
+// Employee-level field.
+type SalaryClassification = { jobCategory?: string | null; jobGrade?: string | null; salaryStructureType?: string | null };
+
+async function getBaseSalary(emp: SalaryClassification): Promise<number> {
+    if (!emp.jobCategory || !emp.jobGrade || !emp.salaryStructureType) return 0;
+    const structure = await prisma.salaryStructure.findUnique({
+        where: {
+            jobCategory_jobGrade_structureLevel: {
+                jobCategory: emp.jobCategory, jobGrade: emp.jobGrade, structureLevel: emp.salaryStructureType,
+            },
+        },
+    });
+    return structure?.monthlyRate ?? 0;
+}
 
 // Resolve which employees the caller may see in FULL. Returns `seeAll` (company-wide) and, for a
 // head, an `inBranch(emp)` predicate matching their own unit/department/division/directorate.
@@ -486,7 +504,7 @@ export const regenerateAllStaffIds = async (req: Request, res: Response) => {
 export const createEmployee = async (req: Request, res: Response) => {
     try {
         const {
-            id, fullName, email, password, role, departmentId, unitId, groupId, divisionId, directorateId, baseSalary, joinDate, staffId,
+            id, fullName, email, password, role, departmentId, unitId, groupId, divisionId, directorateId, joinDate, staffId,
             position, placeOfWork, contractStartDate, contractEndDate, contractType, contractWorkType, contractStatus, holidaysUsed, bonusHolidays,
                 fullNameArabic, passportNumber, contractNumber, nationality, jobCategory, jobGrade, salaryStructureType, emergencyHolidaysUsed,
             unpaidHolidaysUsed, permissions, positionFactor, skillFactor, siteFactor, languageFactor, evaluationPoints, jobDescriptionId,
@@ -653,7 +671,6 @@ export const createEmployee = async (req: Request, res: Response) => {
                 divisionId: cleanDivisionId,
                 directorateId: cleanDirectorateId,
                 jobDescriptionId: cleanJobDescriptionId,
-                baseSalary: parseFloatSafe(baseSalary),
                 joinDate: parseDate(joinDate) || new Date().toISOString(),
                 staffId: staffId || null,
                 position: position || null,
@@ -766,13 +783,15 @@ export const createEmployee = async (req: Request, res: Response) => {
 
             const employee = await tx.employee.create({ data });
 
-            // 3. Create Initial Contract Record
+            // 3. Create Initial Contract Record — salary is always the current SalaryStructure
+            // rate for this hire's classification, never a free-typed value (see getBaseSalary).
+            const initialSalary = await getBaseSalary(employee);
             await tx.contract.create({
                 data: {
                     employeeId: employee.id,
                     startDate: parseDate(contractStartDate) || new Date().toISOString(),
                     endDate: parseDate(contractEndDate),
-                    salary: parseFloatSafe(baseSalary),
+                    salary: initialSalary,
                     contractNumber: contractNumber || "1st",
                     type: contractType || null,
                     status: 'ACTIVE',
@@ -860,8 +879,6 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.groupId !== undefined) {
             data.groupId = (body.groupId === '' || body.groupId === 'null' || body.groupId === 'undefined') ? null : body.groupId;
         }
-        if (body.baseSalary !== undefined) data.baseSalary = parseFloatSafe(body.baseSalary);
-
         // --- Check Headcount if Unit is changing ---
         if (body.unitId !== undefined) {
             const cleanUnitId = (body.unitId === '' || body.unitId === 'null' || body.unitId === 'undefined') ? null : body.unitId;
@@ -1244,7 +1261,6 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
                     unitId: user.unitId,
                     joinDate: user.createdAt,
                     contractStatus: 'Active',
-                    baseSalary: 0,
                     isSynthesized: true,
                     accruedHolidays: 0, earnedHolidays: 0, remainingHolidays: 0
                 });
@@ -1307,7 +1323,8 @@ export const renewContract = async (req: Request, res: Response) => {
                     position: employee.position,
                     jobCategory: employee.jobCategory,
                     jobGrade: employee.jobGrade,
-                    salary: employee.baseSalary,
+                    // Not touching `salary` here — the contract being archived already carries the
+                    // correct salary it was created/renewed with.
                     holidaysUsed: employee.holidaysUsed,
                     emergencyHolidaysUsed: employee.emergencyHolidaysUsed,
                     unpaidHolidaysUsed: employee.unpaidHolidaysUsed,
@@ -1327,7 +1344,10 @@ export const renewContract = async (req: Request, res: Response) => {
                         endDate: employee.contractEndDate,
                         contractNumber: employee.contractNumber,
                         type: employee.contractType,
-                        salary: employee.baseSalary,
+                        // No historical salary is on file for this backfilled "original" contract —
+                        // the current structure rate for the employee's (unchanged) classification is
+                        // the best available figure.
+                        salary: renewedSalary,
                         position: employee.position,
                         jobCategory: employee.jobCategory,
                         jobGrade: employee.jobGrade,
@@ -1377,7 +1397,6 @@ export const renewContract = async (req: Request, res: Response) => {
                     contractStartDate: new Date(startDate),
                     contractEndDate: endDate ? new Date(endDate) : null,
                     contractNumber: contractNumber || null,
-                    baseSalary: renewedSalary,
                     contractStatus: 'Active',
                     holidaysUsed: 0,
                     bonusHolidays: carriedOverHolidays,
@@ -1423,7 +1442,8 @@ export const terminateEmployee = async (req: Request, res: Response) => {
                     position: currentEmployee.position,
                     jobCategory: currentEmployee.jobCategory,
                     jobGrade: currentEmployee.jobGrade,
-                    salary: currentEmployee.baseSalary,
+                    // Not touching `salary` here — the contract already carries the correct salary
+                    // it was created/renewed with.
                     holidaysUsed: currentEmployee.holidaysUsed,
                     emergencyHolidaysUsed: currentEmployee.emergencyHolidaysUsed,
                     unpaidHolidaysUsed: currentEmployee.unpaidHolidaysUsed,
