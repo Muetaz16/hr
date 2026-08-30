@@ -885,6 +885,12 @@ model LeaveRequest {
   startTime            String?
   endTime              String?
   reason               String?
+  // Work Authorization (out-work) specifics — only set when type === 'WORK_AUTHORIZATION'. The
+  // work-order category (Site Mission / Official Business / Out of Office / …) and the place the
+  // assignment is carried out. Used to fill the Work Authorization Form and to compose the reason
+  // written to BioTime's `outworks` table on final approval.
+  workOrderType        String?
+  placeOfAssignment    String?
   attachmentUrl        String?
   attachmentName       String?
   // Supporting document the General Manager must upload before granting the final approval.

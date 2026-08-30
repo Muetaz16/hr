@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ConfirmProvider } from './components/ConfirmDialog';
+import { PromptProvider } from './components/PromptDialog';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -77,6 +78,7 @@ function App() {
         <Toaster position="top-right" richColors />
         <AuthProvider>
           <ConfirmProvider>
+          <PromptProvider>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -110,7 +112,7 @@ function App() {
                     <Route path="/personnel-relations/disciplinary/:caseId" element={<DisciplinaryCaseDetailPage />} />
                     <Route path="/personnel-relations/offboarding/:caseId" element={<OffboardingCaseDetailPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />
                   </Route>
                   <Route path="/attendance" element={<Navigate to="/attendance/overview" replace />} />
@@ -170,6 +172,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </PromptProvider>
           </ConfirmProvider>
         </AuthProvider>
       </QueryClientProvider>

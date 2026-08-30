@@ -121,6 +121,23 @@ export async function createBioTimeLeaveRecord(params: { empCode: string; leaveT
     }
 }
 
+// Registers an out-work (out-of-office / field-work) period in BioTime once a Work Authorization
+// request's approval chain fully completes — it lands in BioTime's `outworks` table. Never throws:
+// fail-soft side effect (mirrors createBioTimeLeaveRecord above), called after the completing
+// approval's DB transaction has already committed.
+export async function createBioTimeOutWork(params: { empCode: string; startDate: Date | string; endDate: Date | string; reason?: string }): Promise<BioTimeResult> {
+    try {
+        const response = await fetch(new URL('/api/attendance/out-works', ATTENDANCE_API_BASE).toString(), jsonPost(params));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { success: false, message: (data as any)?.message || `BioTime returned ${response.status}` };
+        }
+        return { success: true, message: (data as any)?.message };
+    } catch (error: any) {
+        return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
+    }
+}
+
 // Registers a disciplinary suspension in BioTime once a Suspension-type disciplinary action closes.
 // A day covered by a suspension is excluded from that employee's absence count and reports as
 // unpaid (totalWorkMins: 0) rather than a normal paid day. Fail-soft, never throws — same

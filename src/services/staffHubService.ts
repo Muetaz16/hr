@@ -10,6 +10,9 @@ export interface LeaveRequest {
     startTime?: string;
     endTime?: string;
     reason?: string;
+    // Work Authorization (out-work) specifics — only set when type === 'WORK_AUTHORIZATION'.
+    workOrderType?: string;
+    placeOfAssignment?: string;
     attachmentUrl?: string;
     attachmentName?: string;
     finalDocumentUrl?: string;   // document the GM uploaded to grant final approval

@@ -26,6 +26,9 @@ export const PERMISSION_STAGE_SEQUENCE: Record<string, number> = {
     DIRECT_SUPERVISOR: 0,
     DEPT_HEAD: 1,
     HEAD_ATTENDANCE: 2,
+    // Only appended for Work Authorization (out-work), which ends with the General Manager's
+    // signed-document authentication — the other permission types stop at HEAD_ATTENDANCE.
+    GENERAL_MANAGER: 3,
 };
 
 export interface ResolvedApprovalStep {
@@ -160,7 +163,14 @@ export async function resolveApprovalChain(
     }
     const directors = Array.from(directorIds);
 
-    const generalManagers = idsOf(await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } }));
+    // General Manager stage — whoever holds the GENERAL_MANAGER position, a SUPER_ADMIN (who may
+    // step in as GM), OR anyone designated a GM approver via the `approve_gm` permission (Access
+    // Management), mirroring how HEAD_ATTENDANCE is granted by `approve_attendance`. The stage is
+    // satisfied by ANY ONE of them signing — see the sibling-skip in decideApprovalStep.
+    const generalManagers = idsOf(await prisma.user.findMany({
+        where: { OR: [{ role: 'GENERAL_MANAGER' }, { role: 'SUPER_ADMIN' }, { permissions: { has: 'approve_gm' } }] },
+        select: { id: true },
+    }));
 
     // Keep only the org-head levels STRICTLY ABOVE the requester — so a Division Head's request never
     // routes through the Department Head beneath them. HEAD_ATTENDANCE / HR_MANAGER / GENERAL_MANAGER
@@ -244,7 +254,8 @@ export async function resolveApprovalChain(
 // so a person never signs twice. Only the Head of Attendance stage is mandatory.
 export async function resolvePermissionApprovalChain(
     prisma: PrismaClient,
-    employee: Employee
+    employee: Employee,
+    opts?: { includeGeneralManager?: boolean }
 ): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
     const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
 
@@ -299,7 +310,21 @@ export async function resolvePermissionApprovalChain(
     });
     rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads.map(u => u.id) });
 
-    const requiredNonEmpty: ApprovalStage[] = ['HEAD_ATTENDANCE'];
+    // General Manager — the final signed-document authentication. Only appended when requested
+    // (Work Authorization / out-work); mandatory when present, same as the full leave chain.
+    if (opts?.includeGeneralManager) {
+        // GENERAL_MANAGER position, a SUPER_ADMIN (who may step in as GM), OR anyone designated a GM
+        // approver via `approve_gm`. Satisfied by ANY ONE signing (sibling-skip in decideApprovalStep).
+        const generalManagers = await prisma.user.findMany({
+            where: { OR: [{ role: 'GENERAL_MANAGER' }, { role: 'SUPER_ADMIN' }, { permissions: { has: 'approve_gm' } }] },
+            select: { id: true },
+        });
+        rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers.map(u => u.id) });
+    }
+
+    const requiredNonEmpty: ApprovalStage[] = opts?.includeGeneralManager
+        ? ['HEAD_ATTENDANCE', 'GENERAL_MANAGER']
+        : ['HEAD_ATTENDANCE'];
     const seen = new Set<string>();
     const steps: ResolvedApprovalStep[] = [];
     for (const raw of rawStages) {

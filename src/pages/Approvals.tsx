@@ -8,7 +8,7 @@ import type { LeaveRequest, LeaveApprovalStep } from '../services/staffHubServic
 // (fetched separately via getMyPendingSteps) instead of the legacy status-based flow below —
 // exclude them from the old pending-requests list so the old Approve/Reject buttons (which write
 // directly to LeaveRequest.status) can't bypass the new per-step chain.
-const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'];
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE', 'WORK_AUTHORIZATION'];
 const STAGE_LABELS: Record<string, string> = {
     HEAD_ATTENDANCE: 'Head of Attendance & Payroll',
     DIRECT_SUPERVISOR: 'Direct Supervisor',
@@ -39,11 +39,13 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { SERVER_URL } from '../services/apiClient';
 import { useConfirm } from '../components/ConfirmDialog';
+import { usePrompt } from '../components/PromptDialog';
 
 const Approvals: React.FC = () => {
     const { currentUser } = useAuth();
     const { t } = useTranslation();
     const confirm = useConfirm();
+    const prompt = usePrompt();
     const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
     const [historyRequests, setHistoryRequests] = useState<LeaveRequest[]>([]);
     const [pendingSteps, setPendingSteps] = useState<LeaveApprovalStep[]>([]);
@@ -175,6 +177,25 @@ const Approvals: React.FC = () => {
         }
     };
 
+    // Download the official request form (.docx) for an approver to review / sign. The backend
+    // returns the right template per request type (Work Authorization, Permission, or Leave).
+    const downloadRequestForm = async (requestId: string, type?: string) => {
+        try {
+            const blob = await staffHubService.getLeaveForm(requestId);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const prefix = type === 'WORK_AUTHORIZATION'
+                ? 'Work_Authorization'
+                : (['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'].includes(type || '') ? 'Permission_Request' : 'Leave_Request');
+            a.download = `${prefix}_${requestId.slice(0, 8)}.docx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            toast.error(t('leave_form_failed', { defaultValue: 'Failed to generate the form.' }));
+        }
+    };
+
     const handleCreateAnnouncement = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -243,8 +264,8 @@ const Approvals: React.FC = () => {
                 {/* Tabs */}
                 <div className="flex gap-4 mt-8 pb-2 overflow-x-auto">
                     {[
-                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length + pendingSteps.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') },
-                        { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') },
+                        { id: 'requests', label: t('leave_requests'), icon: Calendar, count: pendingRequests.length + pendingSteps.length, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') || currentUser?.permissions?.includes('approve_gm') },
+                        { id: 'history', label: t('request_history'), icon: Archive, visible: currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('manage_leaves') || currentUser?.permissions?.includes('manager_approvals') || currentUser?.permissions?.includes('approve_attendance') || currentUser?.permissions?.includes('approve_gm') },
                         {
                             id: 'announcements',
                             label: t('broadcasting'), 
@@ -323,6 +344,15 @@ const Approvals: React.FC = () => {
                                         </div>
 
                                         <div className="flex flex-col gap-3 w-full md:w-auto">
+                                            {/* Download the form to review (and, for the GM, to sign
+                                                before uploading the signed copy). */}
+                                            <button
+                                                onClick={() => downloadRequestForm(step.leaveRequestId, req.type)}
+                                                className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5 hover:bg-indigo-100 transition-colors"
+                                            >
+                                                <Download className="w-4 h-4 shrink-0" />
+                                                {t('download_form', { defaultValue: 'Download Form' })}
+                                            </button>
                                             {step.stage === 'GENERAL_MANAGER' && (
                                                 <label className="flex items-center gap-2 text-xs font-bold text-[#e3c4a2] bg-[#300a15]/50 border border-[#e3c4a2]/25 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-[#300a15]/70 transition-colors">
                                                     <Paperclip className="w-4 h-4 shrink-0" />
@@ -346,9 +376,16 @@ const Approvals: React.FC = () => {
                                                     Approve
                                                 </button>
                                                 <button
-                                                    onClick={() => {
-                                                        const note = prompt(t('add_rejection_note'));
-                                                        handleStepDecision(step, 'REJECT', note || '');
+                                                    onClick={async () => {
+                                                        const note = await prompt({
+                                                            title: t('reject_request', { defaultValue: 'Reject Request' }),
+                                                            message: t('add_rejection_note'),
+                                                            placeholder: t('rejection_note_placeholder', { defaultValue: 'Reason for rejection (optional)' }),
+                                                            multiline: true,
+                                                            confirmText: t('reject', { defaultValue: 'Reject' }),
+                                                        });
+                                                        if (note === null) return; // cancelled — don't reject
+                                                        handleStepDecision(step, 'REJECT', note);
                                                     }}
                                                     className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
                                                 >
@@ -422,10 +459,17 @@ const Approvals: React.FC = () => {
                                          <Check className="w-5 h-5" />
                                          Approve
                                      </button>
-                                     <button 
-                                         onClick={() => {
-                                             const note = prompt(t('add_rejection_note'));
-                                             handleRequestAction(req.id, 'REJECT', note || '');
+                                     <button
+                                         onClick={async () => {
+                                             const note = await prompt({
+                                                 title: t('reject_request', { defaultValue: 'Reject Request' }),
+                                                 message: t('add_rejection_note'),
+                                                 placeholder: t('rejection_note_placeholder', { defaultValue: 'Reason for rejection (optional)' }),
+                                                 multiline: true,
+                                                 confirmText: t('reject', { defaultValue: 'Reject' }),
+                                             });
+                                             if (note === null) return; // cancelled — don't reject
+                                             handleRequestAction(req.id, 'REJECT', note);
                                          }}
                                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
                                      >

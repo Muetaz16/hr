@@ -52,6 +52,7 @@ export const PERMISSIONS: PermissionDef[] = [
     // Operations & Approvals
     { id: 'manage_leaves', group: 'Operations & Approvals', label: 'Approve Leaves' },
     { id: 'approve_attendance', group: 'Operations & Approvals', label: 'Head of Attendance Approval' },
+    { id: 'approve_gm', group: 'Operations & Approvals', label: 'Approve as General Manager' },
     { id: 'manage_announcements', group: 'Operations & Approvals', label: 'Post Announcements' },
     { id: 'manager_approvals', group: 'Operations & Approvals', label: 'Full Mgr Approvals' },
     // Evaluations

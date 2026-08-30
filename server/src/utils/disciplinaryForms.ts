@@ -116,27 +116,36 @@ export const generateInvestigationResultDocx = (data: InvestigationResultData): 
     return markOutcomeSelected(buffer, OUTCOME_LABELS[data.outcome]);
 };
 
-// The 4 violation-status options print a real checkbox square immediately below their label —
-// not a Word form field or a text glyph, but a small drawn vector shape (a grouped <w:drawing> of
-// custom-geometry shapes), one row below the option-label row, at the same column position (which
-// lands at flat cell index label+5 — verified directly against the template's actual row/cell
-// layout). Filling that shape in is impractical without a Word renderer to verify against. This
-// REPLACES the selected option's box cell outright (dropping the empty-square drawing there only)
-// with the Unicode "ballot box with X" glyph (☒) — a real box-with-a-mark-inside, not a bare
-// letter — while the other 3 options keep their own empty box drawing for contrast.
-const CHECK_MARK_RPR = `<w:rPr><w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:cs="Segoe UI Symbol"/><w:color w:val="000000"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>`;
+// The 4 violation-status options print a checkbox square immediately below their label — in the
+// raw template a small drawn vector shape (a grouped <w:drawing>), one row below the option-label
+// row, at the same column position (flat cell index label+5 — verified against the template layout).
+// We REPLACE all four box cells with uniform Unicode ballot-box text glyphs so they read as one
+// consistent, professional set (matching the Work Authorization form): the selected option gets a
+// ballot box WITH a check (☑), the other three an empty ballot box (☐) — instead of a lone
+// heavy "ballot box with X" (☒) sitting next to differently-drawn vector squares.
+const CHECK_MARK_RPR = `<w:rPr><w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:cs="Segoe UI Symbol"/><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>`;
+const ALL_OUTCOME_LABELS = ['Non Violation', 'Minor Violation', 'Serious Violation', 'Major Violation'];
 function markOutcomeSelected(buffer: Buffer, optionLabel: string): Buffer {
     return transformDocument(buffer, xml => {
         const cells = xml.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || [];
         const texts = cells.map(cellText);
-        const li = texts.findIndex(t => t === optionLabel);
-        const boxIndex = li + 5;
-        if (li < 0 || boxIndex >= cells.length) return xml;
-        // The box cell's original paragraph carries a left indent calibrated to center the tiny
-        // drawn square, not a text glyph — strip it so the glyph centers cleanly via jc alone.
-        const marked = setCell(cells[boxIndex], `<w:r>${CHECK_MARK_RPR}<w:t>☒</w:t></w:r>`).replace(/<w:ind\b[^/]*\/>/, '');
+        // Map each option's box cell (label + 5) to the glyph it should carry — checked box for the
+        // selected outcome, empty box for the rest — so all four render identically.
+        const boxGlyph: Record<number, string> = {};
+        for (const label of ALL_OUTCOME_LABELS) {
+            const li = texts.findIndex(t => t === label);
+            if (li < 0) continue;
+            const boxIndex = li + 5;
+            if (boxIndex >= cells.length) continue;
+            boxGlyph[boxIndex] = label === optionLabel ? '☑' : '☐';
+        }
+        if (Object.keys(boxGlyph).length === 0) return xml;
         let idx = -1;
-        return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => { idx++; return idx === boxIndex ? marked : cell; });
+        return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => {
+            idx++;
+            const glyph = boxGlyph[idx];
+            return glyph ? setCell(cell, `<w:r>${CHECK_MARK_RPR}<w:t>${glyph}</w:t></w:r>`) : cell;
+        });
     });
 }
 

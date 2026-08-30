@@ -5,10 +5,11 @@ import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
 import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
-import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut } from '../utils/attendanceApiProxy';
+import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
+import { generateWorkAuthorizationDocx, type WorkAuthApprover, type WorkOrderType } from '../utils/workAuthorizationForm';
 
 import { prisma } from '../lib/prisma';
 
@@ -21,6 +22,14 @@ const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
 // (Direct Supervisor -> Head of Department -> Head of Attendance & Payroll) and, on final
 // approval, pushed to BioTime as an excused late / excused early-out.
 const PERMISSION_TYPES = ['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'];
+
+// Work Authorization (out-work) — routed through the SAME short 3-stage chain as the attendance
+// permissions above (Direct Supervisor -> Head of Department -> Head of Attendance & Payroll), but
+// on final approval it's written to BioTime's `outworks` table (not as an excused late/early-out).
+const OUTWORK_TYPES = ['WORK_AUTHORIZATION'];
+
+// Every type that runs on the short 3-stage permission chain (permissions + work authorization).
+const SHORT_CHAIN_TYPES = [...PERMISSION_TYPES, ...OUTWORK_TYPES];
 
 // Inclusive day count — same formula already used below in updateRequestStatus's balance
 // increment, kept identical so submission-time validation and approval-time accounting agree.
@@ -43,6 +52,28 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
     LATE_COMING: 'Late Coming',
     EARLY_LEAVING: 'Early Leaving',
     HOURS_LEAVE: 'Hours Leave',
+    WORK_AUTHORIZATION: 'Work Authorization',
+};
+
+// Human-readable label for each Work-Order category (used to compose the out-work reason).
+const WORK_ORDER_LABEL: Record<string, string> = {
+    CHANGE_OF_SCHEDULE: 'Change of Schedule',
+    SITE_MISSION: 'Site Mission',
+    OFFICIAL_BUSINESS: 'Official Business (Travel)',
+    NIGHT_SHIFT: 'Night Shift',
+    OTHERS: 'Others',
+    OUT_OF_OFFICE: 'Out of Office',
+};
+
+// Builds the human-readable reason stored in BioTime's `outworks` table for a Work Authorization:
+// "<Work-Order type> @ <Place> — <purpose>", dropping whichever parts are missing.
+const composeOutWorkReason = (workOrderType?: string | null, placeOfAssignment?: string | null, reason?: string | null): string => {
+    const parts: string[] = [];
+    const woLabel = workOrderType ? (WORK_ORDER_LABEL[workOrderType] || workOrderType) : '';
+    if (woLabel) parts.push(placeOfAssignment ? `${woLabel} @ ${placeOfAssignment}` : woLabel);
+    else if (placeOfAssignment) parts.push(placeOfAssignment);
+    if (reason) parts.push(reason);
+    return parts.join(' — ');
 };
 const leaveTypeLabel = (type: string) => LEAVE_TYPE_LABEL[type] || String(type).replace(/_/g, ' ');
 
@@ -128,7 +159,7 @@ export const getReplacementCandidatesForEmployee = async (req: Request, res: Res
 
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
-        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId } = req.body;
+        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId, workOrderType, placeOfAssignment } = req.body;
         const file = (req as any).file;
 
         // Emergency leave requires a supporting document
@@ -265,10 +296,14 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return res.json(request);
         }
 
-        // Attendance-permission types — the short 3-stage chain (Direct Supervisor -> Head of
-        // Department -> Head of Attendance & Payroll), matching the Early Departure Request Form.
-        if (PERMISSION_TYPES.includes(type)) {
-            const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee);
+        // Short 3-stage chain (Direct Supervisor -> Head of Department -> Head of Attendance &
+        // Payroll) — attendance permissions (Early Departure Request Form) and Work Authorization
+        // (out-work). Work Authorization additionally carries the work-order type + place, and on
+        // final approval is written to BioTime's `outworks` table (see decideApprovalStep).
+        if (SHORT_CHAIN_TYPES.includes(type)) {
+            // Work Authorization (out-work) ends with the General Manager's signed authentication;
+            // the other permission types stop at Head of Attendance.
+            const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee, { includeGeneralManager: OUTWORK_TYPES.includes(type) });
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
             }
@@ -283,6 +318,8 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         startDate: new Date(startDate),
                         endDate: endDate ? new Date(endDate) : null,
                         startTime, endTime, reason, attachmentUrl, attachmentName,
+                        workOrderType: OUTWORK_TYPES.includes(type) ? (workOrderType || null) : null,
+                        placeOfAssignment: OUTWORK_TYPES.includes(type) ? (placeOfAssignment || null) : null,
                         status: 'PENDING',
                     },
                 });
@@ -481,6 +518,17 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                 await tx.leaveRequest.update({ where: { id: requestId }, data: finalDoc });
             }
 
+            // The General Manager stage is satisfied by ANY ONE eligible approver (the GM, an
+            // `approve_gm` holder, or a SUPER_ADMIN stepping in). Once one of them signs, skip the
+            // other still-pending GM steps so a single signature completes the stage — no double
+            // sign-off. (Other stages keep their all-must-sign semantics.)
+            if (step.stage === 'GENERAL_MANAGER') {
+                await tx.leaveApprovalStep.updateMany({
+                    where: { leaveRequestId: requestId, stage: 'GENERAL_MANAGER', status: 'PENDING', id: { not: stepId } },
+                    data: { status: 'SKIPPED' },
+                });
+            }
+
             // Read the remaining-pending count from inside this same transaction — not a
             // pre-transaction snapshot — so two rows in the same stage approved near-simultaneously
             // can't both think they're "the last one" and double-fire completion.
@@ -523,6 +571,16 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                     ? await createBioTimeExcusedLate(params)
                     : await createBioTimeExcusedEarlyOut(params);
                 if (!result.success) console.warn('[BioTime] Excused write-back failed (non-fatal):', result.message);
+            } else if (OUTWORK_TYPES.includes(lrq.type)) {
+                // Work Authorization — register an out-work (out-of-office / field-work) period so
+                // those days report as Out-Work rather than absence. Lands in BioTime's `outworks`.
+                const result = await createBioTimeOutWork({
+                    empCode,
+                    startDate: lrq.startDate,
+                    endDate: lrq.endDate ?? lrq.startDate,
+                    reason: composeOutWorkReason(lrq.workOrderType, lrq.placeOfAssignment, lrq.reason),
+                });
+                if (!result.success) console.warn('[BioTime] Out-work write-back failed (non-fatal):', result.message);
             } else {
                 const leaveTypeId = LEAVE_TYPE_ID_MAP[lrq.type];
                 if (leaveTypeId) {
@@ -807,7 +865,7 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         const request = await prisma.leaveRequest.findUnique({
             where: { id },
             include: {
-                employee: { include: { department: true, division: true, jobDescription: { select: { title: true } } } },
+                employee: { include: { department: true, division: true, jobDescription: { select: { title: true, workLocations: true } } } },
                 user: { select: { signature: true } },
                 replacementUser: { select: { fullName: true, signature: true } },
                 approvalSteps: {
@@ -822,6 +880,46 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
 
         const emp = request.employee;
         const fmt = (d?: Date | string | null) => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+        // Work Authorization uses the "Work Authorization Form" (نموذج التكليف). It runs on the same
+        // short 3-stage chain as permissions, so only the Head of Department and Head of Attendance
+        // & Payroll rows are filled; Head of Division / Head of HR / General Manager stay blank.
+        if (OUTWORK_TYPES.includes(request.type)) {
+            const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const toWa = (step: (typeof request.approvalSteps)[number] | undefined): WorkAuthApprover | null =>
+                step ? { signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+            // Head of Department row: the department-head step, falling back to the direct supervisor.
+            const deptStep = stepBy('DEPT_HEAD') || stepBy('DIRECT_SUPERVISOR');
+            // GM stage may have several eligible steps (GM / approve_gm / SUPER_ADMIN) with all but
+            // the signer skipped — show whichever one actually approved, else the first.
+            const gmStep = request.approvalSteps.find(s => s.stage === 'GENERAL_MANAGER' && s.status === 'APPROVED')
+                || stepBy('GENERAL_MANAGER');
+            const buf = generateWorkAuthorizationDocx({
+                date: fmt(request.createdAt),
+                employeeId: emp.staffId || '',
+                employeeName: emp.fullName || '',
+                positionTitle: (emp as any).jobDescription?.title || emp.position || '',
+                division: emp.division?.name || '',
+                department: emp.department?.name || '',
+                // Work location is the employee's Job Description work location (Office / Site), not a
+                // per-request choice — an employee whose JD is Site-based shows "Out of Office".
+                jdWorkLocations: ((emp as any).jobDescription?.workLocations as string[]) || [],
+                workOrderType: (request.workOrderType as WorkOrderType) || null,
+                purpose: request.reason || '',
+                placeOfAssignment: request.placeOfAssignment || '',
+                dateFrom: fmt(request.startDate),
+                dateTo: fmt(request.endDate || request.startDate),
+                scheduleFrom: request.startTime || '',
+                scheduleTo: request.endTime || '',
+                headOfDepartment: toWa(deptStep),
+                headOfAttendance: toWa(stepBy('HEAD_ATTENDANCE')),
+                generalManager: toWa(gmStep),
+            });
+            const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="Work_Authorization_${safeName}.docx"`);
+            return res.send(buf);
+        }
 
         // Attendance permissions (Late Coming / Early Leaving / Few Hours) use the separate
         // "Late Arrival - Early Departure Request Form" with the short 3-stage chain.

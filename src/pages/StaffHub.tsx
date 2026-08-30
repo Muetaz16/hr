@@ -67,7 +67,9 @@ const StaffHub: React.FC = () => {
         endDate: '',
         startTime: '',
         endTime: '',
-        reason: ''
+        reason: '',
+        workOrderType: 'SITE_MISSION',
+        placeOfAssignment: ''
     });
     const [requestFile, setRequestFile] = useState<File | null>(null);
 
@@ -78,7 +80,9 @@ const StaffHub: React.FC = () => {
             endDate: '',
             startTime: '',
             endTime: '',
-            reason: ''
+            reason: '',
+            workOrderType: 'SITE_MISSION',
+            placeOfAssignment: ''
         });
         setRequestFile(null);
         setReplacementUserId('');
@@ -129,6 +133,18 @@ const StaffHub: React.FC = () => {
             return;
         }
 
+        // Work Authorization covers a date range (out-work), so both dates and a place are required.
+        if (newRequest.type === 'WORK_AUTHORIZATION') {
+            if (!newRequest.endDate) {
+                toast.error(t('err_work_auth_end_date', { defaultValue: 'Please set the "To" date the authorization covers.' }));
+                return;
+            }
+            if (!newRequest.placeOfAssignment.trim()) {
+                toast.error(t('err_work_auth_place', { defaultValue: 'Please enter the place of assignment.' }));
+                return;
+            }
+        }
+
         // Replacement is optional: a chosen colleague must accept (and sign); "N/A" (empty) means no
         // replacement and no replacement approval.
         const hasReplacement = CHAIN_TYPES.includes(newRequest.type) && !!replacementUserId;
@@ -143,6 +159,10 @@ const StaffHub: React.FC = () => {
             if (newRequest.startTime) formData.append('startTime', newRequest.startTime);
             if (newRequest.endTime) formData.append('endTime', newRequest.endTime);
             if (newRequest.reason) formData.append('reason', newRequest.reason);
+            if (newRequest.type === 'WORK_AUTHORIZATION') {
+                formData.append('workOrderType', newRequest.workOrderType);
+                formData.append('placeOfAssignment', newRequest.placeOfAssignment);
+            }
             if (hasReplacement) formData.append('replacementUserId', replacementUserId);
             if (requestFile) formData.append('attachment', requestFile);
 
@@ -297,20 +317,41 @@ const StaffHub: React.FC = () => {
                             {/* Approval trail — shows exactly where the request sits in the chain. The
                                 first still-pending step is the desk it's on right now. */}
                             {req.approvalSteps && req.approvalSteps.length > 0 && (() => {
-                                const steps = req.approvalSteps.filter(s => s.status !== 'SKIPPED');
-                                const currentId = steps.find(s => s.status === 'PENDING')?.id;
+                                const visible = req.approvalSteps.filter(s => s.status !== 'SKIPPED');
+                                // Collapse steps that share a stage (e.g. several eligible General Managers)
+                                // into ONE row — any one of them approving satisfies the stage, so there's
+                                // no need to list them all. A specific name shows only when the stage has a
+                                // single approver, or once someone has actually approved (then we name who).
+                                type StageGroup = { stage: string; status: string; approverName: string | null; sequence: number; count: number };
+                                const byStage = new Map<string, StageGroup>();
+                                for (const s of visible) {
+                                    const g = byStage.get(s.stage);
+                                    if (!g) {
+                                        byStage.set(s.stage, { stage: s.stage, status: s.status, approverName: s.approver?.fullName || null, sequence: s.sequence, count: 1 });
+                                    } else {
+                                        g.count++;
+                                        g.sequence = Math.min(g.sequence, s.sequence);
+                                        if (s.status === 'APPROVED' || s.status === 'REJECTED') { g.status = s.status; g.approverName = s.approver?.fullName || null; }
+                                    }
+                                }
+                                const groups = Array.from(byStage.values()).sort((a, b) => a.sequence - b.sequence);
+                                const currentStage = groups.find(g => g.status === 'PENDING')?.stage;
                                 return (
                                     <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1.5">
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('approval_progress', { defaultValue: 'Approval Progress' })}</p>
-                                        {steps.map(s => {
-                                            const isCurrent = s.id === currentId;
-                                            const Icon = s.status === 'APPROVED' ? CheckCircle2 : s.status === 'REJECTED' ? XCircle : isCurrent ? Clock : MinusCircle;
-                                            const color = s.status === 'APPROVED' ? 'text-emerald-500' : s.status === 'REJECTED' ? 'text-red-500' : isCurrent ? 'text-orange-500' : 'text-slate-300';
+                                        {groups.map(g => {
+                                            const isCurrent = g.stage === currentStage;
+                                            const Icon = g.status === 'APPROVED' ? CheckCircle2 : g.status === 'REJECTED' ? XCircle : isCurrent ? Clock : MinusCircle;
+                                            const color = g.status === 'APPROVED' ? 'text-emerald-500' : g.status === 'REJECTED' ? 'text-red-500' : isCurrent ? 'text-orange-500' : 'text-slate-300';
+                                            // Name the actor only when it's unambiguous: a single-approver
+                                            // stage, or whoever actually approved/rejected. Multiple pending
+                                            // approvers (e.g. several GMs) stay as just the stage name.
+                                            const showName = !!g.approverName && (g.status === 'APPROVED' || g.status === 'REJECTED' || g.count === 1);
                                             return (
-                                                <div key={s.id} className={`flex items-center gap-2 text-xs ${isCurrent ? 'font-bold text-slate-700' : 'font-semibold text-slate-500'}`}>
+                                                <div key={g.stage} className={`flex items-center gap-2 text-xs ${isCurrent ? 'font-bold text-slate-700' : 'font-semibold text-slate-500'}`}>
                                                     <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-                                                    <span className="shrink-0">{STAGE_LABELS[s.stage] || s.stage}</span>
-                                                    {s.approver?.fullName && <span className="text-slate-400 truncate">· {s.approver.fullName}</span>}
+                                                    <span className="shrink-0">{STAGE_LABELS[g.stage] || g.stage}</span>
+                                                    {showName && <span className="text-slate-400 truncate">· {g.approverName}</span>}
                                                     {isCurrent && <span className="ml-auto shrink-0 text-[9px] font-black text-orange-500 uppercase tracking-wider">{t('current', { defaultValue: 'Now' })}</span>}
                                                 </div>
                                             );
@@ -331,7 +372,10 @@ const StaffHub: React.FC = () => {
                                             const url = window.URL.createObjectURL(blob);
                                             const a = document.createElement('a');
                                             a.href = url;
-                                            a.download = `Leave_Request_${req.id.slice(0, 8)}.docx`;
+                                            const formPrefix = req.type === 'WORK_AUTHORIZATION'
+                                                ? 'Work_Authorization'
+                                                : (['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'].includes(req.type) ? 'Permission_Request' : 'Leave_Request');
+                                            a.download = `${formPrefix}_${req.id.slice(0, 8)}.docx`;
                                             a.click();
                                             window.URL.revokeObjectURL(url);
                                         } catch {
@@ -386,6 +430,7 @@ const StaffHub: React.FC = () => {
                                         <option value="EMERGENCY_LEAVE">{t("emergency_leave")}</option>
                                         <option value="LATE_COMING">{t("late_coming")}</option>
                                         <option value="EARLY_LEAVING">{t("early_leaving")}</option>
+                                        <option value="WORK_AUTHORIZATION">{t("work_authorization", { defaultValue: 'Work Authorization' })}</option>
                                     </select>
                                 </div>
 
@@ -447,6 +492,61 @@ const StaffHub: React.FC = () => {
                                         />
                                     </div>
                                 ) : null}
+
+                                {/* Work Authorization (out-work) — work-order category, place of
+                                    assignment, and (for a schedule change) the time window. The
+                                    Start/End dates above act as the "Date Covered" range. */}
+                                {newRequest.type === 'WORK_AUTHORIZATION' && (
+                                    <>
+                                        <div className="col-span-2 space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("work_order_type", { defaultValue: 'Type of Work Order' })}</label>
+                                            <select
+                                                className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                value={newRequest.workOrderType}
+                                                onChange={e => setNewRequest({ ...newRequest, workOrderType: e.target.value })}
+                                            >
+                                                <option value="SITE_MISSION">{t("wo_site_mission", { defaultValue: 'Site Mission' })}</option>
+                                                <option value="OFFICIAL_BUSINESS">{t("wo_official_business", { defaultValue: 'Official Business (Travel)' })}</option>
+                                                <option value="OUT_OF_OFFICE">{t("wo_out_of_office", { defaultValue: 'Out of Office' })}</option>
+                                                <option value="CHANGE_OF_SCHEDULE">{t("wo_change_of_schedule", { defaultValue: 'Change of Schedule' })}</option>
+                                                <option value="NIGHT_SHIFT">{t("wo_night_shift", { defaultValue: 'Night Shift' })}</option>
+                                                <option value="OTHERS">{t("wo_others", { defaultValue: 'Others' })}</option>
+                                            </select>
+                                        </div>
+                                        <div className="col-span-2 space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("place_of_assignment", { defaultValue: 'Place of Assignment' })}</label>
+                                            <input
+                                                type="text"
+                                                placeholder={t("place_of_assignment_ph", { defaultValue: 'e.g. Client site, branch office, travel destination' })}
+                                                className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                value={newRequest.placeOfAssignment}
+                                                onChange={e => setNewRequest({ ...newRequest, placeOfAssignment: e.target.value })}
+                                            />
+                                        </div>
+                                        {newRequest.workOrderType === 'CHANGE_OF_SCHEDULE' && (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("from_time", { defaultValue: 'From (Time)' })}</label>
+                                                    <input
+                                                        type="time"
+                                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                        value={newRequest.startTime}
+                                                        onChange={e => setNewRequest({ ...newRequest, startTime: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("to_time", { defaultValue: 'To (Time)' })}</label>
+                                                    <input
+                                                        type="time"
+                                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                        value={newRequest.endTime}
+                                                        onChange={e => setNewRequest({ ...newRequest, endTime: e.target.value })}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                    </>
+                                )}
 
                                 {/* Replacement (cover) employee — required for chain leave types when
                                     the requester has a colleague; skipped when they're the only one. */}

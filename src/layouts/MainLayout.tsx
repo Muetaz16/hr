@@ -244,7 +244,7 @@ const MainLayout: React.FC = () => {
         {
             title: t('nav_group_ops', { defaultValue: 'Operations' }),
             items: [
-                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance'] },
+                { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm'] },
             ]
         },
         {
