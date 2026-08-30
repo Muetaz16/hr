@@ -7,6 +7,7 @@ import { createBioTimeEmployeeRecord, findBioTimeEmpIdByCode, ATTENDANCE_API_BAS
 import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
 import { generateEmployeeSummaryDocx, type SummaryItem } from '../utils/employeeSummaryForm';
 import { purgeUserAndRelations } from './userController';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 import { prisma } from '../lib/prisma';
 
@@ -128,14 +129,15 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
         const { id: userId } = req.user!;
         // Everyone still receives the full roster at DIRECTORY level (needed for the org chart and
         // people pickers); FULL data is pruned per-record below based on the caller's scope.
-        // Separated employees are excluded by default — payroll runs, evaluation lists, org
-        // headcount, and every people-picker across the app source from this same endpoint, and
-        // none of them should include someone no longer employed. Pass ?includeSeparated=true for
-        // the handful of full-record management pages (Employee Directory, Lifecycle Control) that
-        // still need to browse/search separated employees' historical records.
+        // Inactive employees (separated OR inter-company transferred) are excluded by default —
+        // payroll runs, evaluation lists, org headcount, and every people-picker across the app
+        // source from this same endpoint, and none of them should include someone no longer
+        // employed. Pass ?includeSeparated=true for the handful of full-record management pages
+        // (Employee Directory, Lifecycle Control, Personnel Relations) that still need to
+        // browse/search these historical records.
         const includeSeparated = req.query.includeSeparated === 'true';
         const employees = await prisma.employee.findMany({
-            where: includeSeparated ? {} : { enrollmentStatus: { not: 'SEPARATED' } },
+            where: includeSeparated ? {} : { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER },
             include: { user: { select: { permissions: true } }, jobDescription: true }
         });
 
@@ -612,7 +614,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             if (cleanUnitId) {
                 const unit = await tx.unit.findUnique({
                     where: { id: cleanUnitId },
-                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } }
                 });
 
                 if (unit && unit.headcount > 0) {
@@ -627,7 +629,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             if (cleanJobDescriptionId) {
                 const jobDescription = await tx.jobDescription.findUnique({
                     where: { id: cleanJobDescriptionId },
-                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } }
                 });
 
                 if (!jobDescription) {
@@ -653,7 +655,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 const dir = await tx.directorate.findUnique({ where: { id: cleanDirectorateId } });
                 if (dir && dir.positionFactor) dynamicPositionFactor = dir.positionFactor;
             } else if (role === 'HEAD_UNIT' && cleanUnitId) {
-                const unit = await tx.unit.findUnique({ where: { id: cleanUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } });
+                const unit = await tx.unit.findUnique({ where: { id: cleanUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } } });
                 if (unit) {
                     dynamicPositionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
                 }
@@ -889,7 +891,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             if (cleanUnitId && cleanUnitId !== currentEmp?.unitId) {
                 const unit = await prisma.unit.findUnique({
                     where: { id: cleanUnitId },
-                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } }
                 });
 
                 if (unit && unit.headcount > 0) {
@@ -911,7 +913,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             if (cleanJobDescriptionId && cleanJobDescriptionId !== currentEmpJD?.jobDescriptionId) {
                 const jobDescription = await prisma.jobDescription.findUnique({
                     where: { id: cleanJobDescriptionId },
-                    include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } }
+                    include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } }
                 });
 
                 if (!jobDescription) {
@@ -1033,7 +1035,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
             const dir = await prisma.directorate.findUnique({ where: { id: targetDirId } });
             if (dir && dir.positionFactor) data.positionFactor = dir.positionFactor;
         } else if (targetRole === 'HEAD_UNIT' && targetUnitId) {
-            const unit = await prisma.unit.findUnique({ where: { id: targetUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } });
+            const unit = await prisma.unit.findUnique({ where: { id: targetUnitId }, include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } } });
             if (unit) {
                 data.positionFactor = unit._count.employees < 5 ? 1.15 : 1.20;
             }

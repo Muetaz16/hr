@@ -51,6 +51,13 @@ export const personnelActionService = {
         return response.data;
     },
 
+    // A single personnel action for the full-page transfer detail view. For internal moves the
+    // backend resolves the target org ids into the *Name fields so the page renders uniformly.
+    async getById(id: string): Promise<PersonnelActionForm> {
+        const response = await api.get(`/personnel-actions/${id}`);
+        return response.data;
+    },
+
     async create(data: any): Promise<PersonnelActionForm> {
         const response = await api.post('/personnel-actions', data);
         return response.data;

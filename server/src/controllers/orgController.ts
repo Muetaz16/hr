@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 // --- Departments ---
 
@@ -10,7 +11,7 @@ export const getDepartments = async (req: Request, res: Response) => {
         const departments = await prisma.department.findMany({
             include: {
                 _count: {
-                    select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } }
+                    select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } }
                 },
                 division: true
             }
@@ -120,7 +121,7 @@ export const getDivisions = async (req: Request, res: Response) => {
         const divisions = await prisma.division.findMany({
             include: {
                 _count: {
-                    select: { departments: true, employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } }
+                    select: { departments: true, employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } }
                 }
             }
         });

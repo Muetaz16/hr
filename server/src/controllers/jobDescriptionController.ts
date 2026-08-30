@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { generateJobDescriptionDocx, JobDescriptionVariant } from '../utils/jobDescriptionDoc';
 
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 const cleanId = (val: any): string | null => (val === '' || val === 'null' || val === 'undefined' || !val) ? null : val;
 
@@ -17,7 +18,7 @@ export const getAllJobDescriptions = async (req: Request, res: Response) => {
                 division: { select: { id: true, name: true } },
                 department: { select: { id: true, name: true } },
                 unit: { select: { id: true, name: true } },
-                _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } }
+                _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } }
             },
             orderBy: { title: 'asc' }
         });

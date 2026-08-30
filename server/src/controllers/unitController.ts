@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 export const getUnits = async (req: express.Request, res: express.Response) => {
     //
@@ -9,7 +10,7 @@ export const getUnits = async (req: express.Request, res: express.Response) => {
         const units = await prisma.unit.findMany({
             include: {
                 department: true,
-                _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } }
+                _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } }
             }
         });
         res.json(units);

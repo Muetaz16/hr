@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPersonnelAction, createInterCompanyTransfer, listPersonnelActions, generatePersonnelActionFormDoc, decidePersonnelAction, getPersonnelActionsByEmployee } from '../controllers/personnelActionController';
+import { createPersonnelAction, createInterCompanyTransfer, listPersonnelActions, generatePersonnelActionFormDoc, decidePersonnelAction, getPersonnelActionsByEmployee, getPersonnelActionById } from '../controllers/personnelActionController';
 import { authenticateToken, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
@@ -8,6 +8,7 @@ router.use(authenticateToken);
 
 router.get('/', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), listPersonnelActions);
 router.get('/employee/:employeeId', getPersonnelActionsByEmployee);
+router.get('/:id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), getPersonnelActionById);
 router.post('/', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions']), createPersonnelAction);
 router.post('/inter-company', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions']), createInterCompanyTransfer);
 router.get('/:id/form', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), generatePersonnelActionFormDoc);

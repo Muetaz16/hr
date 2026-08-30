@@ -2752,11 +2752,16 @@ const PersonnelRelations: React.FC = () => {
                                                                     {t.effectiveDate ? `Effective ${fmt(t.effectiveDate)}` : ''}{t.createdByName ? ` · Requested by ${t.createdByName}` : ''}
                                                                     {t.decidedByName ? ` · Decided by ${t.decidedByName}${t.decidedAt ? ' on ' + fmt(t.decidedAt) : ''}` : ''}
                                                                 </p>
-                                                                {t.documentUrl && (
-                                                                    <a href={docHref} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
-                                                                        View signed form <ExternalLink className="w-3 h-3" />
-                                                                    </a>
-                                                                )}
+                                                                <div className="flex items-center gap-4 pt-0.5">
+                                                                    <button type="button" onClick={() => navigate(`/personnel-relations/transfer/${t.id}`)} className="text-[#aa7a51] hover:text-[#8f6544] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                                        View detail <Eye className="w-3 h-3" />
+                                                                    </button>
+                                                                    {t.documentUrl && (
+                                                                        <a href={docHref} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
+                                                                            View signed form <ExternalLink className="w-3 h-3" />
+                                                                        </a>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         );
                                                     })}

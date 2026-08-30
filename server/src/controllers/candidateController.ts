@@ -6,6 +6,7 @@ import { generateEvaluationDocx } from '../utils/jobEvaluation';
 import { generateHiringLetterDocx } from '../utils/hiringLetter';
 
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 const cleanStr = (v: any): string | null => (v === '' || v === 'null' || v === 'undefined' || v == null) ? null : String(v);
 
@@ -13,7 +14,7 @@ const cleanStr = (v: any): string | null => (v === '' || v === 'null' || v === '
 const candidateInclude = {
     requisition: {
         include: {
-            jobDescription: { select: { id: true, title: true, plannedCount: true, isHead: true, jobCategories: true, workLocations: true, _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } },
+            jobDescription: { select: { id: true, title: true, plannedCount: true, isHead: true, jobCategories: true, workLocations: true, _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } } },
             department: { select: { id: true, name: true } },
             division: { select: { id: true, name: true } },
             unit: { select: { id: true, name: true } },

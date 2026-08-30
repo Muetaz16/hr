@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 // GET /api/dashboard/analytics
 // A single, server-side aggregated payload powering the executive/HR analytics section on the
@@ -13,9 +14,10 @@ export const getDashboardAnalytics = async (_req: AuthRequest, res: Response) =>
         now.setHours(0, 0, 0, 0);
         const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-        // "Active" mirrors the Dashboard's Active Employees card: everyone except inter-company
-        // transfers. PENDING_ENROLLMENT stubs are tracked separately below.
-        const ACTIVE_WHERE = { enrollmentStatus: { not: 'TRANSFERRED' } } as const;
+        // "Active" mirrors the Dashboard's Active Employees card: everyone still employed —
+        // excludes both offboarded (SEPARATED) and inter-company transfers (TRANSFERRED).
+        // PENDING_ENROLLMENT stubs are tracked separately below.
+        const ACTIVE_WHERE = { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } as const;
 
         const [
             activeCount,

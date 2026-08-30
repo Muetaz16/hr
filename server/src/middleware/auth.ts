@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { resolveEffectivePermissions } from '../utils/effectivePermissions';
+import { isInactiveEnrollmentStatus } from '../utils/employeeStatus';
 
 export interface AuthRequest extends Request {
     user?: any;
@@ -43,10 +44,11 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
             return res.status(401).json({ error: 'User no longer exists' });
         }
 
-        // Re-checked on every request (not just at login) so separation takes effect immediately
-        // even for a token issued before it happened, instead of waiting out the 24h expiry.
-        if (user.employee?.enrollmentStatus === 'SEPARATED') {
-            return res.status(403).json({ error: 'This account has been deactivated following separation from the company.' });
+        // Re-checked on every request (not just at login) so leaving the company (separation OR
+        // inter-company transfer) takes effect immediately even for a token issued before it
+        // happened, instead of waiting out the 24h expiry.
+        if (isInactiveEnrollmentStatus(user.employee?.enrollmentStatus)) {
+            return res.status(403).json({ error: 'This account has been deactivated because the employee is no longer active.' });
         }
 
         // Authorization runs on the merged EFFECTIVE set (position + hats + grants)

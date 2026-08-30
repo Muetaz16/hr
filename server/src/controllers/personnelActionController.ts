@@ -4,6 +4,7 @@ import type { AuthRequest } from '../middleware/auth';
 import { generatePersonnelActionDocx, INTER_COMPANY_TEMPLATE_NAME } from '../utils/personnelActionForm';
 
 import { prisma } from '../lib/prisma';
+import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 const formatFormDate = (value: Date | string | null | undefined): string => {
     if (!value) return '';
@@ -214,6 +215,34 @@ export const getPersonnelActionsByEmployee = async (req: Request, res: Response)
     }
 };
 
+// GET /api/personnel-actions/:id — a single personnel action for the transfer detail page. For
+// internal moves the target org is stored as ids, so we resolve them to names here (populating the
+// same *Name fields the inter-company path already stores) — the detail page then renders one
+// uniform placement string without loading the whole org tree.
+export const getPersonnelActionById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const form = await prisma.personnelActionForm.findUnique({
+            where: { id },
+            include: { employee: { select: { id: true, fullName: true, staffId: true } } },
+        });
+        if (!form) return res.status(404).json({ error: 'Personnel action not found.' });
+        const isIc = form.actionType === 'INTER_COMPANY_TRANSFER';
+        const resolved = isIc
+            ? { division: form.newDivisionName || '', department: form.newDepartmentName || '', unit: form.newUnitName || '' }
+            : await orgNames({ divisionId: form.newDivisionId, departmentId: form.newDepartmentId, unitId: form.newUnitId });
+        res.json({
+            ...form,
+            newDivisionName: resolved.division || null,
+            newDepartmentName: resolved.department || null,
+            newUnitName: resolved.unit || null,
+        });
+    } catch (error: any) {
+        console.error('Error fetching personnel action form:', error);
+        res.status(500).json({ error: 'Failed to fetch personnel action form' });
+    }
+};
+
 // GET /api/personnel-actions/:id/form  — generate the filled DOCX
 export const generatePersonnelActionFormDoc = async (req: Request, res: Response) => {
     try {
@@ -298,8 +327,11 @@ export const decidePersonnelAction = async (req: Request, res: Response) => {
         if (!documentUrl) return res.status(400).json({ error: 'Attach the signed form before accepting.' });
 
         // --- Inter-company transfer: the employee leaves for another company. We DON'T re-org them
-        // (their placement stays as historical data); we mark them TRANSFERRED so they're retained &
-        // visible but excluded from evaluation / payroll / attendance / active counts.
+        // (their placement stays as historical data); we mark them TRANSFERRED so — exactly like an
+        // offboarded (SEPARATED) employee — the record is retained but excluded from the active
+        // roster, headcount, evaluation, payroll, attendance and login. They remain visible only on
+        // the management pages that pass ?includeSeparated=true (Directory, Lifecycle Control,
+        // Personnel Relations), where Lifecycle Control shows them as Inactive.
         if (paf.actionType === 'INTER_COMPANY_TRANSFER') {
             const destinationCompany = (newCompany && String(newCompany).trim()) || paf.newCompany || null;
             const result = await prisma.$transaction(async (tx) => {
@@ -337,7 +369,7 @@ export const decidePersonnelAction = async (req: Request, res: Response) => {
         // assigning a JD. Skip the check if the employee is already on this JD.
         if (paf.newJobDescriptionId) {
             const [jd, employee] = await Promise.all([
-                prisma.jobDescription.findUnique({ where: { id: paf.newJobDescriptionId }, include: { _count: { select: { employees: { where: { enrollmentStatus: { not: 'SEPARATED' } } } } } } }),
+                prisma.jobDescription.findUnique({ where: { id: paf.newJobDescriptionId }, include: { _count: { select: { employees: { where: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } } } } } }),
                 prisma.employee.findUnique({ where: { id: paf.employeeId }, select: { jobDescriptionId: true } }),
             ]);
             if (!jd) return res.status(404).json({ error: 'Target Job Description no longer exists.' });

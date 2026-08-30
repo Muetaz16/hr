@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { resolveEffectivePermissions } from '../utils/effectivePermissions';
+import { isInactiveEnrollmentStatus } from '../utils/employeeStatus';
 
 import { prisma } from '../lib/prisma';
 
@@ -35,15 +36,16 @@ export const login = async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // A separated employee's account is locked out entirely, regardless of role/permissions —
-        // same lookup chain as resolveMyEmployee elsewhere (userId first, then email fallback).
+        // An inactive employee's account is locked out entirely, regardless of role/permissions —
+        // separation OR inter-company transfer. Same lookup chain as resolveMyEmployee elsewhere
+        // (userId first, then email fallback).
         const employee = await prisma.employee.findFirst({
             where: { OR: [{ userId: user.id }, { email: user.email }] },
             select: { enrollmentStatus: true },
         });
-        if (employee?.enrollmentStatus === 'SEPARATED') {
-            console.warn(`[AUTH] Login blocked for separated employee: ${email}`);
-            return res.status(403).json({ error: 'This account has been deactivated following separation from the company.' });
+        if (isInactiveEnrollmentStatus(employee?.enrollmentStatus)) {
+            console.warn(`[AUTH] Login blocked for inactive employee: ${email}`);
+            return res.status(403).json({ error: 'This account has been deactivated because the employee is no longer active.' });
         }
 
         console.log('[AUTH] Password valid, generating token...');
