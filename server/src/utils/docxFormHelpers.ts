@@ -40,16 +40,19 @@ export const textRuns = (value: string, sizeHalfPoints: number = 16): string => 
 
 // A long value in a narrow (or even fully-merged) cell can still wrap past 2 lines, blowing out
 // the row height. Rather than widen cells beyond their already-merged width, step the font size
-// down just enough to fit within 2 lines.
-export const fittingFontSize = (value: string, widthDxa: number): number => {
-    if (!widthDxa) return 16;
+// down just enough to fit within 2 lines. `baseSize` lets a caller match a specific template's own
+// label size (row heights default to OOXML's "atLeast" rule — a value rendered even slightly larger
+// than the label it sits next to grows every row it touches, and across a whole form that's enough
+// to push the document onto an extra page).
+export const fittingFontSize = (value: string, widthDxa: number, baseSize: number = 16): number => {
+    if (!widthDxa) return baseSize;
     const AVG_CHAR_WIDTH_DXA = 100; // empirical for Montserrat/Readex Pro Light at 8pt
     const charsPerLine = Math.max(10, Math.floor(widthDxa / AVG_CHAR_WIDTH_DXA));
-    const linesAt8pt = Math.ceil(value.length / charsPerLine);
-    if (linesAt8pt <= 2) return 16; // 8pt
-    if (linesAt8pt <= 3) return 14; // 7pt
-    if (linesAt8pt <= 4) return 12; // 6pt
-    return 10; // 5pt floor — stays legible rather than shrinking indefinitely
+    const linesAtBase = Math.ceil(value.length / charsPerLine);
+    if (linesAtBase <= 2) return baseSize;
+    if (linesAtBase <= 3) return baseSize - 2;
+    if (linesAtBase <= 4) return baseSize - 4;
+    return Math.max(10, baseSize - 6); // stays legible rather than shrinking indefinitely
 };
 
 // The templates' own static text (titles, column labels, the "Document Reference No" line above
@@ -225,7 +228,12 @@ export const setCell = (cell: string, runs: string, opts?: { width?: number; gri
 // border between them), so a real `w:gridSpan` merge is applied — the trailing cell(s) are removed
 // from the row entirely and their width folded into the value cell — otherwise the value only
 // centers within the first (narrower) sub-cell instead of the whole visual box.
-export type FieldFill = { label: string; value: string | undefined | null; offset?: number; mergeSpan?: number };
+// `occurrence` (default 1) picks which repeat of a label to target, for templates that print the
+// same label twice (e.g. "Employee Name:" in both an Employee Information section and a later
+// Acknowledgment/signature section) — 1-based, in document order.
+// `baseSizeHalfPoints` overrides fittingFontSize's default starting size (8pt) — set this to match
+// a specific template's own label size when its row heights leave little slack (see fittingFontSize).
+export type FieldFill = { label: string; value: string | undefined | null; offset?: number; mergeSpan?: number; occurrence?: number; baseSizeHalfPoints?: number };
 
 // Shared load step for every generator below: open the template, run every document-wide
 // normalization (fonts at the run/style/theme level, Arabic presentation-form glyphs, excessive
@@ -271,14 +279,18 @@ export const fillTemplate = (templateName: string, fields: FieldFill[]): Buffer 
     const texts = cells.map(cellText);
     const replacements: Record<number, string> = {};
 
-    const findLabel = (label: string): number => {
-        for (let i = 0; i < texts.length; i++) if (texts[i] === label) return i;
-        for (let i = 0; i < texts.length; i++) if (texts[i].includes(label)) return i;
+    const findLabel = (label: string, occurrence: number): number => {
+        const exact: number[] = [];
+        for (let i = 0; i < texts.length; i++) if (texts[i] === label) exact.push(i);
+        if (exact.length >= occurrence) return exact[occurrence - 1];
+        const partial: number[] = [];
+        for (let i = 0; i < texts.length; i++) if (texts[i].includes(label)) partial.push(i);
+        if (partial.length >= occurrence) return partial[occurrence - 1];
         return -1;
     };
 
-    for (const { label, value, offset = 1, mergeSpan = 0 } of fields) {
-        const li = findLabel(label);
+    for (const { label, value, offset = 1, mergeSpan = 0, occurrence = 1, baseSizeHalfPoints } of fields) {
+        const li = findLabel(label, occurrence);
         if (li < 0) continue;
         const index = li + offset;
         if (index < 0 || index >= cells.length) continue;
@@ -296,10 +308,10 @@ export const fillTemplate = (templateName: string, fields: FieldFill[]): Buffer 
                 rightBorder = getRightBorder(cells[index + k]) || rightBorder;
                 replacements[index + k] = ''; // remove the absorbed cell from the row entirely
             }
-            const runs = value ? textRuns(value, fittingFontSize(value, width)) : '';
+            const runs = value ? textRuns(value, fittingFontSize(value, width, baseSizeHalfPoints)) : '';
             replacements[index] = setCell(cells[index], runs, { width, gridSpan, rightBorder });
         } else if (value) {
-            replacements[index] = setCell(cells[index], textRuns(value, fittingFontSize(value, getTcW(cells[index]))));
+            replacements[index] = setCell(cells[index], textRuns(value, fittingFontSize(value, getTcW(cells[index]), baseSizeHalfPoints)));
         }
     }
 
@@ -364,6 +376,24 @@ export const appendToCellEnd = (xml: string, cellContains: string, value: string
     const updated = cell.replace(lastRun, lastRun + newRun);
     let i = -1;
     return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (c) => { i++; return i === idx ? updated : c; });
+};
+
+// Overwrites a label cell's own printed text (not the value beside it) — for templates that print a
+// specific static label baked in as literal text where the real value differs per case, e.g. the
+// Promotion Report's "Performance Evaluation Result Summary" table always prints the literal labels
+// "March"/"April"/"May" rather than true placeholders, even though the 3 rows are meant to show
+// whichever 3 months actually precede the report. Finds the FIRST cell whose text equals `oldLabel`
+// exactly and replaces it, preserving that cell's own width/gridSpan/border.
+export const relabelCell = (xml: string, oldLabel: string, newLabel: string, baseSizeHalfPoints?: number): string => {
+    const cells = xml.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || [];
+    const idx = cells.findIndex(c => cellText(c) === oldLabel);
+    if (idx < 0) return xml;
+    const width = getTcW(cells[idx]);
+    const gridSpan = getGridSpan(cells[idx]);
+    const rightBorder = getRightBorder(cells[idx]);
+    const replacement = setCell(cells[idx], textRuns(newLabel, fittingFontSize(newLabel, width, baseSizeHalfPoints)), { width, gridSpan, rightBorder });
+    let i = -1;
+    return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => { i++; return i === idx ? replacement : cell; });
 };
 
 // Vertically centers every cell's content (Word's Table Properties -> Cell -> Vertical alignment ->

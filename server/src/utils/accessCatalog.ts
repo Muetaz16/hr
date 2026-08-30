@@ -44,6 +44,7 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'manage_disciplinary', group: 'Personnel Relations', label: 'Manage Disciplinary Actions' },
     { id: 'edit_disciplinary_report', group: 'Personnel Relations', label: 'Edit Disciplinary Report After Stage 1' },
     { id: 'manage_offboarding', group: 'Personnel Relations', label: 'Manage Offboarding' },
+    { id: 'manage_promotions', group: 'Personnel Relations', label: 'Manage Promotions' },
     // Payroll & Time
     { id: 'view_payroll', group: 'Payroll & Time', label: 'View Payroll' },
     { id: 'manage_payroll', group: 'Payroll & Time', label: 'Manage Payroll' },
@@ -117,7 +118,7 @@ export const SYSTEM_HATS: HatSeed[] = [
             'view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
             'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager',
             'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control',
-            'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding',
+            'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
             'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking',
             'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
             'manage_evaluation_control', 'manage_job_descriptions',

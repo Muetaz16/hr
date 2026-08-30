@@ -18,7 +18,6 @@ import {
     AlertCircle,
     FileText,
     History,
-    Plus,
     XCircle,
     ArrowUpRight,
     Ban,
@@ -269,11 +268,6 @@ const ContractDetail: React.FC = () => {
                             label={t('contract_number', { defaultValue: 'Contract No.' })}
                             value={employee.contractNumber || '1st'}
                             icon={<FileText className="text-slate-400" size={16} />}
-                        />
-                        <DetailItem
-                            label={t('base_salary')}
-                            value={`${employee.baseSalary} LYD`}
-                            icon={<Plus className="text-emerald-400" size={16} />}
                         />
                         <DetailItem
                             label={t('contract_start')}

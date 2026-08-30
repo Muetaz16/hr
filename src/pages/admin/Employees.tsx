@@ -33,13 +33,6 @@ import Skeleton from '../../components/Skeleton';
 
 import { useConfirm } from '../../components/ConfirmDialog';
 
-const getCurrencySymbol = (type?: string | null) => {
-    if (!type) return '$';
-    if (type.includes('LYD')) return 'LYD ';
-    if (type.includes('EUR')) return '€';
-    return '$';
-};
-
 const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
@@ -60,7 +53,7 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
     // Column sorting
-    type SortKey = 'name' | 'performance' | 'holidays' | 'salary' | 'staffId' | 'contractType' | 'position' | 'place';
+    type SortKey = 'name' | 'performance' | 'holidays' | 'staffId' | 'contractType' | 'position' | 'place';
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
     const handleSort = (key: SortKey) => {
         setSortConfig(prev => prev?.key === key
@@ -289,10 +282,6 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
             case 'name': return (emp.fullName || '').toLowerCase();
             case 'performance': return dirEvals[emp.id]?.finalScore ?? -1;
             case 'holidays': return emp.remainingHolidays ?? 0;
-            case 'salary': {
-                const factor = 1.0 + (Math.max(emp.positionFactor || 1, emp.skillFactor || 1) - 1.0) + ((emp.siteFactor || 1) - 1.0) + ((emp.languageFactor || 1) - 1.0);
-                return (emp.baseSalary || 0) * factor;
-            }
             case 'staffId': return (emp.staffId || '').toLowerCase();
             case 'contractType': return (emp.contractType || '').toLowerCase();
             case 'position': return (emp.position || '').toLowerCase();
@@ -570,11 +559,8 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                         >
                                             <div className="flex items-center justify-center gap-1">{t('holiday_balance')} {sortIndicator('holidays')}</div>
                                         </th>
-                                        <th
-                                            className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none hover:text-slate-600"
-                                            onClick={() => handleSort('salary')}
-                                        >
-                                            <div className="flex items-center justify-center gap-1">Structure & Salary {sortIndicator('salary')}</div>
+                                        <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
+                                            Salary Structure
                                         </th>
                                     </>
                                 )}
@@ -678,10 +664,6 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                                     <div className="inline-flex flex-col items-center">
                                                         <div className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600">
                                                             {emp.salaryStructureType || 'N/A'}
-                                                        </div>
-                                                        <div className="flex flex-col text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                                                            <span>Base: {getCurrencySymbol(emp.salaryStructureType)}{emp.baseSalary?.toLocaleString() || '0'}</span>
-                                                            <span className="text-indigo-500 mt-0.5">Total: {getCurrencySymbol(emp.salaryStructureType)}{((emp.baseSalary || 0) * (1.0 + (Math.max(emp.positionFactor || 1, emp.skillFactor || 1) - 1.0) + ((emp.siteFactor || 1) - 1.0) + ((emp.languageFactor || 1) - 1.0))).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                                                         </div>
                                                     </div>
                                                 </td>

@@ -406,13 +406,13 @@ export const syncEmployeesFromBioTime = async (req: Request, res: Response) => {
             }
 
             // New person from BioTime — create an identity-only pending stub. No User account and
-            // no Job Description: those are created when HR completes the enrolment.
+            // no Job Description (position is left unset, not BioTime's residency classification —
+            // that's a different concept entirely): those are created when HR completes the enrolment.
             await prisma.employee.create({
                 data: {
                     fullName: emp.firstName || emp.empCode,
                     staffId: emp.empCode,
                     bioId: emp.id,
-                    position: emp.positionName,
                     role: 'EMPLOYEE',
                     enrollmentStatus: 'PENDING_ENROLLMENT',
                     joinDate: new Date(),

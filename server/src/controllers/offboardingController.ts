@@ -99,7 +99,7 @@ function separationReasonLabel(offboardingCase: { source: string }): string {
 // structure (whoever holds User.role = 'HEAD_DIVISION' for the division this employee's department
 // rolls up to), the exact lookup leaveApprovalChain.ts already uses for leave-approval routing. No
 // longer typed by the employee — there's a real answer for it in the system.
-async function resolveDivisionHeadName(employeeId: string): Promise<string> {
+export async function resolveDivisionHeadName(employeeId: string): Promise<string> {
     const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { departmentId: true, divisionId: true } });
     if (!employee) return '';
     let divisionId = employee.divisionId;

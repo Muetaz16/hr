@@ -38,6 +38,9 @@ const OrganizationPage = lazy(() => import('./pages/Organization'));
 const PersonnelRelationsPage = lazy(() => import('./pages/personnel-relations/PersonnelRelations'));
 const DisciplinaryCaseDetailPage = lazy(() => import('./pages/personnel-relations/DisciplinaryCaseDetailPage'));
 const OffboardingCaseDetailPage = lazy(() => import('./pages/personnel-relations/OffboardingCaseDetailPage'));
+const PromotionCaseDetailPage = lazy(() => import('./pages/personnel-relations/PromotionCaseDetailPage'));
+const RewardCaseDetailPage = lazy(() => import('./pages/personnel-relations/RewardCaseDetailPage'));
+const RewardCandidateDetailPage = lazy(() => import('./pages/personnel-relations/RewardCandidateDetailPage'));
 const AttendancePage = lazy(() => import('./pages/Attendance'));
 const ApprovalsPage = lazy(() => import('./pages/Approvals'));
 const ApprovedLeavesPage = lazy(() => import('./pages/ApprovedLeaves'));
@@ -111,6 +114,9 @@ function App() {
                     <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
                     <Route path="/personnel-relations/disciplinary/:caseId" element={<DisciplinaryCaseDetailPage />} />
                     <Route path="/personnel-relations/offboarding/:caseId" element={<OffboardingCaseDetailPage />} />
+                    <Route path="/personnel-relations/promotions/:caseId" element={<PromotionCaseDetailPage />} />
+                    <Route path="/personnel-relations/rewards/:caseId" element={<RewardCaseDetailPage />} />
+                    <Route path="/personnel-relations/rewards/candidates/:type/:employeeId" element={<RewardCandidateDetailPage />} />
                   </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm']} />}>
                     <Route path="/approvals" element={<ApprovalsPage />} />

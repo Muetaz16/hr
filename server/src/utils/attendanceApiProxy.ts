@@ -79,6 +79,11 @@ export interface BioTimeRosterEmployee {
     empCode: string;       // staff code -> our Employee.staffId
     firstName: string;     // -> our Employee.fullName
     positionName: string | null; // -> our Employee.position (free text)
+    // BioTime's own residency classification — 4=Resident, 5=Non-Resident, 6=Exception,
+    // 7=Higher-Management. Not stored anywhere in our own database (attendance staff can
+    // reclassify this directly in BioTime via the Attendance page's Employees tab, independent of
+    // our Employee.contractType), so this is the only authoritative source for it.
+    positionId: number | null;
 }
 
 // Fetches the full employee roster from BioTime (GET /api/attendance). Normalises BioTime's
@@ -97,6 +102,7 @@ export async function fetchBioTimeRoster(): Promise<BioTimeRosterEmployee[]> {
                 empCode: String(e?.emp_code ?? '').trim(),
                 firstName: String(e?.first_name ?? '').trim(),
                 positionName: e?.position?.position_name ?? null,
+                positionId: e?.position?.id != null ? Number(e.position.id) : null,
             }))
             .filter((e) => Number.isFinite(e.id) && e.empCode.length > 0);
     } catch (error) {

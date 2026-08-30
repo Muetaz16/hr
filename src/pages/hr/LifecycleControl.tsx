@@ -402,7 +402,7 @@ const LifecycleControl: React.FC = () => {
                                 // 4. Grouped Headers
                                 const row4 = [
                                     { v: "STAFF IDENTITY", s: headerGroupStyle }, "", "", "", "", "",
-                                    { v: "CONTRACT DETAILS", s: headerGroupStyle }, "", "", "", "", "", "", "",
+                                    { v: "CONTRACT DETAILS", s: headerGroupStyle }, "", "", "", "", "", "",
                                     { v: "PAID LEAVE", s: emeraldHeader }, "", "",
                                     { v: "UNPAID LEAVE", s: amberHeader }, "",
                                     { v: "EMERGENCY LEAVE", s: roseHeader }, ""
@@ -420,7 +420,6 @@ const LifecycleControl: React.FC = () => {
                                     { v: 'Grade', s: subHeaderStyle },
                                     { v: 'Type', s: subHeaderStyle },
                                     { v: 'Status', s: subHeaderStyle },
-                                    { v: 'Salary', s: subHeaderStyle },
                                     { v: 'Join Date', s: subHeaderStyle },
                                     { v: 'Cont. Start', s: subHeaderStyle },
                                     { v: 'Cont. End', s: subHeaderStyle },
@@ -466,7 +465,6 @@ const LifecycleControl: React.FC = () => {
                                         { v: e.jobGrade || '---', s: rowStyle },
                                         { v: e.contractType || '---', s: rowStyle },
                                         { v: e.contractStatus || 'Active', s: rowStyle },
-                                        { v: e.baseSalary || 0, s: { ...rowStyle, numFmt: '#,##0' } },
                                         { v: e.joinDate ? format(parseISO(e.joinDate), 'dd/MM/yyyy') : '---', s: rowStyle },
                                         { v: e.contractStartDate ? format(parseISO(e.contractStartDate), 'dd/MM/yyyy') : '---', s: rowStyle },
                                         { v: e.contractEndDate ? format(parseISO(e.contractEndDate), 'dd/MM/yyyy') : '---', s: rowStyle },
@@ -489,14 +487,14 @@ const LifecycleControl: React.FC = () => {
 
                                 // Merge Configuration
                                 ws['!merges'] = [
-                                    { s: { r: 0, c: 0 }, e: { r: 0, c: 24 } }, // Title
-                                    { s: { r: 1, c: 0 }, e: { r: 1, c: 24 } }, // Metadata
+                                    { s: { r: 0, c: 0 }, e: { r: 0, c: 23 } }, // Title
+                                    { s: { r: 1, c: 0 }, e: { r: 1, c: 23 } }, // Metadata
                                     { s: { r: 3, c: 0 }, e: { r: 3, c: 5 } },  // Group: Staff Identity
-                                    { s: { r: 3, c: 6 }, e: { r: 3, c: 13 } }, // Group: Contract Details
-                                    { s: { r: 3, c: 14 }, e: { r: 3, c: 17 } }, // Group: Factors
-                                    { s: { r: 3, c: 18 }, e: { r: 3, c: 20 } }, // Group: Paid Leave
-                                    { s: { r: 3, c: 21 }, e: { r: 3, c: 22 } }, // Group: Unpaid Leave
-                                    { s: { r: 3, c: 23 }, e: { r: 3, c: 24 } }, // Group: Emergency Leave
+                                    { s: { r: 3, c: 6 }, e: { r: 3, c: 12 } }, // Group: Contract Details
+                                    { s: { r: 3, c: 13 }, e: { r: 3, c: 16 } }, // Group: Factors
+                                    { s: { r: 3, c: 17 }, e: { r: 3, c: 19 } }, // Group: Paid Leave
+                                    { s: { r: 3, c: 20 }, e: { r: 3, c: 21 } }, // Group: Unpaid Leave
+                                    { s: { r: 3, c: 22 }, e: { r: 3, c: 23 } }, // Group: Emergency Leave
                                 ];
 
                                 // Freeze Panes (First 5 rows and first 2 columns)
@@ -536,7 +534,7 @@ const LifecycleControl: React.FC = () => {
                             {t('lifecycle_insight_title', { defaultValue: 'Global Workforce Synchronization' })}
                             <div className="px-2 py-0.5 rounded text-[9px] font-black uppercase lifecycle-insight-badge">Live Update</div>
                         </h4>
-                        <p className="text-sm font-medium max-w-xl leading-relaxed lifecycle-insight-desc">{t('lifecycle_insight_desc', { defaultValue: 'You are viewing the comprehensive workforce lifecycle database. All fields (Passport, Nationality, Salary) are synchronized in real-time. Changes made here affect payroll and evaluation eligibility.' })}</p>
+                        <p className="text-sm font-medium max-w-xl leading-relaxed lifecycle-insight-desc">{t('lifecycle_insight_desc', { defaultValue: 'You are viewing the comprehensive workforce lifecycle database. All fields (Passport, Nationality, Grade) are synchronized in real-time. Changes made here affect payroll and evaluation eligibility.' })}</p>
                     </div>
                 </div>
                 <div className="flex flex-col items-center gap-1 relative z-10">
@@ -617,7 +615,6 @@ const LifecycleControl: React.FC = () => {
                         if (!editing) {
                             let v: any = emp[k as keyof Employee];
                             if (type === 'date') v = v ? fmt(v as string) : '';
-                            if (k === 'baseSalary') v = (v || v === 0) ? Number(v).toLocaleString() : '';
                             return <Row label={label} value={v} dir={dir} />;
                         }
                         return (
@@ -740,7 +737,7 @@ const LifecycleControl: React.FC = () => {
                                     <Field label="Contract Type" k="contractType" options={['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT']} />
                                     <Field label="Contract #" k="contractNumber" options={['1st', '2nd', '3rd', '4th', 'Permanent']} />
                                     <Field label="Status" k="contractStatus" options={['Active', 'Expired', 'Inactive', 'Terminated', 'On Leave']} />
-                                    <Field label="Base Salary" k="baseSalary" type="number" />
+                                    <Row label="In Current Grade Since" value={fmt(emp.currentGradeSince)} />
                                     <Field label={t('arrival_date', { defaultValue: 'Arrival Date' })} k="arrivalDate" type="date" />
                                     <Field label="Join Date" k="joinDate" type="date" />
                                     <Field label="Contract Start" k="contractStartDate" type="date" />

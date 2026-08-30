@@ -25,7 +25,8 @@ const COLUMN_FIELD: Record<number, string> = {
     3: 'role',
     4: 'departmentId',
     5: 'groupId',
-    6: 'baseSalary',
+    // 6: was 'baseSalary' — that column no longer exists on Employee (derived from
+    // SalaryStructure instead), so it's discarded like the other skipped columns.
     7: 'joinDate',
     8: 'staffId',
     9: 'contractEndDate',
@@ -105,7 +106,7 @@ const DATE_FIELDS = new Set([
     'passportExpiryDate', 'drivingLicenseExpiry', 'arrivalDate',
 ]);
 const FLOAT_FIELDS = new Set([
-    'baseSalary', 'holidaysUsed', 'bonusHolidays', 'emergencyHolidaysUsed', 'unpaidHolidaysUsed',
+    'holidaysUsed', 'bonusHolidays', 'emergencyHolidaysUsed', 'unpaidHolidaysUsed',
     'accruedHolidays', 'bonusEmergencyHolidays', 'earnedHolidays', 'remainingHolidays',
     'positionFactor', 'siteFactor', 'skillFactor', 'languageFactor', 'evaluationPoints',
 ]);
@@ -310,7 +311,6 @@ async function main() {
                         ...data,
                         role: data.role || 'EMPLOYEE',
                         joinDate: data.joinDate || new Date(),
-                        baseSalary: data.baseSalary ?? 0,
                     } as any,
                 });
             }
