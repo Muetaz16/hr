@@ -144,6 +144,27 @@ export async function createBioTimeOutWork(params: { empCode: string; startDate:
     }
 }
 
+// Registers a per-employee shift override in BioTime once a "Change of Schedule" Work
+// Authorization request's approval chain fully completes — BioTime then computes that employee's
+// late/early/OT for the covered date range against workStart/workEnd instead of the system-wide
+// default or an active multiplier factor (resolution priority: employee shift > multiplier factor
+// > system default). Fail-soft, never throws — same convention as createBioTimeOutWork above.
+export async function createBioTimeEmployeeShift(params: {
+    empCode: string; startDate: Date | string; endDate: Date | string;
+    workStart: string; workEnd: string; gracePeriod?: string; otThreshold?: string; reason?: string;
+}): Promise<BioTimeResult> {
+    try {
+        const response = await fetch(new URL('/api/system-settings/employee-shifts', ATTENDANCE_API_BASE).toString(), jsonPost(params));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { success: false, message: (data as any)?.message || `BioTime returned ${response.status}` };
+        }
+        return { success: true, message: (data as any)?.message };
+    } catch (error: any) {
+        return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
+    }
+}
+
 // Registers a disciplinary suspension in BioTime once a Suspension-type disciplinary action closes.
 // A day covered by a suspension is excluded from that employee's absence count and reports as
 // unpaid (totalWorkMins: 0) rather than a normal paid day. Fail-soft, never throws — same

@@ -11,6 +11,10 @@ import {
     createMultiplierFactor,
     updateMultiplierFactor,
     deleteMultiplierFactor,
+    getEmployeeShifts,
+    createEmployeeShift,
+    updateEmployeeShift,
+    deleteEmployeeShift,
 } from '../controllers/attendanceSettingsController';
 import { authenticateToken, authorizeRoles } from '../middleware/auth';
 
@@ -39,5 +43,10 @@ router.get('/multiplier-factors', getMultiplierFactors);
 router.post('/multiplier-factors', createMultiplierFactor);
 router.put('/multiplier-factors/:id', updateMultiplierFactor);
 router.delete('/multiplier-factors/:id', deleteMultiplierFactor);
+
+router.get('/employee-shifts', getEmployeeShifts);
+router.post('/employee-shifts', createEmployeeShift);
+router.put('/employee-shifts/:id', updateEmployeeShift);
+router.delete('/employee-shifts/:id', deleteEmployeeShift);
 
 export default router;

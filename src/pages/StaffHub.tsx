@@ -143,6 +143,10 @@ const StaffHub: React.FC = () => {
                 toast.error(t('err_work_auth_place', { defaultValue: 'Please enter the place of assignment.' }));
                 return;
             }
+            if (newRequest.workOrderType === 'CHANGE_OF_SCHEDULE' && (!newRequest.startTime || !newRequest.endTime)) {
+                toast.error(t('err_work_auth_schedule_times', { defaultValue: 'Please set both the From and To time for the new schedule.' }));
+                return;
+            }
         }
 
         // Replacement is optional: a chosen colleague must accept (and sign); "N/A" (empty) means no

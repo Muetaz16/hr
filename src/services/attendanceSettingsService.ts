@@ -46,6 +46,22 @@ export interface MultiplierFactorItem {
     otThreshold: string | null;
 }
 
+// Per-employee date-range shift override — resolution priority in the attendance system is
+// employee shift > multiplier factor > system default. Also written automatically when a "Change
+// of Schedule" Work Authorization request completes; this is the manual create/edit/remove screen.
+export interface EmployeeShiftItem {
+    id: number;
+    empCode: string;
+    empName: string;
+    startDate: string;
+    endDate: string;
+    workStart: string;
+    workEnd: string;
+    gracePeriod: string | null;
+    otThreshold: string | null;
+    reason: string | null;
+}
+
 export interface SaveSystemSettingInput {
     key: string;
     valueString: string;
@@ -74,6 +90,19 @@ export interface SaveMultiplierFactorInput {
     gracePeriod?: string | null;
     workEnd?: string | null;
     otThreshold?: string | null;
+}
+
+// empCode is required on create (which employee the shift belongs to) but omitted on update —
+// matches the attendance system's own PUT contract, which doesn't reassign a shift's employee.
+export interface SaveEmployeeShiftInput {
+    empCode: string;
+    startDate: string;
+    endDate: string;
+    workStart: string;
+    workEnd: string;
+    gracePeriod?: string | null;
+    otThreshold?: string | null;
+    reason?: string | null;
 }
 
 type Ack = { success: boolean; message: string };
@@ -124,6 +153,23 @@ export const attendanceSettingsService = {
     },
     async deleteMultiplierFactor(id: number): Promise<Ack> {
         const response = await api.delete(`/attendance-settings/multiplier-factors/${id}`);
+        return response.data;
+    },
+
+    async getEmployeeShifts(): Promise<EmployeeShiftItem[]> {
+        const response = await api.get('/attendance-settings/employee-shifts');
+        return response.data;
+    },
+    async createEmployeeShift(input: SaveEmployeeShiftInput): Promise<Ack> {
+        const response = await api.post('/attendance-settings/employee-shifts', input);
+        return response.data;
+    },
+    async updateEmployeeShift(id: number, input: Omit<SaveEmployeeShiftInput, 'empCode'>): Promise<Ack> {
+        const response = await api.put(`/attendance-settings/employee-shifts/${id}`, input);
+        return response.data;
+    },
+    async deleteEmployeeShift(id: number): Promise<Ack> {
+        const response = await api.delete(`/attendance-settings/employee-shifts/${id}`);
         return response.data;
     },
 };

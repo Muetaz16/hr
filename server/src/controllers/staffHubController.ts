@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
 import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
-import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork } from '../utils/attendanceApiProxy';
+import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
@@ -572,15 +572,32 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                     : await createBioTimeExcusedEarlyOut(params);
                 if (!result.success) console.warn('[BioTime] Excused write-back failed (non-fatal):', result.message);
             } else if (OUTWORK_TYPES.includes(lrq.type)) {
-                // Work Authorization — register an out-work (out-of-office / field-work) period so
-                // those days report as Out-Work rather than absence. Lands in BioTime's `outworks`.
-                const result = await createBioTimeOutWork({
-                    empCode,
-                    startDate: lrq.startDate,
-                    endDate: lrq.endDate ?? lrq.startDate,
-                    reason: composeOutWorkReason(lrq.workOrderType, lrq.placeOfAssignment, lrq.reason),
-                });
-                if (!result.success) console.warn('[BioTime] Out-work write-back failed (non-fatal):', result.message);
+                if (lrq.workOrderType === 'CHANGE_OF_SCHEDULE' && lrq.startTime && lrq.endTime) {
+                    // Change of Schedule — register a per-employee shift override so BioTime scores
+                    // late/early/OT for this date range against the NEW hours, not the default
+                    // schedule (a plain out-work only marks the days, it doesn't change the hours
+                    // used for scoring).
+                    const result = await createBioTimeEmployeeShift({
+                        empCode,
+                        startDate: lrq.startDate,
+                        endDate: lrq.endDate ?? lrq.startDate,
+                        workStart: lrq.startTime,
+                        workEnd: lrq.endTime,
+                        reason: composeOutWorkReason(lrq.workOrderType, lrq.placeOfAssignment, lrq.reason),
+                    });
+                    if (!result.success) console.warn('[BioTime] Employee shift write-back failed (non-fatal):', result.message);
+                } else {
+                    // Every other Work Authorization category — register an out-work (out-of-office
+                    // / field-work) period so those days report as Out-Work rather than absence.
+                    // Lands in BioTime's `outworks`.
+                    const result = await createBioTimeOutWork({
+                        empCode,
+                        startDate: lrq.startDate,
+                        endDate: lrq.endDate ?? lrq.startDate,
+                        reason: composeOutWorkReason(lrq.workOrderType, lrq.placeOfAssignment, lrq.reason),
+                    });
+                    if (!result.success) console.warn('[BioTime] Out-work write-back failed (non-fatal):', result.message);
+                }
             } else {
                 const leaveTypeId = LEAVE_TYPE_ID_MAP[lrq.type];
                 if (leaveTypeId) {

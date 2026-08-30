@@ -89,3 +89,42 @@ export const updateMultiplierFactor = (req: Request, res: Response) => {
 
 export const deleteMultiplierFactor = (req: Request, res: Response) =>
     proxy(res, `/api/system-settings/multiplier-factors/${encodeURIComponent(req.params.id)}`, { method: 'DELETE' });
+
+// --- Employee Shifts -------------------------------------------------------------------------
+// Per-employee date-range shift override — resolution priority in the attendance system is
+// employee shift > multiplier factor > system default. Also written automatically when a
+// "Change of Schedule" Work Authorization request completes (see staffHubController.ts's
+// decideApprovalStep) — this screen is the manual counterpart for creating/editing/removing one
+// directly, independent of any request.
+export const getEmployeeShifts = (req: Request, res: Response) => proxy(res, '/api/system-settings/employee-shifts');
+
+export const createEmployeeShift = (req: Request, res: Response) => {
+    const { empCode, startDate, endDate, workStart, workEnd } = req.body;
+    if (!empCode || !startDate || !endDate || !workStart || !workEnd) {
+        return res.status(400).json({ error: 'empCode, startDate, endDate, workStart and workEnd are required.' });
+    }
+    return proxy(res, '/api/system-settings/employee-shifts', jsonPost({
+        empCode, startDate, endDate, workStart, workEnd,
+        gracePeriod: req.body.gracePeriod || null,
+        otThreshold: req.body.otThreshold || null,
+        reason: req.body.reason || null,
+    }));
+};
+
+export const updateEmployeeShift = (req: Request, res: Response) => {
+    const { startDate, endDate, workStart, workEnd } = req.body;
+    if (!startDate || !endDate || !workStart || !workEnd) {
+        return res.status(400).json({ error: 'startDate, endDate, workStart and workEnd are required.' });
+    }
+    // No empCode here — matches the attendance system's own PUT contract, which doesn't accept
+    // reassigning a shift to a different employee.
+    return proxy(res, `/api/system-settings/employee-shifts/${encodeURIComponent(req.params.id)}`, jsonPut({
+        startDate, endDate, workStart, workEnd,
+        gracePeriod: req.body.gracePeriod || null,
+        otThreshold: req.body.otThreshold || null,
+        reason: req.body.reason || null,
+    }));
+};
+
+export const deleteEmployeeShift = (req: Request, res: Response) =>
+    proxy(res, `/api/system-settings/employee-shifts/${encodeURIComponent(req.params.id)}`, { method: 'DELETE' });

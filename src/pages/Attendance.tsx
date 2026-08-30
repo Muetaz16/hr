@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, ShieldOff, CalendarDays, Percent, Settings as SettingsIcon } from 'lucide-react';
+import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, ShieldOff, CalendarDays, Percent, CalendarClock, Settings as SettingsIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { attendanceService, type AttendanceSummaryEmployee, type BioTimeEmployee } from '../services/attendanceService';
@@ -11,6 +11,7 @@ import {
     type LeaveTypeItem,
     type HolidayItem,
     type MultiplierFactorItem,
+    type EmployeeShiftItem,
 } from '../services/attendanceSettingsService';
 import { staffHubService } from '../services/staffHubService';
 import { useAuth } from '../context/AuthContext';
@@ -33,7 +34,7 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: strin
 );
 
 type Tab = 'overview' | 'exceptions' | 'daily-logging' | 'employees' | 'settings';
-type SettingsSubTab = 'hours' | 'leave-types' | 'holidays' | 'multipliers';
+type SettingsSubTab = 'hours' | 'leave-types' | 'holidays' | 'multipliers' | 'shifts';
 
 // The attendance API's own "blank params" default turned out to be unreliable (same query
 // returned 91 employees once, then an empty list every time after) — so we always pass an
@@ -386,13 +387,19 @@ const AttendancePage: React.FC = () => {
         } catch { toast.error('Failed to remove the excused early-out record.'); }
     };
 
+    // Hoisted above the Employees tab query below — the Employee Shifts settings screen reuses
+    // the same BioTime roster for its employee picker, so its `enabled` condition needs
+    // settingsSubTab before it's otherwise declared further down with the rest of Settings state.
+    const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('hours');
+
     // Employees tab — BioTime roster CRUD (create/edit/delete the employee record inside the
-    // attendance system itself, not our own Employee table).
+    // attendance system itself, not our own Employee table). Also reused (unfiltered) by the
+    // Employee Shifts settings screen's employee picker.
     const [empSearch, setEmpSearch] = useState('');
     const { data: bioTimeEmployeeList, isLoading: isLoadingBioTimeEmployees } = useQuery({
         queryKey: ['attendance-biotime-employees', empSearch],
         queryFn: () => attendanceService.getBioTimeEmployees(empSearch || undefined),
-        enabled: tab === 'employees',
+        enabled: tab === 'employees' || (tab === 'settings' && settingsSubTab === 'shifts'),
         retry: false,
     });
     const bioTimeEmployees = bioTimeEmployeeList?.employees || [];
@@ -452,10 +459,9 @@ const AttendancePage: React.FC = () => {
     };
 
     // Settings tab (SUPER_ADMIN only) — Work-Hour Settings and Leave Types are edit-only (no
-    // add/delete, enforced both here and on the backend); Holidays and Multiplier Factors keep
-    // full CRUD. Work Hours + Leave Types read from the same settingsSnapshot query above.
-    const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('hours');
-
+    // add/delete, enforced both here and on the backend); Holidays, Multiplier Factors, and
+    // Employee Shifts keep full CRUD. Work Hours + Leave Types read from the same settingsSnapshot
+    // query above. (settingsSubTab itself is declared earlier, above the Employees-tab query.)
     const { data: holidaysList = [], isLoading: isLoadingHolidays } = useQuery({
         queryKey: ['attendance-settings-holidays'],
         queryFn: () => attendanceSettingsService.getHolidays(),
@@ -466,6 +472,12 @@ const AttendancePage: React.FC = () => {
         queryKey: ['attendance-settings-multipliers'],
         queryFn: () => attendanceSettingsService.getMultiplierFactors(),
         enabled: tab === 'settings' && settingsSubTab === 'multipliers' && isSuperAdmin,
+        retry: false,
+    });
+    const { data: employeeShiftsList = [], isLoading: isLoadingEmployeeShifts } = useQuery({
+        queryKey: ['attendance-settings-employee-shifts'],
+        queryFn: () => attendanceSettingsService.getEmployeeShifts(),
+        enabled: tab === 'settings' && settingsSubTab === 'shifts' && isSuperAdmin,
         retry: false,
     });
 
@@ -589,6 +601,56 @@ const AttendancePage: React.FC = () => {
             toast.success('Multiplier factor removed.');
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-multipliers'] });
         } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to remove the multiplier factor.'); }
+    };
+
+    // Employee Shifts — per-employee date-range shift override (also written automatically when a
+    // "Change of Schedule" Work Authorization request completes). empCode is only editable on
+    // create, matching the attendance system's own PUT contract.
+    const emptyShiftForm = { empCode: '', startDate: '', endDate: '', workStart: '', workEnd: '', gracePeriod: '', otThreshold: '', reason: '' };
+    const [esModalOpen, setEsModalOpen] = useState(false);
+    const [esEditing, setEsEditing] = useState<EmployeeShiftItem | null>(null);
+    const [esForm, setEsForm] = useState(emptyShiftForm);
+    const [savingEs, setSavingEs] = useState(false);
+    const openAddShift = () => { setEsEditing(null); setEsForm(emptyShiftForm); setEsModalOpen(true); };
+    const openEditShift = (s: EmployeeShiftItem) => {
+        setEsEditing(s);
+        setEsForm({
+            empCode: s.empCode, startDate: s.startDate.slice(0, 10), endDate: s.endDate.slice(0, 10),
+            workStart: s.workStart || '', workEnd: s.workEnd || '',
+            gracePeriod: s.gracePeriod || '', otThreshold: s.otThreshold || '', reason: s.reason || '',
+        });
+        setEsModalOpen(true);
+    };
+    const submitShift = async () => {
+        if (!esForm.empCode || !esForm.startDate || !esForm.endDate || !esForm.workStart || !esForm.workEnd) {
+            toast.error('Select an employee, both dates, and both work-hour times.'); return;
+        }
+        setSavingEs(true);
+        try {
+            const input = {
+                ...esForm,
+                gracePeriod: esForm.gracePeriod || null,
+                otThreshold: esForm.otThreshold || null,
+                reason: esForm.reason || null,
+            };
+            if (esEditing) await attendanceSettingsService.updateEmployeeShift(esEditing.id, input);
+            else await attendanceSettingsService.createEmployeeShift(input);
+            toast.success('Employee shift saved.');
+            setEsModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['attendance-settings-employee-shifts'] });
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || 'Failed to save the employee shift.');
+        } finally {
+            setSavingEs(false);
+        }
+    };
+    const deleteShift = async (s: EmployeeShiftItem) => {
+        if (!window.confirm(`Remove the shift override for "${s.empName}"? This cannot be undone.`)) return;
+        try {
+            await attendanceSettingsService.deleteEmployeeShift(s.id);
+            toast.success('Employee shift removed.');
+            queryClient.invalidateQueries({ queryKey: ['attendance-settings-employee-shifts'] });
+        } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to remove the employee shift.'); }
     };
 
     return (
@@ -1219,7 +1281,7 @@ const AttendancePage: React.FC = () => {
                 ) : (
                 <div className="space-y-6">
                     <div className="flex items-center gap-2 flex-wrap">
-                        {([['hours', 'Work Hours', Clock], ['leave-types', 'Leave Types', ShieldCheck], ['holidays', 'Holidays', CalendarDays], ['multipliers', 'Multiplier Factors', Percent]] as const).map(([key, label, Icon]) => (
+                        {([['hours', 'Work Hours', Clock], ['leave-types', 'Leave Types', ShieldCheck], ['holidays', 'Holidays', CalendarDays], ['multipliers', 'Multiplier Factors', Percent], ['shifts', 'Employee Shifts', CalendarClock]] as const).map(([key, label, Icon]) => (
                             <button
                                 key={key}
                                 onClick={() => setSettingsSubTab(key)}
@@ -1394,6 +1456,58 @@ const AttendancePage: React.FC = () => {
                                         )}
                                         {isLoadingMultipliers && (
                                             <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {settingsSubTab === 'shifts' && (
+                        <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex items-center justify-between">
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Employee Shifts</span>
+                                <button onClick={openAddShift} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
+                                    <PlusCircle className="w-3.5 h-3.5" /> Add Employee Shift
+                                </button>
+                            </div>
+                            <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">
+                                Per-employee date-range shift override — takes priority over Multiplier Factors and the standard Work Hours above for that employee on those days. Also created automatically when a "Change of Schedule" Work Authorization request is fully approved.
+                            </p>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                    <thead>
+                                        <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
+                                            <th className="p-4">Employee</th>
+                                            <th className="p-4">Period</th>
+                                            <th className="p-4">Work Hours</th>
+                                            <th className="p-4">Reason</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
+                                        {employeeShiftsList.map(s => (
+                                            <tr key={s.id} className="hover:bg-slate-50/50">
+                                                <td className="p-4">
+                                                    <p className="font-bold text-slate-800">{s.empName}</p>
+                                                    <p className="text-[10px] text-slate-400 font-mono">{s.empCode}</p>
+                                                </td>
+                                                <td className="p-4">{format(parseISO(s.startDate), 'dd MMM')} – {format(parseISO(s.endDate), 'dd MMM yyyy')}</td>
+                                                <td className="p-4 font-mono text-[11px]">{s.workStart} – {s.workEnd}</td>
+                                                <td className="p-4 text-slate-500">{s.reason || '—'}</td>
+                                                <td className="p-4 text-right">
+                                                    <div className="inline-flex items-center gap-3">
+                                                        <button onClick={() => openEditShift(s)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => deleteShift(s)} className="text-slate-400 hover:text-rose-600" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {!isLoadingEmployeeShifts && employeeShiftsList.length === 0 && (
+                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold">No employee shifts found.</td></tr>
+                                        )}
+                                        {isLoadingEmployeeShifts && (
+                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1967,6 +2081,63 @@ const AttendancePage: React.FC = () => {
                     </div>
                     <button type="button" onClick={submitMultiplier} disabled={savingMf} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
                         {savingMf ? 'Saving…' : 'Save Multiplier Factor'}
+                    </button>
+                </div>
+            </Modal>
+
+            {/* Add/Edit Employee Shift popup */}
+            <Modal isOpen={esModalOpen} onClose={() => setEsModalOpen(false)} title={esEditing ? 'Edit Employee Shift' : 'Add Employee Shift'} maxWidth="max-w-lg">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <select
+                            value={esForm.empCode}
+                            onChange={e => setEsForm(f => ({ ...f, empCode: e.target.value }))}
+                            disabled={!!esEditing}
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold disabled:bg-slate-50 disabled:text-slate-400"
+                        >
+                            <option value="">Select an employee…</option>
+                            {bioTimeEmployees.map(emp => (
+                                <option key={emp.emp_code} value={emp.emp_code}>{emp.first_name} ({emp.emp_code})</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                            <input type="date" value={esForm.startDate} onChange={e => setEsForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                            <input type="date" value={esForm.endDate} onChange={e => setEsForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work Start</label>
+                            <input type="time" value={esForm.workStart} onChange={e => setEsForm(f => ({ ...f, workStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work End</label>
+                            <input type="time" value={esForm.workEnd} onChange={e => setEsForm(f => ({ ...f, workEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Grace Period (optional)</label>
+                            <input type="time" value={esForm.gracePeriod} onChange={e => setEsForm(f => ({ ...f, gracePeriod: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">OT Threshold (optional)</label>
+                            <input type="time" value={esForm.otThreshold} onChange={e => setEsForm(f => ({ ...f, otThreshold: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason (optional)</label>
+                        <input type="text" value={esForm.reason} onChange={e => setEsForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                    </div>
+                    <button type="button" onClick={submitShift} disabled={savingEs} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
+                        {savingEs ? 'Saving…' : 'Save Employee Shift'}
                     </button>
                 </div>
             </Modal>
