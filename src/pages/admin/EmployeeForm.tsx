@@ -98,7 +98,6 @@ const EmployeeForm: React.FC = () => {
         siteFactor: 1.0,
         languageFactor: 1.0,
         evaluationPoints: 0,
-        permissions: [],
         jobDescriptionId: '',
         // Extended Identity Details
         dateOfBirth: '',
@@ -304,7 +303,6 @@ const EmployeeForm: React.FC = () => {
                     siteFactor: emp.siteFactor || 1.0,
                     languageFactor: emp.languageFactor || 1.0,
                     evaluationPoints: emp.evaluationPoints || 0,
-                    permissions: (emp as any).permissions || [],
                     jobDescriptionId: emp.jobDescriptionId || '',
                     // Extended Identity Details
                     dateOfBirth: formatDate(emp.dateOfBirth),
@@ -614,10 +612,11 @@ const EmployeeForm: React.FC = () => {
                 // login account (visible afterwards in Access Management).
                 const payload: any = { ...formData };
                 if (isPendingEnrollment) payload.enrollmentStatus = 'ACTIVE';
-                await employeeService.updateEmployee(id, payload);
+                const updated: any = await employeeService.updateEmployee(id, payload);
                 toast.success(isPendingEnrollment
                     ? t('enrolment_completed', { defaultValue: 'Enrolment completed — login account created and available in Access Management.' })
                     : t('employee_updated'));
+                if (updated?.userSyncError) toast.error(updated.userSyncError);
             } else {
                 // Belt-and-suspenders: Join Date must equal Contract Start for a new hire (their
                 // first contract), regardless of which pre-fill path set contractStartDate.

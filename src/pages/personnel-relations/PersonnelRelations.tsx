@@ -221,7 +221,7 @@ const PersonnelRelations: React.FC = () => {
     const { currentUser } = useAuth();
     // Document control (add/replace/delete) is HR-only — everyone else who can see this screen
     // (heads, plain employees) stays view-only, same as the rest of the detail modal.
-    const isHRRole = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser?.role || '');
+    const isHRRole = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['manage_lifecycle_control']);
 
     // Determine active tab from route path
     const getActiveTab = () => {

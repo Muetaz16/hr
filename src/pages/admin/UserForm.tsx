@@ -249,8 +249,9 @@ const UserForm: React.FC = () => {
 
             if (isEditMode && editingUserId) {
                 if (formData.password) payload.password = formData.password;
-                await userService.updateUser(editingUserId, payload);
+                const updated: any = await userService.updateUser(editingUserId, payload);
                 toast.success(t('user_updated_success'));
+                if (updated?.employeeSyncError) toast.error(updated.employeeSyncError);
             } else {
                 await userService.createUser({ ...payload, password: formData.password || '123456' });
                 toast.success(t('user_created_success'));

@@ -362,19 +362,19 @@ const MainLayout: React.FC = () => {
     const { data: expiringCount } = useQuery({
         queryKey: ['expiring-contracts-count', currentUser?.id],
         queryFn: async () => {
-            if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
+            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
                 const data = await employeeService.getExpiringContracts(30);
                 return data.length;
             }
             return 0;
         },
-        enabled: !!currentUser && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL'),
+        enabled: !!currentUser && canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts']),
         refetchInterval: 300000
     });
 
     useEffect(() => {
         const checkUrgentContracts = async () => {
-            if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
+            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
                 try {
                     const expiringurgent = await employeeService.getExpiringContracts(7);
                     if (expiringurgent.length > 0) {

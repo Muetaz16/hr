@@ -27,8 +27,12 @@ const candidateInclude = {
     techEvalBy: { select: { id: true, fullName: true } },
 } as const;
 
-const isHRRole = (role?: string) => role === 'HR_MANAGER' || role === 'SUPER_ADMIN';
-const isPrivileged = (role?: string) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(role || '');
+// Accept the full req.user (not just role) so a hat/grant holder of the matching permission is
+// recognized too — these used to check role only, silently excluding anyone whose HR/recruitment
+// authority came from a Functional Hat or individual grant rather than a literal role match.
+type ReqUserLike = { role?: string; permissions?: string[] } | undefined;
+const isHRRole = (user: ReqUserLike) => user?.role === 'HR_MANAGER' || user?.role === 'SUPER_ADMIN' || (user?.permissions || []).includes('manage_recruitment');
+const isPrivileged = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(user?.role || '') || (user?.permissions || []).includes('recruitment_approvals') || (user?.permissions || []).includes('manage_recruitment');
 
 // Helper to append an event to the events array
 const appendEvent = (existingEvents: any, action: string, performedBy: string, note?: string) => {
@@ -46,7 +50,7 @@ export const getCandidates = async (req: Request, res: Response) => {
         const where: any = {};
         if (requisitionId) where.requisitionId = String(requisitionId);
         if (stage) where.stage = String(stage);
-        if (!isPrivileged(userRole)) {
+        if (!isPrivileged((req as any).user)) {
             // A head only sees candidates for the requisitions they own.
             where.requisition = { requesterId: userId };
         }
@@ -83,7 +87,7 @@ export const createCandidate = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) {
+        if (!isHRRole((req as any).user)) {
             return res.status(403).json({ error: 'Only HR can add candidates.' });
         }
 
@@ -204,7 +208,7 @@ export const scheduleInterview = async (req: Request, res: Response) => {
         const { id } = req.params;
         const { interviewAt, interviewLocation, interviewNote } = req.body;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can schedule interviews.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can schedule interviews.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -258,7 +262,7 @@ export const submitHrEvaluation = async (req: Request, res: Response) => {
         const { id } = req.params;
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can submit the HR evaluation.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can submit the HR evaluation.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -371,7 +375,7 @@ export const recordOffer = async (req: Request, res: Response) => {
         const { id } = req.params;
         const { decision, note } = req.body;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can record the offer response.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can record the offer response.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -405,7 +409,7 @@ export const markHired = async (req: Request, res: Response) => {
         const { id } = req.params;
         const { employeeId } = req.body;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can complete a hire.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can complete a hire.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id }, include: { requisition: true } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -468,7 +472,7 @@ export const generateOffer = async (req: Request, res: Response) => {
         });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
 
-        const allowed = isHRRole(userRole);
+        const allowed = isHRRole((req as any).user);
         if (!allowed) return res.status(403).json({ error: 'Only HR or Super Admin can generate the job offer.' });
 
         // The HR user generating the offer is the "Job Offer Preparer" — their saved signature
@@ -612,7 +616,7 @@ export const generateEvaluation = async (req: Request, res: Response) => {
         });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
 
-        const allowed = isHRRole(userRole) || candidate.requisition.requesterId === userId;
+        const allowed = isHRRole((req as any).user) || candidate.requisition.requesterId === userId;
         if (!allowed) return res.status(403).json({ error: 'Only HR or the requesting head can generate the evaluation form.' });
 
         if (candidate.hrEvalById == null || candidate.techEvalById == null) {
@@ -684,7 +688,7 @@ export const generateHiringLetter = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR or Super Admin can generate the hiring letter.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR or Super Admin can generate the hiring letter.' });
 
         const candidate = await prisma.candidate.findUnique({
             where: { id },
@@ -759,7 +763,7 @@ export const updateCandidateOfferDetails = async (req: Request, res: Response) =
     try {
         const { id } = req.params;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can edit offer details.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can edit offer details.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -793,7 +797,7 @@ export const generateOnboardingLink = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const userRole = (req as any).user?.role;
-        if (!isHRRole(userRole)) return res.status(403).json({ error: 'Only HR can generate onboarding links.' });
+        if (!isHRRole((req as any).user)) return res.status(403).json({ error: 'Only HR can generate onboarding links.' });
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
@@ -825,13 +829,11 @@ export const generateOnboardingLink = async (req: Request, res: Response) => {
 export const deleteCandidate = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user?.id;
-        const userRole = (req as any).user?.role;
 
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
         // HR (and Super Admin) manage the hiring list and can remove candidates at any stage.
-        if (userRole !== 'HR_MANAGER' && userRole !== 'SUPER_ADMIN') {
+        if (!isHRRole((req as any).user)) {
             return res.status(403).json({ error: 'Only HR can remove candidates from the applicant list.' });
         }
 

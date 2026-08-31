@@ -3,15 +3,19 @@ import type { User } from '../types';
 /**
  * Central access check for nav items and protected routes.
  *
- * Rules:
+ * Mirrors the backend's `authorizeAccess` (server/src/middleware/auth.ts) EXACTLY — a pure OR:
  *  - SUPER_ADMIN can always access everything.
- *  - When a resource lists `allowedPermissions` AND the user has an explicit
- *    permission set, permissions are AUTHORITATIVE: the user must hold one of the
- *    listed permissions. This means unchecking a permission on a user genuinely
- *    hides the module for them, even if their role would otherwise grant it.
- *  - Legacy users with NO permissions stored fall back to role-based access so
- *    they are never unexpectedly locked out until their account is re-saved.
- *  - Resources with only `allowedRoles` (no permission list) are gated by role.
+ *  - Otherwise, access is granted if the user's role is in `allowedRoles` OR they hold any
+ *    permission in `allowedPermissions` (checked against their effective, hat-inclusive set,
+ *    already merged into `user.permissions` server-side). Neither list overrides or suppresses
+ *    the other — role alone is always sufficient, same as the API routes this gate predicts.
+ *  - No restrictions on either list — any authenticated user may access.
+ *
+ * This used to diverge from the backend (permissions were "authoritative" once non-empty,
+ * silently overriding an otherwise-valid role match) — that let a user's role be explicitly
+ * allowed on a screen while the frontend still hid it/redirected to /unauthorized, purely because
+ * their specific hat/grant set didn't happen to include that screen's permission list, even though
+ * the equivalent backend route would have let their API calls through on role alone.
  */
 export function canAccess(
     user: Pick<User, 'role' | 'permissions'> | null | undefined,
@@ -21,19 +25,13 @@ export function canAccess(
     if (!user) return false;
     if (user.role === 'SUPER_ADMIN') return true;
 
+    const hasRole = !!(allowedRoles && allowedRoles.length && user.role && allowedRoles.includes(user.role));
     const perms = user.permissions || [];
-    const hasExplicitPerms = perms.length > 0;
+    const hasPermission = !!(allowedPermissions && allowedPermissions.length && allowedPermissions.some(p => perms.includes(p)));
 
-    const roleOk = !!(allowedRoles && user.role && allowedRoles.includes(user.role));
-    const permOk = !!(allowedPermissions && allowedPermissions.some(p => perms.includes(p)));
-
-    // Permission-gated resource: explicit permissions win over role.
-    if (allowedPermissions && allowedPermissions.length) {
-        return hasExplicitPerms ? permOk : roleOk;
+    if ((allowedRoles && allowedRoles.length) || (allowedPermissions && allowedPermissions.length)) {
+        return hasRole || hasPermission;
     }
-
-    // Role-only resource.
-    if (allowedRoles && allowedRoles.length) return roleOk;
 
     // No restrictions — any authenticated user may access.
     return true;

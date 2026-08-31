@@ -11,6 +11,7 @@ import {
 } from '../utils/evaluationHierarchy';
 import Modal from '../components/Modal';
 import PersonnelEvaluationModal from '../components/PersonnelEvaluationModal';
+import { canAccess } from '../utils/access';
 import { format } from 'date-fns';
 import {
     Search, User, Clock, Calendar, ArrowUpRight, TrendingUp, Filter,
@@ -88,7 +89,7 @@ const EvaluationsPage: React.FC = () => {
             const allEmployees = (await employeeService.getAllEmployees())
                 .filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED' && e.enrollmentStatus !== 'PENDING_ENROLLMENT');
 
-            const isAdminLike = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser.role);
+            const isAdminLike = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations']);
             const visible = isAdminLike
                 ? allEmployees
                 : allEmployees.filter(emp => myLevel && canEvaluate(placement, emp as OrgPlacement, myLevel));
@@ -276,7 +277,7 @@ const EvaluationsPage: React.FC = () => {
         const actions: (EvalLevel | 'PERSONNEL')[] = [];
         if (currentUser?.role === 'SUPER_ADMIN') {
             actions.push(...required); // admin may fill either required level
-        } else if (currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'PERSONNEL') {
+        } else if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
             // Stand in only for levels nobody has evaluated yet, or to fix their own
             // prior stand-in entry — never to overwrite a real manager's submission.
             actions.push(...required.filter(l => {

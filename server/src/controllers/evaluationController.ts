@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { canEvaluate, EvalLevel, OrgPlacement } from '../utils/evaluationHierarchy';
 import { computeAndStorePresence } from '../utils/presenceScoring';
 import { finalizeOneEmployee, reFinalizeEmployee } from '../utils/evaluationFinalize';
+import { resolveEffectivePermissions } from '../utils/effectivePermissions';
 
 import { prisma } from '../lib/prisma';
 
@@ -161,10 +162,16 @@ const checkCanEvaluate = async (
 
     if (submitter.user.role === 'SUPER_ADMIN') return null;
 
-    if (['HR_MANAGER', 'PERSONNEL'].includes(submitter.user.role)) {
+    // submitter.user is the resolved req.user — .permissions is already the effective (hat-
+    // inclusive) set, so this check recognizes a hat/grant holder too, not just the literal role.
+    const submitterIsHRLike = ['HR_MANAGER', 'PERSONNEL'].includes(submitter.user.role) || (submitter.user.permissions || []).includes('view_hr_evaluations');
+    if (submitterIsHRLike) {
         if (!existingSubmitterId) return null;
-        const existingSubmitter = await prisma.user.findUnique({ where: { id: existingSubmitterId }, select: { role: true } });
-        if (!existingSubmitter || ['HR_MANAGER', 'PERSONNEL'].includes(existingSubmitter.role)) return null;
+        const existingSubmitter = await prisma.user.findUnique({ where: { id: existingSubmitterId }, select: { role: true, permissions: true, functionalHatIds: true } });
+        if (!existingSubmitter) return null;
+        const existingSubmitterIsHRLike = ['HR_MANAGER', 'PERSONNEL'].includes(existingSubmitter.role)
+            || (await resolveEffectivePermissions(prisma, existingSubmitter)).includes('view_hr_evaluations');
+        if (existingSubmitterIsHRLike) return null;
     }
 
     if (!canEvaluate(submitter.placement, target as any, level)) {
@@ -195,7 +202,7 @@ const checkCanViewEvaluation = async (
     targetEmployeeId: string,
     level?: EvalLevel
 ): Promise<boolean> => {
-    if (ADMIN_LIKE_ROLES.includes(requesterUser.role)) return true;
+    if (ADMIN_LIKE_ROLES.includes(requesterUser.role) || (requesterUser.permissions || []).includes('view_hr_evaluations')) return true;
     const ownEmployeeId = await resolveOwnEmployeeId(requesterUser.id);
     if (ownEmployeeId && ownEmployeeId === targetEmployeeId) return true;
     if (!level) return false;
@@ -730,6 +737,7 @@ export const getEvaluationHistoryForEmployee = async (req: Request, res: Respons
         const { employeeId } = req.params;
         const requester = (req as any).user;
         const isAllowed = ADMIN_LIKE_ROLES.includes(requester.role)
+            || (requester.permissions || []).includes('view_hr_evaluations')
             || (await resolveOwnEmployeeId(requester.id)) === employeeId;
         if (!isAllowed) return res.status(403).json({ error: 'Forbidden' });
 

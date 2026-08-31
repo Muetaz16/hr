@@ -132,10 +132,11 @@ const LifecycleControl: React.FC = () => {
         mutationFn: async ({ id, data }: { id: string, data: Partial<Employee> }) => {
             return employeeService.updateEmployee(id, data);
         },
-        onSuccess: () => {
+        onSuccess: (updated: any) => {
             queryClient.invalidateQueries({ queryKey: ['employees-lifecycle'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             toast.success(t('update_success', { defaultValue: 'Employee updated successfully' }));
+            if (updated?.userSyncError) toast.error(updated.userSyncError);
         },
         onError: () => {
             toast.error(t('update_error', { defaultValue: 'Failed to update employee' }));
@@ -730,7 +731,7 @@ const LifecycleControl: React.FC = () => {
                                 </Section>
 
                                 <Section icon={Briefcase} title={t('employment_details', { defaultValue: 'Employment Details' })} color="bg-blue-50 text-blue-600">
-                                    <Row label={t('role_type', { defaultValue: 'Role' })} value={emp.role} />
+                                    <Field label={t('role_type', { defaultValue: 'Role' })} k="role" options={['EMPLOYEE', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN', 'PERSONNEL']} />
                                     <Field label="Position" k="position" />
                                     <Field label={t('job_category', { defaultValue: 'Job Category' })} k="jobCategory" />
                                     <Field label={t('job_grade', { defaultValue: 'Job Grade' })} k="jobGrade" />

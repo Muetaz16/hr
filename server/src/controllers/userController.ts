@@ -156,7 +156,7 @@ export const updateUser = async (req: Request, res: Response) => {
             where: { userId: user.id },
             data: { userId: null }
           });
-          
+
           if (employeeId) {
             // Then, link the new employee
             await prisma.employee.update({
@@ -166,7 +166,27 @@ export const updateUser = async (req: Request, res: Response) => {
           }
         }
 
-        res.json(user);
+        // Reverse-direction role sync (Employee.role is the other half of this Employee<->User
+        // sync pair — see employeeController.ts's updateEmployee). Role is meant to represent the
+        // same real-world thing on both records (this person's org position); without this, editing
+        // role from Access Management only ever changed User.role, leaving Employee.role (which
+        // independently drives evaluation-hierarchy eligibility) silently stale.
+        let employeeSyncError: string | undefined;
+        if (role !== undefined) {
+            const linkedEmployeeId = employeeId !== undefined
+                ? (employeeId || null)
+                : (await prisma.employee.findFirst({ where: { userId: user.id }, select: { id: true } }))?.id ?? null;
+            if (linkedEmployeeId) {
+                try {
+                    await prisma.employee.update({ where: { id: linkedEmployeeId }, data: { role } });
+                } catch (err: any) {
+                    console.error('Failed to sync role to linked employee during user update:', err);
+                    employeeSyncError = 'The user was saved, but syncing the role to the linked employee record failed — it may now be out of sync.';
+                }
+            }
+        }
+
+        res.json({ ...user, ...(employeeSyncError ? { employeeSyncError } : {}) });
     } catch (error) {
         console.error("Update User Error:", error);
         res.status(500).json({ error: 'Failed to update user' });

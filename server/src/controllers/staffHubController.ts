@@ -518,16 +518,16 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                 await tx.leaveRequest.update({ where: { id: requestId }, data: finalDoc });
             }
 
-            // The General Manager stage is satisfied by ANY ONE eligible approver (the GM, an
-            // `approve_gm` holder, or a SUPER_ADMIN stepping in). Once one of them signs, skip the
-            // other still-pending GM steps so a single signature completes the stage — no double
-            // sign-off. (Other stages keep their all-must-sign semantics.)
-            if (step.stage === 'GENERAL_MANAGER') {
-                await tx.leaveApprovalStep.updateMany({
-                    where: { leaveRequestId: requestId, stage: 'GENERAL_MANAGER', status: 'PENDING', id: { not: stepId } },
-                    data: { status: 'SKIPPED' },
-                });
-            }
+            // Every stage is satisfied by ANY ONE eligible approver signing — including when a
+            // department/unit/division genuinely has more than one co-head resolved for the same
+            // stage (confirmed real, not test data: "Digital Transformation Department" has two
+            // HEAD_DEPARTMENT holders). One signature completes the stage for everyone; skip the
+            // other still-pending steps for that same stage so a co-head is never blocked waiting on
+            // someone else who holds the identical seat.
+            await tx.leaveApprovalStep.updateMany({
+                where: { leaveRequestId: requestId, stage: step.stage, status: 'PENDING', id: { not: stepId } },
+                data: { status: 'SKIPPED' },
+            });
 
             // Read the remaining-pending count from inside this same transaction — not a
             // pre-transaction snapshot — so two rows in the same stage approved near-simultaneously

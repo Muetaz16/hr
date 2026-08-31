@@ -220,6 +220,10 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
         const { status, note } = req.body; // DEPT_APPROVED (division head), HR_APPROVED, FULLY_APPROVED (GM), REJECTED
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
+        // The route-level gate (canApproveRecruitment) already ORs in recruitment_approvals/
+        // manage_recruitment, so a hat/grant holder reaches this handler — these per-stage checks
+        // used to re-gate on role alone, silently 403-ing exactly the users the route just let in.
+        const perms: string[] = (req as any).user?.permissions || [];
 
         const existing = await prisma.recruitmentRequest.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ error: 'Request not found' });
@@ -229,7 +233,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
 
         if (status === 'DEPT_APPROVED') {
             // First stage = the Head of Division of the requisition's division.
-            if (userRole !== 'HEAD_DIVISION' && !isAdmin) {
+            if (userRole !== 'HEAD_DIVISION' && !isAdmin && !perms.includes('recruitment_approvals')) {
                 return res.status(403).json({ error: 'Only the Head of Division can approve at this stage.' });
             }
             if (!isAdmin) {
@@ -244,7 +248,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             updateData.deptApprovedAt = new Date();
         } else if (status === 'HR_APPROVED') {
             // Intermediate HR approval only applies to JD changes (which still need GM afterwards).
-            if (userRole !== 'HR_MANAGER' && !isAdmin) {
+            if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
                 return res.status(403).json({ error: 'Only HR can approve at this stage.' });
             }
             updateData.hrApprovedById = userId;
@@ -253,7 +257,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
         } else if (status === 'FULLY_APPROVED') {
             if (existing.type === 'HIRE') {
                 // A hire is finalised by HR — it does not go to the GM.
-                if (userRole !== 'HR_MANAGER' && !isAdmin) {
+                if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
                     return res.status(403).json({ error: 'Only HR grants final approval for a hire requisition.' });
                 }
                 updateData.hrApprovedById = userId;
@@ -264,7 +268,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
                 updateData.publishedAt = new Date();
             } else {
                 // A JD change is finalised by the Head of Directorate (not the GM).
-                if (userRole !== 'HEAD_DIRECTOR' && !isAdmin) {
+                if (userRole !== 'HEAD_DIRECTOR' && !isAdmin && !perms.includes('recruitment_approvals')) {
                     return res.status(403).json({ error: 'Only the Head of Directorate can grant final approval for a JD change.' });
                 }
                 updateData.gmApprovedById = userId;
@@ -277,7 +281,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             else if (userRole === 'HEAD_DIRECTOR' || isAdmin) { updateData.gmNote = note; updateData.gmApprovedById = userId; updateData.gmApprovedAt = new Date(); }
         } else if (status === 'FILLED') {
             // Mark an approved hire as filled once the employee has been enrolled.
-            if (userRole !== 'HR_MANAGER' && !isAdmin) {
+            if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
                 return res.status(403).json({ error: 'Only HR can mark a requisition as filled.' });
             }
             if (existing.status !== 'FULLY_APPROVED' || existing.type !== 'HIRE') {
@@ -457,7 +461,10 @@ const isEligibleForStage = (
         case 'hrRecruitment':
             return perms.includes('approve_hr_recruitment');
         case 'gm':
-            return role === 'GENERAL_MANAGER';
+            // Matches the `approve_gm` fallback the leave/work-authorization approval chain already
+            // uses (server/src/utils/leaveApprovalChain.ts) — a hat/grant holder stands in for the
+            // GM here too, not just the literal GENERAL_MANAGER role.
+            return role === 'GENERAL_MANAGER' || perms.includes('approve_gm');
         default:
             return false;
     }

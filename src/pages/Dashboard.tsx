@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
+import { canAccess } from '../utils/access';
 import { timeService } from '../services/timeService';
 import { departmentService, groupService } from '../services/departmentService';
 import { unitService } from '../services/unitService';
@@ -85,7 +86,7 @@ const Dashboard: React.FC = () => {
                 groupService.getAllGroups().catch(() => []),
                 unitService.getAllUnits().catch(() => []),
                 // Only fetch time records for Admin/HR
-                (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER')
+                canAccess(currentUser, ['HR_MANAGER'], ['view_time_tracking', 'manage_time_tracking'])
                     ? timeService.getTimeRecordsByMonth(currentMonth).catch(() => [])
                     : Promise.resolve([]),
                 (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('view_lifecycle') || currentUser.permissions?.includes('manage_lifecycle_control'))
@@ -133,7 +134,7 @@ const Dashboard: React.FC = () => {
             // Analytics Data Preparation (Only for Super Admin / HR)
             let analyticsData: any[] = [];
             let analyticsDepts: string[] = [];
-            const showAnalytics = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER';
+            const showAnalytics = canAccess(currentUser, ['HR_MANAGER'], ['view_hr_evaluations']);
 
             if (showAnalytics) {
                 try {
@@ -259,7 +260,7 @@ const Dashboard: React.FC = () => {
             // Refined Pending Counts
             let totalPendingAction = evaluationPendingCount;
 
-            if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL') {
+            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
                 totalPendingAction += (expiringSoonList as any[]).length;
             }
 
@@ -274,7 +275,7 @@ const Dashboard: React.FC = () => {
             );
 
             // Breakdown behind the "System Alerts" counter, so clicking it shows what's outstanding.
-            const showsContracts = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'].includes(currentUser.role);
+            const showsContracts = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts']);
             const systemAlerts = {
                 total: totalPendingAction,
                 evaluations: evaluationPendingCount,
@@ -356,7 +357,7 @@ const Dashboard: React.FC = () => {
     }
 
     const pendingReviewCount = stats[3]?.value || '0';
-    const showAnalytics = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER';
+    const showAnalytics = canAccess(currentUser, ['HR_MANAGER'], ['view_hr_evaluations']);
 
     const renderDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return '-';

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
+import { canAccess } from '../utils/access';
 
 type View = 'screening' | 'interview' | 'offer' | 'onboarding';
 type ActionType = 'screen' | 'schedule' | 'hrEval' | 'techEval' | 'finalize' | 'offer' | 'details' | 'editOffer';
@@ -66,10 +67,10 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     const [requisitions, setRequisitions] = useState<RecruitmentRequest[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const isHR = currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'SUPER_ADMIN';
+    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
     // Higher management can accept/reject candidates as an override (in addition to the owning head).
-    const isMgmt = currentUser?.role === 'GENERAL_MANAGER' || currentUser?.role === 'CHAIRMAN';
+    const isMgmt = canAccess(currentUser, ['GENERAL_MANAGER', 'CHAIRMAN'], ['recruitment_approvals']);
 
     // Add-candidate modal (screening view)
     const emptyAddForm = {

@@ -96,6 +96,23 @@ export type Position = typeof POSITIONS[number];
 // full company roster. Scope enforcement lives server-side in employeeController.resolveEmployeeScope.
 export const POSITION_DEFAULTS: Record<string, string[]> = {
     EMPLOYEE: [],
+    // HR_MANAGER/PERSONNEL aren't org-hierarchy levels (they're absent from POSITIONS/ORG_RANK,
+    // same as GENERAL_MANAGER's cross-cutting treatment) but they ARE selectable User.role values
+    // (UserForm.tsx, EmployeeForm.tsx). Without a default here, picking the role alone granted
+    // NOTHING — real authority only ever came from separately assigning the same-named Functional
+    // Hat below, an easy-to-miss extra step. Mirrors that hat's own permission list exactly, so the
+    // role alone is now sufficient; the hat remains available for layering a subset of these onto a
+    // *different* base role.
+    HR_MANAGER: [
+        'view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
+        'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager',
+        'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control',
+        'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
+        'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking',
+        'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
+        'manage_evaluation_control', 'manage_job_descriptions',
+    ],
+    PERSONNEL: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'submit_evaluations', 'view_lifecycle', 'view_personnel_relations', 'manage_personnel_actions'],
     HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment'],
     HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
     HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],

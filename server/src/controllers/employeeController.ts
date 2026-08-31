@@ -1131,6 +1131,13 @@ export const updateEmployee = async (req: Request, res: Response) => {
             data
         });
 
+        // Permissions are deliberately NOT synced here — Access Management (userController.ts's
+        // updateUser) is the only place they're ever written. This screen never exposes a
+        // permissions control, so syncing them from here previously meant saving ANY unrelated
+        // field silently reverted the linked User's permissions to whatever stale snapshot the
+        // Employee Form happened to load with, wiping out grants made via Access Management in the
+        // meantime with no warning at all.
+        let userSyncError: string | undefined;
         if (employee.userId) {
             const userUpdateData: any = {};
             if (data.fullName !== undefined) userUpdateData.fullName = data.fullName;
@@ -1139,21 +1146,26 @@ export const updateEmployee = async (req: Request, res: Response) => {
             if (data.departmentId !== undefined) userUpdateData.departmentId = data.departmentId;
             if (data.unitId !== undefined) userUpdateData.unitId = data.unitId;
             if (data.groupId !== undefined) userUpdateData.groupId = data.groupId;
-            if (body.permissions !== undefined) userUpdateData.permissions = body.permissions;
 
             if (body.password) {
                 userUpdateData.password = await bcrypt.hash(body.password, 10);
             }
-            
+
             if (Object.keys(userUpdateData).length > 0) {
-                await prisma.user.update({
-                    where: { id: employee.userId },
-                    data: userUpdateData
-                }).catch(err => console.error('Failed to sync user data during employee update:', err));
+                try {
+                    await prisma.user.update({ where: { id: employee.userId }, data: userUpdateData });
+                } catch (err: any) {
+                    // Surfaced to the caller (not just logged) — the Employee row is already
+                    // committed at this point, so failing the whole request would misleadingly
+                    // suggest nothing changed. The admin needs to know the linked User record
+                    // (fullName/email/role/department/unit/group) may now be out of sync.
+                    console.error('Failed to sync user data during employee update:', err);
+                    userSyncError = 'The employee record was saved, but syncing the linked user account failed — it may now be out of sync.';
+                }
             }
         }
 
-        res.json(employee);
+        res.json({ ...employee, ...(userSyncError ? { userSyncError } : {}) });
     } catch (error: any) {
         console.error('CRITICAL_UPDATE_ERROR:', error);
         res.status(500).json({

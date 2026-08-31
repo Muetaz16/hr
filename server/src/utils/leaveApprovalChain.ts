@@ -14,8 +14,12 @@ import { PrismaClient, Employee } from '@prisma/client';
 //                             against the director's own Employee.directorateId, OR (legacy) the
 //                             employee's department listed in User.departmentIds  (the "Directorate" stage)
 // The Head-of-Attendance stage is granted by the "approve_attendance" permission (a function, not a
-// role); HR_MANAGER and GENERAL_MANAGER are global, unscoped roles. Every person matching one of
-// these three stages must sign, and each stage must have at least one holder or the request is blocked.
+// role); HR_MANAGER and GENERAL_MANAGER are global, unscoped roles. Every stage must have at least
+// one holder or the request is blocked — but ANY ONE person resolved for a given stage signing is
+// enough to complete it (staffHubController.ts's decideApprovalStep skips the other pending steps
+// in that same stage once one signs). This matters whenever a stage resolves to more than one
+// person — e.g. a department with two co-heads both holding HEAD_DEPARTMENT — confirmed intentional
+// or otherwise; either co-head's approval alone now suffices, not both.
 
 export type ApprovalStage = 'HEAD_ATTENDANCE' | 'UNIT_HEAD' | 'DEPT_HEAD' | 'DIVISION_HEAD' | 'HR_MANAGER' | 'DIRECTORATE' | 'GENERAL_MANAGER' | 'DIRECT_SUPERVISOR' | 'HEAD_DEPT_DIVISION';
 
@@ -77,6 +81,31 @@ const ORG_RANK: Record<string, number> = {
 };
 const orgRank = (role?: string | null): number => (role && ORG_RANK[role] != null ? ORG_RANK[role] : 0);
 
+// Resolves every user who EFFECTIVELY holds `permission` — a raw individual grant
+// (User.permissions), a FunctionalHat that bundles it (User.functionalHatIds), or SUPER_ADMIN (who
+// can always stand in for any function-based approver, e.g. Head of Attendance or GM, so a missing
+// assignment never hard-blocks an approval chain). Assigning a hat in the admin UI only ever writes
+// to User.functionalHatIds, never to User.permissions (see functionalHatController.ts/
+// userController.ts) — querying `permissions: { has: permission }` alone, as this file used to,
+// misses every hat-granted holder entirely. Mirrors the per-user resolution in
+// server/src/utils/effectivePermissions.ts (used by auth.ts for route authorization), reshaped
+// into one targeted query instead of loading every user's hats individually.
+async function resolveUsersWithPermission(prisma: PrismaClient, permission: string): Promise<string[]> {
+    const hats = await prisma.functionalHat.findMany({ where: { permissions: { has: permission } }, select: { id: true } });
+    const hatIds = hats.map(h => h.id);
+    const users = await prisma.user.findMany({
+        where: {
+            OR: [
+                { role: 'SUPER_ADMIN' },
+                { permissions: { has: permission } },
+                ...(hatIds.length > 0 ? [{ functionalHatIds: { hasSome: hatIds } }] : []),
+            ],
+        },
+        select: { id: true },
+    });
+    return users.map(u => u.id);
+}
+
 export async function resolveApprovalChain(
     prisma: PrismaClient,
     employee: Employee
@@ -97,11 +126,8 @@ export async function resolveApprovalChain(
     // work out the "smart signature" coverage (which printed row each person's lone signature fills).
 
     // Head of Attendance & Payroll — a *function*, not a role. Granted via the "Head of Attendance
-    // Approval" permission (approve_attendance) in Access Management, so anyone can be designated.
-    const attendanceHeads = idsOf(await prisma.user.findMany({
-        where: { permissions: { has: 'approve_attendance' } },
-        select: { id: true },
-    }));
+    // Approval" permission (approve_attendance) — directly, via a Functional Hat, or by SUPER_ADMIN.
+    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
 
     let unitHeads: string[] = [];
     if (employee.unitId) {
@@ -163,14 +189,12 @@ export async function resolveApprovalChain(
     }
     const directors = Array.from(directorIds);
 
-    // General Manager stage — whoever holds the GENERAL_MANAGER position, a SUPER_ADMIN (who may
-    // step in as GM), OR anyone designated a GM approver via the `approve_gm` permission (Access
-    // Management), mirroring how HEAD_ATTENDANCE is granted by `approve_attendance`. The stage is
-    // satisfied by ANY ONE of them signing — see the sibling-skip in decideApprovalStep.
-    const generalManagers = idsOf(await prisma.user.findMany({
-        where: { OR: [{ role: 'GENERAL_MANAGER' }, { role: 'SUPER_ADMIN' }, { permissions: { has: 'approve_gm' } }] },
-        select: { id: true },
-    }));
+    // General Manager stage — whoever holds the GENERAL_MANAGER position, OR anyone designated a GM
+    // approver via the `approve_gm` permission (directly, via a hat, or SUPER_ADMIN — see
+    // resolveUsersWithPermission), mirroring how HEAD_ATTENDANCE is granted by `approve_attendance`.
+    // The stage is satisfied by ANY ONE of them signing — see the sibling-skip in decideApprovalStep.
+    const generalManagerRoleHolders = idsOf(await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } }));
+    const generalManagers = Array.from(new Set([...generalManagerRoleHolders, ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
 
     // Keep only the org-head levels STRICTLY ABOVE the requester — so a Division Head's request never
     // routes through the Department Head beneath them. HEAD_ATTENDANCE / HR_MANAGER / GENERAL_MANAGER
@@ -303,23 +327,19 @@ export async function resolvePermissionApprovalChain(
     }
     rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeadIds });
 
-    // Head of Attendance & Payroll — granted by the approve_attendance permission (mandatory).
-    const attendanceHeads = await prisma.user.findMany({
-        where: { permissions: { has: 'approve_attendance' } },
-        select: { id: true },
-    });
-    rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads.map(u => u.id) });
+    // Head of Attendance & Payroll — granted by the approve_attendance permission, directly, via a
+    // Functional Hat, or by SUPER_ADMIN (mandatory stage).
+    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
+    rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
 
     // General Manager — the final signed-document authentication. Only appended when requested
     // (Work Authorization / out-work); mandatory when present, same as the full leave chain.
     if (opts?.includeGeneralManager) {
-        // GENERAL_MANAGER position, a SUPER_ADMIN (who may step in as GM), OR anyone designated a GM
-        // approver via `approve_gm`. Satisfied by ANY ONE signing (sibling-skip in decideApprovalStep).
-        const generalManagers = await prisma.user.findMany({
-            where: { OR: [{ role: 'GENERAL_MANAGER' }, { role: 'SUPER_ADMIN' }, { permissions: { has: 'approve_gm' } }] },
-            select: { id: true },
-        });
-        rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers.map(u => u.id) });
+        // GENERAL_MANAGER position, OR anyone designated a GM approver via `approve_gm` (directly,
+        // via a hat, or SUPER_ADMIN). Satisfied by ANY ONE signing (sibling-skip in decideApprovalStep).
+        const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });
+        const generalManagers = Array.from(new Set([...generalManagerRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+        rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
     }
 
     const requiredNonEmpty: ApprovalStage[] = opts?.includeGeneralManager

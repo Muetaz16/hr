@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { proxy, jsonPost, jsonPut } from '../utils/attendanceApiProxy';
+import { proxy, jsonPost, jsonPut, addMinutesToTime } from '../utils/attendanceApiProxy';
 
 // Rarely-changed admin config for the attendance system: work-hour settings, leave types,
 // holidays, and multiplier-factor (e.g. Ramadan/overtime) overrides. Lives as a tab inside the
@@ -105,8 +105,11 @@ export const createEmployeeShift = (req: Request, res: Response) => {
     }
     return proxy(res, '/api/system-settings/employee-shifts', jsonPost({
         empCode, startDate, endDate, workStart, workEnd,
-        gracePeriod: req.body.gracePeriod || null,
-        otThreshold: req.body.otThreshold || null,
+        // Default to workStart+5min / workEnd+30min when left blank, rather than sending null
+        // (which would fall back to BioTime's own system-wide default instead of this shift's
+        // actual hours).
+        gracePeriod: req.body.gracePeriod || addMinutesToTime(workStart, 5),
+        otThreshold: req.body.otThreshold || addMinutesToTime(workEnd, 30),
         reason: req.body.reason || null,
     }));
 };
@@ -120,8 +123,8 @@ export const updateEmployeeShift = (req: Request, res: Response) => {
     // reassigning a shift to a different employee.
     return proxy(res, `/api/system-settings/employee-shifts/${encodeURIComponent(req.params.id)}`, jsonPut({
         startDate, endDate, workStart, workEnd,
-        gracePeriod: req.body.gracePeriod || null,
-        otThreshold: req.body.otThreshold || null,
+        gracePeriod: req.body.gracePeriod || addMinutesToTime(workStart, 5),
+        otThreshold: req.body.otThreshold || addMinutesToTime(workEnd, 30),
         reason: req.body.reason || null,
     }));
 };

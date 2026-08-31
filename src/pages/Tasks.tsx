@@ -6,6 +6,7 @@ import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
 import { getHREvaluation } from '../services/hrEvaluationService';
 import { isEvaluationEnabled } from '../services/evaluationPeriodService';
+import { canAccess } from '../utils/access';
 import type { Employee, UserRole } from '../types';
 import { format } from 'date-fns';
 import {
@@ -56,7 +57,7 @@ const TasksPage: React.FC = () => {
                 }
             } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
                 emps = await employeeService.getEmployeesByDepartment(currentUser.departmentId);
-            } else if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL') {
+            } else if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
                 emps = await employeeService.getAllEmployees();
             }
 
@@ -101,7 +102,7 @@ const TasksPage: React.FC = () => {
 
             // 3. Fetch Urgent Contracts (only for HR/Admin/Personnel)
             let contractTasks: any[] = [];
-            if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL') {
+            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
                 try {
                     const urgentContracts = await employeeService.getExpiringContracts(7);
                     contractTasks = urgentContracts.map(emp => ({

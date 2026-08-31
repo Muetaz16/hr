@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../components/ConfirmDialog';
 import JobDescriptionFields, { emptyJDDetails, JD_SECTIONS, type JDFormValue } from '../components/JobDescriptionFields';
+import { canAccess } from '../utils/access';
 
 const emptyJDForm = (): JDFormValue => ({
     title: '', description: '', isHead: false, plannedCount: 1,
@@ -73,12 +74,12 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const [jdMode, setJdMode] = useState<'edit' | 'new'>('new'); // JD_CHANGE mode
     const [jdForm, setJdForm] = useState<JDFormValue>(emptyJDForm());
 
-    const isHR = currentUser?.role === 'HR_MANAGER' || currentUser?.role === 'SUPER_ADMIN';
+    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
     // The Head of Directorate acts as the GM for final approval.
     // JD changes are finalised by the Head of Directorate (not the GM).
-    const isDirector = currentUser?.role === 'HEAD_DIRECTOR' || currentUser?.role === 'SUPER_ADMIN';
-    const isDivisionHead = currentUser?.role === 'HEAD_DIVISION' || currentUser?.role === 'SUPER_ADMIN';
-    const canRequest = ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'SUPER_ADMIN'].includes(currentUser?.role || '');
+    const isDirector = canAccess(currentUser, ['HEAD_DIRECTOR'], ['recruitment_approvals']);
+    const isDivisionHead = canAccess(currentUser, ['HEAD_DIVISION'], ['recruitment_approvals']);
+    const canRequest = canAccess(currentUser, ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION'], ['manage_recruitment']);
 
     useEffect(() => { fetchData(); }, []);
 
