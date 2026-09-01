@@ -184,6 +184,30 @@ export async function createBioTimeEmployeeShift(params: {
     }
 }
 
+// Adds a forgotten biometric punch to BioTime once a Missing Biometric Log request's approval
+// chain fully completes — lands as a real check-in (punchState "0") or check-out (punchState "1")
+// at the given punchTime. Fail-soft, never throws — same convention as the other write-backs above;
+// called after the completing approval's DB transaction has already committed.
+export async function createBioTimeMissingPunch(params: { empCode: string; empId: number; punchTime: string; punchState: '0' | '1' }): Promise<BioTimeResult> {
+    try {
+        const response = await fetch(new URL('/api/attendance/missing-punches', ATTENDANCE_API_BASE).toString(), jsonPost({
+            empCode: params.empCode,
+            empId: params.empId,
+            punchTime: params.punchTime,
+            punchState: params.punchState,
+            startDate: null,
+            endDate: null,
+        }));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { success: false, message: (data as any)?.message || `BioTime returned ${response.status}` };
+        }
+        return { success: true, message: (data as any)?.message };
+    } catch (error: any) {
+        return { success: false, message: error?.message || 'Failed to reach the attendance system.' };
+    }
+}
+
 // Registers a disciplinary suspension in BioTime once a Suspension-type disciplinary action closes.
 // A day covered by a suspension is excluded from that employee's absence count and reports as
 // unpaid (totalWorkMins: 0) rather than a normal paid day. Fail-soft, never throws — same

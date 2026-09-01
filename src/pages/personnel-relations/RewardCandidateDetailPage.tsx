@@ -10,6 +10,7 @@ import { fetchEvaluationBreakdown } from '../../utils/evaluationScoring';
 import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
+import { useTranslation } from 'react-i18next';
 
 type CandidateType = 'month' | 'attendance' | 'loyalty';
 
@@ -46,6 +47,7 @@ const RewardCandidateDetailPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
     const canManage = canAccess(currentUser, [], ['manage_rewards']);
 
     const validType: CandidateType | null = type === 'month' || type === 'attendance' || type === 'loyalty' ? type : null;
@@ -98,7 +100,7 @@ const RewardCandidateDetailPage: React.FC = () => {
             toast.success(`Case ${created.caseNumber} opened — complete it to apply the award.`);
             navigate(`/personnel-relations/rewards/${created.id}`);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to open the case.');
+            toast.error(err?.response?.data?.error || t('failed_to_open_the_case', { defaultValue: 'Failed to open the case.' }));
         } finally {
             setBusy(false);
         }
@@ -108,22 +110,22 @@ const RewardCandidateDetailPage: React.FC = () => {
         return (
             <div className="p-8 text-center space-y-4">
                 <AlertCircle size={40} className="mx-auto text-red-500" />
-                <h2 className="text-lg font-bold text-slate-800">Unknown award type.</h2>
-                <button onClick={() => navigate('/personnel-relations/rewards')} className="text-red-700 font-bold hover:underline text-sm">Back to Rewards</button>
+                <h2 className="text-lg font-bold text-slate-800">{t('unknown_award_type', { defaultValue: 'Unknown award type.' })}</h2>
+                <button onClick={() => navigate('/personnel-relations/rewards')} className="text-red-700 font-bold hover:underline text-sm">{t('back_to_rewards', { defaultValue: 'Back to Rewards' })}</button>
             </div>
         );
     }
     if (empLoading || activeDetailQuery.isLoading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Loading…</div>;
+        return <div className="p-8 text-center text-slate-400 text-sm">{t('loading', { defaultValue: 'Loading…' })}</div>;
     }
     if (!employee || activeDetailQuery.isError) {
         return (
             <div className="p-8 text-center space-y-4">
                 <AlertCircle size={40} className="mx-auto text-red-500" />
                 <h2 className="text-lg font-bold text-slate-800">
-                    {activeDetailQuery.isError ? 'This employee is no longer an eligible candidate.' : 'Employee not found.'}
+                    {activeDetailQuery.isError ? t('this_employee_is_no_longer_an_eligible_candidate', { defaultValue: 'This employee is no longer an eligible candidate.' }) : t('employee_not_found', { defaultValue: 'Employee not found.' })}
                 </h2>
-                <button onClick={() => navigate('/personnel-relations/rewards')} className="text-red-700 font-bold hover:underline text-sm">Back to Rewards</button>
+                <button onClick={() => navigate('/personnel-relations/rewards')} className="text-red-700 font-bold hover:underline text-sm">{t('back_to_rewards', { defaultValue: 'Back to Rewards' })}</button>
             </div>
         );
     }

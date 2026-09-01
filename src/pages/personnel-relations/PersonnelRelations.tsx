@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../../services/employeeService';
@@ -118,6 +119,7 @@ const SearchSelect: React.FC<{
     placeholder?: string;
     emptyText?: string;
 }> = ({ value, onChange, options, placeholder, emptyText }) => {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const ref = useRef<HTMLDivElement>(null);
@@ -139,7 +141,7 @@ const SearchSelect: React.FC<{
         <div className="relative" ref={ref}>
             <button type="button" onClick={() => setOpen(o => !o)}
                 className="w-full p-2 border border-[#511d29]/20 bg-white text-left flex items-center justify-between gap-2">
-                <span className={`truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>{selected ? selected.label : (placeholder || 'Select…')}</span>
+                <span className={`truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>{selected ? selected.label : (placeholder || t('select_ellipsis', { defaultValue: 'Select…' }))}</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
@@ -148,10 +150,10 @@ const SearchSelect: React.FC<{
                         <div className="relative">
                             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input autoFocus type="text" value={query} onChange={e => setQuery(e.target.value)}
-                                placeholder="Search…" className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded text-xs" />
+                                placeholder={t('search_ellipsis', { defaultValue: 'Search…' })} className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded text-xs" />
                         </div>
                     </div>
-                    {filtered.length === 0 && <div className="px-3 py-4 text-center text-slate-400 text-xs">{emptyText || 'No matches'}</div>}
+                    {filtered.length === 0 && <div className="px-3 py-4 text-center text-slate-400 text-xs">{emptyText || t('no_matches', { defaultValue: 'No matches' })}</div>}
                     {groupKeys.map(g => (
                         <div key={g}>
                             {g && <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 sticky top-[49px]">{g}</div>}
@@ -214,6 +216,7 @@ const OFFBOARDING_SOURCE_LABELS: Record<string, string> = {
 };
 
 const PersonnelRelations: React.FC = () => {
+    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
     const currentPath = location.pathname;
@@ -414,10 +417,10 @@ const PersonnelRelations: React.FC = () => {
             await employeeService.updateEmployee(empId, { [key]: url } as Partial<Employee>);
             setDetailEmp(prev => (prev && prev.id === empId ? ({ ...prev, [key]: url } as Employee) : prev));
             queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
-            toast.success('Document updated.');
+            toast.success(t('document_updated', { defaultValue: 'Document updated.' }));
         } catch (err) {
             console.error('Failed to upload document', err);
-            toast.error('Failed to upload document.');
+            toast.error(t('failed_to_upload_document', { defaultValue: 'Failed to upload document.' }));
         } finally {
             setUploadingDocKey(null);
         }
@@ -425,8 +428,8 @@ const PersonnelRelations: React.FC = () => {
 
     // Add a brand-new, custom-named document (e.g. a new certificate) for the employee.
     const handleAddDocument = async (empId: string) => {
-        if (!newDocName.trim()) { toast.error('Enter a name for the document.'); return; }
-        if (!newDocFile) { toast.error('Choose a file to upload.'); return; }
+        if (!newDocName.trim()) { toast.error(t('enter_a_name_for_the_document', { defaultValue: 'Enter a name for the document.' })); return; }
+        if (!newDocFile) { toast.error(t('choose_a_file_to_upload', { defaultValue: 'Choose a file to upload.' })); return; }
         setAddingDoc(true);
         try {
             const { url, name: fileName } = await employeeService.uploadDocument(newDocFile);
@@ -435,24 +438,24 @@ const PersonnelRelations: React.FC = () => {
             setNewDocFile(null);
             setAddDocModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['employee-documents', empId] });
-            toast.success('Document added.');
+            toast.success(t('document_added', { defaultValue: 'Document added.' }));
         } catch (err) {
             console.error('Failed to add document', err);
-            toast.error('Failed to add document.');
+            toast.error(t('failed_to_add_document', { defaultValue: 'Failed to add document.' }));
         } finally {
             setAddingDoc(false);
         }
     };
 
     const handleDeleteDocument = async (empId: string, docId: string) => {
-        if (!window.confirm('Remove this document? This cannot be undone.')) return;
+        if (!window.confirm(t('remove_this_document_this_cannot_be_undone', { defaultValue: 'Remove this document? This cannot be undone.' }))) return;
         try {
             await employeeService.deleteEmployeeDocument(empId, docId);
             queryClient.invalidateQueries({ queryKey: ['employee-documents', empId] });
-            toast.success('Document removed.');
+            toast.success(t('document_removed', { defaultValue: 'Document removed.' }));
         } catch (err) {
             console.error('Failed to delete document', err);
-            toast.error('Failed to delete document.');
+            toast.error(t('failed_to_delete_document', { defaultValue: 'Failed to delete document.' }));
         }
     };
 
@@ -579,12 +582,12 @@ const PersonnelRelations: React.FC = () => {
     const openCaseFromCandidate = async (employeeId: string) => {
         try {
             const created = await promotionService.createFromCandidate(employeeId);
-            toast.success(`Promotion case ${created.caseNumber} opened.`);
+            toast.success(t('promotion_case_opened', { defaultValue: 'Promotion case {{caseNumber}} opened.', caseNumber: created.caseNumber }));
             queryClient.invalidateQueries({ queryKey: ['promotion-cases'] });
             queryClient.invalidateQueries({ queryKey: ['promotion-candidates'] });
             navigate(`/personnel-relations/promotions/${created.id}`);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to open the promotion case.');
+            toast.error(err?.response?.data?.error || t('failed_to_open_the_promotion_case', { defaultValue: 'Failed to open the promotion case.' }));
         }
     };
     // Searchable employee picker for "Add Exceptional Promotion", same pattern as the offboarding
@@ -644,11 +647,11 @@ const PersonnelRelations: React.FC = () => {
     const handleExecuteAttendanceCase = async (employeeId: string, violationId: string) => {
         try {
             await disciplinaryService.executeAttendanceCase(employeeId, violationId, attendanceMonth);
-            toast.success('Disciplinary case opened at the Disciplinary Action stage.');
+            toast.success(t('disciplinary_case_opened_at_the_disciplinary_action_stage', { defaultValue: 'Disciplinary case opened at the Disciplinary Action stage.' }));
             queryClient.invalidateQueries({ queryKey: ['disciplinary-attendance-candidates'] });
             queryClient.invalidateQueries({ queryKey: ['disciplinary-cases'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to execute the disciplinary case.');
+            toast.error(err?.response?.data?.error || t('failed_to_execute_the_disciplinary_case', { defaultValue: 'Failed to execute the disciplinary case.' }));
         }
     };
     const { data: jobDescriptions = [] } = useQuery({
@@ -755,7 +758,7 @@ const PersonnelRelations: React.FC = () => {
         });
         XLSX.utils.book_append_sheet(wb, ws, "Employee Lifecycle");
         XLSX.writeFile(wb, `IPH_Personnel_Relations_Lifecycle_${format(new Date(), 'yyyyMMdd')}.xlsx`);
-        toast.success('Lifecycle report exported.');
+        toast.success(t('lifecycle_report_exported', { defaultValue: 'Lifecycle report exported.' }));
     };
 
     const [clearances] = useState<any[]>([
@@ -770,21 +773,21 @@ const PersonnelRelations: React.FC = () => {
     // the destination; a PENDING record is stored, then generated/signed/uploaded/accepted.
     const handleActionFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!pafForm.employeeId) { toast.error('Select an employee.'); return; }
-        if (!pafForm.newJobDescriptionId) { toast.error('Select the target position (Job Description).'); return; }
+        if (!pafForm.employeeId) { toast.error(t('select_an_employee', { defaultValue: 'Select an employee.' })); return; }
+        if (!pafForm.newJobDescriptionId) { toast.error(t('select_the_target_position_job_description', { defaultValue: 'Select the target position (Job Description).' })); return; }
         {
             const jd = (jobDescriptions as any[]).find(j => j.id === pafForm.newJobDescriptionId);
             const cats: string[] = Array.isArray(jd?.jobCategories) ? jd.jobCategories : [];
-            if (cats.length > 1 && !pafForm.newJobCategory) { toast.error('Select a job category for this transfer.'); return; }
+            if (cats.length > 1 && !pafForm.newJobCategory) { toast.error(t('select_a_job_category_for_this_transfer', { defaultValue: 'Select a job category for this transfer.' })); return; }
         }
         setPafSubmitting(true);
         try {
             await personnelActionService.create(pafForm);
             queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
-            toast.success('Transfer form created. Generate it to collect signatures.');
+            toast.success(t('transfer_form_created_generate_it_to_collect_signatures', { defaultValue: 'Transfer form created. Generate it to collect signatures.' }));
             setIsActionFormModalOpen(false);
         } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to create the form.');
+            toast.error(err.response?.data?.error || t('failed_to_create_the_form', { defaultValue: 'Failed to create the form.' }));
         } finally {
             setPafSubmitting(false);
         }
@@ -805,16 +808,16 @@ const PersonnelRelations: React.FC = () => {
     // uploaded, then Accept marks the employee TRANSFERRED.
     const handleIcSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!icForm.employeeId) { toast.error('Select an employee.'); return; }
-        if (!icForm.newCompany.trim()) { toast.error('Enter the destination company.'); return; }
+        if (!icForm.employeeId) { toast.error(t('select_an_employee', { defaultValue: 'Select an employee.' })); return; }
+        if (!icForm.newCompany.trim()) { toast.error(t('enter_the_destination_company', { defaultValue: 'Enter the destination company.' })); return; }
         setIcSubmitting(true);
         try {
             await personnelActionService.createInterCompany(icForm);
             queryClient.invalidateQueries({ queryKey: ['personnel-actions'] });
-            toast.success('Inter-company transfer created. Generate it to collect signatures.');
+            toast.success(t('inter_company_transfer_created_generate_it_to_collect', { defaultValue: 'Inter-company transfer created. Generate it to collect signatures.' }));
             setIsIcModalOpen(false);
         } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to create the transfer.');
+            toast.error(err.response?.data?.error || t('failed_to_create_the_transfer', { defaultValue: 'Failed to create the transfer.' }));
         } finally {
             setIcSubmitting(false);
         }
@@ -884,9 +887,9 @@ const PersonnelRelations: React.FC = () => {
             a.download = `Personnel_Action_${(paf.employee?.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Personnel Action Form generated.');
+            toast.success(t('personnel_action_form_generated', { defaultValue: 'Personnel Action Form generated.' }));
         } catch (error: any) {
-            let msg = 'Failed to generate the form.';
+            let msg = t('failed_to_generate_the_form', { defaultValue: 'Failed to generate the form.' });
             const data = error.response?.data;
             if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
             else if (data?.error) { msg = data.error; }
@@ -909,9 +912,9 @@ const PersonnelRelations: React.FC = () => {
             a.download = `Monthly_Evaluation_${(employeeName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}_${month}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Evaluation form generated.');
+            toast.success(t('evaluation_form_generated', { defaultValue: 'Evaluation form generated.' }));
         } catch (error: any) {
-            let msg = 'Failed to generate the evaluation form.';
+            let msg = t('failed_to_generate_the_evaluation_form', { defaultValue: 'Failed to generate the evaluation form.' });
             const data = error.response?.data;
             if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
             else if (data?.error) { msg = data.error; }
@@ -924,10 +927,10 @@ const PersonnelRelations: React.FC = () => {
     // Accept (applies the transfer, requires the signed file) or reject a pending form.
     const handleDecide = async (decision: 'ACCEPT' | 'REJECT') => {
         if (!decidePaf) return;
-        if (decision === 'ACCEPT' && !decideFile) { toast.error('Attach the signed form to accept.'); return; }
+        if (decision === 'ACCEPT' && !decideFile) { toast.error(t('attach_the_signed_form_to_accept', { defaultValue: 'Attach the signed form to accept.' })); return; }
         const isInterCompany = decidePaf.actionType === 'INTER_COMPANY_TRANSFER';
         const newCompany = (decideNewCompany || decidePaf.newCompany || '').trim();
-        if (decision === 'ACCEPT' && isInterCompany && !newCompany) { toast.error('Enter the company the employee is transferring to.'); return; }
+        if (decision === 'ACCEPT' && isInterCompany && !newCompany) { toast.error(t('enter_the_company_the_employee_is_transferring', { defaultValue: 'Enter the company the employee is transferring to.' })); return; }
         setDecideBusy(decision);
         try {
             let documentUrl: string | undefined;
@@ -942,13 +945,13 @@ const PersonnelRelations: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
             queryClient.invalidateQueries({ queryKey: ['employee-documents', decidePaf.employeeId] });
             toast.success(decision === 'ACCEPT'
-                ? (isInterCompany ? 'Transfer accepted — employee marked as Transferred.' : 'Transfer accepted and applied to the employee.')
-                : 'Form rejected.');
+                ? (isInterCompany ? t('transfer_accepted_employee_marked_as_transferred', { defaultValue: 'Transfer accepted — employee marked as Transferred.' }) : t('transfer_accepted_and_applied_to_the_employee', { defaultValue: 'Transfer accepted and applied to the employee.' }))
+                : t('form_rejected', { defaultValue: 'Form rejected.' }));
             setDecidePaf(null);
             setDecideFile(null);
             setDecideNewCompany('');
         } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to process the decision.');
+            toast.error(err.response?.data?.error || t('failed_to_process_the_decision', { defaultValue: 'Failed to process the decision.' }));
         } finally {
             setDecideBusy(null);
         }
@@ -977,8 +980,8 @@ const PersonnelRelations: React.FC = () => {
     const handleRenewalSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedEmployee) return;
-        if (!renewForm.startDate || !renewForm.endDate) { toast.error('Enter the new contract start and end dates.'); return; }
-        if (!renewFile) { toast.error('Attach the signed contract before confirming.'); return; }
+        if (!renewForm.startDate || !renewForm.endDate) { toast.error(t('enter_the_new_contract_start_and_end_dates', { defaultValue: 'Enter the new contract start and end dates.' })); return; }
+        if (!renewFile) { toast.error(t('attach_the_signed_contract_before_confirming', { defaultValue: 'Attach the signed contract before confirming.' })); return; }
         setRenewSubmitting(true);
         try {
             const { url, name } = await employeeService.uploadDocument(renewFile);
@@ -994,10 +997,10 @@ const PersonnelRelations: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['relations-employees'] });
             queryClient.invalidateQueries({ queryKey: ['employee-documents', selectedEmployee.id] });
             queryClient.invalidateQueries({ queryKey: ['employee-contracts', selectedEmployee.id] });
-            toast.success('Contract renewed. Signed document filed to the employee lifecycle.');
+            toast.success(t('contract_renewed_signed_document_filed_to_the_employee', { defaultValue: 'Contract renewed. Signed document filed to the employee lifecycle.' }));
             setIsRenewalModalOpen(false);
         } catch (err: any) {
-            toast.error(err.response?.data?.error || 'Failed to renew the contract.');
+            toast.error(err.response?.data?.error || t('failed_to_renew_the_contract', { defaultValue: 'Failed to renew the contract.' }));
         } finally {
             setRenewSubmitting(false);
         }
@@ -1017,9 +1020,9 @@ const PersonnelRelations: React.FC = () => {
             a.download = `Contract_Renewal_${(emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Contract renewal form generated.');
+            toast.success(t('contract_renewal_form_generated', { defaultValue: 'Contract renewal form generated.' }));
         } catch (error: any) {
-            let msg = 'Failed to generate the form.';
+            let msg = t('failed_to_generate_the_form', { defaultValue: 'Failed to generate the form.' });
             const data = error.response?.data;
             if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
             else if (data?.error) { msg = data.error; }
@@ -1040,9 +1043,9 @@ const PersonnelRelations: React.FC = () => {
             a.download = `Employee_Summary_${(emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_')}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Employee summary generated.');
+            toast.success(t('employee_summary_generated', { defaultValue: 'Employee summary generated.' }));
         } catch (error: any) {
-            let msg = 'Failed to generate the summary.';
+            let msg = t('failed_to_generate_the_summary', { defaultValue: 'Failed to generate the summary.' });
             const data = error.response?.data;
             if (data instanceof Blob) { try { msg = JSON.parse(await data.text()).error || msg; } catch { /* keep */ } }
             else if (data?.error) { msg = data.error; }
@@ -1054,7 +1057,7 @@ const PersonnelRelations: React.FC = () => {
 
 
     if (isLoadingEmps) {
-        return <div className="p-12 text-center animate-pulse text-[#511d29] font-black uppercase tracking-widest text-sm">Loading Personnel Relations...</div>;
+        return <div className="p-12 text-center animate-pulse text-[#511d29] font-black uppercase tracking-widest text-sm">{t('loading_personnel_relations', { defaultValue: 'Loading Personnel Relations...' })}</div>;
     }
 
     // Not assigned to this section → don't reveal its contents at all.
@@ -1062,16 +1065,16 @@ const PersonnelRelations: React.FC = () => {
         return (
             <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-8">
                 <div className="border-b-2 border-[#511d29]/10 pb-6">
-                    <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">Personnel Relations Department</h1>
+                    <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">{t('personnel_relations_department', { defaultValue: 'Personnel Relations Department' })}</h1>
                 </div>
                 <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
                     <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
                         <Lock className="w-7 h-7 text-slate-400" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-slate-700">Access Restricted</h2>
+                        <h2 className="text-xl font-black text-slate-700">{t('access_restricted', { defaultValue: 'Access Restricted' })}</h2>
                         <p className="text-slate-500 mt-1 max-w-md">
-                            You aren't assigned to this section. Ask an administrator to grant you the matching permission in Access Management.
+                            {t('you_arent_assigned_to_this_section_ask', { defaultValue: "You aren't assigned to this section. Ask an administrator to grant you the matching permission in Access Management." })}
                         </p>
                     </div>
                 </div>
@@ -1085,15 +1088,15 @@ const PersonnelRelations: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-[#511d29]/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">
-                        Personnel Relations Department
+                        {t('personnel_relations_department', { defaultValue: 'Personnel Relations Department' })}
                     </h1>
                     <p className="text-slate-500 mt-1 font-medium">
-                        Manage employee lifecycles, contract renewals, disciplinary procedures, offboarding, rewards, and performance metrics.
+                        {t('manage_employee_lifecycles_contract_renewals_disciplinary', { defaultValue: 'Manage employee lifecycles, contract renewals, disciplinary procedures, offboarding, rewards, and performance metrics.' })}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="px-4 py-2 bg-[#f5ebd9] border border-[#511d29]/30 text-xs font-black text-[#511d29] uppercase tracking-widest">
-                        Relations Center
+                        {t('relations_center', { defaultValue: 'Relations Center' })}
                     </span>
                 </div>
             </div>
@@ -1106,9 +1109,9 @@ const PersonnelRelations: React.FC = () => {
                             <Users className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Employee Lifecycle Tracking</h3>
+                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('employee_lifecycle_tracking', { defaultValue: 'Employee Lifecycle Tracking' })}</h3>
                             <p className="text-sm text-slate-600 mt-1">
-                                Tracks the entire career stages of all personnel from probation to active service status, transfers, and promotions.
+                                {t('tracks_the_entire_career_stages_of_all', { defaultValue: 'Tracks the entire career stages of all personnel from probation to active service status, transfers, and promotions.' })}
                             </p>
                         </div>
                     </div>
@@ -1209,7 +1212,7 @@ const PersonnelRelations: React.FC = () => {
                                             <td className="p-4">{emp.joinDate ? format(parseISO(emp.joinDate), 'yyyy-MM-dd') : 'N/A'}</td>
                                             <td className="p-4 text-right">
                                                 <button
-                                                    onClick={() => setDetailEmp(emp)}
+                                                    onClick={() => { setDetailEmp(emp); navigate(`/personnel-relations/lifecycle?employeeId=${emp.id}`); }}
                                                     className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5"
                                                 >
                                                     <Eye className="w-3.5 h-3.5" /> Details
@@ -2201,19 +2204,19 @@ const PersonnelRelations: React.FC = () => {
                 <form
                     onSubmit={async (e) => {
                         e.preventDefault();
-                        if (!involuntaryEmployee) return toast.error('Select the employee from the suggestions.');
+                        if (!involuntaryEmployee) return toast.error(t('select_the_employee_from_the_suggestions', { defaultValue: 'Select the employee from the suggestions.' }));
                         try {
                             const created = await offboardingService.createManualCase({
                                 employeeId: involuntaryEmployee.id, source: involuntarySource,
                                 reason: involuntaryReason || undefined, dateOfSeparation: involuntaryDate || undefined,
                             });
-                            const startedAt = involuntarySource === 'EMPLOYEE_RESIGNATION' ? 'Resignation Request' : 'Clearance';
-                            toast.success(`Offboarding case ${created.caseNumber} opened at ${startedAt}.`);
+                            const startedAt = involuntarySource === 'EMPLOYEE_RESIGNATION' ? t('resignation_request', { defaultValue: 'Resignation Request' }) : t('clearance', { defaultValue: 'Clearance' });
+                            toast.success(t('offboarding_case_casenumber_opened_at_stage', { defaultValue: 'Offboarding case {{caseNumber}} opened at {{stage}}.', caseNumber: created.caseNumber, stage: startedAt }));
                             setIsOffboardingModalOpen(false);
                             setInvoluntaryEmployeeQuery(''); setInvoluntaryEmployee(null); setInvoluntaryReason(''); setInvoluntaryDate('');
                             queryClient.invalidateQueries({ queryKey: ['offboarding-cases'] });
                         } catch (err: any) {
-                            toast.error(err?.response?.data?.error || 'Failed to create the offboarding case.');
+                            toast.error(err?.response?.data?.error || t('failed_to_create_the_offboarding_case', { defaultValue: 'Failed to create the offboarding case.' }));
                         }
                     }}
                     className="space-y-4 text-xs font-semibold text-slate-700"
@@ -2289,19 +2292,19 @@ const PersonnelRelations: React.FC = () => {
                 <form
                     onSubmit={async (e) => {
                         e.preventDefault();
-                        if (!exceptionalEmployee) return toast.error('Select the employee from the suggestions.');
-                        if (!exceptionalToGrade) return toast.error('Select the target job grade.');
+                        if (!exceptionalEmployee) return toast.error(t('select_the_employee_from_the_suggestions', { defaultValue: 'Select the employee from the suggestions.' }));
+                        if (!exceptionalToGrade) return toast.error(t('select_the_target_job_grade', { defaultValue: 'Select the target job grade.' }));
                         try {
                             const created = await promotionService.createExceptional({
                                 employeeId: exceptionalEmployee.id, toGrade: exceptionalToGrade,
                             });
-                            toast.success(`Promotion case ${created.caseNumber} opened at Promotion Report.`);
+                            toast.success(t('promotion_case_opened_at_promotion_report', { defaultValue: 'Promotion case {{caseNumber}} opened at Promotion Report.', caseNumber: created.caseNumber }));
                             setIsExceptionalPromotionModalOpen(false);
                             setExceptionalEmployeeQuery(''); setExceptionalEmployee(null); setExceptionalToGrade('');
                             queryClient.invalidateQueries({ queryKey: ['promotion-cases'] });
                             navigate(`/personnel-relations/promotions/${created.id}`);
                         } catch (err: any) {
-                            toast.error(err?.response?.data?.error || 'Failed to create the exceptional promotion.');
+                            toast.error(err?.response?.data?.error || t('failed_to_create_the_exceptional_promotion', { defaultValue: 'Failed to create the exceptional promotion.' }));
                         }
                     }}
                     className="space-y-4 text-xs font-semibold text-slate-700"
@@ -2364,7 +2367,15 @@ const PersonnelRelations: React.FC = () => {
             {/* Employee Lifecycle — Full read-only detail view */}
             <Modal
                 isOpen={!!detailEmp}
-                onClose={() => setDetailEmp(null)}
+                onClose={() => {
+                    setDetailEmp(null);
+                    // Drop the ?employeeId= deep-link param on explicit close so a later browser Back
+                    // doesn't re-open this record. (Navigating away to a case page keeps the param, so
+                    // returning re-opens the detail view — that is the desired back behaviour.)
+                    if (new URLSearchParams(location.search).get('employeeId')) {
+                        navigate('/personnel-relations/lifecycle', { replace: true });
+                    }
+                }}
                 title={detailEmp ? `${detailEmp.fullName}${detailEmp.staffId ? ' · ' + detailEmp.staffId : ''}` : ''}
                 fullScreen
                 fullScreenWidth="max-w-7xl"

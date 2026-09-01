@@ -18,13 +18,21 @@ import {
     XCircle,
     MinusCircle,
     FileDown,
+    FileCheck,
     UserCheck,
-    Info
+    Info,
+    CalendarCheck,
+    CalendarX,
+    AlertTriangle,
+    LogOut,
+    Plane,
+    Fingerprint
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import type { Employee } from '../types';
+import { SERVER_URL } from '../services/apiClient';
 
 // Human-readable labels for the org approval-chain stages, shown in each request's progress trail.
 const STAGE_LABELS: Record<string, string> = {
@@ -37,6 +45,31 @@ const STAGE_LABELS: Record<string, string> = {
     DIRECTORATE: 'Directorate',
     GENERAL_MANAGER: 'General Manager',
 };
+
+// The request types offered in the New Request modal, rendered as a visual picker (icon + label +
+// short description) instead of a bare dropdown so each request type reads clearly at a glance.
+const REQUEST_TYPE_OPTIONS: { value: string; icon: React.ElementType; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string }[] = [
+    { value: 'PAID_HOLIDAY', icon: CalendarCheck, labelKey: 'paid_holiday', defaultLabel: 'Paid Holiday', descKey: 'paid_holiday_desc', defaultDesc: 'Annual paid leave' },
+    { value: 'UNPAID_LEAVE', icon: CalendarX, labelKey: 'unpaid_leave', defaultLabel: 'Unpaid Leave', descKey: 'unpaid_leave_desc', defaultDesc: 'Leave without pay' },
+    { value: 'EMERGENCY_LEAVE', icon: AlertTriangle, labelKey: 'emergency_leave', defaultLabel: 'Emergency Leave', descKey: 'emergency_leave_desc', defaultDesc: 'Urgent — needs a document' },
+    { value: 'LATE_COMING', icon: Clock, labelKey: 'late_coming', defaultLabel: 'Late Coming', descKey: 'late_coming_desc', defaultDesc: 'Arrive later than usual' },
+    { value: 'EARLY_LEAVING', icon: LogOut, labelKey: 'early_leaving', defaultLabel: 'Early Leaving', descKey: 'early_leaving_desc', defaultDesc: 'Leave before end of day' },
+    { value: 'WORK_AUTHORIZATION', icon: Plane, labelKey: 'work_authorization', defaultLabel: 'Work Authorization', descKey: 'work_authorization_desc', defaultDesc: 'Out-work / mission / travel' },
+    { value: 'MISSING_PUNCH', icon: Fingerprint, labelKey: 'missing_punch', defaultLabel: 'Missing Punch', descKey: 'missing_punch_desc', defaultDesc: 'Forgotten biometric log' },
+];
+
+// Missing-punch option lists (value = what the backend stores; label rendered via i18n).
+const MISSING_PUNCH_RECORD_OPTIONS = [
+    { value: 'CHECK_IN', labelKey: 'mp_check_in', defaultLabel: 'Check in' },
+    { value: 'CHECK_OUT', labelKey: 'mp_check_out', defaultLabel: 'Check out' },
+    { value: 'BOTH', labelKey: 'mp_both', defaultLabel: 'Both' },
+];
+const MISSING_PUNCH_REASON_OPTIONS = [
+    { value: 'FORGOT', labelKey: 'mp_forgot', defaultLabel: 'Forgot to Log' },
+    { value: 'DEVICE_ISSUE', labelKey: 'mp_device_issue', defaultLabel: 'Device / System Issue' },
+    { value: 'POWER_OUTAGE', labelKey: 'mp_power_outage', defaultLabel: 'Power Outage' },
+    { value: 'OTHERS', labelKey: 'mp_others', defaultLabel: 'Others' },
+];
 
 const StaffHub: React.FC = () => {
     const { currentUser } = useAuth();
@@ -69,7 +102,9 @@ const StaffHub: React.FC = () => {
         endTime: '',
         reason: '',
         workOrderType: 'SITE_MISSION',
-        placeOfAssignment: ''
+        placeOfAssignment: '',
+        missingPunchType: 'CHECK_IN',
+        missingPunchReason: 'FORGOT'
     });
     const [requestFile, setRequestFile] = useState<File | null>(null);
 
@@ -167,6 +202,10 @@ const StaffHub: React.FC = () => {
                 formData.append('workOrderType', newRequest.workOrderType);
                 formData.append('placeOfAssignment', newRequest.placeOfAssignment);
             }
+            if (newRequest.type === 'MISSING_PUNCH') {
+                formData.append('missingPunchType', newRequest.missingPunchType);
+                formData.append('missingPunchReason', newRequest.missingPunchReason);
+            }
             if (hasReplacement) formData.append('replacementUserId', replacementUserId);
             if (requestFile) formData.append('attachment', requestFile);
 
@@ -188,6 +227,22 @@ const StaffHub: React.FC = () => {
                 ? t('replacement_accepted_toast', { defaultValue: 'Accepted — your signature will be added to the leave form.' })
                 : t('replacement_declined_toast', { defaultValue: 'Declined. The request was cancelled.' }));
             setMyReplacementRequests(prev => prev.filter(r => r.id !== requestId));
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || t('err_generic', { defaultValue: 'Something went wrong.' }));
+        } finally {
+            setDeciding(null);
+        }
+    };
+
+    // The creator withdraws their own in-flight request. Confirmed first (it drops the request out
+    // of every approver's inbox), then the list is refreshed so its status flips to Cancelled.
+    const handleCancelRequest = async (requestId: string) => {
+        if (!window.confirm(t('confirm_cancel_request', { defaultValue: 'Cancel this request? This cannot be undone.' }))) return;
+        setDeciding(requestId);
+        try {
+            await staffHubService.cancelRequest(requestId);
+            toast.success(t('request_cancelled_toast', { defaultValue: 'Request cancelled.' }));
+            setRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: 'CANCELLED' } : r));
         } catch (error: any) {
             toast.error(error?.response?.data?.error || t('err_generic', { defaultValue: 'Something went wrong.' }));
         } finally {
@@ -299,6 +354,7 @@ const StaffHub: React.FC = () => {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t(req.type.toLowerCase())}</span>
                                 <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${req.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' :
                                         req.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
+                                            req.status === 'CANCELLED' ? 'bg-slate-200 text-slate-500' :
                                             req.status.startsWith('APPROVED_BY_') ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
                                     }`}>
                                     {t(req.status.toLowerCase())}
@@ -368,7 +424,20 @@ const StaffHub: React.FC = () => {
                                     {t("manager_note")} {req.managerNote}
                                 </div>
                             )}
-                            {req.approvalSteps && req.approvalSteps.length > 0 && (
+                            {/* Once the final signed document has been uploaded (at the GM stage), it
+                                becomes the request's official artifact — show it and stop offering the
+                                system-generated form. Otherwise the generated form stays available. */}
+                            {req.finalDocumentUrl ? (
+                                <a
+                                    href={`${SERVER_URL}${req.finalDocumentUrl}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={req.finalDocumentName || t('final_document', { defaultValue: 'Final Document' })}
+                                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors"
+                                >
+                                    <FileCheck className="w-3.5 h-3.5" /> {t('view_final_document', { defaultValue: 'View Final Document' })}
+                                </a>
+                            ) : req.approvalSteps && req.approvalSteps.length > 0 && (
                                 <button
                                     onClick={async () => {
                                         try {
@@ -389,6 +458,20 @@ const StaffHub: React.FC = () => {
                                     className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors"
                                 >
                                     <FileDown className="w-3.5 h-3.5" /> {t('download_form', { defaultValue: 'Download Form' })}
+                                </button>
+                            )}
+                            {/* The creator may withdraw their own request while it's still in flight —
+                                any type, any pending stage. Terminal states (completed/rejected/
+                                cancelled) hide the button. */}
+                            {!['COMPLETED', 'REJECTED', 'CANCELLED'].includes(req.status) && (
+                                <button
+                                    onClick={() => handleCancelRequest(req.id)}
+                                    disabled={deciding === req.id}
+                                    className="mt-2 w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors disabled:opacity-50"
+                                >
+                                    <X className="w-3.5 h-3.5" /> {deciding === req.id
+                                        ? t('cancelling', { defaultValue: 'Cancelling…' })
+                                        : t('cancel_request', { defaultValue: 'Cancel Request' })}
                                 </button>
                             )}
                         </div>
@@ -424,18 +507,34 @@ const StaffHub: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2 space-y-2">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("request_type")}</label>
-                                    <select
-                                        className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
-                                        value={newRequest.type}
-                                        onChange={e => setNewRequest({ ...newRequest, type: e.target.value, startTime: '', endTime: '' })}
-                                    >
-                                        <option value="PAID_HOLIDAY">{t("paid_holiday")}</option>
-                                        <option value="UNPAID_LEAVE">{t("unpaid_leave")}</option>
-                                        <option value="EMERGENCY_LEAVE">{t("emergency_leave")}</option>
-                                        <option value="LATE_COMING">{t("late_coming")}</option>
-                                        <option value="EARLY_LEAVING">{t("early_leaving")}</option>
-                                        <option value="WORK_AUTHORIZATION">{t("work_authorization", { defaultValue: 'Work Authorization' })}</option>
-                                    </select>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                        {REQUEST_TYPE_OPTIONS.map(opt => {
+                                            const active = newRequest.type === opt.value;
+                                            const Icon = opt.icon;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={opt.value}
+                                                    onClick={() => setNewRequest({ ...newRequest, type: opt.value, startTime: '', endTime: '' })}
+                                                    aria-pressed={active}
+                                                    className={`group relative flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all ${active
+                                                        ? 'border-[#aa7a51] bg-[#aa7a51]/10 shadow-sm ring-1 ring-[#aa7a51]/30'
+                                                        : 'border-slate-200 bg-slate-50 hover:border-[#aa7a51]/40 hover:bg-white'}`}
+                                                >
+                                                    <span className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${active ? 'bg-[#aa7a51] text-white' : 'bg-white text-slate-500 group-hover:text-[#aa7a51]'}`}>
+                                                        <Icon className="h-4 w-4" />
+                                                    </span>
+                                                    <span className={`text-xs font-bold leading-tight ${active ? 'text-[#511d29]' : 'text-slate-700'}`}>
+                                                        {t(opt.labelKey, { defaultValue: opt.defaultLabel })}
+                                                    </span>
+                                                    <span className="text-[10px] font-medium leading-tight text-slate-400">
+                                                        {t(opt.descKey, { defaultValue: opt.defaultDesc })}
+                                                    </span>
+                                                    {active && <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[#aa7a51]" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -448,7 +547,7 @@ const StaffHub: React.FC = () => {
                                     />
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-2" hidden={newRequest.type === 'MISSING_PUNCH'}>
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("end_date_optional")}</label>
                                     <input
                                         type="date"
@@ -549,6 +648,47 @@ const StaffHub: React.FC = () => {
                                                 </div>
                                             </>
                                         )}
+                                    </>
+                                )}
+
+                                {/* Missing Biometric Log (missing-punch) — which record is missing, why,
+                                    and where. The working schedule is fixed at 9-to-5, so no times are
+                                    asked; the date above is the day of the missing punch. */}
+                                {newRequest.type === 'MISSING_PUNCH' && (
+                                    <>
+                                        <div className="col-span-2 space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('mp_record_type', { defaultValue: 'Type of Missing Record' })}</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {MISSING_PUNCH_RECORD_OPTIONS.map(o => {
+                                                    const active = newRequest.missingPunchType === o.value;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={o.value}
+                                                            onClick={() => setNewRequest({ ...newRequest, missingPunchType: o.value })}
+                                                            className={`rounded-2xl border p-3 text-sm font-bold transition-all ${active ? 'border-[#aa7a51] bg-[#aa7a51]/10 text-[#511d29]' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#aa7a51]/40'}`}
+                                                        >
+                                                            {t(o.labelKey, { defaultValue: o.defaultLabel })}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div className="col-span-2 space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('mp_reason', { defaultValue: 'Reason for Missing Biometric Record' })}</label>
+                                            <select
+                                                className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                value={newRequest.missingPunchReason}
+                                                onChange={e => setNewRequest({ ...newRequest, missingPunchReason: e.target.value })}
+                                            >
+                                                {MISSING_PUNCH_REASON_OPTIONS.map(o => (
+                                                    <option key={o.value} value={o.value}>{t(o.labelKey, { defaultValue: o.defaultLabel })}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-[11px] font-medium text-slate-500 leading-relaxed">
+                                            {t('mp_schedule_note', { defaultValue: 'Working schedule is fixed at 09:00 – 17:00, and the work location is taken from your Job Description. Pick the date above; on final approval the missing punch is logged into the attendance system automatically.' })}
+                                        </div>
                                     </>
                                 )}
 

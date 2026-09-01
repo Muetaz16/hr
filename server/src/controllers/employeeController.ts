@@ -392,11 +392,32 @@ export const deleteEmployeeDocument = async (req: Request, res: Response) => {
     }
 };
 
+// Sane calendar-year bounds for any human/HR date (birth dates back to the early 1900s, contract/
+// passport expiries a few decades out). JavaScript's `new Date` happily accepts absurd years like
+// 11111, which then serialise via toISOString() to the extended "+011111-11-24T..." form that
+// Prisma/PostgreSQL reject ("input contains invalid characters. Expected ISO-8601 DateTime"), so we
+// bound the year explicitly rather than letting such a value reach the database.
+const MIN_DATE_YEAR = 1900;
+const MAX_DATE_YEAR = 2200;
+
+// True when a value is empty (allowed — optional field) OR a real calendar date within range.
+// Returns false only for a non-empty value that isn't a valid, in-range date.
+export const isValidDateInput = (value: any): boolean => {
+    if (value === undefined || value === null || String(value).trim() === '') return true;
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return false;
+    const year = date.getUTCFullYear();
+    return year >= MIN_DATE_YEAR && year <= MAX_DATE_YEAR;
+};
+
 const parseDate = (dateStr: any): string | null => {
-    if (!dateStr || dateStr.trim() === '') return null;
+    if (!dateStr || String(dateStr).trim() === '') return null;
     try {
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return null;
+        const year = date.getUTCFullYear();
+        // Reject out-of-range years so we never emit the extended "+0YYYYY-..." ISO string.
+        if (year < MIN_DATE_YEAR || year > MAX_DATE_YEAR) return null;
         return date.toISOString();
     } catch {
         return null;
@@ -536,6 +557,34 @@ export const createEmployee = async (req: Request, res: Response) => {
         const cleanDivisionId = (divisionId === '' || divisionId === 'null' || divisionId === 'undefined' || !divisionId) ? null : divisionId;
         const cleanDirectorateId = (directorateId === '' || directorateId === 'null' || directorateId === 'undefined' || !directorateId) ? null : directorateId;
         const cleanJobDescriptionId = (jobDescriptionId === '' || jobDescriptionId === 'null' || jobDescriptionId === 'undefined' || !jobDescriptionId) ? null : jobDescriptionId;
+
+        // Validate every date field up-front and report exactly which one is bad, instead of letting
+        // an out-of-range value (e.g. a mistyped 5-digit year) reach Prisma and surface as a cryptic
+        // "Invalid value for argument `arrivalDate`... Expected ISO-8601 DateTime" dump.
+        const DATE_FIELD_LABELS: Record<string, string> = {
+            joinDate: 'Join Date',
+            contractStartDate: 'Contract Start Date',
+            contractEndDate: 'Contract End Date',
+            dateOfBirth: 'Date of Birth',
+            idIssueDate: 'ID Issue Date',
+            passportExpiryDate: 'Passport Expiry Date',
+            drivingLicenseExpiry: 'Driving License Expiry',
+            arrivalDate: 'Arrival Date',
+            employeeTravelDate: 'Employee Travel Date',
+            employeeStartDate: 'Employee Start Date',
+        };
+        const dateValues: Record<string, any> = {
+            joinDate, contractStartDate, contractEndDate, dateOfBirth, idIssueDate,
+            passportExpiryDate, drivingLicenseExpiry, arrivalDate, employeeTravelDate, employeeStartDate,
+        };
+        const invalidDateFields = Object.entries(dateValues)
+            .filter(([, value]) => !isValidDateInput(value))
+            .map(([key, value]) => `${DATE_FIELD_LABELS[key] || key} (you entered "${String(value)}")`);
+        if (invalidDateFields.length > 0) {
+            return res.status(400).json({
+                error: `Please fix these date field(s) — they are not valid calendar dates. Check the year is between ${MIN_DATE_YEAR} and ${MAX_DATE_YEAR}: ${invalidDateFields.join('; ')}.`,
+            });
+        }
 
         // Emails are the login identifier — normalise to lowercase so authentication (which lowercases
         // the entered email) always matches what we store.
@@ -842,10 +891,22 @@ export const createEmployee = async (req: Request, res: Response) => {
         res.json({ ...result, _attendanceSync: attendanceSync });
     } catch (error: any) {
         console.error("Error creating employee:", error);
+        const message = error?.message || 'Failed to create employee';
+
+        // A bad date value that slipped past the up-front check (e.g. from another code path) reaches
+        // Prisma as a long "Expected ISO-8601 DateTime" invocation dump. Turn it into a short, clear
+        // message instead of surfacing the raw stack to the user.
+        if (/ISO-8601|invalid characters/i.test(message)) {
+            return res.status(400).json({
+                error: 'One or more date fields contain an invalid date (check the year is realistic). Please correct the dates and try again.',
+                details: message,
+                code: error?.code,
+            });
+        }
+
         // Business-rule failures thrown inside the transaction (duplicate account email,
         // unit/staffing capacity, etc.) are the user's to fix, so return 400 with the exact
         // message. Prisma error code + meta are included so the client can be specific.
-        const message = error?.message || 'Failed to create employee';
         const isValidation = error?.code === 'P2002' || error?.code === 'P2003' ||
             /already exists|capacity|staffing plan|required|not found/i.test(message);
         res.status(isValidation ? 400 : 500).json({

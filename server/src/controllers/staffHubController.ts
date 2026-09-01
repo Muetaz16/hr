@@ -4,12 +4,13 @@ import type { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
-import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
-import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift } from '../utils/attendanceApiProxy';
+import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE, resolveMissingPunchChain, MISSING_PUNCH_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
+import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift, createBioTimeMissingPunch, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 import { generateWorkAuthorizationDocx, type WorkAuthApprover, type WorkOrderType } from '../utils/workAuthorizationForm';
+import { generateMissingBiometricLogDocx, type MissingPunchApprover, type MissingPunchType, type MissingPunchReason } from '../utils/missingBiometricLogForm';
 
 import { prisma } from '../lib/prisma';
 
@@ -30,6 +31,15 @@ const OUTWORK_TYPES = ['WORK_AUTHORIZATION'];
 
 // Every type that runs on the short 3-stage permission chain (permissions + work authorization).
 const SHORT_CHAIN_TYPES = [...PERMISSION_TYPES, ...OUTWORK_TYPES];
+
+// Missing Biometric Log (missing-punch) — its own 2-stage chain (Head of Department/Division ->
+// Head of Attendance & Payroll). On final approval the forgotten punch(es) are written to BioTime
+// at the fixed 9-to-5 schedule (09:00 check-in / 17:00 check-out).
+const MISSING_PUNCH_TYPE = 'MISSING_PUNCH';
+const MISSING_PUNCH_CHECK_IN_TIME = '09:00';
+const MISSING_PUNCH_CHECK_OUT_TIME = '17:00';
+const MISSING_PUNCH_RECORD_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BOTH'];
+const MISSING_PUNCH_REASONS = ['FORGOT', 'DEVICE_ISSUE', 'POWER_OUTAGE', 'OTHERS'];
 
 // Inclusive day count — same formula already used below in updateRequestStatus's balance
 // increment, kept identical so submission-time validation and approval-time accounting agree.
@@ -53,6 +63,7 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
     EARLY_LEAVING: 'Early Leaving',
     HOURS_LEAVE: 'Hours Leave',
     WORK_AUTHORIZATION: 'Work Authorization',
+    MISSING_PUNCH: 'Missing Punch',
 };
 
 // Human-readable label for each Work-Order category (used to compose the out-work reason).
@@ -159,7 +170,7 @@ export const getReplacementCandidatesForEmployee = async (req: Request, res: Res
 
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
-        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId, workOrderType, placeOfAssignment } = req.body;
+        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId, workOrderType, placeOfAssignment, missingPunchType, missingPunchReason } = req.body;
         const file = (req as any).file;
 
         // Emergency leave requires a supporting document
@@ -342,6 +353,60 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 firstApprovers,
                 'New permission request to review',
                 `${employee.fullName} submitted a ${leaveTypeLabel(type)} request.`,
+                '/approvals',
+            );
+            return res.json(request);
+        }
+
+        // Missing Biometric Log (missing-punch) — its own 2-stage chain (Head of Department/Division
+        // -> Head of Attendance & Payroll). On final approval the forgotten punch(es) are written to
+        // BioTime at the fixed 9-to-5 schedule (see decideApprovalStep).
+        if (type === MISSING_PUNCH_TYPE) {
+            if (!MISSING_PUNCH_RECORD_TYPES.includes(missingPunchType)) {
+                return res.status(400).json({ error: 'Please choose which record is missing (Check in, Check out, or Both).' });
+            }
+            if (!MISSING_PUNCH_REASONS.includes(missingPunchReason)) {
+                return res.status(400).json({ error: 'Please choose a reason for the missing biometric record.' });
+            }
+
+            const { steps, blockedStage } = await resolveMissingPunchChain(prisma, employee);
+            if (blockedStage) {
+                return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
+            }
+            if (steps.length === 0) {
+                return res.status(400).json({ error: 'No approvers could be resolved for this request. Contact an administrator.' });
+            }
+
+            const request = await prisma.$transaction(async (tx) => {
+                const created = await tx.leaveRequest.create({
+                    data: {
+                        employeeId, userId, type,
+                        startDate: new Date(startDate),
+                        reason: reason || null,
+                        missingPunchType,
+                        missingPunchReason,
+                        status: 'PENDING',
+                    },
+                });
+                await tx.leaveApprovalStep.createMany({
+                    data: steps.map(s => ({
+                        leaveRequestId: created.id,
+                        sequence: MISSING_PUNCH_STAGE_SEQUENCE[s.stage],
+                        stage: s.stage,
+                        approverUserId: s.approverUserId,
+                        coversStages: s.coversStages,
+                        status: 'PENDING',
+                    })),
+                });
+                return created;
+            });
+
+            const minSeq = Math.min(...steps.map(s => MISSING_PUNCH_STAGE_SEQUENCE[s.stage]));
+            const firstApprovers = steps.filter(s => MISSING_PUNCH_STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
+            await notifyUsers(
+                firstApprovers,
+                'New missing-punch request to review',
+                `${employee.fullName} submitted a Missing Punch request (${fmtRange(startDate, null)}).`,
                 '/approvals',
             );
             return res.json(request);
@@ -598,6 +663,27 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                     });
                     if (!result.success) console.warn('[BioTime] Out-work write-back failed (non-fatal):', result.message);
                 }
+            } else if (lrq.type === MISSING_PUNCH_TYPE) {
+                // Missing Biometric Log — write the forgotten punch(es) straight into BioTime at the
+                // fixed 9-to-5 schedule. empId is BioTime's own numeric id (our Employee.bioId),
+                // falling back to a live lookup by empCode if it isn't stored yet.
+                const empId = step.leaveRequest.employee.bioId ?? (await findBioTimeEmpIdByCode(empCode));
+                if (empId == null) {
+                    console.warn('[BioTime] Missing-punch write skipped (non-fatal): no BioTime empId for', empCode);
+                } else {
+                    const datePart = new Date(lrq.startDate).toISOString().slice(0, 10);
+                    const punches: { punchTime: string; punchState: '0' | '1' }[] = [];
+                    if (lrq.missingPunchType === 'CHECK_IN' || lrq.missingPunchType === 'BOTH') {
+                        punches.push({ punchTime: `${datePart}T${MISSING_PUNCH_CHECK_IN_TIME}:00`, punchState: '0' });
+                    }
+                    if (lrq.missingPunchType === 'CHECK_OUT' || lrq.missingPunchType === 'BOTH') {
+                        punches.push({ punchTime: `${datePart}T${MISSING_PUNCH_CHECK_OUT_TIME}:00`, punchState: '1' });
+                    }
+                    for (const p of punches) {
+                        const result = await createBioTimeMissingPunch({ empCode, empId, punchTime: p.punchTime, punchState: p.punchState });
+                        if (!result.success) console.warn('[BioTime] Missing-punch write-back failed (non-fatal):', result.message);
+                    }
+                }
             } else {
                 const leaveTypeId = LEAVE_TYPE_ID_MAP[lrq.type];
                 if (leaveTypeId) {
@@ -813,6 +899,83 @@ export const decideReplacement = async (req: Request, res: Response) => {
     }
 };
 
+// PATCH /staff-hub/requests/:id/cancel — the employee who created the request withdraws it. Works
+// for every request type (leave, permission, work authorization, missing punch, …) as long as it's
+// still in flight: a request that's already COMPLETED, REJECTED or CANCELLED can't be cancelled.
+// Only the creator may do this — verified against the request's own userId (and the owning
+// employee's userId as a fallback), never a role. On cancel we mark the request CANCELLED, skip any
+// still-pending approval steps so it drops out of every approver's inbox, and notify whoever was
+// currently on the hook (the front-of-queue approvers, or a replacement still deciding).
+export const cancelRequest = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+        const request = await prisma.leaveRequest.findUnique({
+            where: { id },
+            include: { employee: { select: { fullName: true, userId: true } } },
+        });
+        if (!request) return res.status(404).json({ error: 'Request not found.' });
+
+        // Only the creator can cancel. The request stores the creating user's id; also accept the
+        // owning employee's linked account so an employee whose userId differs from the stored one
+        // (e.g. re-linked account) can still withdraw their own request.
+        const isOwner = request.userId === userId || request.employee?.userId === userId;
+        if (!isOwner) {
+            return res.status(403).json({ error: 'You can only cancel your own requests.' });
+        }
+
+        if (['COMPLETED', 'REJECTED', 'CANCELLED'].includes(request.status)) {
+            return res.status(400).json({
+                error: request.status === 'CANCELLED'
+                    ? 'This request has already been cancelled.'
+                    : 'This request has already been finalised and can no longer be cancelled.',
+            });
+        }
+
+        // Capture who's currently notified so we can tell them it's been withdrawn — the
+        // front-of-queue approver(s), or the replacement still deciding.
+        const firstPending = await prisma.leaveApprovalStep.findFirst({
+            where: { leaveRequestId: id, status: 'PENDING' },
+            orderBy: { sequence: 'asc' },
+        });
+        const currentApprovers = firstPending
+            ? await prisma.leaveApprovalStep.findMany({
+                where: { leaveRequestId: id, status: 'PENDING', sequence: firstPending.sequence },
+                select: { approverUserId: true },
+            })
+            : [];
+
+        await prisma.$transaction(async (tx) => {
+            await tx.leaveApprovalStep.updateMany({
+                where: { leaveRequestId: id, status: 'PENDING' },
+                data: { status: 'SKIPPED' },
+            });
+            await tx.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
+        });
+
+        // Fail-soft notifications, after commit. Nudge whoever the request was sitting with, plus a
+        // pending replacement so they don't act on a nomination that no longer exists.
+        const rangeLabel = fmtRange(request.startDate, request.endDate);
+        const recipients = currentApprovers.map(s => s.approverUserId);
+        if (request.replacementStatus === 'PENDING' && request.replacementUserId) {
+            recipients.push(request.replacementUserId);
+        }
+        await notifyUsers(
+            recipients,
+            'Request cancelled',
+            `${request.employee?.fullName || 'An employee'} cancelled their ${leaveTypeLabel(request.type)} request (${rangeLabel}). No action is needed.`,
+            '/approvals',
+        );
+
+        return res.json({ id, status: 'CANCELLED' });
+    } catch (error) {
+        console.error('Error cancelling request:', error);
+        res.status(500).json({ error: 'Failed to cancel the request.' });
+    }
+};
+
 export const getRequestsByEmployee = async (req: Request, res: Response) => {
     try {
         const { employeeId } = req.params;
@@ -966,6 +1129,32 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
             res.setHeader('Content-Disposition', `attachment; filename="Permission_Request_${safeName}.docx"`);
+            return res.send(buf);
+        }
+
+        // Missing Biometric Log (missing-punch) uses its own "Missing Biometric Log Form" with the
+        // short 2-stage chain (Head of Department/Division -> Head of Attendance & Payroll).
+        if (request.type === MISSING_PUNCH_TYPE) {
+            const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const toMp = (step: (typeof request.approvalSteps)[number] | undefined): MissingPunchApprover | null =>
+                step ? { signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+            const buf = generateMissingBiometricLogDocx({
+                employeeId: emp.staffId || '',
+                employeeName: emp.fullName || '',
+                positionTitle: (emp as any).jobDescription?.title || emp.position || '',
+                division: emp.division?.name || '',
+                department: emp.department?.name || '',
+                workingSchedule: '09:00 - 17:00',
+                jdWorkLocations: ((emp as any).jobDescription?.workLocations as string[]) || [],
+                date: fmt(request.startDate),
+                recordType: (request.missingPunchType as MissingPunchType) || 'CHECK_IN',
+                reason: (request.missingPunchReason as MissingPunchReason) || 'FORGOT',
+                headOfDeptDivision: toMp(stepBy('DEPT_HEAD')),
+                headOfAttendance: toMp(stepBy('HEAD_ATTENDANCE')),
+            });
+            const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="Missing_Biometric_Log_${safeName}.docx"`);
             return res.send(buf);
         }
 

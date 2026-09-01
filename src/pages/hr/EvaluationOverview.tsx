@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { departmentService, divisionService } from '../../services/departmentService';
 import { directorateService } from '../../services/directorateService';
@@ -37,6 +38,7 @@ const ScoreBadge: React.FC<{ label?: string; value: string; done: boolean }> = (
 // and the aggregated Final Score. Reuses buildEvaluationBreakdown against
 // data already bulk-fetched here, so there's no extra per-employee network cost.
 const EvaluationOverview: React.FC<Props> = ({ month }) => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -156,10 +158,10 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
         setFinalizing(employeeId);
         try {
             await evaluationService.finalizeEvaluations(month, { employeeId });
-            toast.success('Evaluation finalized.');
+            toast.success(t('evaluation_finalized', { defaultValue: 'Evaluation finalized.' }));
             await fetchAll();
         } catch (error: any) {
-            toast.error(error?.response?.data?.error || 'Failed to finalize evaluation.');
+            toast.error(error?.response?.data?.error || t('failed_to_finalize_evaluation', { defaultValue: 'Failed to finalize evaluation.' }));
         } finally {
             setFinalizing(null);
         }
@@ -172,10 +174,10 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
             for (const emp of targets) {
                 await evaluationService.finalizeEvaluations(month, { employeeId: emp.id });
             }
-            toast.success(`Finalized ${targets.length} employee(s) in ${groupName}.`);
+            toast.success(t('finalized_employees_in_group', { defaultValue: 'Finalized {{count}} employee(s) in {{groupName}}.', count: targets.length, groupName }));
             await fetchAll();
         } catch (error: any) {
-            toast.error(error?.response?.data?.error || 'Failed to finalize group.');
+            toast.error(error?.response?.data?.error || t('failed_to_finalize_group', { defaultValue: 'Failed to finalize group.' }));
         } finally {
             setFinalizing(null);
         }
@@ -185,10 +187,10 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
         setFinalizing('all');
         try {
             const result = await evaluationService.finalizeEvaluations(month);
-            toast.success(`Finalized ${result.finalized} employee(s), ${result.skipped} already done.`);
+            toast.success(t('finalized_employees_already_done', { defaultValue: 'Finalized {{finalized}} employee(s), {{skipped}} already done.', finalized: result.finalized, skipped: result.skipped }));
             await fetchAll();
         } catch (error: any) {
-            toast.error(error?.response?.data?.error || 'Failed to finalize all evaluations.');
+            toast.error(error?.response?.data?.error || t('failed_to_finalize_all_evaluations', { defaultValue: 'Failed to finalize all evaluations.' }));
         } finally {
             setFinalizing(null);
         }
@@ -223,7 +225,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
     const totalEmployees = employees.length;
     const fullyEvaluated = employees.filter(isFullyEvaluated).length;
 
-    if (loading) return <div className="p-12 text-center text-slate-400">Loading evaluation overview...</div>;
+    if (loading) return <div className="p-12 text-center text-slate-400">{t('loading_evaluation_overview', { defaultValue: 'Loading evaluation overview...' })}</div>;
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -231,7 +233,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <Building2 className="w-5 h-5 text-indigo-500" />
-                        Evaluation Status by Department
+                        {t('evaluation_status_by_department', { defaultValue: 'Evaluation Status by Department' })}
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">
                         All employees for <strong>{month}</strong> — {fullyEvaluated}/{totalEmployees} fully evaluated.
@@ -241,25 +243,25 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                         <input
-                            type="text" placeholder="Search employee..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            type="text" placeholder={t('search_employee', { defaultValue: 'Search employee...' })} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
                         />
                     </div>
                     <button
                         onClick={finalizeAll}
                         disabled={!canFinalizeMonth || finalizing !== null}
-                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : 'Save/finalize every employee\'s evaluation for this month'}
+                        title={!canFinalizeMonth ? t('presence_data_is_not_final_until_day_25', { defaultValue: 'Presence data is not final until day 25 of the month' }) : t('save_finalize_every_employee_s_evaluation_for_this', { defaultValue: "Save/finalize every employee's evaluation for this month" })}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                     >
                         <ShieldCheck className="w-4 h-4" />
-                        {finalizing === 'all' ? 'Finalizing…' : 'Finalize All'}
+                        {finalizing === 'all' ? t('finalizing', { defaultValue: 'Finalizing…' }) : t('finalize_all', { defaultValue: 'Finalize All' })}
                     </button>
                 </div>
             </div>
 
             <div className="divide-y divide-slate-100">
                 {groups.length === 0 && (
-                    <div className="p-12 text-center text-slate-400 text-sm">No employees found.</div>
+                    <div className="p-12 text-center text-slate-400 text-sm">{t('no_employees_found', { defaultValue: 'No employees found.' })}</div>
                 )}
                 {groups.map(([groupName, groupEmployees]) => {
                     const isCollapsed = collapsed.has(groupName);
@@ -273,17 +275,17 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                     <span className="text-xs text-slate-400">({groupEmployees.length})</span>
                                 </button>
                                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${groupDone >= groupEmployees.length ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-50 text-amber-600 ring-1 ring-amber-100'}`}>
-                                    {groupDone}/{groupEmployees.length} evaluated
+                                    {groupDone}/{groupEmployees.length} {t('evaluated', { defaultValue: 'evaluated' })}
                                 </span>
                                 {groupEmployees.some(e => !finalizedMap[e.id]) && (
                                     <button
                                         onClick={() => finalizeGroup(groupName, groupEmployees)}
                                         disabled={!canFinalizeMonth || finalizing !== null}
-                                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : `Finalize every employee in ${groupName}`}
+                                        title={!canFinalizeMonth ? t('presence_data_is_not_final_until_day_25', { defaultValue: 'Presence data is not final until day 25 of the month' }) : t('finalize_every_employee_in_group', { defaultValue: 'Finalize every employee in {{groupName}}', groupName })}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                     >
                                         <ShieldCheck className="w-3.5 h-3.5" />
-                                        {finalizing === groupName ? 'Finalizing…' : 'Finalize Group'}
+                                        {finalizing === groupName ? t('finalizing', { defaultValue: 'Finalizing…' }) : t('finalize_group', { defaultValue: 'Finalize Group' })}
                                     </button>
                                 )}
                             </div>
@@ -293,14 +295,14 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                     <table className="w-full text-left">
                                         <thead className="bg-white text-slate-400 border-b border-slate-100">
                                             <tr>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Employee</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Direct Manager /40</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Skip-Level Manager /40</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Presence /20</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Exceptional ±20</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Training +10</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">Final Score</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-right">Details</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('direct_manager_40', { defaultValue: 'Direct Manager /40' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('skip_level_manager_40', { defaultValue: 'Skip-Level Manager /40' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('presence_20', { defaultValue: 'Presence /20' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('exceptional_20', { defaultValue: 'Exceptional ±20' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('training_10', { defaultValue: 'Training +10' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('final_score', { defaultValue: 'Final Score' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-right">{t('details', { defaultValue: 'Details' })}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
@@ -320,7 +322,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{emp.staffId || emp.id.slice(0, 8)}</p>
                                                             {finalized && (
                                                                 <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-900 text-white" title={`Finalized ${new Date(finalized.finalizedAt).toLocaleDateString()}${finalized.isAuto ? ' (auto)' : ''}`}>
-                                                                    <Lock className="w-2.5 h-2.5" /> Finalized
+                                                                    <Lock className="w-2.5 h-2.5" /> {t('finalized', { defaultValue: 'Finalized' })}
                                                                 </span>
                                                             )}
                                                         </td>
@@ -328,28 +330,28 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                             {!b.evaluatorA ? (
                                                                 <span className="text-slate-300 text-xs">—</span>
                                                             ) : !aIsMetric ? (
-                                                                <span className="text-slate-300 text-xs italic" title="Score-only evaluator — see Details">—</span>
+                                                                <span className="text-slate-300 text-xs italic" title={t('score_only_evaluator_see_details', { defaultValue: 'Score-only evaluator — see Details' })}>—</span>
                                                             ) : (
-                                                                <ScoreBadge label={b.evaluatorA.label} value={col1 != null ? `${col1.toFixed(1)}/40` : 'Not Evaluated'} done={col1 != null} />
+                                                                <ScoreBadge label={b.evaluatorA.label} value={col1 != null ? `${col1.toFixed(1)}/40` : t('not_evaluated', { defaultValue: 'Not Evaluated' })} done={col1 != null} />
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             {!b.evaluatorB ? (
                                                                 <span className="text-slate-300 text-xs">—</span>
                                                             ) : !bIsMetric ? (
-                                                                <span className="text-slate-300 text-xs italic" title="Score-only evaluator — see Details">—</span>
+                                                                <span className="text-slate-300 text-xs italic" title={t('score_only_evaluator_see_details', { defaultValue: 'Score-only evaluator — see Details' })}>—</span>
                                                             ) : (
-                                                                <ScoreBadge label={b.evaluatorB.label} value={col2 != null ? `${col2.toFixed(1)}/40` : 'Not Evaluated'} done={col2 != null} />
+                                                                <ScoreBadge label={b.evaluatorB.label} value={col2 != null ? `${col2.toFixed(1)}/40` : t('not_evaluated', { defaultValue: 'Not Evaluated' })} done={col2 != null} />
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <ScoreBadge value={hrDone ? `${b.hrScore.toFixed(1)}/20` : 'Not Evaluated'} done={hrDone} />
+                                                            <ScoreBadge value={hrDone ? `${b.hrScore.toFixed(1)}/20` : t('not_evaluated', { defaultValue: 'Not Evaluated' })} done={hrDone} />
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <ScoreBadge value={persDone ? `${b.exceptionalScore >= 0 ? '+' : ''}${b.exceptionalScore.toFixed(1)}%` : 'Not Evaluated'} done={persDone} />
+                                                            <ScoreBadge value={persDone ? `${b.exceptionalScore >= 0 ? '+' : ''}${b.exceptionalScore.toFixed(1)}%` : t('not_evaluated', { defaultValue: 'Not Evaluated' })} done={persDone} />
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <ScoreBadge value={persDone ? `+${b.trainingScore.toFixed(1)}%` : 'Not Evaluated'} done={persDone} />
+                                                            <ScoreBadge value={persDone ? `+${b.trainingScore.toFixed(1)}%` : t('not_evaluated', { defaultValue: 'Not Evaluated' })} done={persDone} />
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             <div className="font-bold text-slate-700 bg-slate-100/50 inline-block px-2 py-1 rounded-lg">{b.finalScore.toFixed(1)}%</div>
@@ -361,7 +363,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                                         onClick={() => finalizeOne(emp.id)}
                                                                         disabled={!canFinalizeMonth || finalizing !== null}
                                                                         className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                        title={!canFinalizeMonth ? 'Presence data is not final until day 25 of the month' : 'Finalize this employee\'s evaluation'}
+                                                                        title={!canFinalizeMonth ? t('presence_data_is_not_final_until_day_25', { defaultValue: 'Presence data is not final until day 25 of the month' }) : t('finalize_this_employee_s_evaluation', { defaultValue: "Finalize this employee's evaluation" })}
                                                                     >
                                                                         <ShieldCheck className="w-4 h-4" />
                                                                     </button>
@@ -370,14 +372,14 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                                     onClick={() => setPersonnelEmp(emp)}
                                                                     disabled={!!finalized && currentUser?.role !== 'SUPER_ADMIN'}
                                                                     className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                    title={finalized && currentUser?.role !== 'SUPER_ADMIN' ? 'Finalized — no longer editable' : 'Edit Exceptional / Training'}
+                                                                    title={finalized && currentUser?.role !== 'SUPER_ADMIN' ? t('finalized_no_longer_editable', { defaultValue: 'Finalized — no longer editable' }) : t('edit_exceptional_training', { defaultValue: 'Edit Exceptional / Training' })}
                                                                 >
                                                                     <Pencil className="w-4 h-4" />
                                                                 </button>
                                                                 <button
                                                                     onClick={() => setDetailEmp(emp)}
                                                                     className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
-                                                                    title="Details"
+                                                                    title={t('details', { defaultValue: 'Details' })}
                                                                 >
                                                                     <FileSearch className="w-4 h-4" />
                                                                 </button>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { employeeService } from '../services/employeeService';
 import { unitService } from '../services/unitService';
@@ -13,6 +14,7 @@ import Modal from '../components/Modal';
 import JobDescriptionView from '../components/JobDescriptionView';
 
 const Organization: React.FC = () => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const [myRecord, setMyRecord] = useState<any>(null);
     const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -68,14 +70,14 @@ const Organization: React.FC = () => {
                 }
             }
         } catch (error) {
-            toast.error('Failed to load organization data');
+            toast.error(t('failed_to_load_organization_data', { defaultValue: 'Failed to load organization data' }));
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading) return <div className="p-12 text-center animate-pulse text-slate-400 font-medium">Loading Organization...</div>;
-    if (!myRecord) return <div className="p-12 text-center text-slate-400">Unable to load your profile record.</div>;
+    if (loading) return <div className="p-12 text-center animate-pulse text-slate-400 font-medium">{t('loading_organization', { defaultValue: 'Loading Organization...' })}</div>;
+    if (!myRecord) return <div className="p-12 text-center text-slate-400">{t('unable_to_load_your_profile_record', { defaultValue: 'Unable to load your profile record.' })}</div>;
 
     const offices = allDepts.filter(d => d.isOffice);
 
@@ -103,7 +105,7 @@ const Organization: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b-2 border-[#511d29]/10 pb-6">
                 <div>
-                    <h1 className="text-4xl font-outfit font-black text-[#511d29] tracking-tight">Organization Structure</h1>
+                    <h1 className="text-4xl font-outfit font-black text-[#511d29] tracking-tight">{t('organization_structure', { defaultValue: 'Organization Structure' })}</h1>
 
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -112,7 +114,7 @@ const Organization: React.FC = () => {
                             <Users className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest leading-none mb-1">Total Staff</p>
+                            <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest leading-none mb-1">{t('total_staff', { defaultValue: 'Total Staff' })}</p>
                             <p className="text-lg font-black text-[#511d29] leading-none">{allEmployees.length}</p>
                         </div>
                     </div>
@@ -121,10 +123,10 @@ const Organization: React.FC = () => {
                             <Users className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest leading-none mb-1">Staff Plan (Current / Planned)</p>
+                            <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest leading-none mb-1">{t('staff_plan_current_planned', { defaultValue: 'Staff Plan (Current / Planned)' })}</p>
                             <p className="text-lg font-black text-[#511d29] leading-none">
                                 {totalCurrent} <span className="text-[#511d29]/40">/</span> {totalPlanned}
-                                <span className="text-xs font-bold text-amber-600 ml-2">{Math.max(0, totalPlanned - totalCurrent)} open</span>
+                                <span className="text-xs font-bold text-amber-600 ml-2">{Math.max(0, totalPlanned - totalCurrent)} {t('open', { defaultValue: 'open' })}</span>
                             </p>
                         </div>
                     </div>
@@ -147,13 +149,13 @@ const Organization: React.FC = () => {
                                 <Crown className="w-5 h-5" />
                             </div>
                             <div className="flex-1 p-3 text-left">
-                                <p className="text-[8px] sm:text-[9px] md:text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">Top Leadership</p>
+                                <p className="text-[8px] sm:text-[9px] md:text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">{t('top_leadership', { defaultValue: 'Top Leadership' })}</p>
                                 <h4 className="text-xs sm:text-sm font-black text-[#511d29] tracking-tight leading-tight">
-                                    {topLeader ? topLeader.fullName : 'Chairman & General Manager'}
+                                    {topLeader ? topLeader.fullName : t('chairman_general_manager', { defaultValue: 'Chairman & General Manager' })}
                                 </h4>
                                 {topLeader && (
                                     <p className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-[#511d29]/60 uppercase tracking-widest mt-0.5">
-                                        {topLeader.role === 'CHAIRMAN' ? 'Chairman' : 'General Manager'}
+                                        {topLeader.role === 'CHAIRMAN' ? t('chairman', { defaultValue: 'Chairman' }) : t('general_manager', { defaultValue: 'General Manager' })}
                                     </p>
                                 )}
                             </div>
@@ -175,7 +177,7 @@ const Organization: React.FC = () => {
                                             <>
                                                 <TreeNode
                                                     title={leftOffice.name}
-                                                    subtitle="Direct Office"
+                                                    subtitle={t('direct_office', { defaultValue: 'Direct Office' })}
                                                     badge={leftOffice.name.substring(0, 2).toUpperCase()}
                                                     isSelected={selectedEntity?.id === leftOffice.id && selectedEntity?.type === 'OFFICE'}
                                                     onClick={() => setSelectedEntity({ id: leftOffice.id, type: 'OFFICE' })}
@@ -191,7 +193,7 @@ const Organization: React.FC = () => {
                                                 <div className="absolute left-0 top-1/2 w-3 sm:w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
                                                 <TreeNode
                                                     title={rightOffice.name}
-                                                    subtitle="Direct Office"
+                                                    subtitle={t('direct_office', { defaultValue: 'Direct Office' })}
                                                     badge={rightOffice.name.substring(0, 2).toUpperCase()}
                                                     isSelected={selectedEntity?.id === rightOffice.id && selectedEntity?.type === 'OFFICE'}
                                                     onClick={() => setSelectedEntity({ id: rightOffice.id, type: 'OFFICE' })}
@@ -223,7 +225,7 @@ const Organization: React.FC = () => {
                                             <div className="absolute top-[-16px] w-[2px] h-[16px] bg-[#511d29]"></div>
                                             <TreeNode
                                                 title={dir.name}
-                                                subtitle="Directorate"
+                                                subtitle={t('directorate', { defaultValue: 'Directorate' })}
                                                 badge={dir.name.substring(0, 2).toUpperCase()}
                                                 isSelected={isSelected}
                                                 onClick={() => setSelectedEntity(isSelected ? null : { id: dir.id, type: 'DIRECTORATE' })}
@@ -240,7 +242,7 @@ const Organization: React.FC = () => {
                                                             {headDir.fullName[0].toUpperCase()}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-[8px] sm:text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Directorate</p>
+                                                            <p className="text-[8px] sm:text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_directorate', { defaultValue: 'Head of Directorate' })}</p>
                                                             <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headDir.fullName}</p>
                                                         </div>
                                                     </button>
@@ -265,7 +267,7 @@ const Organization: React.FC = () => {
                                                                     <div className="w-48 sm:w-56 flex flex-col gap-2">
                                                                         <TreeNode
                                                                             title={div.name}
-                                                                            subtitle="Division"
+                                                                            subtitle={t('division', { defaultValue: 'Division' })}
                                                                             badge={div.name.substring(0, 2).toUpperCase()}
                                                                             isSelected={isDivSelected}
                                                                             onClick={() => setSelectedEntity(isDivSelected ? null : { id: div.id, type: 'DIVISION' })}
@@ -279,7 +281,7 @@ const Organization: React.FC = () => {
                                                                                             {headOfDivision.fullName[0].toUpperCase()}
                                                                                         </div>
                                                                                         <div className="flex-1 min-w-0">
-                                                                                            <p className="text-[8px] sm:text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Division</p>
+                                                                                            <p className="text-[8px] sm:text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_division', { defaultValue: 'Head of Division' })}</p>
                                                                                             <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headOfDivision.fullName}</p>
                                                                                         </div>
                                                                                     </button>
@@ -305,13 +307,13 @@ const Organization: React.FC = () => {
                     {allDivisions.filter(d => !d.directorateId).length > 0 && (
                         <>
                             <div className="w-[2px] h-12 bg-[#511d29]/30"></div>
-                            <div className="text-[10px] font-black text-[#511d29]/50 uppercase tracking-widest mb-4">Unassigned Divisions</div>
+                            <div className="text-[10px] font-black text-[#511d29]/50 uppercase tracking-widest mb-4">{t('unassigned_divisions', { defaultValue: 'Unassigned Divisions' })}</div>
                             <div className="flex justify-center gap-4 opacity-70">
                                 {allDivisions.filter(d => !d.directorateId).map(div => (
                                     <TreeNode
                                         key={`udiv-${div.id}`}
                                         title={div.name}
-                                        subtitle="Division"
+                                        subtitle={t('division', { defaultValue: 'Division' })}
                                         badge={div.name.substring(0, 2).toUpperCase()}
                                         isSelected={selectedEntity?.id === div.id && selectedEntity?.type === 'DIVISION'}
                                         onClick={() => setSelectedEntity(selectedEntity?.id === div.id ? null : { id: div.id, type: 'DIVISION' })}
@@ -331,7 +333,7 @@ const Organization: React.FC = () => {
                                     return (
                                         <div className="space-y-8">
                                             <div className="text-center border-b-2 border-[#511d29]/10 pb-4">
-                                                <h3 className="text-2xl font-black text-[#511d29] tracking-tight uppercase">Units in Office</h3>
+                                                <h3 className="text-2xl font-black text-[#511d29] tracking-tight uppercase">{t('units_in_office', { defaultValue: 'Units in Office' })}</h3>
                                             </div>
                                             <UnitGrid units={officeUnits} allEmployees={allEmployees} setSelectedEmployee={setSelectedEmployee} directEmployees={directEmps} staffPlanFor={staffPlanFor} />
                                         </div>
@@ -344,7 +346,7 @@ const Organization: React.FC = () => {
                                     return (
                                         <div className="space-y-8">
                                             <div className="text-center border-b-2 border-[#511d29]/10 pb-4">
-                                                <h3 className="text-2xl font-black text-[#511d29] tracking-tight uppercase">Departments in Division</h3>
+                                                <h3 className="text-2xl font-black text-[#511d29] tracking-tight uppercase">{t('departments_in_division', { defaultValue: 'Departments in Division' })}</h3>
                                             </div>
 
                                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -358,14 +360,14 @@ const Organization: React.FC = () => {
                                                                     <Building2 className="w-5 h-5" />
                                                                 </div>
                                                                 <div className="flex-1">
-                                                                    <p className="text-[10px] font-black uppercase text-[#511d29]/60 tracking-widest">Department</p>
+                                                                    <p className="text-[10px] font-black uppercase text-[#511d29]/60 tracking-widest">{t('department', { defaultValue: 'Department' })}</p>
                                                                     <h4 className="text-lg font-bold text-[#511d29]">{dept.name}</h4>
                                                                     {(() => {
                                                                         const plan = staffPlanFor('departmentId', dept.id);
                                                                         if (plan.planned === 0) return null;
                                                                         return (
                                                                             <p className="text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mt-1">
-                                                                                Staff Plan: <span className={plan.current >= plan.planned ? 'text-red-600' : 'text-emerald-700'}>{plan.current}</span> / {plan.planned}
+                                                                                {t('staff_plan', { defaultValue: 'Staff Plan:' })} <span className={plan.current >= plan.planned ? 'text-red-600' : 'text-emerald-700'}>{plan.current}</span> / {plan.planned}
                                                                             </p>
                                                                         );
                                                                     })()}

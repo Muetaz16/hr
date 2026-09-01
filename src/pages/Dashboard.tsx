@@ -356,7 +356,11 @@ const Dashboard: React.FC = () => {
         );
     }
 
-    const pendingReviewCount = stats[3]?.value || '0';
+    // Mirror the "System Alerts" counter so the hero pill's number matches what its
+    // breakdown modal lists (evaluations awaiting + expiring contracts). Sourced from
+    // systemAlerts.total — NOT stats[3], whose index shifts once the stats array is
+    // role-filtered above.
+    const pendingReviewCount = String(systemAlerts.total ?? 0);
     const showAnalytics = canAccess(currentUser, ['HR_MANAGER'], ['view_hr_evaluations']);
 
     const renderDate = (dateStr: string | null | undefined) => {
@@ -433,7 +437,7 @@ const Dashboard: React.FC = () => {
 
                         <button
                             type="button"
-                            onClick={() => navigate('/approvals')}
+                            onClick={() => setShowAlerts(true)}
                             className="inline-flex items-center gap-3 mb-10 pl-2 pr-5 py-2 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all hover:scale-[1.02] group/msg"
                         >
                             <span className="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 rounded-full bg-white text-slate-900 text-sm font-black">

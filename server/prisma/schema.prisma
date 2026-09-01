@@ -1005,6 +1005,12 @@ model LeaveRequest {
   // written to BioTime's `outworks` table on final approval.
   workOrderType        String?
   placeOfAssignment    String?
+  // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
+  // missingPunchType: CHECK_IN | CHECK_OUT | BOTH. missingPunchReason: FORGOT | DEVICE_ISSUE |
+  // POWER_OUTAGE | OTHERS. On final approval the forgotten punch(es) are written to BioTime via
+  // /api/attendance/missing-punches (09:00 in / 17:00 out). Work location comes from the JD, not stored here.
+  missingPunchType     String?
+  missingPunchReason   String?
   attachmentUrl        String?
   attachmentName       String?
   // Supporting document the General Manager must upload before granting the final approval.

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { JOB_CATEGORIES } from '../types';
 import type { JobDescriptionDetails } from '../types';
 import { Building2, MapPin } from 'lucide-react';
@@ -51,6 +52,7 @@ interface Props {
 }
 
 const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) => {
+    const { t } = useTranslation();
     const set = (patch: Partial<JDFormValue>) => onChange({ ...value, ...patch });
 
     const toggleWorkLocation = (loc: string) => set({
@@ -73,18 +75,18 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
         <div className="space-y-4">
             {!hideTitle && (
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Position Title</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_title', { defaultValue: 'Position Title' })}</label>
                     <input
                         type="text" required value={value.title}
                         onChange={(e) => set({ title: e.target.value })}
-                        placeholder="e.g. Accountant, Head of Finance"
+                        placeholder={t('e_g_accountant_head_of_finance', { defaultValue: 'e.g. Accountant, Head of Finance' })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                     />
                 </div>
             )}
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Summary / Overview</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('summary_overview', { defaultValue: 'Summary / Overview' })}</label>
                 <textarea
                     value={value.description} rows={3}
                     onChange={(e) => set({ description: e.target.value })}
@@ -94,7 +96,7 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Planned Headcount</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">{t('planned_headcount', { defaultValue: 'Planned Headcount' })}</label>
                     <input
                         type="number" min="1" required
                         value={value.isHead ? 1 : value.plannedCount}
@@ -102,10 +104,10 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
                         onChange={(e) => set({ plannedCount: parseInt(e.target.value) || 1 })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-400 bg-white"
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">{value.isHead ? 'A Head position is fixed at 1.' : 'Maximum number of employees for this position.'}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{value.isHead ? t('a_head_position_is_fixed_at_1', { defaultValue: 'A Head position is fixed at 1.' }) : t('maximum_number_of_employees_for_this_position', { defaultValue: 'Maximum number of employees for this position.' })}</p>
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Work Location</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">{t('work_location', { defaultValue: 'Work Location' })}</label>
                     <div className="flex flex-wrap gap-2">
                         {WORK_LOCATIONS.map(loc => {
                             const Icon = loc.icon;
@@ -122,17 +124,17 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
             </div>
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Reports To <span className="text-gray-400 font-normal">/ يقدم تقاريره إلى</span></label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-gray-400 font-normal">/ يقدم تقاريره إلى</span></label>
                 <input
                     type="text" value={value.details.reportsTo || ''}
                     onChange={(e) => set({ details: { ...value.details, reportsTo: e.target.value } })}
-                    placeholder="e.g. Head of Finance"
+                    placeholder={t('e_g_head_of_finance', { defaultValue: 'e.g. Head of Finance' })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                 />
             </div>
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Applicable Job Categories</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('applicable_job_categories', { defaultValue: 'Applicable Job Categories' })}</label>
                 <div className="grid grid-cols-2 gap-2 p-3 bg-white rounded-lg border border-gray-200">
                     {JOB_CATEGORIES.map(cat => (
                         <label key={cat} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
@@ -147,11 +149,11 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
                 <input type="checkbox" checked={value.isHead}
                     onChange={(e) => set({ isHead: e.target.checked, plannedCount: e.target.checked ? 1 : value.plannedCount })}
                     className="text-indigo-600 focus:ring-indigo-500 rounded" />
-                <span className="text-sm font-bold text-gray-800">This is a Head position (only one holder allowed)</span>
+                <span className="text-sm font-bold text-gray-800">{t('this_is_a_head_position_only_one_holder', { defaultValue: 'This is a Head position (only one holder allowed)' })}</span>
             </label>
 
             <div className="space-y-4">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Job Description Document (English / العربية)</h4>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('job_description_document_english', { defaultValue: 'Job Description Document (English / العربية)' })}</h4>
                 {JD_SECTIONS.map(section => (
                     <div key={section.key} className="p-4 bg-white rounded-2xl border border-slate-200">
                         <div className="flex items-center justify-between mb-2">
@@ -162,7 +164,7 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
                             <textarea
                                 value={value.details[section.key]?.en || ''} rows={3}
                                 onChange={(e) => setSection(section.key, 'en', e.target.value)}
-                                placeholder="English"
+                                placeholder={t('english', { defaultValue: 'English' })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y text-sm"
                             />
                             <textarea

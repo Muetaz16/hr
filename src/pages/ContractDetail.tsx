@@ -88,9 +88,9 @@ const ContractDetail: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['employee-contract', id] });
             setIsRenewModalOpen(false);
-            toast.success("Contract renewed successfully");
+            toast.success(t('contract_renewed_successfully', { defaultValue: 'Contract renewed successfully' }));
         },
-        onError: () => toast.error("Failed to renew contract")
+        onError: () => toast.error(t('failed_to_renew_contract', { defaultValue: 'Failed to renew contract' }))
     });
 
     const terminateMutation = useMutation({
@@ -98,9 +98,9 @@ const ContractDetail: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['employee-contract', id] });
             setIsTerminateModalOpen(false);
-            toast.success("Employee offboarded successfully");
+            toast.success(t('employee_offboarded_successfully', { defaultValue: 'Employee offboarded successfully' }));
         },
-        onError: () => toast.error("Failed to process offboarding")
+        onError: () => toast.error(t('failed_to_process_offboarding', { defaultValue: 'Failed to process offboarding' }))
     });
 
     if (isLoading) return (
@@ -435,7 +435,7 @@ const ContractDetail: React.FC = () => {
                             value={renewData.notes}
                             onChange={e => setRenewData({...renewData, notes: e.target.value})}
                             className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-transparent focus:ring-2 focus:ring-indigo-100 min-h-[80px]"
-                            placeholder="Add renewal terms or internal notes..."
+                            placeholder={t('add_renewal_terms_or_internal_notes', { defaultValue: 'Add renewal terms or internal notes...' })}
                         />
                     </div>
 
@@ -483,11 +483,11 @@ const ContractDetail: React.FC = () => {
                                 onChange={e => setTerminateData({...terminateData, reason: e.target.value})}
                                 className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-transparent focus:ring-2 focus:ring-red-100 appearance-none"
                             >
-                                <option value="Resignation">Resignation</option>
-                                <option value="Retirement">Retirement</option>
-                                <option value="Termination for Cause">Termination for Cause</option>
-                                <option value="Contract Expiry">Contract Expiry</option>
-                                <option value="Mutual Agreement">Mutual Agreement</option>
+                                <option value="Resignation">{t('resignation', { defaultValue: 'Resignation' })}</option>
+                                <option value="Retirement">{t('retirement', { defaultValue: 'Retirement' })}</option>
+                                <option value="Termination for Cause">{t('termination_for_cause', { defaultValue: 'Termination for Cause' })}</option>
+                                <option value="Contract Expiry">{t('contract_expiry', { defaultValue: 'Contract Expiry' })}</option>
+                                <option value="Mutual Agreement">{t('mutual_agreement', { defaultValue: 'Mutual Agreement' })}</option>
                             </select>
                         </div>
                         <div className="space-y-2">
@@ -496,7 +496,7 @@ const ContractDetail: React.FC = () => {
                                 value={terminateData.notes}
                                 onChange={e => setTerminateData({...terminateData, notes: e.target.value})}
                                 className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold text-slate-800 border-transparent focus:ring-2 focus:ring-red-100 min-h-[100px]"
-                                placeholder="Final exit interview notes or administrative remarks..."
+                                placeholder={t('final_exit_interview_notes_or_administrative_remarks', { defaultValue: 'Final exit interview notes or administrative remarks...' })}
                             />
                         </div>
                     </div>
