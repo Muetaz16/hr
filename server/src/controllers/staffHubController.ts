@@ -9,12 +9,12 @@ import {
     resolveExceptionalPerformanceApprovalChain, EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE, resolveHeadTeamEmployees,
     resolveMissingPunchChain, MISSING_PUNCH_STAGE_SEQUENCE,
 } from '../utils/leaveApprovalChain';
-import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift, createBioTimeMissingPunch, findBioTimeEmpIdByCode } from '../utils/attendanceApiProxy';
+import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift, createBioTimeMissingPunch, findBioTimeEmpIdByCode, resolveScheduledWorkHours } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 import { generateWorkAuthorizationDocx, type WorkAuthApprover, type WorkOrderType } from '../utils/workAuthorizationForm';
-import { generateExceptionalPerformanceNominationDocx, type ExceptionalPerformanceApprover } from '../utils/exceptionalPerformanceNominationForm';
+import { generateExceptionalContributionRewardDocx, type ExceptionalContributionApprover } from '../utils/exceptionalPerformanceNominationForm';
 import { checkExceptionalPerformanceEligibility } from '../utils/rewardEligibility';
 import { nextCaseNumber, resolveHrRecipients } from './rewardController';
 import { generateMissingBiometricLogDocx, type MissingPunchApprover, type MissingPunchType, type MissingPunchReason } from '../utils/missingBiometricLogForm';
@@ -48,10 +48,9 @@ const NOMINATOR_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DI
 
 // Missing Biometric Log (missing-punch) — its own 2-stage chain (Head of Department/Division ->
 // Head of Attendance & Payroll). On final approval the forgotten punch(es) are written to BioTime
-// at the fixed 9-to-5 schedule (09:00 check-in / 17:00 check-out).
+// at that employee's actual scheduled work-start/work-end for that date — see
+// resolveScheduledWorkHours (Shift override > Multiplier Factor override > system default).
 const MISSING_PUNCH_TYPE = 'MISSING_PUNCH';
-const MISSING_PUNCH_CHECK_IN_TIME = '09:00';
-const MISSING_PUNCH_CHECK_OUT_TIME = '17:00';
 const MISSING_PUNCH_RECORD_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BOTH'];
 const MISSING_PUNCH_REASONS = ['FORGOT', 'DEVICE_ISSUE', 'POWER_OUTAGE', 'OTHERS'];
 
@@ -394,11 +393,19 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             }
 
             if (!reason || !String(reason).trim()) {
-                return res.status(400).json({ error: 'A justification / reference to the external letter is required.' });
+                return res.status(400).json({ error: 'A justification for exceptional recognition is required.' });
+            }
+            const natureOfContribution = String(req.body.natureOfContribution || '').trim();
+            if (!natureOfContribution) {
+                return res.status(400).json({ error: 'The nature of the exceptional contribution is required.' });
+            }
+            const payrollCoverageMonth = String(req.body.payrollCoverageMonth || '').trim();
+            if (!payrollCoverageMonth) {
+                return res.status(400).json({ error: 'The payroll coverage month is required.' });
             }
             const proposedBonusPercent = Number(req.body.proposedBonusPercent);
-            if (!Number.isFinite(proposedBonusPercent) || proposedBonusPercent <= 0 || proposedBonusPercent > 25) {
-                return res.status(400).json({ error: 'The proposed bonus must be a percentage between 0 and 25.' });
+            if (!Number.isFinite(proposedBonusPercent) || proposedBonusPercent < 5 || proposedBonusPercent > 25) {
+                return res.status(400).json({ error: 'The proposed bonus must be a percentage between 5 and 25.' });
             }
 
             const existingPending = await prisma.leaveRequest.findFirst({ where: { employeeId, type, status: 'PENDING' } });
@@ -409,7 +416,7 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: `This employee is not eligible for this award: ${eligibility.reasons.join(' ')}` });
             }
 
-            const { steps, blockedStage } = await resolveExceptionalPerformanceApprovalChain(prisma);
+            const { steps, blockedStage } = await resolveExceptionalPerformanceApprovalChain(prisma, authUser);
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
             }
@@ -418,7 +425,7 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 const created = await tx.leaveRequest.create({
                     data: {
                         employeeId, userId, type,
-                        startDate: new Date(), reason, proposedBonusPercent,
+                        startDate: new Date(), reason, proposedBonusPercent, natureOfContribution, payrollCoverageMonth,
                         status: 'PENDING',
                     },
                 });
@@ -752,20 +759,24 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                     if (!result.success) console.warn('[BioTime] Out-work write-back failed (non-fatal):', result.message);
                 }
             } else if (lrq.type === MISSING_PUNCH_TYPE) {
-                // Missing Biometric Log — write the forgotten punch(es) straight into BioTime at the
-                // fixed 9-to-5 schedule. empId is BioTime's own numeric id (our Employee.bioId),
-                // falling back to a live lookup by empCode if it isn't stored yet.
+                // Missing Biometric Log — write the forgotten punch(es) straight into BioTime at
+                // that employee's actual scheduled work-start/work-end for this date (Shift override
+                // > Multiplier Factor override > system default — see resolveScheduledWorkHours),
+                // not a fixed 9-to-5 that would be wrong for anyone on a different shift or covered
+                // by a seasonal (e.g. Ramadan) hours override. empId is BioTime's own numeric id
+                // (our Employee.bioId), falling back to a live lookup by empCode if not stored yet.
                 const empId = step.leaveRequest.employee.bioId ?? (await findBioTimeEmpIdByCode(empCode));
                 if (empId == null) {
                     console.warn('[BioTime] Missing-punch write skipped (non-fatal): no BioTime empId for', empCode);
                 } else {
                     const datePart = new Date(lrq.startDate).toISOString().slice(0, 10);
+                    const { workStart, workEnd } = await resolveScheduledWorkHours(empCode, datePart);
                     const punches: { punchTime: string; punchState: '0' | '1' }[] = [];
                     if (lrq.missingPunchType === 'CHECK_IN' || lrq.missingPunchType === 'BOTH') {
-                        punches.push({ punchTime: `${datePart}T${MISSING_PUNCH_CHECK_IN_TIME}:00`, punchState: '0' });
+                        punches.push({ punchTime: `${datePart}T${workStart}:00`, punchState: '0' });
                     }
                     if (lrq.missingPunchType === 'CHECK_OUT' || lrq.missingPunchType === 'BOTH') {
-                        punches.push({ punchTime: `${datePart}T${MISSING_PUNCH_CHECK_OUT_TIME}:00`, punchState: '1' });
+                        punches.push({ punchTime: `${datePart}T${workEnd}:00`, punchState: '1' });
                     }
                     for (const p of punches) {
                         const result = await createBioTimeMissingPunch({ empCode, empId, punchTime: p.punchTime, punchState: p.punchState });
@@ -798,6 +809,7 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                 data: {
                     employeeId: lrq.employeeId, caseNumber, type: 'EXCEPTIONAL_PERFORMANCE',
                     bonusPercent: lrq.proposedBonusPercent, notes: lrq.reason,
+                    natureOfContribution: (lrq as any).natureOfContribution, period: (lrq as any).payrollCoverageMonth,
                     createdByName: (lrq as any).user?.fullName || null,
                 },
             });
@@ -1245,24 +1257,26 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         const emp = request.employee;
         const fmt = (d?: Date | string | null) => (d ? new Date(d).toISOString().split('T')[0] : '');
 
-        // Exceptional Performance / Exceptional Contribution Award nomination form — no pre-existing
-        // template (see exceptionalPerformanceNominationForm.ts), built from scratch instead of the
-        // PizZip cell-fill mechanism every other branch here uses.
+        // Exceptional Performance / Exceptional Contribution Award nomination form — fills the real
+        // "EXCEPTIONAL CONTRIBUTION REWARD" template (see exceptionalPerformanceNominationForm.ts).
         if (EXCEPTIONAL_PERFORMANCE_TYPES.includes(request.type)) {
             const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
-            const toEp = (step: (typeof request.approvalSteps)[number] | undefined): ExceptionalPerformanceApprover | null =>
-                step ? { name: step.approver?.fullName || '', signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
-            const buf = await generateExceptionalPerformanceNominationDocx({
-                caseNumber: request.id.slice(0, 8).toUpperCase(),
-                date: fmt(request.createdAt),
+            const toEcr = (step: (typeof request.approvalSteps)[number] | undefined): ExceptionalContributionApprover | null =>
+                step ? { signature: step.approver?.signature || null, decided: step.status === 'APPROVED' } : null;
+            const buf = generateExceptionalContributionRewardDocx({
                 employeeId: emp.staffId || '',
                 employeeName: emp.fullName || '',
+                positionTitle: (emp as any).jobDescription?.title || emp.position || '',
                 department: emp.department?.name || '',
-                nominatedByName: request.user?.fullName || '',
+                division: emp.division?.name || '',
+                payrollCoverageMonth: (request as any).payrollCoverageMonth || '',
+                natureOfContribution: (request as any).natureOfContribution || '',
                 justification: request.reason || '',
-                proposedBonusPercent: request.proposedBonusPercent ?? null,
-                hrManager: toEp(stepBy('HR_MANAGER')),
-                generalManager: toEp(stepBy('GENERAL_MANAGER')),
+                percentageBonus: request.proposedBonusPercent ?? null,
+                deptHead: toEcr(stepBy('DEPT_HEAD')),
+                divisionHead: toEcr(stepBy('DIVISION_HEAD')),
+                hrManager: toEcr(stepBy('HR_MANAGER')),
+                generalManager: toEcr(stepBy('GENERAL_MANAGER')),
             });
             const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -1346,14 +1360,18 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         if (request.type === MISSING_PUNCH_TYPE) {
             const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
             const toMp = (step: (typeof request.approvalSteps)[number] | undefined): MissingPunchApprover | null =>
-                step ? { signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+                step ? { signature: step.approver?.signature || null, decided: step.status === 'APPROVED' } : null;
+            // Reflect this employee's actual scheduled hours for this date (Shift override >
+            // Multiplier Factor override > system default) rather than a hardcoded 9-to-5, so the
+            // printed form matches what will really be written to BioTime on final approval.
+            const { workStart, workEnd } = await resolveScheduledWorkHours(emp.staffId || '', request.startDate);
             const buf = generateMissingBiometricLogDocx({
                 employeeId: emp.staffId || '',
                 employeeName: emp.fullName || '',
                 positionTitle: (emp as any).jobDescription?.title || emp.position || '',
                 division: emp.division?.name || '',
                 department: emp.department?.name || '',
-                workingSchedule: '09:00 - 17:00',
+                workingSchedule: `${workStart} - ${workEnd}`,
                 jdWorkLocations: ((emp as any).jobDescription?.workLocations as string[]) || [],
                 date: fmt(request.startDate),
                 recordType: (request.missingPunchType as MissingPunchType) || 'CHECK_IN',

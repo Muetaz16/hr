@@ -427,37 +427,86 @@ export async function resolvePermissionApprovalChain(
     return { steps };
 }
 
-// Exceptional Performance / Exceptional Contribution Award — HR Manager -> General Manager. Both
-// are global, non-org-scoped roles, so (unlike every other chain builder above) this needs no
-// employee-position walk at all. Reuses HR_MANAGER/GENERAL_MANAGER, both already valid
-// ApprovalStage values, and the existing approve_hr_manager/approve_gm permissions (role ∪
-// permission/hat ∪ SUPER_ADMIN, via resolveUsersWithPermission) — no new permissions needed.
+// Exceptional Performance / Exceptional Contribution Award — real escalation from whoever submits
+// the nomination, up to HR then the General Manager, mirroring resolveApprovalChain's org-ladder
+// walk exactly (just keyed by the SUBMITTING HEAD's own placement, not the nominee's): a Unit Head's
+// nomination escalates Dept Head -> Division Head -> HR -> GM; a Department/Office Head's escalates
+// Division Head -> HR -> GM; a Division Head or Director (already at/above Division rank) skips
+// straight to HR -> GM, self-excluded from ever approving their own submission. DEPT_HEAD/
+// DIVISION_HEAD are already valid ApprovalStage values (reused from the main chain); HR_MANAGER/
+// GENERAL_MANAGER reuse the existing approve_hr_manager/approve_gm permissions as before.
 export const EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE: Record<string, number> = {
-    HR_MANAGER: 0,
-    GENERAL_MANAGER: 1,
+    DEPT_HEAD: 0,
+    DIVISION_HEAD: 1,
+    HR_MANAGER: 2,
+    GENERAL_MANAGER: 3,
 };
 
+interface ExceptionalPerformanceSubmitter {
+    id: string;
+    role?: string | null;
+    unitId?: string | null;
+    departmentId?: string | null;
+    divisionId?: string | null;
+}
+
 export async function resolveExceptionalPerformanceApprovalChain(
-    prisma: PrismaClient
+    prisma: PrismaClient,
+    submitter: ExceptionalPerformanceSubmitter
 ): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+    const submitterRank = orgRank(submitter.role);
+
+    // Resolve the SUBMITTER's own department/division (not the nominee's) — directly if they're a
+    // Department/Office/Division head, else walked up one hop from their unit — so the escalation
+    // targets whoever actually sits above THEM in the org, same relation resolveApprovalChain uses
+    // for an employee's own placement.
+    let ownDepartmentId = submitter.departmentId ?? null;
+    if (!ownDepartmentId && submitter.unitId) {
+        const unit = await prisma.unit.findUnique({ where: { id: submitter.unitId }, select: { departmentId: true } });
+        ownDepartmentId = unit?.departmentId ?? null;
+    }
+    let ownDivisionId = submitter.divisionId ?? null;
+    if (!ownDivisionId && ownDepartmentId) {
+        const dept = await prisma.department.findUnique({ where: { id: ownDepartmentId }, select: { divisionId: true } });
+        ownDivisionId = dept?.divisionId ?? null;
+    }
+
+    const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
+
+    if (submitterRank < ORG_RANK.HEAD_DEPARTMENT && ownDepartmentId) {
+        const deptHeads = await prisma.user.findMany({
+            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: ownDepartmentId },
+            select: { id: true },
+        });
+        rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeads.map(u => u.id) });
+    }
+    if (submitterRank < ORG_RANK.HEAD_DIVISION && ownDivisionId) {
+        const divisionHeads = await prisma.user.findMany({
+            where: { role: 'HEAD_DIVISION', divisionId: ownDivisionId },
+            select: { id: true },
+        });
+        rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeads.map(u => u.id) });
+    }
+
     const hrRoleHolders = await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } });
     const hrManagers = Array.from(new Set([...hrRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+    rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
+
     const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });
     const generalManagers = Array.from(new Set([...generalManagerRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+    rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
 
-    const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [
-        { stage: 'HR_MANAGER', userIds: hrManagers },
-        { stage: 'GENERAL_MANAGER', userIds: generalManagers },
-    ];
-
-    const seen = new Set<string>();
+    // Only HR/GM are mandatory — DEPT_HEAD/DIVISION_HEAD tolerate zero holders and are simply
+    // skipped, same treatment as the main chain's org-ladder stages (a missing org-coverage gap,
+    // not a misconfiguration worth blocking on).
+    const requiredNonEmpty: ApprovalStage[] = ['HR_MANAGER', 'GENERAL_MANAGER'];
+    const seen = new Set<string>([submitter.id]);
     const steps: ResolvedApprovalStep[] = [];
     for (const raw of rawStages) {
         const distinctIds = Array.from(new Set(raw.userIds));
-        // Both stages are mandatory — a nomination with no resolvable HR Manager or General
-        // Manager is a real misconfiguration, not a tolerable gap (same REQUIRED_NONEMPTY_STAGES
-        // treatment as the other chains).
-        if (distinctIds.length === 0) return { steps: [], blockedStage: raw.stage };
+        if (distinctIds.length === 0 && requiredNonEmpty.includes(raw.stage)) {
+            return { steps: [], blockedStage: raw.stage };
+        }
         const eligible = distinctIds.filter(id => !seen.has(id));
         for (const userId of eligible) {
             seen.add(userId);

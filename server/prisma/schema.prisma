@@ -672,12 +672,13 @@ model RewardCase {
 
   type       String   // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE | EXCEPTIONAL_PERFORMANCE
 
-  period         String?   // 'YYYY-MM' (Month/Attendance) or 'YYYY' (Employee of Year); null for Loyalty
+  period         String?   // 'YYYY-MM' (Month/Attendance/Exceptional Performance's Payroll Coverage) or 'YYYY' (Employee of Year); null for Loyalty
   milestoneYears Int?      // 5 or 10 — Loyalty only
   milestoneDate  DateTime? // joinDate + milestoneYears, snapshotted at grant — Loyalty only
 
-  finalScoreSnapshot Float?  // the winning EvaluationFinalization.finalScore — Employee of Month only
-  notes              String? // tie-break reasoning / selection justification — any type
+  finalScoreSnapshot   Float?  // the winning EvaluationFinalization.finalScore — Employee of Month only
+  notes                String? // tie-break reasoning / selection justification (Exceptional Performance: the nomination's Justification) — any type
+  natureOfContribution String? // Exceptional Performance only — what the employee actually did, from the nomination
 
   bonusLeaveDaysGranted Float  @default(0) // +1 (Month/Attendance) / +3 (Year) / 0 (Loyalty) — applied to Employee.bonusHolidays only once completed
   bonusPercent          Float? // % of salary — Year (HR-entered) / Loyalty (fixed 5 or 10); null otherwise
@@ -1005,14 +1006,21 @@ model LeaveRequest {
   // written to BioTime's `outworks` table on final approval.
   workOrderType        String?
   placeOfAssignment    String?
-  // Exceptional Performance Award only — the bonus % (<=25) the nominating Head proposes at
+  // Exceptional Performance Award only — the bonus % (5-25) the nominating Head proposes at
   // submission; the General Manager approves/rejects the nomination as a whole package, including
   // this figure. Carried onto the RewardCase's own bonusPercent once the chain completes.
   proposedBonusPercent Float?
+  // Exceptional Performance Award only — 2 more fields required by the real
+  // "EXCEPTIONAL CONTRIBUTION REWARD" template. natureOfContribution: what the employee actually did
+  // (separate from `reason`, which serves the template's "Justification for Exceptional
+  // Recognition"). payrollCoverageMonth: "YYYY-MM", the payroll month the award applies to.
+  natureOfContribution String?
+  payrollCoverageMonth String?
   // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
   // missingPunchType: CHECK_IN | CHECK_OUT | BOTH. missingPunchReason: FORGOT | DEVICE_ISSUE |
-  // POWER_OUTAGE | OTHERS. On final approval the forgotten punch(es) are written to BioTime via
-  // /api/attendance/missing-punches (09:00 in / 17:00 out). Work location comes from the JD, not stored here.
+  // POWER_OUTAGE | OTHERS. On final approval the forgotten punch(es) are written to BioTime at that
+  // employee's actual scheduled work hours for the date (see resolveScheduledWorkHours). Work
+  // location comes from the JD, not stored here.
   missingPunchType     String?
   missingPunchReason   String?
   attachmentUrl        String?

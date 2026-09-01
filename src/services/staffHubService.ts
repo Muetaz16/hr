@@ -13,8 +13,11 @@ export interface LeaveRequest {
     // Work Authorization (out-work) specifics — only set when type === 'WORK_AUTHORIZATION'.
     workOrderType?: string;
     placeOfAssignment?: string;
-    // Exceptional Performance Award only — the bonus % (<=25) the nominating Head proposed.
+    // Exceptional Performance Award only — the bonus % (5-25) the nominating Head proposed, plus
+    // the 2 other fields required by the real "EXCEPTIONAL CONTRIBUTION REWARD" template.
     proposedBonusPercent?: number | null;
+    natureOfContribution?: string | null;
+    payrollCoverageMonth?: string | null;
     // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
     missingPunchType?: string;       // CHECK_IN | CHECK_OUT | BOTH
     missingPunchReason?: string;     // FORGOT | DEVICE_ISSUE | POWER_OUTAGE | OTHERS

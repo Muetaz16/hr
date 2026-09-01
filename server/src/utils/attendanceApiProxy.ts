@@ -241,3 +241,58 @@ export const createBioTimeExcusedLate = (p: { empCode: string; date: Date | stri
     postExcused('/api/attendance/excused-lates', p);
 export const createBioTimeExcusedEarlyOut = (p: { empCode: string; date: Date | string; excusedMinutes: number; reason?: string }) =>
     postExcused('/api/attendance/excused-early-outs', p);
+
+export interface ScheduledWorkHours { workStart: string; workEnd: string; source: 'shift' | 'multiplier' | 'default' }
+
+const toDateOnly = (d: Date | string) => (typeof d === 'string' ? d : d.toISOString()).slice(0, 10);
+const inDateRange = (target: string, start: string, end: string) => target >= toDateOnly(start) && target <= toDateOnly(end);
+const hhmm = (t: string) => t.slice(0, 5);
+
+// Resolves an employee's expected work-start/work-end for a specific date, following the same
+// priority BioTime itself applies when it computes lateness/early-out/OT for a punch: an active
+// per-employee Shift override (createBioTimeEmployeeShift above / the Employee Shifts admin
+// screen) > an active date-ranged Multiplier Factor override (e.g. Ramadan hours) that itself
+// carries a workStart/workEnd > the system-wide default (SystemSettings WorkStart/WorkEnd). Used
+// wherever WE decide a punch time ourselves instead of BioTime doing it (e.g. Missing Biometric
+// Log), so the written-back punch matches what BioTime would actually expect for that employee on
+// that date rather than assuming everyone works a fixed 9-to-5. Fail-soft at every tier — never
+// throws, falls through to the next tier (and ultimately a hardcoded 09:00–17:00) if BioTime is
+// unreachable or a tier has no applicable override.
+export async function resolveScheduledWorkHours(empCode: string, date: Date | string): Promise<ScheduledWorkHours> {
+    const targetDate = toDateOnly(date);
+
+    try {
+        const res = await fetch(new URL('/api/system-settings/employee-shifts', ATTENDANCE_API_BASE).toString());
+        if (res.ok) {
+            const shifts: any[] = await res.json().catch(() => []);
+            const match = (Array.isArray(shifts) ? shifts : []).find((s) =>
+                s?.empCode === empCode && s?.workStart && s?.workEnd && inDateRange(targetDate, s.startDate, s.endDate));
+            if (match) return { workStart: hhmm(match.workStart), workEnd: hhmm(match.workEnd), source: 'shift' };
+        }
+    } catch { /* fall through to the multiplier-factor tier */ }
+
+    try {
+        const res = await fetch(new URL('/api/system-settings/multiplier-factors', ATTENDANCE_API_BASE).toString());
+        if (res.ok) {
+            const factors: any[] = await res.json().catch(() => []);
+            const match = (Array.isArray(factors) ? factors : []).find((f) =>
+                f?.workStart && f?.workEnd && inDateRange(targetDate, f.dateStart, f.dateEnd));
+            if (match) return { workStart: hhmm(match.workStart), workEnd: hhmm(match.workEnd), source: 'multiplier' };
+        }
+    } catch { /* fall through to the system default */ }
+
+    try {
+        const res = await fetch(new URL('/api/system-settings', ATTENDANCE_API_BASE).toString());
+        if (res.ok) {
+            const snapshot: any = await res.json().catch(() => ({}));
+            const settings: any[] = Array.isArray(snapshot?.systemSettings) ? snapshot.systemSettings : [];
+            const workStart = settings.find((s) => s?.key === 'WorkStart')?.value;
+            const workEnd = settings.find((s) => s?.key === 'WorkEnd')?.value;
+            if (workStart && workEnd) return { workStart: hhmm(workStart), workEnd: hhmm(workEnd), source: 'default' };
+        }
+    } catch { /* fall through to the hardcoded last resort */ }
+
+    // Absolute last resort — BioTime unreachable or no WorkStart/WorkEnd system setting configured
+    // at all yet. Keeps this fail-soft, same convention as every write-back function above.
+    return { workStart: '09:00', workEnd: '17:00', source: 'default' };
+}

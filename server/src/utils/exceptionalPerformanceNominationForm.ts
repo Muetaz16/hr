@@ -1,104 +1,112 @@
-// Exceptional Performance / Exceptional Contribution Award — nomination form. Unlike every other
-// form in this app (earlyDepartureForm.ts, workAuthorizationForm.ts, leaveRequestForm.ts,
-// rewardForms.ts), there is no pre-existing Word template shipped in public/ to fill — this one is
-// built from a blank document with the `docx` package instead of PizZip raw-XML cell surgery, since
-// there's no template layout to preserve. Mirrors the same signature-embedding idea as
-// docxImage.ts's dataUrlToPng (used by the PizZip-based forms) rather than duplicating it.
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ImageRun, HeadingLevel, VerticalAlign } from 'docx';
-import { dataUrlToPng, pngSize } from './docxImage';
+// Exceptional Performance / Exceptional Contribution Award — nomination form. Fills the real
+// "EXCEPTIONAL CONTRIBUTION REWARD.docx" template shipped in public/ (replacing the earlier
+// from-scratch `docx`-package build made before this template existed). Text fields go through
+// docxFormHelpers.ts's fillTemplate (its setCell REPLACES a cell's content — needed here since the
+// Nature/Justification/Percentage cells hold real instructional placeholder text in the template,
+// not blank cells); the 4 approver signatures are embedded afterwards the same way every other
+// PizZip-based form in this app does it (missingBiometricLogForm.ts, workAuthorizationForm.ts).
+import PizZip from 'pizzip';
+import { EMU_PER_INCH, pngSize, fitEmu, dataUrlToPng, drawingRun } from './docxImage';
+import { fillTemplate, cellText, type FieldFill } from './docxFormHelpers';
 
-export interface ExceptionalPerformanceApprover {
-    name: string;
+const TEMPLATE_NAME = 'EXCEPTIONAL CONTRIBUTION REWARD.docx';
+
+export interface ExceptionalContributionApprover {
     signature?: string | null;
-    date: string;
     decided: boolean;
 }
 
-export interface ExceptionalPerformanceNominationData {
-    caseNumber: string;
-    date: string;
+export interface ExceptionalContributionRewardData {
     employeeId: string;
     employeeName: string;
+    positionTitle: string;
     department: string;
-    nominatedByName: string;
+    division: string;
+    payrollCoverageMonth: string;
+    natureOfContribution: string;
     justification: string;
-    proposedBonusPercent: number | null;
-    hrManager: ExceptionalPerformanceApprover | null;
-    generalManager: ExceptionalPerformanceApprover | null;
+    percentageBonus: number | null;
+    deptHead?: ExceptionalContributionApprover | null;
+    divisionHead?: ExceptionalContributionApprover | null;
+    hrManager?: ExceptionalContributionApprover | null;
+    generalManager?: ExceptionalContributionApprover | null;
 }
 
-const LABEL_CELL_WIDTH = 30;
+const SIG_MAX_W_EMU = Math.round(1.4 * EMU_PER_INCH);
+const SIG_MAX_H_EMU = Math.round(0.45 * EMU_PER_INCH);
 
-const labelCell = (text: string) => new TableCell({
-    width: { size: LABEL_CELL_WIDTH, type: WidthType.PERCENTAGE },
-    verticalAlign: VerticalAlign.CENTER,
-    children: [new Paragraph({ children: [new TextRun({ text, bold: true })] })],
-});
-const valueCell = (text: string) => new TableCell({
-    width: { size: 100 - LABEL_CELL_WIDTH, type: WidthType.PERCENTAGE },
-    verticalAlign: VerticalAlign.CENTER,
-    children: [new Paragraph({ children: [new TextRun({ text })] })],
-});
-const infoRow = (label: string, value: string) => new TableRow({ children: [labelCell(label), valueCell(value)] });
-
-const NO_BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' };
-const tableBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER };
-
-// Approver block: name + signature image (if decided) or "Pending" + decision date.
-function approverCell(label: string, approver: ExceptionalPerformanceApprover | null): TableCell {
-    const children: Paragraph[] = [
-        new Paragraph({ children: [new TextRun({ text: label, bold: true })], alignment: AlignmentType.CENTER }),
-        new Paragraph({ text: '' }),
-    ];
-    if (approver?.decided) {
-        const png = dataUrlToPng(approver.signature);
-        if (png) {
-            const dims = pngSize(png) || { width: 480, height: 200 };
-            const maxW = 200, maxH = 80;
-            const scale = Math.min(maxW / dims.width, maxH / dims.height, 1);
-            children.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new ImageRun({ type: 'png', data: png, transformation: { width: Math.round(dims.width * scale), height: Math.round(dims.height * scale) } })],
-            }));
-        }
-        children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: approver.name || '' })] }));
-        children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: approver.date ? `Approved: ${approver.date}` : '', italics: true, size: 18 })] }));
-    } else {
-        children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Pending', italics: true, color: '999999' })] }));
+// Append a run to the cell's LAST paragraph, forcing it centered — mirrors missingBiometricLogForm's
+// injectRun exactly (signature slots start truly empty, so appending is correct here, unlike the
+// text fields above which need setCell's full-replace).
+const injectRun = (cell: string, run: string): string => {
+    const m = cell.match(/^([\s\S]*)(<w:p\b[^>]*>)([\s\S]*?)(<\/w:p>\s*<\/w:tc>)$/);
+    if (m) {
+        const [, before, pOpen, inner, tail] = m;
+        const centered = /<w:pPr>[\s\S]*?<\/w:pPr>/.test(inner)
+            ? inner.replace(/<w:pPr>[\s\S]*?<\/w:pPr>/, (pp) => pp.replace(/<w:jc\b[^>]*\/>/g, '').replace('</w:pPr>', '<w:jc w:val="center"/></w:pPr>'))
+            : `<w:pPr><w:jc w:val="center"/></w:pPr>${inner}`;
+        return `${before}${pOpen}${centered}${run}${tail}`;
     }
-    return new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children, borders: tableBorders });
-}
+    return cell.replace(/<\/w:tc>$/, `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>${run}</w:p></w:tc>`);
+};
 
-export async function generateExceptionalPerformanceNominationDocx(data: ExceptionalPerformanceNominationData): Promise<Buffer> {
-    const doc = new Document({
-        sections: [{
-            children: [
-                new Paragraph({ heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, children: [new TextRun('Exceptional Performance / Exceptional Contribution Award')] }),
-                new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nomination Form', italics: true })] }),
-                new Paragraph({ text: '' }),
-                new Table({
-                    width: { size: 100, type: WidthType.PERCENTAGE },
-                    borders: tableBorders,
-                    rows: [
-                        infoRow('Reference No.', data.caseNumber),
-                        infoRow('Date', data.date),
-                        infoRow('Employee', `${data.employeeName} (${data.employeeId})`),
-                        infoRow('Department', data.department),
-                        infoRow('Nominated By', data.nominatedByName),
-                        infoRow('Proposed Bonus', data.proposedBonusPercent != null ? `${data.proposedBonusPercent}% of monthly basic salary` : 'N/A'),
-                    ],
-                }),
-                new Paragraph({ text: '' }),
-                new Paragraph({ children: [new TextRun({ text: 'Justification', bold: true })] }),
-                new Paragraph({ children: [new TextRun({ text: data.justification || '—' })] }),
-                new Paragraph({ text: '' }),
-                new Paragraph({ text: '' }),
-                new Table({
-                    width: { size: 100, type: WidthType.PERCENTAGE },
-                    rows: [new TableRow({ children: [approverCell('HR Manager', data.hrManager), approverCell('General Manager', data.generalManager)] })],
-                }),
-            ],
-        }],
-    });
-    return Packer.toBuffer(doc);
-}
+export const generateExceptionalContributionRewardDocx = (data: ExceptionalContributionRewardData): Buffer => {
+    const fields: FieldFill[] = [
+        { label: 'Employee ID:', value: data.employeeId, mergeSpan: 1 },
+        { label: 'Employee Name:', value: data.employeeName, mergeSpan: 1 },
+        { label: 'Position Title:', value: data.positionTitle, mergeSpan: 1 },
+        { label: 'Department:', value: data.department, mergeSpan: 1 },
+        { label: 'Division:', value: data.division, mergeSpan: 1 },
+        { label: 'Payroll Coverage:', value: data.payrollCoverageMonth },
+        { label: 'Nature of Exceptional Contribution:', value: data.natureOfContribution },
+        // The template's own "Justiﬁcation" uses the "fi" ligature glyph (U+FB01), which
+        // loadNormalizedTemplate's NFKC pass decomposes to plain "fi" before labels are matched —
+        // and its "Percentage Bonus" cell prints "(%)" out of the order this label string implies.
+        // Partial (non-exact) matches on a distinctive substring sidestep both.
+        { label: 'Justification for Exceptional Recognition', value: data.justification },
+        { label: 'Percentage Bonus', value: data.percentageBonus != null ? `${data.percentageBonus}%` : null },
+    ];
+    const buf = fillTemplate(TEMPLATE_NAME, fields);
+
+    // --- Signatures: re-open the filled buffer and embed each decided approver's signature image
+    // into the cell right after their label. No date is printed next to any of them — the template
+    // has no date cell in its Approvals box at all.
+    const zip = new PizZip(buf);
+    const docPath = 'word/document.xml';
+    let xml = zip.file(docPath)!.asText();
+    const cells = xml.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || [];
+    const texts = cells.map(cellText);
+    const findLabel = (label: string): number => texts.findIndex(t => t === label);
+
+    let relsXml = zip.file('word/_rels/document.xml.rels')?.asText() || '';
+    let rIdSeq = 990, mediaSeq = 190, docPrSeq = 990;
+    const replacements: Record<number, string> = {};
+    const placeSignature = (approver: ExceptionalContributionApprover | null | undefined, label: string, name: string) => {
+        if (!approver?.decided) return;
+        const li = findLabel(label);
+        if (li < 0) return;
+        const cellIndex = li + 1;
+        const png = dataUrlToPng(approver.signature);
+        if (!png || cellIndex < 0 || cellIndex >= cells.length) return;
+        const dims = pngSize(png) || { width: 480, height: 200 };
+        const { cx, cy } = fitEmu(dims.width, dims.height, SIG_MAX_W_EMU, SIG_MAX_H_EMU);
+        const rId = `rId${rIdSeq++}`;
+        const mediaFile = `ecrsig${mediaSeq++}.png`;
+        zip.file(`word/media/${mediaFile}`, png);
+        relsXml = relsXml.replace('</Relationships>',
+            `<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mediaFile}"/></Relationships>`);
+        replacements[cellIndex] = injectRun(replacements[cellIndex] ?? cells[cellIndex], drawingRun(rId, cx, cy, docPrSeq++, name));
+    };
+
+    placeSignature(data.deptHead, 'Head of Department', 'Head of Department Signature');
+    placeSignature(data.divisionHead, 'Head of Division', 'Head of Division Signature');
+    placeSignature(data.hrManager, 'Head of HR', 'Head of HR Signature');
+    placeSignature(data.generalManager, 'General Manager', 'General Manager Signature');
+
+    let idx = -1;
+    xml = xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => { idx++; return replacements[idx] ?? cell; });
+
+    zip.file(docPath, xml);
+    zip.file('word/_rels/document.xml.rels', relsXml);
+    return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+};

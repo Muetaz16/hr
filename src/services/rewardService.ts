@@ -27,6 +27,7 @@ export interface RewardCase {
     milestoneDate?: string | null;
     finalScoreSnapshot?: number | null;
     notes?: string | null;
+    natureOfContribution?: string | null; // Exceptional Performance only
 
     bonusLeaveDaysGranted: number;
     bonusPercent?: number | null;

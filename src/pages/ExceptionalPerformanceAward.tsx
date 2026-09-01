@@ -12,6 +12,13 @@ import type {
 
 const NOMINATOR_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR'];
 
+const STAGE_LABELS: Record<string, string> = {
+    DEPT_HEAD: 'Head of Department',
+    DIVISION_HEAD: 'Head of Division',
+    HR_MANAGER: 'HR Manager',
+    GENERAL_MANAGER: 'General Manager',
+};
+
 const STATUS_BADGE: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-800',
     COMPLETED: 'bg-emerald-100 text-emerald-800',
@@ -32,7 +39,11 @@ const ExceptionalPerformanceAward: React.FC = () => {
     const canNominate = canAccess(currentUser, NOMINATOR_ROLES, ['nominate_exceptional_award']);
     const canDecideHR = canAccess(currentUser, ['HR_MANAGER'], ['approve_hr_manager']);
     const canDecideGM = canAccess(currentUser, ['GENERAL_MANAGER'], ['approve_gm']);
-    const canDecide = canDecideHR || canDecideGM;
+    // The chain now also escalates through the submitting Head's own Department/Division Head
+    // before HR — any of the 5 head roles can be an intermediate approver, not just HR/GM. Real
+    // authorization is still server-side (decideApprovalStep checks approverUserId); this only
+    // controls whether the tab is visible.
+    const canDecide = canDecideHR || canDecideGM || canAccess(currentUser, NOMINATOR_ROLES, []);
     const canViewHistory = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'], ['manage_rewards', 'approve_gm']);
 
     const [tab, setTab] = useState<TabKey>(canNominate ? 'nominate' : canDecide ? 'decide' : 'history');
@@ -46,6 +57,8 @@ const ExceptionalPerformanceAward: React.FC = () => {
     const blurTimeout = useRef<number | null>(null);
     const [eligibility, setEligibility] = useState<ExceptionalPerformanceEligibility | null>(null);
     const [justification, setJustification] = useState('');
+    const [natureOfContribution, setNatureOfContribution] = useState('');
+    const [payrollCoverageMonth, setPayrollCoverageMonth] = useState('');
     const [bonusPercent, setBonusPercent] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -68,7 +81,8 @@ const ExceptionalPerformanceAward: React.FC = () => {
         setShowSuggestions(true);
     };
     const resetNominationForm = () => {
-        setNomineeQuery(''); setNominee(null); setEligibility(null); setJustification(''); setBonusPercent('');
+        setNomineeQuery(''); setNominee(null); setEligibility(null); setJustification('');
+        setNatureOfContribution(''); setPayrollCoverageMonth(''); setBonusPercent('');
     };
 
     const loadNominateData = async () => {
@@ -83,9 +97,11 @@ const ExceptionalPerformanceAward: React.FC = () => {
     const submitNomination = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!nominee) { toast.error('Select the employee to nominate from the suggestions.'); return; }
-        if (!justification.trim()) { toast.error('A justification / reference to the external letter is required.'); return; }
+        if (!justification.trim()) { toast.error('A justification for exceptional recognition is required.'); return; }
+        if (!natureOfContribution.trim()) { toast.error('The nature of the exceptional contribution is required.'); return; }
+        if (!payrollCoverageMonth) { toast.error('The payroll coverage month is required.'); return; }
         const pct = Number(bonusPercent);
-        if (!Number.isFinite(pct) || pct <= 0 || pct > 25) { toast.error('Enter a bonus percentage between 0 and 25.'); return; }
+        if (!Number.isFinite(pct) || pct < 5 || pct > 25) { toast.error('Enter a bonus percentage between 5 and 25.'); return; }
         setSubmitting(true);
         try {
             const formData = new FormData();
@@ -93,6 +109,8 @@ const ExceptionalPerformanceAward: React.FC = () => {
             formData.append('userId', currentUser!.id);
             formData.append('type', 'EXCEPTIONAL_PERFORMANCE');
             formData.append('reason', justification.trim());
+            formData.append('natureOfContribution', natureOfContribution.trim());
+            formData.append('payrollCoverageMonth', payrollCoverageMonth);
             formData.append('proposedBonusPercent', bonusPercent);
             await staffHubService.createRequest(formData);
             toast.success('Nomination submitted — awaiting HR Manager then General Manager decision.');
@@ -248,14 +266,25 @@ const ExceptionalPerformanceAward: React.FC = () => {
                         )}
 
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Justification (reference the external letter to the GM)</label>
-                            <textarea rows={3} value={justification} onChange={e => setJustification(e.target.value)} placeholder="Why this employee — exceptional dedication, urgent/high-impact assignment beyond normal duties…" className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Nature of Exceptional Contribution</label>
+                            <textarea rows={3} value={natureOfContribution} onChange={e => setNatureOfContribution(e.target.value)} placeholder="Describe the exceptional contribution performed by the employee, including the actions taken and responsibilities undertaken beyond the employee's regular duties." className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
                         </div>
 
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Proposed Bonus % of Monthly Basic Salary (max 25%)</label>
-                            <input type="number" min={0} max={25} step="0.1" value={bonusPercent} onChange={e => setBonusPercent(e.target.value)} placeholder="e.g. 15" className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
-                            <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">The General Manager approves or rejects this nomination — including the proposed % — as a whole. The actual currency amount is pending Payroll Integration.</p>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Justification for Exceptional Recognition</label>
+                            <textarea rows={3} value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain why the contribution is considered exceptional and merits recognition beyond the employee's normal job responsibilities." className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
+                        </div>
+
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Payroll Coverage</label>
+                            <input type="month" value={payrollCoverageMonth} onChange={e => setPayrollCoverageMonth(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
+                            <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">The payroll month this award should be reflected in.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Proposed Bonus % of Monthly Basic Salary (5–25%)</label>
+                            <input type="number" min={5} max={25} step="0.1" value={bonusPercent} onChange={e => setBonusPercent(e.target.value)} placeholder="e.g. 15" className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
+                            <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">The Department/Division Head decides the percentage (5–25%). The General Manager approves or rejects this nomination — including the proposed % — as a whole. The actual currency amount is pending Payroll Integration.</p>
                         </div>
 
                         <button type="submit" disabled={submitting || (!!nominee && !!eligibility && !eligibility.eligible)} className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest rounded-xl hover:bg-[#3a151d] disabled:opacity-50">
@@ -291,12 +320,13 @@ const ExceptionalPerformanceAward: React.FC = () => {
                     ) : pendingSteps.map(step => {
                         const req = step.leaveRequest;
                         const isGM = step.stage === 'GENERAL_MANAGER';
+                        const stageLabel = STAGE_LABELS[step.stage] || step.stage;
                         return (
                             <div key={step.id} className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-3">
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <p className="text-sm font-black text-slate-800">{(req as any)?.employee?.fullName || 'Employee'}</p>
-                                        <p className="text-[11px] text-slate-400">Nominated by {(req as any)?.user?.fullName || 'a Head'} · {(req as any)?.proposedBonusPercent}% proposed · {isGM ? 'General Manager stage' : 'HR Manager stage'}</p>
+                                        <p className="text-[11px] text-slate-400">Nominated by {(req as any)?.user?.fullName || 'a Head'} · {(req as any)?.proposedBonusPercent}% proposed · {stageLabel} stage</p>
                                     </div>
                                     <button onClick={() => downloadForm(step.leaveRequestId)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-100">
                                         <FileDown className="w-3.5 h-3.5" /> Download Form

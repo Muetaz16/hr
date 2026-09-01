@@ -145,9 +145,10 @@ const RewardCaseDetailPage: React.FC = () => {
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-slate-600">
-                    <Row label={t('period', { defaultValue: 'Period' })} value={c.period || (c.milestoneYears ? `${c.milestoneYears}-Year Milestone` : '—')} />
+                    <Row label={c.type === 'EXCEPTIONAL_PERFORMANCE' ? t('payroll_coverage', { defaultValue: 'Payroll Coverage' }) : t('period', { defaultValue: 'Period' })} value={c.period || (c.milestoneYears ? `${c.milestoneYears}-Year Milestone` : '—')} />
                     <Row label={t('reward', { defaultValue: 'Reward' })} value={rewardParts.length ? rewardParts.join(', ') : t('n_a', { defaultValue: 'N/A' })} />
-                    {c.notes && <Row label={t('notes', { defaultValue: 'Notes' })} value={c.notes} />}
+                    {c.natureOfContribution && <Row label={t('nature_of_contribution', { defaultValue: 'Nature of Exceptional Contribution' })} value={c.natureOfContribution} />}
+                    {c.notes && <Row label={c.type === 'EXCEPTIONAL_PERFORMANCE' ? t('justification', { defaultValue: 'Justification for Exceptional Recognition' }) : t('notes', { defaultValue: 'Notes' })} value={c.notes} />}
                     <Row label={t('filed', { defaultValue: 'Filed' })} value={`${format(new Date(c.createdAt), 'dd MMM yyyy')}${c.createdByName ? ` by ${c.createdByName}` : ''}`} />
                 </div>
 

@@ -66,7 +66,6 @@ export type MissingPunchReason = 'FORGOT' | 'DEVICE_ISSUE' | 'POWER_OUTAGE' | 'O
 
 export interface MissingPunchApprover {
     signature?: string | null;
-    date?: string;
     decided: boolean;
 }
 
@@ -76,7 +75,7 @@ export interface MissingBiometricLogData {
     positionTitle: string;
     division: string;
     department: string;
-    workingSchedule: string;         // fixed "09:00 - 17:00"
+    workingSchedule: string;         // resolved via resolveScheduledWorkHours — "HH:mm - HH:mm"
     // The employee's Job Description work locations ('OFFICE' / 'SITE'), same source as the Work
     // Authorization form — drives the Office / Site checkbox; not a per-request choice.
     jdWorkLocations?: string[];
@@ -140,9 +139,9 @@ export const generateMissingBiometricLogDocx = (data: MissingBiometricLogData): 
 
     // --- Missing Biometric Log details ---
     fillAfter('Date', data.date);
-    if (data.recordType === 'CHECK_IN' || data.recordType === 'BOTH') tickAfter('Check in');
-    if (data.recordType === 'CHECK_OUT' || data.recordType === 'BOTH') tickAfter('Check out');
-    if (data.recordType === 'BOTH') tickAfter('Both');
+    if (data.recordType === 'CHECK_IN') tickAfter('Check in');
+    else if (data.recordType === 'CHECK_OUT') tickAfter('Check out');
+    else if (data.recordType === 'BOTH') tickAfter('Both');
 
     if (data.reason === 'FORGOT') tickAfter('Forgot to Log');
     else if (data.reason === 'DEVICE_ISSUE') tickAfter('Device/System Issue');
@@ -172,7 +171,6 @@ export const generateMissingBiometricLogDocx = (data: MissingBiometricLogData): 
         const li = findLabel('Name and Signature');
         if (li >= 0) {
             placeSignature(data.headOfDeptDivision.signature, li + 1, 'Head of Department/Division Signature');
-            if (data.headOfDeptDivision.date) fillIdx(li + 1, `  ${data.headOfDeptDivision.date}`);
         }
     }
 
@@ -181,7 +179,6 @@ export const generateMissingBiometricLogDocx = (data: MissingBiometricLogData): 
         const li = findLabel('Head of Attendance and Payroll');
         if (li >= 0) {
             placeSignature(data.headOfAttendance.signature, li + 1, 'Head of Attendance Signature');
-            if (data.headOfAttendance.date) fillIdx(li + 1, `  ${data.headOfAttendance.date}`);
         }
     }
 

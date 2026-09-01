@@ -687,7 +687,7 @@ const StaffHub: React.FC = () => {
                                             </select>
                                         </div>
                                         <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-[11px] font-medium text-slate-500 leading-relaxed">
-                                            {t('mp_schedule_note', { defaultValue: 'Working schedule is fixed at 09:00 – 17:00, and the work location is taken from your Job Description. Pick the date above; on final approval the missing punch is logged into the attendance system automatically.' })}
+                                            {t('mp_schedule_note', { defaultValue: 'The punch time is taken from your actual scheduled working hours for that date, and the work location is taken from your Job Description. Pick the date above; on final approval the missing punch is logged into the attendance system automatically.' })}
                                         </div>
                                     </>
                                 )}
