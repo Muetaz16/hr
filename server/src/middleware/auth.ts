@@ -33,6 +33,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
                 unitId: true,
                 departmentId: true,
                 departmentIds: true,
+                divisionId: true,
                 permissions: true,
                 functionalHatIds: true,
                 groupId: true,

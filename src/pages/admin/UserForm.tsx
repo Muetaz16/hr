@@ -42,11 +42,11 @@ const buildGroups = (catalog: AccessCatalog | null): PermGroup[] => {
     return order.map(g => ({ key: g, title: g, perms: map.get(g)! }));
 };
 
-// Organizational positions (a user holds exactly one). Kept as an optgroup so the
-// dropdown reads as a hierarchy. HR Manager / Personnel remain selectable as a
-// "functional primary role" because a dedicated HR account still drives approval
-// routing — but for anyone who simply needs HR access on top of their position,
-// leave the position as-is and add the matching hat below.
+// Organizational positions (a user holds exactly one). HR Manager / Personnel are deliberately NOT
+// offered here anymore — the correct pattern is a real position (e.g. Head of Department) plus the
+// matching Functional Hat layered on top, which already carries the full HR Manager / Personnel
+// permission bundle (see accessCatalog.ts). Any pre-existing account still carrying one of those two
+// role strings keeps working exactly as before; it's just no longer an assignable choice going forward.
 const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
     { value: 'EMPLOYEE', labelDefault: 'Employee' },
     { value: 'HEAD_UNIT', labelDefault: 'Head of Unit' },
@@ -56,10 +56,6 @@ const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
     { value: 'HEAD_DIRECTOR', labelDefault: 'Head of Directorate' },
     { value: 'GENERAL_MANAGER', labelDefault: 'General Manager' },
     { value: 'CHAIRMAN', labelDefault: 'Chairman' },
-];
-const FUNCTIONAL_ROLE_OPTIONS: { value: UserRole; labelDefault: string }[] = [
-    { value: 'HR_MANAGER', labelDefault: 'HR Manager (dedicated HR account)' },
-    { value: 'PERSONNEL', labelDefault: 'Personnel (dedicated HR data-entry account)' },
 ];
 
 const PermissionCheckbox: React.FC<{
@@ -357,16 +353,9 @@ const UserForm: React.FC = () => {
                                 onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
                                 className={`${selectClass} pl-10`}
                             >
-                                <optgroup label={t('org_position', { defaultValue: 'Organizational position' })}>
-                                    {POSITION_OPTIONS.map(r => (
-                                        <option key={r.value} value={r.value}>{t(`role_${r.value.toLowerCase()}`, { defaultValue: r.labelDefault })}</option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label={t('functional_primary', { defaultValue: 'Functional (dedicated HR accounts)' })}>
-                                    {FUNCTIONAL_ROLE_OPTIONS.map(r => (
-                                        <option key={r.value} value={r.value}>{r.labelDefault}</option>
-                                    ))}
-                                </optgroup>
+                                {POSITION_OPTIONS.map(r => (
+                                    <option key={r.value} value={r.value}>{t(`role_${r.value.toLowerCase()}`, { defaultValue: r.labelDefault })}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-start gap-3">
@@ -374,7 +363,7 @@ const UserForm: React.FC = () => {
                             <div className="flex-1">
                                 <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1">{t('position_grants_defaults', { defaultValue: 'Position grants its default access automatically' })}</p>
                                 <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
-                                    {t('position_note', { defaultValue: 'Each position comes with a default set of permissions (shown locked below). Add Functional Hats and Individual Grants on top — access only ever stacks, never shrinks. Pick HR Manager / Personnel here only for a dedicated HR account; otherwise keep the real position and add the matching hat.' })}
+                                    {t('position_note', { defaultValue: 'Each position comes with a default set of permissions (shown locked below). Add Functional Hats and Individual Grants on top — access only ever stacks, never shrinks. For someone who needs HR Manager / Personnel access, keep their real position and add the matching Functional Hat below.' })}
                                 </p>
                             </div>
                         </div>

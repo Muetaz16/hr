@@ -16,7 +16,7 @@ import {
     updateEmployeeShift,
     deleteEmployeeShift,
 } from '../controllers/attendanceSettingsController';
-import { authenticateToken, authorizeRoles } from '../middleware/auth';
+import { authenticateToken, authorizeRoles, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticateToken);
@@ -24,7 +24,7 @@ router.use(authenticateToken);
 // Read-only: the Attendance & Leave Requests screens reference the scheduled work hours (e.g.
 // to show "Scheduled Shift: 09:00–17:00" next to actual punches), so HR_MANAGER/PERSONNEL can
 // read the snapshot even though only SUPER_ADMIN can manage these settings.
-router.get('/snapshot', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'), getSystemSettingsSnapshot);
+router.get('/snapshot', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_time_tracking', 'manage_time_tracking']), getSystemSettingsSnapshot);
 
 router.use(authorizeRoles('SUPER_ADMIN'));
 

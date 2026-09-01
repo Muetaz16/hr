@@ -90,7 +90,7 @@ const orgRank = (role?: string | null): number => (role && ORG_RANK[role] != nul
 // misses every hat-granted holder entirely. Mirrors the per-user resolution in
 // server/src/utils/effectivePermissions.ts (used by auth.ts for route authorization), reshaped
 // into one targeted query instead of loading every user's hats individually.
-async function resolveUsersWithPermission(prisma: PrismaClient, permission: string): Promise<string[]> {
+export async function resolveUsersWithPermission(prisma: PrismaClient, permission: string): Promise<string[]> {
     const hats = await prisma.functionalHat.findMany({ where: { permissions: { has: permission } }, select: { id: true } });
     const hatIds = hats.map(h => h.id);
     const users = await prisma.user.findMany({
@@ -165,7 +165,12 @@ export async function resolveApprovalChain(
         }));
     }
 
-    const hrManagers = idsOf(await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } }));
+    // Role ∪ approve_hr_manager permission/hat ∪ SUPER_ADMIN — mirrors the GENERAL_MANAGER union
+    // just below (and resolveExceptionalPerformanceApprovalChain's) exactly, so a person whose real
+    // Position is a Head role (e.g. HEAD_DEPARTMENT) but who holds the HR Manager Functional Hat is
+    // recognized here too, not just a literal role==='HR_MANAGER' account.
+    const hrManagerRoleHolders = idsOf(await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } }));
+    const hrManagers = Array.from(new Set([...hrManagerRoleHolders, ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
 
     // Directorate head — the "Administrative Director" endorsement. Resolve two ways and union them so
     // the director always lands in the flow when the org structure says they head this branch:
@@ -360,4 +365,113 @@ export async function resolvePermissionApprovalChain(
     }
 
     return { steps };
+}
+
+// Exceptional Performance / Exceptional Contribution Award — HR Manager -> General Manager. Both
+// are global, non-org-scoped roles, so (unlike every other chain builder above) this needs no
+// employee-position walk at all. Reuses HR_MANAGER/GENERAL_MANAGER, both already valid
+// ApprovalStage values, and the existing approve_hr_manager/approve_gm permissions (role ∪
+// permission/hat ∪ SUPER_ADMIN, via resolveUsersWithPermission) — no new permissions needed.
+export const EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE: Record<string, number> = {
+    HR_MANAGER: 0,
+    GENERAL_MANAGER: 1,
+};
+
+export async function resolveExceptionalPerformanceApprovalChain(
+    prisma: PrismaClient
+): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+    const hrRoleHolders = await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } });
+    const hrManagers = Array.from(new Set([...hrRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+    const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });
+    const generalManagers = Array.from(new Set([...generalManagerRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+
+    const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [
+        { stage: 'HR_MANAGER', userIds: hrManagers },
+        { stage: 'GENERAL_MANAGER', userIds: generalManagers },
+    ];
+
+    const seen = new Set<string>();
+    const steps: ResolvedApprovalStep[] = [];
+    for (const raw of rawStages) {
+        const distinctIds = Array.from(new Set(raw.userIds));
+        // Both stages are mandatory — a nomination with no resolvable HR Manager or General
+        // Manager is a real misconfiguration, not a tolerable gap (same REQUIRED_NONEMPTY_STAGES
+        // treatment as the other chains).
+        if (distinctIds.length === 0) return { steps: [], blockedStage: raw.stage };
+        const eligible = distinctIds.filter(id => !seen.has(id));
+        for (const userId of eligible) {
+            seen.add(userId);
+            steps.push({ stage: raw.stage, approverUserId: userId, coversStages: [raw.stage] });
+        }
+    }
+
+    return { steps };
+}
+
+interface HeadTeamUser {
+    id: string;
+    role?: string | null;
+    unitId?: string | null;
+    departmentId?: string | null;
+    divisionId?: string | null;
+    departmentIds?: string[];
+}
+
+const HEAD_TEAM_EMPLOYEE_SELECT = {
+    id: true, fullName: true, staffId: true, position: true, jobCategory: true, jobGrade: true, joinDate: true,
+    department: { select: { name: true, isOffice: true } },
+    division: { select: { name: true } },
+    unit: { select: { name: true } },
+} as const;
+
+// Given a Head-role user, resolves the employees they may nominate for Exceptional Performance —
+// the reverse direction of this file's employee -> head resolution above, reusing the exact same
+// org columns and department -> division -> directorate walk already proven correct there.
+// Division/Directorate heads cover their whole subtree (every department under their division /
+// every division under their directorate), not just employees stamped directly with that id.
+// HEAD_DIRECTOR's own directorateId isn't a User column (only Employee.directorateId is) —
+// resolved here via the caller's own linked Employee record, same as the directorate lookups above.
+export async function resolveHeadTeamEmployees(prisma: PrismaClient, user: HeadTeamUser) {
+    const baseWhere = { enrollmentStatus: 'ACTIVE' as const };
+    switch (user.role) {
+        case 'HEAD_UNIT':
+            if (!user.unitId) return [];
+            return prisma.employee.findMany({ where: { ...baseWhere, unitId: user.unitId }, select: HEAD_TEAM_EMPLOYEE_SELECT });
+        case 'HEAD_DEPARTMENT':
+        case 'HEAD_OFFICE':
+            if (!user.departmentId) return [];
+            return prisma.employee.findMany({ where: { ...baseWhere, departmentId: user.departmentId }, select: HEAD_TEAM_EMPLOYEE_SELECT });
+        case 'HEAD_DIVISION': {
+            if (!user.divisionId) return [];
+            const depts = await prisma.department.findMany({ where: { divisionId: user.divisionId }, select: { id: true } });
+            return prisma.employee.findMany({
+                where: { ...baseWhere, OR: [{ divisionId: user.divisionId }, { departmentId: { in: depts.map(d => d.id) } }] },
+                select: HEAD_TEAM_EMPLOYEE_SELECT,
+            });
+        }
+        case 'HEAD_DIRECTOR': {
+            const ownEmployee = await prisma.employee.findUnique({ where: { userId: user.id }, select: { directorateId: true } });
+            const directorateId = ownEmployee?.directorateId ?? null;
+            const divisions = directorateId
+                ? await prisma.division.findMany({ where: { directorateId }, select: { id: true } })
+                : [];
+            const deptWhere: any[] = [];
+            if (divisions.length > 0) deptWhere.push({ divisionId: { in: divisions.map(d => d.id) } });
+            if (user.departmentIds && user.departmentIds.length > 0) deptWhere.push({ id: { in: user.departmentIds } });
+            if (deptWhere.length === 0) return [];
+            const depts = await prisma.department.findMany({ where: { OR: deptWhere }, select: { id: true } });
+            return prisma.employee.findMany({
+                where: {
+                    ...baseWhere,
+                    OR: [
+                        ...(directorateId ? [{ directorateId }] : []),
+                        { departmentId: { in: depts.map(d => d.id) } },
+                    ],
+                },
+                select: HEAD_TEAM_EMPLOYEE_SELECT,
+            });
+        }
+        default:
+            return [];
+    }
 }

@@ -287,7 +287,7 @@ const EvaluationsPage: React.FC = () => {
         } else if (myLevel && canEvaluate(me, emp as OrgPlacement, myLevel)) {
             actions.push(myLevel);
         }
-        if (currentUser?.role === 'PERSONNEL' || currentUser?.role === 'SUPER_ADMIN') actions.push('PERSONNEL');
+        if (currentUser?.role === 'PERSONNEL' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('view_hr_evaluations')) actions.push('PERSONNEL');
         return actions;
     };
 

@@ -29,7 +29,8 @@ import {
     Clock,
     PenTool,
     AlertTriangle,
-    UserMinus
+    UserMinus,
+    Award
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -245,6 +246,19 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_ops', { defaultValue: 'Operations' }),
             items: [
                 { label: t('nav_approvals', { defaultValue: 'Manager Approvals' }), path: '/approvals', icon: Briefcase, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm'] },
+            ]
+        },
+        {
+            // Its own separate top-level section — nomination, HR/GM decisions, and history for the
+            // Exceptional Performance Award all live on one dedicated screen, not nested inside
+            // Staff Hub, Manager Approvals, or Personnel Relations.
+            title: t('nav_group_exceptional_performance', { defaultValue: 'Exceptional Performance' }),
+            items: [
+                {
+                    label: 'Exceptional Performance Award', path: '/exceptional-performance', icon: Award,
+                    roles: ['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'],
+                    permissions: ['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards'],
+                },
             ]
         },
         {

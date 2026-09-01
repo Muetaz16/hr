@@ -5,18 +5,20 @@ import { ArrowLeft, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { employeeService } from '../../services/employeeService';
+import { evaluationService } from '../../services/evaluationService';
 import { rewardService } from '../../services/rewardService';
 import { fetchEvaluationBreakdown } from '../../utils/evaluationScoring';
 import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
 
-type CandidateType = 'month' | 'attendance' | 'loyalty';
+type CandidateType = 'month' | 'attendance' | 'loyalty' | 'year';
 
 const TYPE_TITLES: Record<CandidateType, string> = {
     month: 'Employee of the Month — Candidate Review',
     attendance: 'Attendance Excellence — Candidate Review',
     loyalty: 'Loyalty Milestone — Candidate Review',
+    year: 'Employee of the Year — Candidate Review',
 };
 
 // No existing tenure formatter anywhere in the codebase (confirmed) — small new addition.
@@ -48,10 +50,11 @@ const RewardCandidateDetailPage: React.FC = () => {
     const { currentUser } = useAuth();
     const canManage = canAccess(currentUser, [], ['manage_rewards']);
 
-    const validType: CandidateType | null = type === 'month' || type === 'attendance' || type === 'loyalty' ? type : null;
+    const validType: CandidateType | null = type === 'month' || type === 'attendance' || type === 'loyalty' || type === 'year' ? type : null;
     const period = searchParams.get('period') || '';
     const milestoneYearsParam = searchParams.get('milestoneYears');
     const milestoneYears = milestoneYearsParam === '5' || milestoneYearsParam === '10' ? (Number(milestoneYearsParam) as 5 | 10) : undefined;
+    const year = searchParams.get('year') || String(new Date().getFullYear());
 
     const { data: employee, isLoading: empLoading } = useQuery({
         queryKey: ['reward-candidate-employee', employeeId],
@@ -77,13 +80,27 @@ const RewardCandidateDetailPage: React.FC = () => {
         enabled: validType === 'loyalty' && !!employeeId && !!milestoneYears,
         retry: false,
     });
-    const activeDetailQuery = validType === 'month' ? monthDetail : validType === 'attendance' ? attendanceDetail : loyaltyDetail;
+    const yearDetail = useQuery({
+        queryKey: ['reward-candidate-year-detail', employeeId, year],
+        queryFn: () => rewardService.getYearCandidateDetail(employeeId!, year),
+        enabled: validType === 'year' && !!employeeId && !!year,
+        retry: false,
+    });
+    const activeDetailQuery = validType === 'month' ? monthDetail : validType === 'attendance' ? attendanceDetail : validType === 'loyalty' ? loyaltyDetail : yearDetail;
 
     const breakdownQuery = useQuery({
         queryKey: ['reward-candidate-breakdown', employeeId, period],
         queryFn: () => fetchEvaluationBreakdown(employee as any, period),
         enabled: validType === 'month' && !!employee && !!period && !!monthDetail.data,
     });
+    const yearEvalHistory = useQuery({
+        queryKey: ['reward-candidate-year-eval-history', employeeId],
+        queryFn: () => evaluationService.getEvaluationHistory(employeeId!),
+        enabled: validType === 'year' && !!employeeId && !!yearDetail.data,
+    });
+
+    const [notes, setNotes] = useState('');
+    const [bonusPercent, setBonusPercent] = useState('');
 
     const [busy, setBusy] = useState(false);
     const handleOpenCase = async () => {
@@ -94,7 +111,12 @@ const RewardCandidateDetailPage: React.FC = () => {
                 ? await rewardService.createMonthCase(employeeId, period)
                 : validType === 'attendance'
                     ? await rewardService.createAttendanceCase(employeeId, period)
-                    : await rewardService.createLoyaltyCase(employeeId, milestoneYears!);
+                    : validType === 'loyalty'
+                        ? await rewardService.createLoyaltyCase(employeeId, milestoneYears!)
+                        : await rewardService.createEmployeeOfYear({
+                            employeeId, year, notes: notes || undefined,
+                            bonusPercent: bonusPercent ? Number(bonusPercent) : undefined,
+                        });
             toast.success(`Case ${created.caseNumber} opened — complete it to apply the award.`);
             navigate(`/personnel-relations/rewards/${created.id}`);
         } catch (err: any) {
@@ -163,6 +185,7 @@ const RewardCandidateDetailPage: React.FC = () => {
                     <p className="text-slate-400 font-semibold mb-2">Cycle: {attendanceDetail.data.cycleStart} → {attendanceDetail.data.cycleEnd}</p>
                     <CriteriaRow label="No late arrivals" ok={attendanceDetail.data.attendanceSummary.lateDays === 0} detail={`${attendanceDetail.data.attendanceSummary.lateDays} late day(s)`} />
                     <CriteriaRow label="No unauthorized absences" ok={attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays === 0} detail={`${attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays} day(s)`} />
+                    <CriteriaRow label="No early departures" ok={attendanceDetail.data.attendanceSummary.earlyOutDays === 0} detail={`${attendanceDetail.data.attendanceSummary.earlyOutDays} day(s)`} />
                     <CriteriaRow label="No leave requests filed this period" ok={!attendanceDetail.data.hasLeaveRequestFiled} />
                     <CriteriaRow label="No confirmed disciplinary record" ok={!attendanceDetail.data.hasConfirmedDisciplinaryRecord} />
                     <CriteriaRow label="Resident per BioTime (not using company transportation)" ok />
@@ -177,9 +200,59 @@ const RewardCandidateDetailPage: React.FC = () => {
                 </div>
             )}
 
+            {validType === 'year' && yearDetail.data && (
+                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
+                    <CriteriaRow label="12+ months tenure" ok detail={formatTenure(yearDetail.data.tenureMonths)} />
+                    <CriteriaRow label="No confirmed disciplinary record (past 12 months)" ok />
+                    <CriteriaRow label="Employee of the Month win(s) this year" ok detail={`${yearDetail.data.monthWinsThisYear.length} win(s): ${yearDetail.data.monthWinsThisYear.join(', ')}`} />
+                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Evaluation Reference (not a filter)</p>
+                        {yearEvalHistory.data?.allowed && yearEvalHistory.data.months.filter(m => m.finalization).length > 0 ? (
+                            <ul className="text-[11px] text-slate-500 space-y-0.5">
+                                {[...yearEvalHistory.data.months]
+                                    .filter(m => m.finalization)
+                                    .sort((a, b) => b.month.localeCompare(a.month))
+                                    .slice(0, 6)
+                                    .map(m => (
+                                        <li key={m.month}>{m.month}: {m.finalization!.finalScore.toFixed(2)}%</li>
+                                    ))}
+                            </ul>
+                        ) : (
+                            <p className="text-[11px] text-slate-400">No finalized monthly evaluations on file.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {validType === 'year' && yearDetail.data && canManage && (
+                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
+                    <div>
+                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Selection Justification</label>
+                        <textarea
+                            rows={3}
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                            placeholder="Why this employee — outstanding performance, contribution, values alignment…"
+                            className="w-full p-2 border border-slate-200 rounded"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Bonus % of Salary (subject to management approval)</label>
+                        <input
+                            type="number" min={0} max={100} step="0.1"
+                            value={bonusPercent}
+                            onChange={e => setBonusPercent(e.target.value)}
+                            placeholder="e.g. 10"
+                            className="w-full p-2 border border-slate-200 rounded"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">The actual currency amount is pending Payroll Integration — this only records the agreed percentage.</p>
+                    </div>
+                </div>
+            )}
+
             {canManage && (
                 <button disabled={busy} onClick={handleOpenCase} className="w-full py-3 bg-red-700 text-white font-black uppercase text-[10px] rounded">
-                    Open Case
+                    {validType === 'year' ? 'Grant Employee of the Year' : 'Open Case'}
                 </button>
             )}
         </div>

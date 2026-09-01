@@ -2,11 +2,26 @@ import { Request, Response } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { notify, notifyRoles } from './notificationController';
 import { generatePersonnelRequisitionDocx } from '../utils/personnelRequisition';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
 
 import { prisma } from '../lib/prisma';
 import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 
 const cleanId = (val: any): string | null => (val === '' || val === 'null' || val === 'undefined' || !val) ? null : val;
+
+// Role ∪ approve_hr_manager permission/hat ∪ SUPER_ADMIN — same union used everywhere else this
+// session, so a Head-role account wearing the HR Manager Functional Hat is recognized as "HR" here
+// too. notifyRoles() only ever queries a literal role list (it doesn't expand Functional Hats), so
+// call sites that need hat-aware HR notification resolve this list and call notify() per recipient
+// instead of notifyRoles(['HR_MANAGER'], ...).
+async function resolveHrManagerIds(): Promise<string[]> {
+    const roleHolders = await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } });
+    return Array.from(new Set([...roleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+}
+async function notifyHrManagers(title: string, content: string, link?: string) {
+    const ids = await resolveHrManagerIds();
+    await Promise.all(ids.map(id => notify(id, title, content, link)));
+}
 
 // Resolve the directorate that a requisition scope belongs to (for routing the "direct head" approval).
 const resolveDirectorateId = async (scope: { departmentId?: string | null; divisionId?: string | null; unitId?: string | null }): Promise<string | null> => {
@@ -57,11 +72,16 @@ export const getAllRecruitmentRequests = async (req: Request, res: Response) => 
         const { status, departmentId } = req.query;
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
+        const userPerms: string[] = (req as any).user?.permissions || [];
         const where: any = {};
         if (status) where.status = String(status);
         if (departmentId) where.departmentId = String(departmentId);
 
-        if (!['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole)) {
+        // Company-wide visibility for HR/GM/Admin/Director — also anyone holding the HR Manager hat
+        // (approve_hr_manager), not just a literal role==='HR_MANAGER' account. Deliberately NOT
+        // falling back to manage_recruitment/recruitment_approvals here — regular Heads already hold
+        // those by default and must stay scoped to their own branch, not see every requisition.
+        if (!['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole) && !userPerms.includes('approve_hr_manager')) {
             const scope = await getActorScope(userId, (req as any).user);
             const or: any[] = [{ requesterId: userId }];
             if (userRole === 'HEAD_DIVISION' && scope.divisionId) {
@@ -201,7 +221,7 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
                 `${request.requester?.fullName || 'A head'} raised a ${label} requisition (${request.jobTitle}) needing your approval.`,
                 '/recruitment/approvals', { divisionId: reqDivisionId });
         } else {
-            await notifyRoles(['HR_MANAGER'], 'New requisition to review',
+            await notifyHrManagers('New requisition to review',
                 `${request.requester?.fullName || 'A division head'} raised a ${label} requisition (${request.jobTitle}) needing HR approval.`,
                 '/recruitment/approvals');
         }
@@ -277,7 +297,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             }
         } else if (status === 'REJECTED') {
             if (userRole === 'HEAD_DIVISION') { updateData.deptNote = note; updateData.deptApprovedById = userId; updateData.deptApprovedAt = new Date(); }
-            else if (userRole === 'HR_MANAGER') { updateData.hrNote = note; updateData.hrApprovedById = userId; updateData.hrApprovedAt = new Date(); }
+            else if (userRole === 'HR_MANAGER' || perms.includes('approve_hr_manager')) { updateData.hrNote = note; updateData.hrApprovedById = userId; updateData.hrApprovedAt = new Date(); }
             else if (userRole === 'HEAD_DIRECTOR' || isAdmin) { updateData.gmNote = note; updateData.gmApprovedById = userId; updateData.gmApprovedAt = new Date(); }
         } else if (status === 'FILLED') {
             // Mark an approved hire as filled once the employee has been enrolled.
@@ -347,16 +367,16 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             await notify(result.requesterId, 'Requisition rejected', `Your requisition "${title}" was rejected.`, '/recruitment/requests');
         } else if (status === 'DEPT_APPROVED') {
             await notify(result.requesterId, 'Requisition advanced', `Your requisition "${title}" was approved by the Head of Division and is now with HR.`, '/recruitment/requests');
-            await notifyRoles(['HR_MANAGER'], 'Requisition awaiting HR', `"${title}" was approved by the Head of Division and needs HR review.`, '/recruitment/approvals');
+            await notifyHrManagers('Requisition awaiting HR', `"${title}" was approved by the Head of Division and needs HR review.`, '/recruitment/approvals');
         } else if (status === 'HR_APPROVED') {
             await notify(result.requesterId, 'Requisition advanced', `Your JD change "${title}" was approved by HR and is now with the Head of Directorate.`, '/recruitment/requests');
             await notifyRoles(['HEAD_DIRECTOR'], 'Requisition awaiting final approval', `JD change "${title}" needs your final approval.`, '/recruitment/approvals');
         } else if (status === 'FULLY_APPROVED') {
             await notify(result.requesterId, 'Requisition approved', `Your requisition "${title}" is fully approved.`, '/recruitment/requests');
             if (result.type === 'HIRE') {
-                await notifyRoles(['HR_MANAGER'], 'Position ready to source', `"${title}" is approved — you can start sourcing candidates.`, '/recruitment/hiring');
+                await notifyHrManagers('Position ready to source', `"${title}" is approved — you can start sourcing candidates.`, '/recruitment/hiring');
                 // Careers portal: the position is now live publicly. Let HR and the requesting head know.
-                await notifyRoles(['HR_MANAGER'], 'Position published to Careers', `"${title}" is now live on the public Careers page. Applications will appear in the applicant list.`, '/recruitment/hiring');
+                await notifyHrManagers('Position published to Careers', `"${title}" is now live on the public Careers page. Applications will appear in the applicant list.`, '/recruitment/hiring');
                 await notify(result.requesterId, 'Position published to Careers', `"${title}" is now open for public applications on the Careers page.`, '/recruitment/hiring');
             }
         } else if (updateData.filled) {
@@ -416,11 +436,12 @@ export const deleteRecruitmentRequest = async (req: Request, res: Response) => {
         const { id } = req.params;
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
+        const userPerms: string[] = (req as any).user?.permissions || [];
 
         const existing = await prisma.recruitmentRequest.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ error: 'Request not found' });
 
-        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HR_MANAGER' && userRole !== 'HEAD_DIVISION') {
+        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HR_MANAGER' && userRole !== 'HEAD_DIVISION' && !userPerms.includes('approve_hr_manager')) {
             return res.status(403).json({ error: 'Unauthorized to delete this request' });
         }
 
@@ -531,7 +552,7 @@ export const prfApprove = async (req: Request, res: Response) => {
         const following = PRF_STAGES.find(s => !approvals[s]) as PrfStage | undefined;
         if (!following) {
             await notify(existing.requesterId, 'Requisition fully approved', `Your hire requisition "${existing.jobTitle}" is fully approved and open for sourcing.`, '/recruitment/requests').catch(() => {});
-            await notifyRoles(['HR_MANAGER'], 'Position ready to source', `"${existing.jobTitle}" is fully approved — you can start sourcing candidates.`, '/recruitment/hiring').catch(() => {});
+            await notifyHrManagers('Position ready to source', `"${existing.jobTitle}" is fully approved — you can start sourcing candidates.`, '/recruitment/hiring').catch(() => {});
         } else {
             await notify(existing.requesterId, 'Requisition advanced', `Your hire requisition "${existing.jobTitle}" was approved at the ${PRF_STAGE_LABEL[nextStage]} stage.`, '/recruitment/requests').catch(() => {});
         }

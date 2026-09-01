@@ -86,7 +86,7 @@ const TasksPage: React.FC = () => {
                         isPending = true;
                         status = t('department_assessment_needed');
                     }
-                } else if (currentUser.role === 'PERSONNEL') {
+                } else if (currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('view_hr_evaluations')) {
                     const persEval = await evaluationService.getPersonnelEvaluation(emp.id, currentMonth);
                     if (!persEval) {
                         isPending = true;

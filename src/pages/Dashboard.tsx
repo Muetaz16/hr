@@ -250,7 +250,7 @@ const Dashboard: React.FC = () => {
             } else if (currentUser.role === 'HEAD_UNIT') {
                 positionName = 'Head of Unit';
                 managedEntity = units.find(u => u.id === (currentUser as any).unitId)?.name || 'Unit';
-            } else if (currentUser.role === 'PERSONNEL') {
+            } else if (currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('manage_personnel_actions')) {
                 positionName = 'Personnel Officer';
                 managedEntity = 'Human Resources';
                 myGroup = 'Human Resources IPH SYSTEM';

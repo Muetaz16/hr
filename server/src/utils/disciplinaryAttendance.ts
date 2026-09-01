@@ -20,6 +20,8 @@ interface RawDay {
     firstPunch?: string;
     lastPunch?: string;
     lateMins?: number;
+    earlyOutMins?: number;
+    isExcusedEarlyOut?: boolean;
     isHoliday?: boolean;
     isOutWork?: boolean;
     isSuspended?: boolean;
@@ -79,6 +81,7 @@ export interface AttendanceSummary {
     lateDays: number;
     unauthorizedAbsenceDays: number;
     maxConsecutiveAbsenceDays: number;
+    earlyOutDays: number;
 }
 
 // Single monthly-report fetch, classified into the 3 Annex I signals the Attendance Candidates
@@ -97,6 +100,10 @@ export async function fetchAttendanceSummary(bioId: number, start: string, end: 
         const leaves: RawLeave[] = Array.isArray(data?.empLeaves) ? data.empLeaves : [];
 
         const lateDays = rawReportData.filter(d => Number(d?.lateMins) > 0 && !d?.isHoliday && !d?.isSuspended).length;
+        // Symmetric to lateDays — BioTime returns earlyOutMins/isExcusedEarlyOut per day already
+        // (same payload, no extra call), same as the frontend's DailyAttendanceResult already
+        // surfaces. An EXCUSED early-out went through the approval workflow, so it doesn't count.
+        const earlyOutDays = rawReportData.filter(d => Number(d?.earlyOutMins) > 0 && !d?.isExcusedEarlyOut && !d?.isHoliday && !d?.isSuspended).length;
 
         const todayKey = fmt(new Date());
         const days = fillMissingDays(rawReportData, start, end)
@@ -113,7 +120,7 @@ export async function fetchAttendanceSummary(bioId: number, start: string, end: 
             maxConsecutiveAbsenceDays = Math.max(maxConsecutiveAbsenceDays, currentStreak);
         }
 
-        return { lateDays, unauthorizedAbsenceDays, maxConsecutiveAbsenceDays };
+        return { lateDays, unauthorizedAbsenceDays, maxConsecutiveAbsenceDays, earlyOutDays };
     } catch (error) {
         console.error(`[DISCIPLINARY][ATTENDANCE] Failed to fetch monthly report for bioId ${bioId}:`, error);
         return null;

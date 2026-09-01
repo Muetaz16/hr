@@ -29,6 +29,7 @@ const EvaluationControlPage = lazy(() => import('./pages/hr/EvaluationControl'))
 const ContractDetailPage = lazy(() => import('./pages/ContractDetail'));
 const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
+const ExceptionalPerformanceAwardPage = lazy(() => import('./pages/ExceptionalPerformanceAward'));
 const ReportIncidentPage = lazy(() => import('./pages/ReportIncident'));
 const ResignationRequestPage = lazy(() => import('./pages/ResignationRequest'));
 const MyAttendancePage = lazy(() => import('./pages/MyAttendance'));
@@ -105,6 +106,9 @@ function App() {
                     <Route path="/contract-management" element={<ContractManagementPage />} />
                   </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER']} allowedPermissions={['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards']} />}>
+                    <Route path="/exceptional-performance" element={<ExceptionalPerformanceAwardPage />} />
+                  </Route>
                   <Route path="/report-incident" element={<ReportIncidentPage />} />
                   <Route path="/resignation-request" element={<ResignationRequestPage />} />
                   <Route path="/my-attendance" element={<MyAttendancePage />} />
@@ -147,7 +151,7 @@ function App() {
                     <Route path="/lifecycle-control" element={<LifecycleControlPage />} />
                   </Route>
 
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
                     <Route path="/job-descriptions-browse" element={<JobDescriptionsBrowsePage />} />
                   </Route>
 

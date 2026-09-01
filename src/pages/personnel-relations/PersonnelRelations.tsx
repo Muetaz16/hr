@@ -248,7 +248,7 @@ const PersonnelRelations: React.FC = () => {
         'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
         'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
         'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER'], perms: ['manage_promotions'] },
-        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
+        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], perms: ['manage_rewards', 'nominate_exceptional_award', 'approve_gm'] },
         'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
         'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
         'evaluations': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], perms: ['manage_evaluation_control', 'view_evaluations'] },

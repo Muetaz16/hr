@@ -12,7 +12,7 @@ import {
     deleteDirectorEvaluation, deleteGMEvaluation, deleteChairmanEvaluation, deletePersonnelEvaluation,
     finalizeEvaluations, getFinalizationsByMonth, getEvaluationHistoryForEmployee
 } from '../controllers/evaluationController';
-import { authenticateToken, authorizeRoles, authorizeAccess } from '../middleware/auth';
+import { authenticateToken, authorizeAccess } from '../middleware/auth';
 import { MANAGER_ROLES } from '../utils/evaluationAssignments';
 
 const router = Router();
@@ -24,7 +24,9 @@ router.use(authenticateToken);
 // data, and only ever needs their own record (via the single-record GET
 // routes below, which enforce ownership per-request instead).
 const EVALUATOR_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', ...MANAGER_ROLES];
-const authorizeEvaluators = authorizeRoles(...EVALUATOR_ROLES);
+// Permission fallback so a hat holder (e.g. the "HR Manager"/"Personnel" Functional Hat on top of a
+// different base role) reaches these bulk reads too, not just the literal roles above.
+const authorizeEvaluators = authorizeAccess(EVALUATOR_ROLES, ['view_hr_evaluations', 'submit_evaluations', 'manage_evaluation_control']);
 // Writing an evaluation requires the `submit_evaluations` permission (or an evaluator role, or
 // `manage_evaluation_control`). Previously these POSTs were open to any authenticated user.
 const authorizeEvalWrite = authorizeAccess(EVALUATOR_ROLES, ['submit_evaluations', 'manage_evaluation_control']);

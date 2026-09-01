@@ -15,6 +15,7 @@ const TYPE_LABELS: Record<RewardType, string> = {
     ATTENDANCE_EXCELLENCE: 'Monthly Attendance and Timeliness Excellence Award',
     EMPLOYEE_OF_YEAR: 'Employee of the Year',
     LOYALTY_MILESTONE: 'Loyalty & Service Milestone Award',
+    EXCEPTIONAL_PERFORMANCE: 'Exceptional Performance / Exceptional Contribution Award',
 };
 
 const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (

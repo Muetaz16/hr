@@ -41,6 +41,7 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'view_personnel_relations', group: 'Personnel Relations', label: 'View Personnel Relations' },
     { id: 'manage_personnel_actions', group: 'Personnel Relations', label: 'Manage Personnel Action Forms' },
     { id: 'manage_rewards', group: 'Personnel Relations', label: 'Manage Rewards & Recognition' },
+    { id: 'nominate_exceptional_award', group: 'Personnel Relations', label: 'Nominate Exceptional Performance Award' },
     { id: 'manage_disciplinary', group: 'Personnel Relations', label: 'Manage Disciplinary Actions' },
     { id: 'edit_disciplinary_report', group: 'Personnel Relations', label: 'Edit Disciplinary Report After Stage 1' },
     { id: 'manage_offboarding', group: 'Personnel Relations', label: 'Manage Offboarding' },
@@ -96,13 +97,14 @@ export type Position = typeof POSITIONS[number];
 // full company roster. Scope enforcement lives server-side in employeeController.resolveEmployeeScope.
 export const POSITION_DEFAULTS: Record<string, string[]> = {
     EMPLOYEE: [],
-    // HR_MANAGER/PERSONNEL aren't org-hierarchy levels (they're absent from POSITIONS/ORG_RANK,
-    // same as GENERAL_MANAGER's cross-cutting treatment) but they ARE selectable User.role values
-    // (UserForm.tsx, EmployeeForm.tsx). Without a default here, picking the role alone granted
-    // NOTHING — real authority only ever came from separately assigning the same-named Functional
-    // Hat below, an easy-to-miss extra step. Mirrors that hat's own permission list exactly, so the
-    // role alone is now sufficient; the hat remains available for layering a subset of these onto a
-    // *different* base role.
+    // HR_MANAGER/PERSONNEL aren't org-hierarchy levels (they're absent from POSITIONS/ORG_RANK, same
+    // as GENERAL_MANAGER's cross-cutting treatment) and are NO LONGER selectable User.role values —
+    // removed from the UserForm.tsx/EmployeeForm.tsx dropdowns. The intended pattern now is a real org
+    // Position (e.g. HEAD_DEPARTMENT) + the same-named Functional Hat layered on top. These two
+    // POSITION_DEFAULTS entries are kept only so any pre-existing account still carrying one of these
+    // role strings in the DB keeps working exactly as before (nothing here forces a migration) —
+    // mirrors each hat's own permission list exactly, so no capability differs between "has the
+    // literal role" and "has the hat".
     HR_MANAGER: [
         'view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
         'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager',
@@ -112,12 +114,22 @@ export const POSITION_DEFAULTS: Record<string, string[]> = {
         'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
         'manage_evaluation_control', 'manage_job_descriptions',
     ],
-    PERSONNEL: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'submit_evaluations', 'view_lifecycle', 'view_personnel_relations', 'manage_personnel_actions'],
-    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment'],
-    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment'],
-    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
-    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals'],
+    // Expanded to match every permission a literal role==='PERSONNEL' account is actually granted
+    // via role-list checks across the codebase (routes/controllers pairing 'PERSONNEL' alongside a
+    // permission via authorizeAccess), so the "Personnel" Functional Hat is a full substitute for the
+    // role once PERSONNEL is retired as an assignable Position — same reasoning as HR_MANAGER above.
+    PERSONNEL: [
+        'view_directory', 'view_employees', 'register_employees', 'edit_employees',
+        'view_contracts', 'manage_contract_management', 'view_lifecycle',
+        'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
+        'view_payroll', 'view_time_tracking', 'manage_time_tracking',
+        'view_evaluations', 'submit_evaluations', 'view_hr_evaluations', 'manage_evaluation_control',
+    ],
+    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'nominate_exceptional_award'],
+    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
+    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
     GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     SUPER_ADMIN: ALL_PERMISSION_IDS,
@@ -162,8 +174,14 @@ export const SYSTEM_HATS: HatSeed[] = [
     {
         key: 'PERSONNEL',
         name: 'Personnel',
-        description: 'HR data-entry: register/edit employees, onboarding, IT issues, personnel actions.',
-        permissions: ['view_directory', 'view_employees', 'register_employees', 'edit_employees', 'view_evaluations', 'submit_evaluations', 'view_lifecycle', 'view_personnel_relations', 'manage_personnel_actions'],
+        description: 'Full personnel operations on top of a real position: employees, contracts, lifecycle, rewards/disciplinary/offboarding/promotions, time tracking, evaluations.',
+        permissions: [
+            'view_directory', 'view_employees', 'register_employees', 'edit_employees',
+            'view_contracts', 'manage_contract_management', 'view_lifecycle',
+            'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
+            'view_payroll', 'view_time_tracking', 'manage_time_tracking',
+            'view_evaluations', 'submit_evaluations', 'view_hr_evaluations', 'manage_evaluation_control',
+        ],
     },
 ];
 

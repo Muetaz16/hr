@@ -3,13 +3,27 @@ import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import {
     computeMonthCandidates, computeAttendanceCandidates, checkLoyaltyMilestones,
+    computeEmployeeOfYearCandidates,
     currentCycleMonth,
 } from '../utils/rewardEligibility';
 import { generateAppreciationLetterDocx } from '../utils/rewardForms';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
 
 const prisma = new PrismaClient();
 
-async function nextCaseNumber(): Promise<string> {
+// Role ∪ permission/hat ∪ SUPER_ADMIN — mirrors leaveApprovalChain.ts's GENERAL_MANAGER /
+// HEAD_ATTENDANCE union exactly (resolveUsersWithPermission alone only covers raw grants/hats/
+// SUPER_ADMIN, not role-based defaults, so the role list is always OR'd in separately). Exported
+// for staffHubController.ts to notify HR once an Exceptional Performance nomination's approval
+// chain completes and a draft RewardCase is ready to finalize.
+export async function resolveHrRecipients(): Promise<string[]> {
+    const roleHolders = await prisma.user.findMany({ where: { role: { in: ['HR_MANAGER', 'PERSONNEL'] } }, select: { id: true } });
+    return Array.from(new Set([...roleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'manage_rewards'))]));
+}
+
+// Exported so staffHubController.ts's Exceptional Performance completion hook can create the
+// RewardCase with a properly-formatted, sequential case number, matching every other award type.
+export async function nextCaseNumber(): Promise<string> {
     const count = await prisma.rewardCase.count();
     return `IPH-CCHR-FRM-REWARD-${String(count + 1).padStart(3, '0')}`;
 }
@@ -63,11 +77,27 @@ export const getAttendanceCandidatesHandler = async (req: Request, res: Response
 // GET /api/reward-cases/candidates/loyalty
 export const getLoyaltyMilestoneCandidates = async (_req: Request, res: Response) => {
     try {
-        const candidates = await checkLoyaltyMilestones();
-        res.json({ candidates });
+        const { candidates, excluded } = await checkLoyaltyMilestones();
+        res.json({ candidates, excluded });
     } catch (error: any) {
         console.error('Error checking loyalty milestones:', error);
         res.status(500).json({ error: 'Failed to check milestones' });
+    }
+};
+
+const isValidYear = (v: unknown): v is string => typeof v === 'string' && /^\d{4}$/.test(v);
+
+// GET /api/reward-cases/candidates/year?year=YYYY — filtered per the user's explicit confirmation
+// (12-month tenure, 12-month disciplinary-free, at least one Employee of the Month win this year);
+// the final pick among these candidates is still manual, per computeEmployeeOfYearCandidates's header.
+export const getEmployeeOfYearCandidates = async (req: Request, res: Response) => {
+    try {
+        const year = isValidYear(req.query.year) ? req.query.year : String(new Date().getFullYear());
+        const candidates = await computeEmployeeOfYearCandidates(year);
+        res.json({ year, candidates });
+    } catch (error: any) {
+        console.error('Error computing Employee of the Year candidates:', error);
+        res.status(500).json({ error: 'Failed to compute candidates' });
     }
 };
 
@@ -117,12 +147,27 @@ export const getLoyaltyCandidateDetail = async (req: Request, res: Response) => 
         const { employeeId } = req.params;
         const milestoneYears = Number(req.query.milestoneYears);
         if (milestoneYears !== 5 && milestoneYears !== 10) return res.status(400).json({ error: 'A valid milestoneYears (5 or 10) is required.' });
-        const candidates = await checkLoyaltyMilestones();
+        const { candidates } = await checkLoyaltyMilestones();
         const match = candidates.find(c => c.employeeId === employeeId && c.milestoneYears === milestoneYears);
         if (!match) return res.status(404).json({ error: 'This employee does not currently qualify for this milestone.' });
         res.json({ milestoneYears: match.milestoneYears, milestoneDate: match.milestoneDate, tenureMonths: match.tenureMonths });
     } catch (error: any) {
         console.error('Error fetching Loyalty Milestone candidate detail:', error);
+        res.status(500).json({ error: 'Failed to fetch candidate detail' });
+    }
+};
+
+// GET /api/reward-cases/candidates/year/:employeeId?year=YYYY
+export const getYearCandidateDetail = async (req: Request, res: Response) => {
+    try {
+        const { employeeId } = req.params;
+        const year = isValidYear(req.query.year) ? req.query.year : String(new Date().getFullYear());
+        const candidates = await computeEmployeeOfYearCandidates(year);
+        const match = candidates.find(c => c.employeeId === employeeId);
+        if (!match) return res.status(404).json({ error: 'This employee is not an eligible Employee of the Year candidate for this year.' });
+        res.json({ year, tenureMonths: match.tenureMonths, monthWinsThisYear: match.monthWinsThisYear });
+    } catch (error: any) {
+        console.error('Error fetching Employee of the Year candidate detail:', error);
         res.status(500).json({ error: 'Failed to fetch candidate detail' });
     }
 };
@@ -199,7 +244,7 @@ export const createLoyaltyCase = async (req: Request, res: Response) => {
         const existing = await prisma.rewardCase.findFirst({ where: { employeeId, type: 'LOYALTY_MILESTONE', milestoneYears } });
         if (existing) return res.status(400).json({ error: `This employee already has a ${milestoneYears}-year Loyalty Milestone case.` });
 
-        const candidates = await checkLoyaltyMilestones();
+        const { candidates } = await checkLoyaltyMilestones();
         const match = candidates.find(c => c.employeeId === employeeId && c.milestoneYears === milestoneYears);
         if (!match) return res.status(400).json({ error: 'This employee no longer qualifies for this milestone.' });
 
@@ -220,7 +265,9 @@ export const createLoyaltyCase = async (req: Request, res: Response) => {
 };
 
 // POST /api/reward-cases/employee-of-year — body: { employeeId, year?, notes?, bonusPercent? }.
-// Manual HR/management pick, not formula-driven — no eligibility check beyond "one winner per year".
+// The pick among eligible candidates is still manual (HR/management judgement, evaluation shown only
+// as reference) but the pool itself is now hard-gated against computeEmployeeOfYearCandidates, per
+// the user's explicit confirmation — no longer "no eligibility check beyond one winner per year".
 // Draft only — see createMonthCase.
 export const createEmployeeOfYearAward = async (req: Request, res: Response) => {
     try {
@@ -231,6 +278,11 @@ export const createEmployeeOfYearAward = async (req: Request, res: Response) => 
 
         const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
         if (!emp) return res.status(404).json({ error: 'Employee not found.' });
+
+        const yearCandidates = await computeEmployeeOfYearCandidates(year);
+        if (!yearCandidates.some(c => c.employeeId === employeeId)) {
+            return res.status(400).json({ error: 'This employee is no longer an eligible Employee of the Year candidate for this year.' });
+        }
 
         const existing = await prisma.rewardCase.findFirst({ where: { type: 'EMPLOYEE_OF_YEAR', period: year } });
         if (existing) return res.status(400).json({ error: `Employee of the Year has already been opened for ${year}.` });
@@ -323,6 +375,7 @@ const AWARD_TITLES: Record<string, string> = {
     ATTENDANCE_EXCELLENCE: 'Monthly Attendance and Timeliness Excellence Award',
     EMPLOYEE_OF_YEAR: 'Employee of the Year',
     LOYALTY_MILESTONE: 'Loyalty & Service Milestone Award',
+    EXCEPTIONAL_PERFORMANCE: 'Exceptional Performance / Exceptional Contribution Award',
 };
 
 // 'YYYY-MM' -> "July 2026", 'YYYY' -> "2026" (printed as-is, nothing to reformat).

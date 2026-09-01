@@ -44,6 +44,15 @@ router.patch('/requests/:id/replacement-decision', staffHubController.decideRepl
 router.get('/requests/my-pending-steps', staffHubController.getMyPendingSteps);
 router.patch('/requests/:requestId/steps/:stepId/decision', requestUpload.single('document'), staffHubController.decideApprovalStep);
 
+// Exceptional Performance Award nomination — a Head picks from their own team, previews
+// eligibility, and tracks their own submitted nominations (employeeId there is the nominee, not
+// the submitter, so it can't reuse /requests/employee/:employeeId).
+router.get('/my-nomination-team', staffHubController.getMyNominationTeam);
+router.get('/exceptional-performance-eligibility/:employeeId', staffHubController.getExceptionalPerformanceEligibilityHandler);
+router.get('/my-submitted-nominations', staffHubController.getMySubmittedNominations);
+// Broad visibility (not just the submitter) — the dedicated award screen's History tab.
+router.get('/exceptional-performance/history', authorizeAccess(['HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'], ['manage_rewards', 'approve_gm']), staffHubController.getExceptionalPerformanceHistory);
+
 const uploadDir = path.join(__dirname, '../../uploads/announcements');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });

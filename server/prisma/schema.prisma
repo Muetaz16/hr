@@ -670,7 +670,7 @@ model RewardCase {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   caseNumber String   @unique // "IPH-CCHR-FRM-REWARD-000" style, same convention as INCREP/OFFBRD/PROMOT
 
-  type       String   // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE
+  type       String   // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE | EXCEPTIONAL_PERFORMANCE
 
   period         String?   // 'YYYY-MM' (Month/Attendance) or 'YYYY' (Employee of Year); null for Loyalty
   milestoneYears Int?      // 5 or 10 — Loyalty only
@@ -1005,6 +1005,10 @@ model LeaveRequest {
   // written to BioTime's `outworks` table on final approval.
   workOrderType        String?
   placeOfAssignment    String?
+  // Exceptional Performance Award only — the bonus % (<=25) the nominating Head proposes at
+  // submission; the General Manager approves/rejects the nomination as a whole package, including
+  // this figure. Carried onto the RewardCase's own bonusPercent once the chain completes.
+  proposedBonusPercent Float?
   attachmentUrl        String?
   attachmentName       String?
   // Supporting document the General Manager must upload before granting the final approval.

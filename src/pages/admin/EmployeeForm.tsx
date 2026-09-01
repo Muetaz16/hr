@@ -1088,10 +1088,8 @@ const EmployeeForm: React.FC = () => {
                                     <option value="HEAD_OFFICE">Head of Office</option>
                                     <option value="HEAD_DIVISION">Head of Division</option>
                                     <option value="HEAD_DIRECTOR">{t('role_head_director')}</option>
-                                    <option value="HR_MANAGER">{t('role_hr_manager')}</option>
                                     <option value="GENERAL_MANAGER">General Manager</option>
                                     <option value="CHAIRMAN">Chairman</option>
-                                    <option value="PERSONNEL">{t('role_personnel')}</option>
                                 </select>
                             </div>
 

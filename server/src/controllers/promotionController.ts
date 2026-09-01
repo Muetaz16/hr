@@ -5,14 +5,24 @@ import { generatePromotionReportDocx, generateNoticeOfPromotionDocx } from '../u
 import { resolveDivisionHeadName } from './offboardingController';
 import { JOB_GRADES, TOP_GRADE, getPromotionRule, monthsSince } from '../utils/jobGrades';
 import { promotionReasonPrintLabel } from '../utils/promotionReasons';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
 
 const prisma = new PrismaClient();
 
 // "Head of Human Resources" / "Head of Human Resources Division" — resolved live the same way
 // resolveDivisionHeadName resolves a Head of Division, since HR_MANAGER is this system's only role
-// representing HR leadership (no dedicated "Head of HR" role exists).
+// representing HR leadership (no dedicated "Head of HR" role exists). Also recognizes anyone whose
+// real Position is a Head role but who holds the HR Manager Functional Hat (approve_hr_manager) —
+// not just a literal role==='HR_MANAGER' account.
 async function resolveHeadOfHumanResources(): Promise<string> {
-    const head = await prisma.user.findFirst({ where: { role: 'HR_MANAGER' }, select: { fullName: true } });
+    // resolveUsersWithPermission also folds in SUPER_ADMIN as an authorization fallback — correct
+    // for deciding who CAN act, but wrong for a printed signature name ("System Admin" must never
+    // show up as "Head of Human Resources" on an official document), so it's excluded here.
+    const hatHolderIds = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
+    const head = await prisma.user.findFirst({
+        where: { OR: [{ role: 'HR_MANAGER' }, { id: { in: hatHolderIds } }], role: { not: 'SUPER_ADMIN' } },
+        select: { fullName: true },
+    });
     return head?.fullName || '';
 }
 

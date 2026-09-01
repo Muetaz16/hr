@@ -4,6 +4,7 @@ import { generateJobDescriptionDocx, JobDescriptionVariant } from '../utils/jobD
 
 import { prisma } from '../lib/prisma';
 import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
 
 const cleanId = (val: any): string | null => (val === '' || val === 'null' || val === 'undefined' || !val) ? null : val;
 
@@ -156,11 +157,20 @@ export const generateJobDescriptionDoc = async (req: Request, res: Response) => 
                 });
                 return e?.user?.signature || null;
             };
+            // HR signature: role==='HR_MANAGER' OR anyone holding the HR Manager Functional Hat
+            // (approve_hr_manager) — same union as everywhere else this session, so a Head-role
+            // account wearing the hat is recognized here too. SUPER_ADMIN is excluded even though
+            // resolveUsersWithPermission includes it as an auth fallback — a printed HR signature
+            // must never resolve to a generic admin account.
+            const hrHatHolderIds = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
             const [headDept, headDiv, adminDir, hrUser] = await Promise.all([
                 jd.departmentId ? empSig({ role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: jd.departmentId }) : Promise.resolve(null),
                 resolvedDivisionId ? empSig({ role: { in: ['HEAD_DIVISION', 'HEAD_OFFICE'] }, divisionId: resolvedDivisionId }) : Promise.resolve(null),
                 resolvedDirectorateId ? empSig({ role: 'HEAD_DIRECTOR', directorateId: resolvedDirectorateId }) : Promise.resolve(null),
-                prisma.user.findFirst({ where: { role: 'HR_MANAGER', signature: { not: null } }, select: { signature: true } }),
+                prisma.user.findFirst({
+                    where: { OR: [{ role: 'HR_MANAGER' }, { id: { in: hrHatHolderIds } }], role: { not: 'SUPER_ADMIN' }, signature: { not: null } },
+                    select: { signature: true },
+                }),
             ]);
             signatures = { headDept, headDiv, headHr: hrUser?.signature || null, adminDir };
         }

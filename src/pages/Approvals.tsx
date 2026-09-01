@@ -8,7 +8,7 @@ import type { LeaveRequest, LeaveApprovalStep } from '../services/staffHubServic
 // (fetched separately via getMyPendingSteps) instead of the legacy status-based flow below —
 // exclude them from the old pending-requests list so the old Approve/Reject buttons (which write
 // directly to LeaveRequest.status) can't bypass the new per-step chain.
-const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE', 'WORK_AUTHORIZATION'];
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE', 'WORK_AUTHORIZATION', 'EXCEPTIONAL_PERFORMANCE'];
 const STAGE_LABELS: Record<string, string> = {
     HEAD_ATTENDANCE: 'Head of Attendance & Payroll',
     DIRECT_SUPERVISOR: 'Direct Supervisor',
@@ -129,7 +129,9 @@ const Approvals: React.FC = () => {
             setHistoryRequests(hist);
             setEmployees(emps);
             setDepartments(depts);
-            setPendingSteps(steps);
+            // Exceptional Performance nominations are decided on their own dedicated screen, not
+            // here — exclude them so this page never shows or actions them.
+            setPendingSteps(steps.filter((s: LeaveApprovalStep) => s.leaveRequest?.type !== 'EXCEPTIONAL_PERFORMANCE'));
         } catch (error) {
             toast.error(t('failed_to_load_data'));
         } finally {
@@ -187,7 +189,9 @@ const Approvals: React.FC = () => {
             a.href = url;
             const prefix = type === 'WORK_AUTHORIZATION'
                 ? 'Work_Authorization'
-                : (['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'].includes(type || '') ? 'Permission_Request' : 'Leave_Request');
+                : type === 'EXCEPTIONAL_PERFORMANCE'
+                    ? 'Exceptional_Performance_Nomination'
+                    : (['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'].includes(type || '') ? 'Permission_Request' : 'Leave_Request');
             a.download = `${prefix}_${requestId.slice(0, 8)}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);

@@ -26,7 +26,7 @@ const JobDescriptionsBrowse: React.FC = () => {
     const [search, setSearch] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
 
-    const canSeeAll = PRIVILEGED.includes(currentUser?.role || '');
+    const canSeeAll = PRIVILEGED.includes(currentUser?.role || '') || !!currentUser?.permissions?.includes('view_employees');
 
     useEffect(() => {
         (async () => {

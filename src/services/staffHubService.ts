@@ -13,6 +13,8 @@ export interface LeaveRequest {
     // Work Authorization (out-work) specifics — only set when type === 'WORK_AUTHORIZATION'.
     workOrderType?: string;
     placeOfAssignment?: string;
+    // Exceptional Performance Award only — the bonus % (<=25) the nominating Head proposed.
+    proposedBonusPercent?: number | null;
     attachmentUrl?: string;
     attachmentName?: string;
     finalDocumentUrl?: string;   // document the GM uploaded to grant final approval
@@ -64,6 +66,24 @@ export interface LeaveApprovalStep {
     createdAt: string;
     leaveRequest?: LeaveRequest & { employee?: { fullName: string; staffId?: string } };
     approver?: { fullName: string };
+}
+
+// A nomination team member — the shape of one employee returned by getMyNominationTeam.
+export interface NominationTeamEmployee {
+    id: string;
+    fullName: string;
+    staffId?: string | null;
+    position?: string | null;
+    department?: { name: string } | null;
+}
+
+export interface ExceptionalPerformanceEligibility {
+    eligible: boolean;
+    isResident: boolean;
+    isFullTime: boolean;
+    grantedCount: number;
+    contractStartDate?: string | null;
+    reasons: string[];
 }
 
 export interface Announcement {
@@ -147,6 +167,28 @@ export const staffHubService = {
             return response.data;
         }
         const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, { decision, note });
+        return response.data;
+    },
+
+    // Exceptional Performance Award — a Head's own team (for the nomination picker), a live
+    // eligibility preview, and the Head's own submitted nominations (employeeId there is the
+    // nominee, not the submitter, so getMyRequests can't be reused for this).
+    async getMyNominationTeam(): Promise<{ employees: NominationTeamEmployee[] }> {
+        const response = await api.get('/staff-hub/my-nomination-team');
+        return response.data;
+    },
+    async getExceptionalPerformanceEligibility(employeeId: string): Promise<ExceptionalPerformanceEligibility> {
+        const response = await api.get(`/staff-hub/exceptional-performance-eligibility/${employeeId}`);
+        return response.data;
+    },
+    async getMySubmittedNominations(): Promise<LeaveRequestWithEmployee[]> {
+        const response = await api.get('/staff-hub/my-submitted-nominations');
+        return response.data;
+    },
+    // Every Exceptional Performance nomination ever submitted — the dedicated award screen's
+    // History tab (broad visibility: HR Manager/Personnel/General Manager/Super Admin).
+    async getExceptionalPerformanceHistory(): Promise<LeaveRequest[]> {
+        const response = await api.get('/staff-hub/exceptional-performance/history');
         return response.data;
     },
 

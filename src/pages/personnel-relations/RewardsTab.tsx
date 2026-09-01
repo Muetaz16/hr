@@ -1,11 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { Award, Search, Filter } from 'lucide-react';
 import { employeeService } from '../../services/employeeService';
-import { evaluationService } from '../../services/evaluationService';
 import {
     rewardService,
     type RewardType,
@@ -14,9 +13,11 @@ import {
     type RewardAttendanceCandidate,
     type RewardAttendanceExclusion,
     type RewardLoyaltyCandidate,
+    type RewardLoyaltyExclusion,
+    type RewardYearCandidate,
 } from '../../services/rewardService';
-import Modal from '../../components/Modal';
-import type { Employee } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { canAccess } from '../../utils/access';
 
 // Exported for the Employee Lifecycle tree's "Rewards Record" section (PersonnelRelations.tsx),
 // which lists an employee's own cases outside this tab.
@@ -25,6 +26,7 @@ export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
     ATTENDANCE_EXCELLENCE: 'Attendance Excellence',
     EMPLOYEE_OF_YEAR: 'Employee of the Year',
     LOYALTY_MILESTONE: 'Loyalty Milestone',
+    EXCEPTIONAL_PERFORMANCE: 'Exceptional Performance / Exceptional Contribution Award',
 };
 
 // One shared badge for every Draft/Completed indicator across the tab — same formula the
@@ -52,6 +54,9 @@ const defaultPrevMonth = (): string => {
 const RewardsTab: React.FC = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { currentUser } = useAuth();
+
+    const canManageAwards = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['manage_rewards']);
 
     const [view, setView] = useState<'awards' | 'history'>('awards');
 
@@ -129,12 +134,14 @@ const RewardsTab: React.FC = () => {
     // via an HR-triggered check rather than a background cron/push notification.
     const [loyaltyLoading, setLoyaltyLoading] = useState(false);
     const [loyaltyCandidates, setLoyaltyCandidates] = useState<RewardLoyaltyCandidate[] | null>(null);
+    const [loyaltyExcluded, setLoyaltyExcluded] = useState<RewardLoyaltyExclusion[]>([]);
     const checkLoyaltyMilestones = async () => {
         setLoyaltyLoading(true);
         setLoyaltyCandidates(null);
         try {
-            const { candidates } = await rewardService.getLoyaltyCandidates();
+            const { candidates, excluded } = await rewardService.getLoyaltyCandidates();
             setLoyaltyCandidates(candidates);
+            setLoyaltyExcluded(excluded);
         } catch (err: any) {
             toast.error(err?.response?.data?.error || 'Failed to check milestones.');
         } finally {
@@ -142,38 +149,24 @@ const RewardsTab: React.FC = () => {
         }
     };
 
-    // Employee of the Year — manual HR/management pick, mirrors the "Add Exceptional Promotion"
-    // searchable employee picker exactly. Evaluation data is shown as reference only, never a filter.
-    const [isEoyModalOpen, setIsEoyModalOpen] = useState(false);
+    // Employee of the Year — the pool is filtered (12-month tenure, 12-month disciplinary-free, at
+    // least one Employee of the Month win this year); the final pick among these candidates is still
+    // manual, matching how Month/Attendance/Loyalty already work.
     const [eoyYear, setEoyYear] = useState(String(new Date().getFullYear()));
-    const [eoyEmployeeQuery, setEoyEmployeeQuery] = useState('');
-    const [eoyEmployee, setEoyEmployee] = useState<Employee | null>(null);
-    const [showEoySuggestions, setShowEoySuggestions] = useState(false);
-    const eoyBlurTimeout = useRef<number | null>(null);
-    const [eoyNotes, setEoyNotes] = useState('');
-    const [eoyBonusPercent, setEoyBonusPercent] = useState('');
-    const eoySuggestions = useMemo(() => {
-        const q = eoyEmployeeQuery.trim().toLowerCase();
-        if (!q || eoyEmployee) return [];
-        return (employees as Employee[])
-            .filter((emp: any) => emp.fullName.toLowerCase().includes(q) || (emp.staffId || '').toLowerCase().includes(q))
-            .slice(0, 8);
-    }, [eoyEmployeeQuery, eoyEmployee, employees]);
-    const selectEoyEmployee = (emp: Employee) => {
-        setEoyEmployee(emp);
-        setEoyEmployeeQuery(emp.fullName);
-        setShowEoySuggestions(false);
+    const [eoyLoading, setEoyLoading] = useState(false);
+    const [eoyCandidates, setEoyCandidates] = useState<RewardYearCandidate[] | null>(null);
+    const computeYearCandidates = async () => {
+        setEoyLoading(true);
+        setEoyCandidates(null);
+        try {
+            const { candidates } = await rewardService.getYearCandidates(eoyYear);
+            setEoyCandidates(candidates);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || 'Failed to compute candidates.');
+        } finally {
+            setEoyLoading(false);
+        }
     };
-    const handleEoyEmployeeChange = (value: string) => {
-        setEoyEmployeeQuery(value);
-        if (eoyEmployee && value !== eoyEmployee.fullName) setEoyEmployee(null);
-        setShowEoySuggestions(true);
-    };
-    const { data: eoyEvalHistory } = useQuery({
-        queryKey: ['reward-eoy-eval-history', eoyEmployee?.id],
-        queryFn: () => evaluationService.getEvaluationHistory(eoyEmployee!.id),
-        enabled: !!eoyEmployee && isEoyModalOpen,
-    });
 
     // History view — every RewardCase ever created, searchable/filterable (replaces the old buried
     // <details> at the bottom of the page).
@@ -201,7 +194,7 @@ const RewardsTab: React.FC = () => {
                             <p className="text-sm text-slate-600 mt-1">
                                 Nothing here runs automatically — candidates are computed on demand, and no award is
                                 applied to the employee until its case is completed with a signed, uploaded document.
-                                Bi-Annual Bonus and Exceptional Performance Award are not yet configured.
+                                Bi-Annual Bonus is not yet configured.
                             </p>
                         </div>
                     </div>
@@ -223,6 +216,7 @@ const RewardsTab: React.FC = () => {
 
                 {view === 'awards' && (
                     <>
+                        {canManageAwards && <>
                         {/* Employee of the Month */}
                         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -376,21 +370,21 @@ const RewardsTab: React.FC = () => {
                                 <div>
                                     <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Employee of the Year</h4>
                                     <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                        Manual selection by HR/Management for the year. Evaluation history is shown as
-                                        reference only — this is not formula-driven.
+                                        Restricted to employees with 12+ months tenure, no confirmed disciplinary action in
+                                        the last 12 months, and at least one Employee of the Month win this year. The final
+                                        pick among these candidates is still a manual HR/Management decision.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     <input type="number" value={eoyYear} onChange={e => setEoyYear(e.target.value)} className="w-24 p-2 border border-slate-200 rounded text-xs font-semibold" />
-                                    <button onClick={() => setIsEoyModalOpen(true)} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d]">
-                                        + Select Employee of the Year
+                                    <button onClick={computeYearCandidates} disabled={eoyLoading} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d] disabled:opacity-50">
+                                        {eoyLoading ? 'Computing…' : 'Compute Candidates'}
                                     </button>
                                 </div>
                             </div>
                             {(() => {
                                 const existingCase = rewardCases.find(c => c.type === 'EMPLOYEE_OF_YEAR' && c.period === eoyYear);
-                                if (!existingCase) return <p className="text-xs text-slate-400 font-semibold">No one selected for {eoyYear} yet.</p>;
-                                return (
+                                if (existingCase) return (
                                     <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-2">
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -403,6 +397,33 @@ const RewardsTab: React.FC = () => {
                                         <button onClick={() => navigate(`/personnel-relations/rewards/${existingCase.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
                                             {existingCase.completedAt ? 'View Case' : 'Complete Case'}
                                         </button>
+                                    </div>
+                                );
+                                if (eoyCandidates === null) return <p className="text-xs text-slate-400 font-semibold">Pick a year and click "Compute Candidates" to see who's eligible.</p>;
+                                if (eoyCandidates.length === 0) return <p className="text-xs text-slate-400 font-semibold">No eligible candidates found for {eoyYear}.</p>;
+                                return (
+                                    <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead><tr className={THEAD_TR}>
+                                                <th className={TH}>Employee</th>
+                                                <th className={TH}>Month Wins This Year</th>
+                                                <th className={`${TH} text-right`}>Action</th>
+                                            </tr></thead>
+                                            <tbody className={TBODY}>
+                                                {eoyCandidates.map(c => (
+                                                    <tr key={c.employeeId} className={TR_HOVER}>
+                                                        <td className="p-3">
+                                                            <p className="font-bold text-slate-800">{c.employee.fullName}</p>
+                                                            <p className="text-[10px] text-slate-400 font-mono">{c.employee.staffId}</p>
+                                                        </td>
+                                                        <td className="p-3 font-bold">{c.monthWinsThisYear.length}</td>
+                                                        <td className="p-3 text-right">
+                                                            <button onClick={() => navigate(`/personnel-relations/rewards/candidates/year/${c.employeeId}?year=${eoyYear}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Review</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 );
                             })()}
@@ -472,7 +493,49 @@ const RewardsTab: React.FC = () => {
                                     </div>
                                 );
                             })()}
+                            {loyaltyExcluded.length > 0 && (
+                                <details className="text-[11px] text-slate-400">
+                                    <summary className="cursor-pointer font-black uppercase tracking-widest text-slate-400">Excluded ({loyaltyExcluded.length})</summary>
+                                    <ul className="mt-2 space-y-1">
+                                        {loyaltyExcluded.map(e => (
+                                            <li key={e.employeeId}>{e.employeeName} — {e.reason === 'NO_BIO_ID' ? 'No attendance device linked' : 'Attendance data unavailable'}</li>
+                                        ))}
+                                    </ul>
+                                </details>
+                            )}
                         </div>
+                        </>}
+
+                        {canManageAwards && (() => {
+                            const readyToFinalize = rewardCases.filter(c => c.type === 'EXCEPTIONAL_PERFORMANCE' && !c.completedAt);
+                            return (
+                                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                                    <div>
+                                        <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Exceptional Performance / Exceptional Contribution Award</h4>
+                                        <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
+                                            Nominated by a Head, approved by HR Manager then the General Manager — via Staff
+                                            Hub → Approvals, not this screen. A case appears here automatically once that
+                                            chain fully completes, ready for the usual signed-document finalize step.
+                                        </p>
+                                    </div>
+                                    {readyToFinalize.length === 0 ? (
+                                        <p className="text-xs text-slate-400 font-semibold">No approved nominations awaiting finalization.</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {readyToFinalize.map(rc => (
+                                                <div key={rc.id} className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-xs font-black text-slate-700">{rc.employee?.fullName} — {rc.caseNumber}</p>
+                                                        <p className="text-[10px] text-slate-400">Nominated by {rc.createdByName || 'a Head'} · {rc.bonusPercent}% proposed</p>
+                                                    </div>
+                                                    <button onClick={() => navigate(`/personnel-relations/rewards/${rc.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">Complete Case</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </>
                 )}
 
@@ -543,120 +606,6 @@ const RewardsTab: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {/* Select Employee of the Year — manual HR/management pick, evaluation history shown as
-                reference only, never as a filter. */}
-            <Modal
-                isOpen={isEoyModalOpen}
-                onClose={() => { setIsEoyModalOpen(false); setEoyEmployeeQuery(''); setEoyEmployee(null); setEoyNotes(''); setEoyBonusPercent(''); }}
-                title="Select Employee of the Year"
-                maxWidth="max-w-md"
-            >
-                <form
-                    onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!eoyEmployee) return toast.error('Select the employee from the suggestions.');
-                        try {
-                            const created = await rewardService.createEmployeeOfYear({
-                                employeeId: eoyEmployee.id, year: eoyYear,
-                                notes: eoyNotes || undefined,
-                                bonusPercent: eoyBonusPercent ? Number(eoyBonusPercent) : undefined,
-                            });
-                            toast.success(`Case ${created.caseNumber} opened — complete it to apply the award.`);
-                            setIsEoyModalOpen(false);
-                            setEoyEmployeeQuery(''); setEoyEmployee(null); setEoyNotes(''); setEoyBonusPercent('');
-                            refreshRewards();
-                            navigate(`/personnel-relations/rewards/${created.id}`);
-                        } catch (err: any) {
-                            toast.error(err?.response?.data?.error || 'Failed to open the case.');
-                        }
-                    }}
-                    className="space-y-4 text-xs font-semibold text-slate-700"
-                >
-                    <p className="text-[10px] text-slate-400 font-normal normal-case">
-                        A subjective HR/management pick for {eoyYear} — evaluation history is shown below only as
-                        reference context, it is not a filter.
-                    </p>
-                    <div className="relative">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
-                        <input
-                            type="text"
-                            value={eoyEmployeeQuery}
-                            onChange={e => handleEoyEmployeeChange(e.target.value)}
-                            onFocus={() => setShowEoySuggestions(true)}
-                            onBlur={() => { eoyBlurTimeout.current = window.setTimeout(() => setShowEoySuggestions(false), 150); }}
-                            placeholder="Start typing the employee's name…"
-                            className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
-                            autoComplete="off"
-                        />
-                        {showEoySuggestions && eoySuggestions.length > 0 && (
-                            <ul className="absolute z-10 mt-1 w-full bg-white border border-[#511d29]/20 rounded shadow-md max-h-56 overflow-auto">
-                                {eoySuggestions.map((emp: any) => (
-                                    <li key={emp.id}>
-                                        <button
-                                            type="button"
-                                            onMouseDown={e => e.preventDefault()}
-                                            onClick={() => selectEoyEmployee(emp)}
-                                            className="w-full text-left px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
-                                        >
-                                            {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-
-                    {eoyEmployee && (
-                        <div className="p-3 bg-slate-50 border border-slate-100 rounded space-y-1.5 font-normal normal-case">
-                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Evaluation Reference</p>
-                            <p className="text-[11px] text-slate-600">Evaluation Index: {(eoyEmployee.evaluationPoints || 0).toFixed(2)}</p>
-                            {eoyEvalHistory?.allowed && eoyEvalHistory.months.filter(m => m.finalization).length > 0 ? (
-                                <ul className="text-[11px] text-slate-500 space-y-0.5">
-                                    {[...eoyEvalHistory.months]
-                                        .filter(m => m.finalization)
-                                        .sort((a, b) => b.month.localeCompare(a.month))
-                                        .slice(0, 6)
-                                        .map(m => (
-                                            <li key={m.month}>{m.month}: {m.finalization!.finalScore.toFixed(2)}%</li>
-                                        ))}
-                                </ul>
-                            ) : (
-                                <p className="text-[11px] text-slate-400">No finalized monthly evaluations on file.</p>
-                            )}
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Selection Justification</label>
-                        <textarea
-                            rows={3}
-                            value={eoyNotes}
-                            onChange={e => setEoyNotes(e.target.value)}
-                            placeholder="Why this employee — outstanding performance, contribution, values alignment…"
-                            className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Bonus % of Salary (subject to management approval)</label>
-                        <input
-                            type="number" min={0} max={100} step="0.1"
-                            value={eoyBonusPercent}
-                            onChange={e => setEoyBonusPercent(e.target.value)}
-                            placeholder="e.g. 10"
-                            className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
-                        />
-                        <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">
-                            The actual currency amount is pending Payroll Integration — this only records the agreed percentage.
-                        </p>
-                    </div>
-
-                    <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
-                        Grant Employee of the Year
-                    </button>
-                </form>
-            </Modal>
         </>
     );
 };

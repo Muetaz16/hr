@@ -1,6 +1,6 @@
 import api from './apiClient';
 
-export type RewardType = 'EMPLOYEE_OF_MONTH' | 'ATTENDANCE_EXCELLENCE' | 'EMPLOYEE_OF_YEAR' | 'LOYALTY_MILESTONE';
+export type RewardType = 'EMPLOYEE_OF_MONTH' | 'ATTENDANCE_EXCELLENCE' | 'EMPLOYEE_OF_YEAR' | 'LOYALTY_MILESTONE' | 'EXCEPTIONAL_PERFORMANCE';
 
 export interface RewardCaseEmployee {
     id: string;
@@ -59,6 +59,7 @@ export interface AttendanceSummary {
     lateDays: number;
     unauthorizedAbsenceDays: number;
     maxConsecutiveAbsenceDays: number;
+    earlyOutDays: number;
 }
 export interface RewardAttendanceCandidate {
     employeeId: string;
@@ -87,6 +88,18 @@ export interface RewardLoyaltyCandidate {
     milestoneDate: string;
     tenureMonths: number;
 }
+export interface RewardLoyaltyExclusion {
+    employeeId: string;
+    employeeName: string;
+    reason: 'NO_BIO_ID' | 'ATTENDANCE_FETCH_FAILED';
+}
+
+export interface RewardYearCandidate {
+    employeeId: string;
+    employee: RewardCaseEmployee;
+    tenureMonths: number;
+    monthWinsThisYear: string[];
+}
 
 export const rewardService = {
     async getMonthCandidates(month?: string): Promise<{ month: string; candidates: RewardMonthCandidate[] }> {
@@ -99,8 +112,13 @@ export const rewardService = {
         return response.data;
     },
 
-    async getLoyaltyCandidates(): Promise<{ candidates: RewardLoyaltyCandidate[] }> {
+    async getLoyaltyCandidates(): Promise<{ candidates: RewardLoyaltyCandidate[]; excluded: RewardLoyaltyExclusion[] }> {
         const response = await api.get('/reward-cases/candidates/loyalty');
+        return response.data;
+    },
+
+    async getYearCandidates(year?: string): Promise<{ year: string; candidates: RewardYearCandidate[] }> {
+        const response = await api.get('/reward-cases/candidates/year', { params: year ? { year } : undefined });
         return response.data;
     },
 
@@ -117,6 +135,11 @@ export const rewardService = {
 
     async getLoyaltyCandidateDetail(employeeId: string, milestoneYears: 5 | 10): Promise<{ milestoneYears: 5 | 10; milestoneDate: string; tenureMonths: number }> {
         const response = await api.get(`/reward-cases/candidates/loyalty/${employeeId}`, { params: { milestoneYears } });
+        return response.data;
+    },
+
+    async getYearCandidateDetail(employeeId: string, year: string): Promise<{ year: string; tenureMonths: number; monthWinsThisYear: string[] }> {
+        const response = await api.get(`/reward-cases/candidates/year/${employeeId}`, { params: { year } });
         return response.data;
     },
 

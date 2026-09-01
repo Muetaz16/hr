@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, ShieldOff, CalendarDays, Percent, CalendarClock, Settings as SettingsIcon } from 'lucide-react';
@@ -32,6 +32,65 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: strin
         </div>
     </div>
 );
+
+// Searchable employee picker — same interaction pattern already established for the Disciplinary/
+// Offboarding modules' employee search fields (PersonnelRelations.tsx / ReportIncident.tsx),
+// restyled to match this page's own modal look. Replaces a plain <select> everywhere a modal here
+// asks "which employee" — the roster is too long to scroll through natively. `value`/`onChange`
+// work on the employee code (empCode) string, matching how every form on this page already stores
+// its selection, rather than a full Employee object.
+const EmployeeSearchSelect: React.FC<{
+    options: { code: string; name: string }[];
+    value: string;
+    onChange: (code: string) => void;
+    disabled?: boolean;
+    placeholder?: string;
+}> = ({ options, value, onChange, disabled, placeholder }) => {
+    const [query, setQuery] = useState(() => {
+        const match = options.find(o => o.code === value);
+        return match ? `${match.name} (${match.code})` : '';
+    });
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const blurTimeout = useRef<number | null>(null);
+
+    const suggestions = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q || value) return [];
+        return options.filter(o => o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q)).slice(0, 8);
+    }, [query, options, value]);
+
+    return (
+        <div className="relative">
+            <input
+                type="text"
+                value={query}
+                onChange={e => { setQuery(e.target.value); if (value) onChange(''); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => { blurTimeout.current = window.setTimeout(() => setShowSuggestions(false), 150); }}
+                disabled={disabled}
+                placeholder={placeholder || "Start typing the employee's name…"}
+                autoComplete="off"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-md max-h-56 overflow-auto">
+                    {suggestions.map(o => (
+                        <li key={o.code}>
+                            <button
+                                type="button"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => { onChange(o.code); setQuery(`${o.name} (${o.code})`); setShowSuggestions(false); }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-slate-50"
+                            >
+                                {o.name} ({o.code})
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
 
 type Tab = 'overview' | 'exceptions' | 'daily-logging' | 'employees' | 'settings';
 type SettingsSubTab = 'hours' | 'leave-types' | 'holidays' | 'multipliers' | 'shifts';
@@ -77,6 +136,12 @@ const AttendancePage: React.FC = () => {
         retry: false,
     });
     const allAttendanceRows = attendanceSummary?.employees || [];
+    // Shared option list for every EmployeeSearchSelect fed by the summary roster (missing-punch,
+    // leave, overtime, out-work, excused-late, excused-early-out logging popups).
+    const attendanceEmployeeOptions = useMemo(
+        () => allAttendanceRows.map(r => ({ code: r.empCode, name: r.matchedFullName || r.empName })),
+        [allAttendanceRows]
+    );
 
     // Additional filters on the summary table — all client-side since the roster for a given
     // date range is small enough to already be fully loaded.
@@ -403,6 +468,11 @@ const AttendancePage: React.FC = () => {
         retry: false,
     });
     const bioTimeEmployees = bioTimeEmployeeList?.employees || [];
+    // Option list for the Employee Shifts picker (fed by the BioTime roster, not the summary rows).
+    const bioTimeEmployeeOptions = useMemo(
+        () => bioTimeEmployees.map(emp => ({ code: emp.emp_code, name: emp.first_name })),
+        [bioTimeEmployees]
+    );
 
     const [empModalOpen, setEmpModalOpen] = useState(false);
     const [empEditing, setEmpEditing] = useState<BioTimeEmployee | null>(null);
@@ -1735,16 +1805,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select
-                            value={mpEmpCode}
-                            onChange={e => setMpEmpCode(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer"
-                        >
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => (
-                                <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>
-                            ))}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={mpEmpCode} onChange={setMpEmpCode} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Punch Date & Time</label>
@@ -1782,10 +1843,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select value={leaveForm.empCode} onChange={e => setLeaveForm(f => ({ ...f, empCode: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>)}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={leaveForm.empCode} onChange={code => setLeaveForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Leave Type</label>
@@ -1819,10 +1877,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select value={otForm.empCode} onChange={e => setOtForm(f => ({ ...f, empCode: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>)}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={otForm.empCode} onChange={code => setOtForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
@@ -1853,10 +1908,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select value={owForm.empCode} onChange={e => setOwForm(f => ({ ...f, empCode: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>)}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={owForm.empCode} onChange={code => setOwForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -1883,10 +1935,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select value={xlForm.empCode} onChange={e => setXlForm(f => ({ ...f, empCode: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>)}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={xlForm.empCode} onChange={code => setXlForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
@@ -1911,10 +1960,7 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select value={eoForm.empCode} onChange={e => setEoForm(f => ({ ...f, empCode: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select employee…</option>
-                            {allAttendanceRows.map(r => <option key={r.empId} value={r.empCode}>{r.matchedFullName || r.empName} ({r.empCode})</option>)}
-                        </select>
+                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={eoForm.empCode} onChange={code => setEoForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
@@ -2090,17 +2136,12 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
-                        <select
+                        <EmployeeSearchSelect
+                            options={bioTimeEmployeeOptions}
                             value={esForm.empCode}
-                            onChange={e => setEsForm(f => ({ ...f, empCode: e.target.value }))}
+                            onChange={code => setEsForm(f => ({ ...f, empCode: code }))}
                             disabled={!!esEditing}
-                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold disabled:bg-slate-50 disabled:text-slate-400"
-                        >
-                            <option value="">Select an employee…</option>
-                            {bioTimeEmployees.map(emp => (
-                                <option key={emp.emp_code} value={emp.emp_code}>{emp.first_name} ({emp.emp_code})</option>
-                            ))}
-                        </select>
+                        />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>

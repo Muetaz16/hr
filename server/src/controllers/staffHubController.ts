@@ -4,12 +4,18 @@ import type { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
-import { resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE } from '../utils/leaveApprovalChain';
+import {
+    resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE,
+    resolveExceptionalPerformanceApprovalChain, EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE, resolveHeadTeamEmployees,
+} from '../utils/leaveApprovalChain';
 import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
 import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
 import { generateWorkAuthorizationDocx, type WorkAuthApprover, type WorkOrderType } from '../utils/workAuthorizationForm';
+import { generateExceptionalPerformanceNominationDocx, type ExceptionalPerformanceApprover } from '../utils/exceptionalPerformanceNominationForm';
+import { checkExceptionalPerformanceEligibility } from '../utils/rewardEligibility';
+import { nextCaseNumber, resolveHrRecipients } from './rewardController';
 
 import { prisma } from '../lib/prisma';
 
@@ -30,6 +36,13 @@ const OUTWORK_TYPES = ['WORK_AUTHORIZATION'];
 
 // Every type that runs on the short 3-stage permission chain (permissions + work authorization).
 const SHORT_CHAIN_TYPES = [...PERMISSION_TYPES, ...OUTWORK_TYPES];
+
+// Exceptional Performance / Exceptional Contribution Award nomination — submitted by a Head (not
+// self-service, the only type where employeeId != the submitter), routed through its own 2-stage
+// chain (HR Manager -> General Manager). On final approval, a DRAFT RewardCase is created for HR to
+// finalize via the existing Rewards module — see decideApprovalStep's completion hook.
+const EXCEPTIONAL_PERFORMANCE_TYPES = ['EXCEPTIONAL_PERFORMANCE'];
+const NOMINATOR_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR'];
 
 // Inclusive day count — same formula already used below in updateRequestStatus's balance
 // increment, kept identical so submission-time validation and approval-time accounting agree.
@@ -182,7 +195,10 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'This employee is no longer active and cannot file a new request.' });
         }
 
-        if (employee.contractEndDate) {
+        // Not applicable to Exceptional Performance nominations — there's no real date range being
+        // requested (employeeId there is the NOMINEE, not someone requesting leave against their own
+        // contract dates), so this contract-coverage check is meaningless for that type.
+        if (employee.contractEndDate && !EXCEPTIONAL_PERFORMANCE_TYPES.includes(type)) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const contractEnd = new Date(employee.contractEndDate);
@@ -347,6 +363,77 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return res.json(request);
         }
 
+        // Exceptional Performance / Exceptional Contribution Award nomination — employeeId here is
+        // the NOMINEE, not the submitter (userId is the nominating Head's own id; LeaveRequest's
+        // employeeId/userId split already supports this, just never previously exercised). Routed
+        // through its own 2-stage chain: HR Manager -> General Manager (see decideApprovalStep's
+        // completion hook for what happens once it fully completes).
+        if (EXCEPTIONAL_PERFORMANCE_TYPES.includes(type)) {
+            const authUser = (req as AuthRequest).user;
+            const canNominate = NOMINATOR_ROLES.includes(authUser?.role) || (authUser?.permissions || []).includes('nominate_exceptional_award');
+            if (!canNominate) {
+                return res.status(403).json({ error: 'Only a Head may submit an Exceptional Performance nomination.' });
+            }
+
+            // Never trust the client — re-verify the nominee is actually inside this Head's own team.
+            const team = await resolveHeadTeamEmployees(prisma, authUser);
+            if (!team.some(e => e.id === employeeId)) {
+                return res.status(403).json({ error: 'This employee is not within your organizational branch.' });
+            }
+
+            if (!reason || !String(reason).trim()) {
+                return res.status(400).json({ error: 'A justification / reference to the external letter is required.' });
+            }
+            const proposedBonusPercent = Number(req.body.proposedBonusPercent);
+            if (!Number.isFinite(proposedBonusPercent) || proposedBonusPercent <= 0 || proposedBonusPercent > 25) {
+                return res.status(400).json({ error: 'The proposed bonus must be a percentage between 0 and 25.' });
+            }
+
+            const existingPending = await prisma.leaveRequest.findFirst({ where: { employeeId, type, status: 'PENDING' } });
+            if (existingPending) return res.status(400).json({ error: 'This employee already has a nomination pending decision.' });
+
+            const eligibility = await checkExceptionalPerformanceEligibility(employeeId);
+            if (!eligibility.eligible) {
+                return res.status(400).json({ error: `This employee is not eligible for this award: ${eligibility.reasons.join(' ')}` });
+            }
+
+            const { steps, blockedStage } = await resolveExceptionalPerformanceApprovalChain(prisma);
+            if (blockedStage) {
+                return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
+            }
+
+            const request = await prisma.$transaction(async (tx) => {
+                const created = await tx.leaveRequest.create({
+                    data: {
+                        employeeId, userId, type,
+                        startDate: new Date(), reason, proposedBonusPercent,
+                        status: 'PENDING',
+                    },
+                });
+                await tx.leaveApprovalStep.createMany({
+                    data: steps.map(s => ({
+                        leaveRequestId: created.id,
+                        sequence: EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE[s.stage],
+                        stage: s.stage,
+                        approverUserId: s.approverUserId,
+                        coversStages: s.coversStages,
+                        status: 'PENDING',
+                    })),
+                });
+                return created;
+            });
+
+            const minSeq = Math.min(...steps.map(s => EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE[s.stage]));
+            const firstApprovers = steps.filter(s => EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE[s.stage] === minSeq).map(s => s.approverUserId);
+            await notifyUsers(
+                firstApprovers,
+                'New Exceptional Performance nomination',
+                `${employee.fullName} was nominated for the Exceptional Performance / Exceptional Contribution Award.`,
+                '/approvals',
+            );
+            return res.json(request);
+        }
+
         // Any remaining non-chain request types — plain PENDING record.
         const request = await prisma.leaveRequest.create({
             data: {
@@ -463,7 +550,7 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
 
         const step = await prisma.leaveApprovalStep.findUnique({
             where: { id: stepId },
-            include: { leaveRequest: { include: { employee: true } } },
+            include: { leaveRequest: { include: { employee: true, user: { select: { fullName: true } } } } },
         });
         if (!step || step.leaveRequestId !== requestId) {
             return res.status(404).json({ error: 'Approval step not found.' });
@@ -612,23 +699,51 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
             }
         }
 
+        // Exceptional Performance Award — no BioTime write-back (this isn't an attendance event).
+        // The chain fully completing IS the General Manager's approval; only now does the award get
+        // drafted as a normal RewardCase for HR to finalize with its own signed-document cycle,
+        // exactly like every other award type. Not gated behind the employee.staffId check above —
+        // this branch needs no BioTime empCode at all.
+        if (becameCompleted && EXCEPTIONAL_PERFORMANCE_TYPES.includes(step.leaveRequest.type)) {
+            const lrq = step.leaveRequest;
+            const caseNumber = await nextCaseNumber();
+            await prisma.rewardCase.create({
+                data: {
+                    employeeId: lrq.employeeId, caseNumber, type: 'EXCEPTIONAL_PERFORMANCE',
+                    bonusPercent: lrq.proposedBonusPercent, notes: lrq.reason,
+                    createdByName: (lrq as any).user?.fullName || null,
+                },
+            });
+            const hrRecipients = await resolveHrRecipients();
+            await notifyUsers(hrRecipients, 'Exceptional Performance award ready to finalize',
+                `${lrq.employee.fullName}'s Exceptional Performance nomination was approved — complete the case to apply the award.`,
+                '/personnel-relations/rewards');
+        }
+
         // Notifications (after commit, fail-soft): tell the employee the outcome, or nudge the
-        // next-stage approver(s) that it's now their turn.
+        // next-stage approver(s) that it's now their turn. Exceptional Performance nominations don't
+        // notify the nominee mid-process (only the submitting Head) — matching how every other award
+        // type never tells the recipient anything until the case is actually completed.
         const lr = step.leaveRequest;
-        const employeeUserIds = [(lr as any).employee?.userId, lr.userId];
+        const isNomination = EXCEPTIONAL_PERFORMANCE_TYPES.includes(lr.type);
+        const employeeUserIds = isNomination ? [lr.userId] : [(lr as any).employee?.userId, lr.userId];
         const rangeLabel = fmtRange(lr.startDate, lr.endDate);
         if (decision === 'REJECT') {
             await notifyUsers(
                 employeeUserIds,
-                'Leave request rejected',
-                `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) was rejected${note ? `: ${note}` : '.'}`,
+                isNomination ? 'Exceptional Performance nomination rejected' : 'Leave request rejected',
+                isNomination
+                    ? `Your Exceptional Performance nomination for ${(lr as any).employee?.fullName || 'this employee'} was rejected${note ? `: ${note}` : '.'}`
+                    : `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) was rejected${note ? `: ${note}` : '.'}`,
                 '/staff-hub',
             );
         } else if (becameCompleted) {
             await notifyUsers(
                 employeeUserIds,
-                'Leave request approved',
-                `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) has been fully approved.`,
+                isNomination ? 'Exceptional Performance nomination approved' : 'Leave request approved',
+                isNomination
+                    ? `Your Exceptional Performance nomination for ${(lr as any).employee?.fullName || 'this employee'} was approved.`
+                    : `Your ${leaveTypeLabel(lr.type)} request (${rangeLabel}) has been fully approved.`,
                 '/staff-hub',
             );
         } else {
@@ -699,6 +814,74 @@ export const getMyPendingSteps = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching my pending approval steps:', error);
         res.status(500).json({ error: 'Failed to fetch pending approvals' });
+    }
+};
+
+// GET /staff-hub/my-nomination-team — the employees the calling Head may nominate for Exceptional
+// Performance (their own organizational branch only, per resolveHeadTeamEmployees).
+export const getMyNominationTeam = async (req: Request, res: Response) => {
+    try {
+        const user = (req as AuthRequest).user;
+        const team = await resolveHeadTeamEmployees(prisma, user);
+        res.json({ employees: team });
+    } catch (error) {
+        console.error('Error resolving nomination team:', error);
+        res.status(500).json({ error: 'Failed to load your team' });
+    }
+};
+
+// GET /staff-hub/exceptional-performance-eligibility/:employeeId — live preview shown as soon as
+// the nominating Head picks a candidate, before they submit.
+export const getExceptionalPerformanceEligibilityHandler = async (req: Request, res: Response) => {
+    try {
+        const { employeeId } = req.params;
+        const result = await checkExceptionalPerformanceEligibility(employeeId);
+        res.json(result);
+    } catch (error) {
+        console.error('Error checking Exceptional Performance eligibility:', error);
+        res.status(500).json({ error: 'Failed to check eligibility' });
+    }
+};
+
+// GET /staff-hub/my-submitted-nominations — the calling Head's own Exceptional Performance
+// nominations. A separate, narrowly-scoped query rather than widening getRequestsByEmployee's
+// existing employeeId-only semantics — here employeeId is the NOMINEE, not the submitter, so a
+// submitted nomination would never appear in that employee-scoped endpoint at all.
+export const getMySubmittedNominations = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+        const requests = await prisma.leaveRequest.findMany({
+            where: { userId, type: { in: EXCEPTIONAL_PERFORMANCE_TYPES } },
+            include: { employee: { select: { fullName: true, staffId: true } } },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching my submitted nominations:', error);
+        res.status(500).json({ error: 'Failed to fetch nominations' });
+    }
+};
+
+// GET /staff-hub/exceptional-performance/history — every Exceptional Performance nomination ever
+// submitted, regardless of who submitted it. Broad visibility (HR Manager/Personnel/General
+// Manager/Super Admin, gated at the route level) — this is the dedicated award screen's "History"
+// tab, distinct from a Head's own "my-submitted-nominations".
+export const getExceptionalPerformanceHistory = async (req: Request, res: Response) => {
+    try {
+        const requests = await prisma.leaveRequest.findMany({
+            where: { type: { in: EXCEPTIONAL_PERFORMANCE_TYPES } },
+            include: {
+                employee: { select: { fullName: true, staffId: true } },
+                user: { select: { fullName: true } },
+                approvalSteps: { orderBy: { sequence: 'asc' }, include: { approver: { select: { fullName: true } } } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching Exceptional Performance history:', error);
+        res.status(500).json({ error: 'Failed to fetch history' });
     }
 };
 
@@ -883,7 +1066,7 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             where: { id },
             include: {
                 employee: { include: { department: true, division: true, jobDescription: { select: { title: true, workLocations: true } } } },
-                user: { select: { signature: true } },
+                user: { select: { fullName: true, signature: true } },
                 replacementUser: { select: { fullName: true, signature: true } },
                 approvalSteps: {
                     orderBy: { sequence: 'asc' },
@@ -897,6 +1080,31 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
 
         const emp = request.employee;
         const fmt = (d?: Date | string | null) => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+        // Exceptional Performance / Exceptional Contribution Award nomination form — no pre-existing
+        // template (see exceptionalPerformanceNominationForm.ts), built from scratch instead of the
+        // PizZip cell-fill mechanism every other branch here uses.
+        if (EXCEPTIONAL_PERFORMANCE_TYPES.includes(request.type)) {
+            const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const toEp = (step: (typeof request.approvalSteps)[number] | undefined): ExceptionalPerformanceApprover | null =>
+                step ? { name: step.approver?.fullName || '', signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+            const buf = await generateExceptionalPerformanceNominationDocx({
+                caseNumber: request.id.slice(0, 8).toUpperCase(),
+                date: fmt(request.createdAt),
+                employeeId: emp.staffId || '',
+                employeeName: emp.fullName || '',
+                department: emp.department?.name || '',
+                nominatedByName: request.user?.fullName || '',
+                justification: request.reason || '',
+                proposedBonusPercent: request.proposedBonusPercent ?? null,
+                hrManager: toEp(stepBy('HR_MANAGER')),
+                generalManager: toEp(stepBy('GENERAL_MANAGER')),
+            });
+            const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader('Content-Disposition', `attachment; filename="Exceptional_Performance_Nomination_${safeName}.docx"`);
+            return res.send(buf);
+        }
 
         // Work Authorization uses the "Work Authorization Form" (نموذج التكليف). It runs on the same
         // short 3-stage chain as permissions, so only the Head of Department and Head of Attendance
