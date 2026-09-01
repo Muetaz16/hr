@@ -10,6 +10,7 @@ import { PROMOTION_REASON_OPTIONS } from '../../constants/promotionReasons';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
+import { useTranslation } from 'react-i18next';
 
 const STAGE_LABELS: Record<PromotionStage, string> = {
     PROMOTION_REPORT: 'Promotion Report',
@@ -47,6 +48,7 @@ const PromotionCaseDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
     const canManage = canAccess(currentUser, [], ['manage_promotions']);
 
     const { data: c, isLoading, error } = useQuery({
@@ -80,7 +82,7 @@ const PromotionCaseDetailPage: React.FC = () => {
 
     const handleGenerateForm = async (stage: PromotionStage) => {
         if (!c) return;
-        if (!c.effectiveDate && !effectiveDate) { toast.error('Enter the effectivity date first.'); return; }
+        if (!c.effectiveDate && !effectiveDate) { toast.error(t('enter_the_effectivity_date_first', { defaultValue: 'Enter the effectivity date first.' })); return; }
         setBusy(true);
         try {
             const blob = await promotionService.generateForm(c.id, stage, { effectiveDate });

@@ -7,6 +7,7 @@ import { departmentService } from '../services/departmentService';
 import { disciplinaryService, type MyDisciplinaryReport } from '../services/disciplinaryService';
 import type { Employee, Department } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
@@ -26,6 +27,7 @@ const reportStatus = (r: MyDisciplinaryReport): { label: string; cls: string } =
 };
 
 const ReportIncident: React.FC = () => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const queryClient = useQueryClient();
     const [showForm, setShowForm] = useState(false);
@@ -54,7 +56,7 @@ const ReportIncident: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        employeeService.getAllEmployees().then(setEmployees).catch(() => toast.error('Failed to load employees.'));
+        employeeService.getAllEmployees().then(setEmployees).catch(() => toast.error(t('failed_to_load_employees', { defaultValue: 'Failed to load employees.' })));
         departmentService.getAllDepartments().then(setDepartments).catch(() => {});
     }, []);
 
@@ -87,12 +89,12 @@ const ReportIncident: React.FC = () => {
     const handleFilesChange = (fileList: FileList | null) => {
         const picked = Array.from(fileList || []);
         if (picked.length > MAX_FILES) {
-            toast.error(`You can attach up to ${MAX_FILES} files.`);
+            toast.error(t('you_can_attach_up_to_max_files', { max: MAX_FILES, defaultValue: 'You can attach up to {{max}} files.' }));
             return;
         }
         const tooBig = picked.find(f => f.size > MAX_FILE_SIZE);
         if (tooBig) {
-            toast.error(`"${tooBig.name}" exceeds the 100 MB limit per file.`);
+            toast.error(t('name_exceeds_the_100_mb_limit_per_file', { name: tooBig.name, defaultValue: '"{{name}}" exceeds the 100 MB limit per file.' }));
             return;
         }
         setFiles(picked);
@@ -113,12 +115,12 @@ const ReportIncident: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!subjectEmployee) return toast.error('Select the subject employee from the suggestions.');
-        if (!positionTitle.trim()) return toast.error('Position title of the subject employee is required.');
-        if (!department.trim()) return toast.error('Department of the subject employee is required.');
-        if (!incidentDate) return toast.error('Date happened is required.');
-        if (!incidentPlace.trim()) return toast.error('Place of incident is required.');
-        if (!description.trim()) return toast.error('A description of the incident is required.');
+        if (!subjectEmployee) return toast.error(t('select_the_subject_employee_from_the_suggestions', { defaultValue: 'Select the subject employee from the suggestions.' }));
+        if (!positionTitle.trim()) return toast.error(t('position_title_of_the_subject_employee_is', { defaultValue: 'Position title of the subject employee is required.' }));
+        if (!department.trim()) return toast.error(t('department_of_the_subject_employee_is_required', { defaultValue: 'Department of the subject employee is required.' }));
+        if (!incidentDate) return toast.error(t('date_happened_is_required', { defaultValue: 'Date happened is required.' }));
+        if (!incidentPlace.trim()) return toast.error(t('place_of_incident_is_required', { defaultValue: 'Place of incident is required.' }));
+        if (!description.trim()) return toast.error(t('a_description_of_the_incident_is_required', { defaultValue: 'A description of the incident is required.' }));
 
         setSubmitting(true);
         try {
@@ -135,12 +137,12 @@ const ReportIncident: React.FC = () => {
             if (files.length) {
                 await disciplinaryService.addEvidence(created.id, files);
             }
-            toast.success('Incident report submitted. Personnel Relations will review it.');
+            toast.success(t('incident_report_submitted_personnel_relations_will_review_it', { defaultValue: 'Incident report submitted. Personnel Relations will review it.' }));
             resetForm();
             queryClient.invalidateQueries({ queryKey: ['my-disciplinary-reports'] });
             setShowForm(false);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to submit the incident report.');
+            toast.error(err?.response?.data?.error || t('failed_to_submit_the_incident_report', { defaultValue: 'Failed to submit the incident report.' }));
         } finally {
             setSubmitting(false);
         }
@@ -153,10 +155,9 @@ const ReportIncident: React.FC = () => {
                     <AlertTriangle size={22} />
                 </div>
                 <div>
-                    <h1 className="text-xl font-semibold text-slate-800">Report an Incident</h1>
+                    <h1 className="text-xl font-semibold text-slate-800">{t('report_an_incident', { defaultValue: 'Report an Incident' })}</h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Any employee may file an incident report — about yourself or a colleague. Personnel
-                        Relations reviews every report confidentially per the Disciplinary Action Procedure.
+                        {t('any_employee_may_file_an_incident_report_about', { defaultValue: 'Any employee may file an incident report — about yourself or a colleague. Personnel Relations reviews every report confidentially per the Disciplinary Action Procedure.' })}
                     </p>
                 </div>
             </div>
@@ -167,7 +168,7 @@ const ReportIncident: React.FC = () => {
                         onClick={() => setShowForm(true)}
                         className="flex items-center justify-center gap-2 w-full bg-slate-800 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-slate-900"
                     >
-                        <Plus size={16} /> Report New Incident
+                        <Plus size={16} /> {t('report_new_incident', { defaultValue: 'Report New Incident' })}
                     </button>
 
                     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">

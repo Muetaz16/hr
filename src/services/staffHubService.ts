@@ -15,6 +15,9 @@ export interface LeaveRequest {
     placeOfAssignment?: string;
     // Exceptional Performance Award only — the bonus % (<=25) the nominating Head proposed.
     proposedBonusPercent?: number | null;
+    // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
+    missingPunchType?: string;       // CHECK_IN | CHECK_OUT | BOTH
+    missingPunchReason?: string;     // FORGOT | DEVICE_ISSUE | POWER_OUTAGE | OTHERS
     attachmentUrl?: string;
     attachmentName?: string;
     finalDocumentUrl?: string;   // document the GM uploaded to grant final approval
@@ -29,7 +32,7 @@ export interface LeaveRequest {
     // PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only ever use PENDING/COMPLETED/REJECTED going
     // forward (see LeaveApprovalStep below for their per-stage chain); the APPROVED_BY_* values
     // remain valid for the other request types (LATE_COMING/EARLY_LEAVING/HOURS_LEAVE) and older history.
-    status: 'PENDING' | 'APPROVED_BY_UNIT' | 'APPROVED_BY_DEPT' | 'APPROVED_BY_DIVISION' | 'APPROVED_BY_DIRECTOR' | 'REJECTED' | 'COMPLETED';
+    status: 'PENDING' | 'APPROVED_BY_UNIT' | 'APPROVED_BY_DEPT' | 'APPROVED_BY_DIVISION' | 'APPROVED_BY_DIRECTOR' | 'REJECTED' | 'COMPLETED' | 'CANCELLED';
     createdAt: string;
     updatedAt?: string;
     // Present on the org-chain leave types — the ordered approval trail (who signs, in what order).
@@ -113,6 +116,12 @@ export const staffHubService = {
     },
     async getMyRequests(employeeId: string) {
         const response = await api.get(`/staff-hub/requests/employee/${employeeId}`);
+        return response.data;
+    },
+    // The creator withdraws their own in-flight request (any type). Only works while the request is
+    // still PENDING — the server rejects cancelling a finalised (completed/rejected) request.
+    async cancelRequest(requestId: string) {
+        const response = await api.patch(`/staff-hub/requests/${requestId}/cancel`);
         return response.data;
     },
     // Colleagues the requester may nominate as their leave replacement (same department, has a

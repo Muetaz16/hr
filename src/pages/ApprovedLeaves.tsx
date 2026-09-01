@@ -194,13 +194,19 @@ const ApprovedLeaves: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="p-4 text-center">
-                                            <button
-                                                onClick={() => downloadLeaveForm(l.id, l.employee?.fullName)}
-                                                title={t('download_leave_form', { defaultValue: 'Download Leave Request Form' })}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#511d29]/5 border border-[#511d29]/20 text-[#511d29] text-xs font-black rounded-lg hover:bg-[#511d29]/10 transition-colors"
-                                            >
-                                                <FileDown className="w-3.5 h-3.5" /> {t('form', { defaultValue: 'Form' })}
-                                            </button>
+                                            {/* Once the GM has uploaded the signed document (GM Document column),
+                                                that is the official artifact — stop offering the generated form. */}
+                                            {l.finalDocumentUrl ? (
+                                                <span className="text-xs text-slate-300 font-bold">—</span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => downloadLeaveForm(l.id, l.employee?.fullName)}
+                                                    title={t('download_leave_form', { defaultValue: 'Download Leave Request Form' })}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#511d29]/5 border border-[#511d29]/20 text-[#511d29] text-xs font-black rounded-lg hover:bg-[#511d29]/10 transition-colors"
+                                                >
+                                                    <FileDown className="w-3.5 h-3.5" /> {t('form', { defaultValue: 'Form' })}
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

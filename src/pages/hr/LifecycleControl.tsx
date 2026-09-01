@@ -182,7 +182,7 @@ const LifecycleControl: React.FC = () => {
     if (isLoading) return (
         <div className="p-8 flex flex-col items-center justify-center min-h-[400px] gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-            <p className="text-slate-500 font-bold animate-pulse">Loading Lifecycle Data...</p>
+            <p className="text-slate-500 font-bold animate-pulse">{t('loading_lifecycle_data', { defaultValue: 'Loading Lifecycle Data...' })}</p>
         </div>
     );
 
@@ -236,10 +236,10 @@ const LifecycleControl: React.FC = () => {
                                 <th className="w-16 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">#</th>
                                 <th className="px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('employee')}</th>
                                 <th className="w-44 px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('staff_id')}</th>
-                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">Position</th>
-                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">Department</th>
-                                <th className="w-44 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">Contract Type</th>
-                                <th className="w-40 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">Status</th>
+                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('position', { defaultValue: 'Position' })}</th>
+                                <th className="w-56 px-5 py-6 text-[10px] font-black lifecycle-header-cell">{t('department', { defaultValue: 'Department' })}</th>
+                                <th className="w-44 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">{t('contract_type', { defaultValue: 'Contract Type' })}</th>
+                                <th className="w-40 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">{t('status', { defaultValue: 'Status' })}</th>
                                 <th className="w-64 px-5 py-6 text-[10px] font-black text-center lifecycle-header-cell">{t('actions')}</th>
                             </tr>
                         </thead>
@@ -323,21 +323,21 @@ const LifecycleControl: React.FC = () => {
                             <Plane className="w-4 h-4 text-blue-400" />
                             <div className="flex flex-col">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('total_paid', { defaultValue: 'Total Paid' })}</span>
-                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.holidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">days</span></span>
+                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.holidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">{t('days', { defaultValue: 'days' })}</span></span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
                             <Stethoscope className="w-4 h-4 text-rose-400" />
                             <div className="flex flex-col">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('total_emergency', { defaultValue: 'Total Emergency' })}</span>
-                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.emergencyHolidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">days</span></span>
+                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.emergencyHolidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">{t('days', { defaultValue: 'days' })}</span></span>
                             </div>
                         </div>
                         <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
                             <MinusSquare className="w-4 h-4 text-amber-400" />
                             <div className="flex flex-col">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('total_unpaid', { defaultValue: 'Total Unpaid' })}</span>
-                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.unpaidHolidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">days</span></span>
+                                <span className="text-sm font-black text-white">{employees.reduce((acc, curr) => acc + (curr.unpaidHolidaysUsed || 0), 0)} <span className="text-[10px] font-medium text-slate-400">{t('days', { defaultValue: 'days' })}</span></span>
                             </div>
                         </div>
                     </div>
@@ -533,14 +533,14 @@ const LifecycleControl: React.FC = () => {
                     <div className="space-y-2">
                         <h4 className="text-xl font-black tracking-tight flex items-center gap-3 lifecycle-insight-title">
                             {t('lifecycle_insight_title', { defaultValue: 'Global Workforce Synchronization' })}
-                            <div className="px-2 py-0.5 rounded text-[9px] font-black uppercase lifecycle-insight-badge">Live Update</div>
+                            <div className="px-2 py-0.5 rounded text-[9px] font-black uppercase lifecycle-insight-badge">{t('live_update', { defaultValue: 'Live Update' })}</div>
                         </h4>
                         <p className="text-sm font-medium max-w-xl leading-relaxed lifecycle-insight-desc">{t('lifecycle_insight_desc', { defaultValue: 'You are viewing the comprehensive workforce lifecycle database. All fields (Passport, Nationality, Grade) are synchronized in real-time. Changes made here affect payroll and evaluation eligibility.' })}</p>
                     </div>
                 </div>
                 <div className="flex flex-col items-center gap-1 relative z-10">
                     <div className="text-4xl font-black lifecycle-insight-count">{employees.length}</div>
-                    <div className="text-[10px] font-black uppercase tracking-widest lifecycle-insight-count-label">Total Active Staff</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest lifecycle-insight-count-label">{t('total_active_staff', { defaultValue: 'Total Active Staff' })}</div>
                 </div>
             </div>
 
@@ -661,7 +661,7 @@ const LifecycleControl: React.FC = () => {
                                     <div className="min-w-0 flex-1">
                                         {editing ? (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <input value={detailForm.fullName ?? ''} onChange={e => setF('fullName', e.target.value)} placeholder="Full name" className="px-3.5 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white placeholder-white/50 font-black focus:ring-2 focus:ring-white/30 outline-none" />
+                                                <input value={detailForm.fullName ?? ''} onChange={e => setF('fullName', e.target.value)} placeholder={t('full_name', { defaultValue: 'Full name' })} className="px-3.5 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white placeholder-white/50 font-black focus:ring-2 focus:ring-white/30 outline-none" />
                                                 <input value={detailForm.fullNameArabic ?? ''} onChange={e => setF('fullNameArabic', e.target.value)} placeholder="الاسم بالعربية" dir="rtl" className="px-3.5 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white placeholder-white/50 font-bold text-right focus:ring-2 focus:ring-white/30 outline-none" />
                                             </div>
                                         ) : (
@@ -674,7 +674,7 @@ const LifecycleControl: React.FC = () => {
                                         )}
                                         <div className="flex flex-wrap items-center gap-2 mt-3">
                                             {editing ? (
-                                                <input value={detailForm.staffId ?? ''} onChange={e => setF('staffId', e.target.value)} placeholder="Staff ID" className="px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/50 text-[11px] font-mono font-black w-40 outline-none focus:ring-2 focus:ring-white/30" />
+                                                <input value={detailForm.staffId ?? ''} onChange={e => setF('staffId', e.target.value)} placeholder={t('staff_id', { defaultValue: 'Staff ID' })} className="px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/50 text-[11px] font-mono font-black w-40 outline-none focus:ring-2 focus:ring-white/30" />
                                             ) : (
                                                 emp.staffId && <span className="px-3 py-1 rounded-full bg-white/15 border border-white/10 backdrop-blur-sm text-[11px] font-mono font-black tracking-tight">{emp.staffId}</span>
                                             )}
@@ -732,30 +732,30 @@ const LifecycleControl: React.FC = () => {
 
                                 <Section icon={Briefcase} title={t('employment_details', { defaultValue: 'Employment Details' })} color="bg-blue-50 text-blue-600">
                                     <Field label={t('role_type', { defaultValue: 'Role' })} k="role" options={['EMPLOYEE', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN', 'PERSONNEL']} />
-                                    <Field label="Position" k="position" />
+                                    <Field label={t('position', { defaultValue: 'Position' })} k="position" />
                                     <Field label={t('job_category', { defaultValue: 'Job Category' })} k="jobCategory" />
                                     <Field label={t('job_grade', { defaultValue: 'Job Grade' })} k="jobGrade" />
-                                    <Field label="Contract Type" k="contractType" options={['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT']} />
-                                    <Field label="Contract #" k="contractNumber" options={['1st', '2nd', '3rd', '4th', 'Permanent']} />
-                                    <Field label="Status" k="contractStatus" options={['Active', 'Expired', 'Inactive', 'Terminated', 'On Leave']} />
-                                    <Row label="In Current Grade Since" value={fmt(emp.currentGradeSince)} />
+                                    <Field label={t('contract_type', { defaultValue: 'Contract Type' })} k="contractType" options={['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT']} />
+                                    <Field label={t('contract', { defaultValue: 'Contract #' })} k="contractNumber" options={['1st', '2nd', '3rd', '4th', 'Permanent']} />
+                                    <Field label={t('status', { defaultValue: 'Status' })} k="contractStatus" options={['Active', 'Expired', 'Inactive', 'Terminated', 'On Leave']} />
+                                    <Row label={t('in_current_grade_since', { defaultValue: 'In Current Grade Since' })} value={fmt(emp.currentGradeSince)} />
                                     <Field label={t('arrival_date', { defaultValue: 'Arrival Date' })} k="arrivalDate" type="date" />
-                                    <Field label="Join Date" k="joinDate" type="date" />
-                                    <Field label="Contract Start" k="contractStartDate" type="date" />
-                                    <Field label="Contract End" k="contractEndDate" type="date" />
+                                    <Field label={t('join_date', { defaultValue: 'Join Date' })} k="joinDate" type="date" />
+                                    <Field label={t('contract_start', { defaultValue: 'Contract Start' })} k="contractStartDate" type="date" />
+                                    <Field label={t('contract_end', { defaultValue: 'Contract End' })} k="contractEndDate" type="date" />
                                     <Field label={t('worked_before', { defaultValue: 'Worked Before?' })} k="workedBefore" options={['Yes', 'No']} />
                                     <Field label={t('has_relatives', { defaultValue: 'Relatives in Company?' })} k="hasRelativesInCompany" options={['Yes', 'No']} />
                                     <Field label={t('relatives_names', { defaultValue: "Relatives' Names" })} k="relativesNames" />
                                 </Section>
 
                                 <Section icon={CalendarDays} title={t('leave_balances', { defaultValue: 'Leave Balances' })} color="bg-amber-50 text-amber-600">
-                                    <Row label="Paid Accrued" value={paidAccrued} />
-                                    <Field label="Paid Taken" k="holidaysUsed" type="number" />
-                                    <Row label="Paid Balance" value={paidAccrued + paidBonus - paidTaken} />
-                                    <Field label="Unpaid Taken" k="unpaidHolidaysUsed" type="number" />
-                                    <Row label="Unpaid Balance (14)" value={14 - unpaidTaken} />
-                                    <Field label="Emergency Taken" k="emergencyHolidaysUsed" type="number" />
-                                    <Row label="Emergency Balance (3)" value={3 - emergTaken} />
+                                    <Row label={t('paid_accrued', { defaultValue: 'Paid Accrued' })} value={paidAccrued} />
+                                    <Field label={t('paid_taken', { defaultValue: 'Paid Taken' })} k="holidaysUsed" type="number" />
+                                    <Row label={t('paid_balance', { defaultValue: 'Paid Balance' })} value={paidAccrued + paidBonus - paidTaken} />
+                                    <Field label={t('unpaid_taken', { defaultValue: 'Unpaid Taken' })} k="unpaidHolidaysUsed" type="number" />
+                                    <Row label={t('unpaid_balance_14', { defaultValue: 'Unpaid Balance (14)' })} value={14 - unpaidTaken} />
+                                    <Field label={t('emergency_taken', { defaultValue: 'Emergency Taken' })} k="emergencyHolidaysUsed" type="number" />
+                                    <Row label={t('emergency_balance_3', { defaultValue: 'Emergency Balance (3)' })} value={3 - emergTaken} />
                                     {/* Quick add — log a leave day without opening edit mode */}
                                     <div className="sm:col-span-2 flex flex-wrap items-center gap-2 pt-4 mt-1 border-t border-slate-100">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">{t('quick_add', { defaultValue: 'Quick Add' })}</span>

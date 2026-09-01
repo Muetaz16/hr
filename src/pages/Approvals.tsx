@@ -8,7 +8,7 @@ import type { LeaveRequest, LeaveApprovalStep } from '../services/staffHubServic
 // (fetched separately via getMyPendingSteps) instead of the legacy status-based flow below —
 // exclude them from the old pending-requests list so the old Approve/Reject buttons (which write
 // directly to LeaveRequest.status) can't bypass the new per-step chain.
-const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE', 'WORK_AUTHORIZATION', 'EXCEPTIONAL_PERFORMANCE'];
+const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE', 'WORK_AUTHORIZATION', 'EXCEPTIONAL_PERFORMANCE', 'MISSING_PUNCH'];
 const STAGE_LABELS: Record<string, string> = {
     HEAD_ATTENDANCE: 'Head of Attendance & Payroll',
     DIRECT_SUPERVISOR: 'Direct Supervisor',
@@ -33,7 +33,8 @@ import {
     Paperclip,
     Download,
     Edit,
-    Trash2
+    Trash2,
+    FileCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -58,6 +59,9 @@ const Approvals: React.FC = () => {
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
     // The document the General Manager must upload to grant the final approval, keyed by step id.
     const [gmDocs, setGmDocs] = useState<Record<string, File | null>>({});
+    // The step whose decision is currently being submitted — guards against double submits while an
+    // upload is in flight (a large GM document can take a moment).
+    const [submittingStep, setSubmittingStep] = useState<string | null>(null);
 
     // New Announcement State
     const [newAnnounce, setNewAnnounce] = useState({
@@ -169,6 +173,8 @@ const Approvals: React.FC = () => {
             toast.error(t('gm_document_required', { defaultValue: 'Please upload a supporting document before approving.' }));
             return;
         }
+        if (submittingStep) return; // a decision is already in flight
+        setSubmittingStep(step.id);
         try {
             await staffHubService.decideApprovalStep(step.leaveRequestId, step.id, decision, note, isGM ? doc : null);
             toast.success(decision === 'REJECT' ? t('request_rejected') : t('request_approved'));
@@ -176,6 +182,8 @@ const Approvals: React.FC = () => {
             fetchData();
         } catch (error: any) {
             toast.error(error?.response?.data?.error || t('failed_to_update_status'));
+        } finally {
+            setSubmittingStep(null);
         }
     };
 
@@ -262,9 +270,29 @@ const Approvals: React.FC = () => {
                 <div className="absolute top-0 right-0 p-12 opacity-10 rotate-12">
                     <LayoutDashboard className="w-48 h-48" />
                 </div>
-                <h1 className="text-4xl font-bold tracking-tight mb-2">{t('manager_control_room', { defaultValue: 'Manager Control Room' })}</h1>
-                <p className="text-[#e3c4a2]/70 font-light text-lg">{t('manage_approvals_desc')}</p>
-                
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+                    <div className="flex items-start gap-4">
+                        <div className="hidden sm:flex w-14 h-14 rounded-2xl bg-[#e3c4a2]/15 border border-[#e3c4a2]/25 items-center justify-center shadow-inner shrink-0">
+                            <LayoutDashboard className="w-7 h-7 text-[#e3c4a2]" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-1">{t('manager_control_room', { defaultValue: 'Manager Control Room' })}</h1>
+                            <p className="text-[#e3c4a2]/70 font-light text-base md:text-lg">{t('manage_approvals_desc')}</p>
+                        </div>
+                    </div>
+                    {/* Quick stats — a glance at how much is on this desk right now. */}
+                    <div className="flex flex-wrap gap-3">
+                        <div className="rounded-2xl bg-[#e3c4a2]/10 border border-[#e3c4a2]/20 px-4 py-3 min-w-[116px] backdrop-blur-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#e3c4a2]/60">{t('awaiting_you', { defaultValue: 'Awaiting You' })}</p>
+                            <p className="text-2xl font-black text-white">{pendingSteps.length + pendingRequests.length}</p>
+                        </div>
+                        <div className="rounded-2xl bg-[#e3c4a2]/10 border border-[#e3c4a2]/20 px-4 py-3 min-w-[116px] backdrop-blur-sm">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#e3c4a2]/60">{t('in_history', { defaultValue: 'In History' })}</p>
+                            <p className="text-2xl font-black text-white">{historyRequests.length}</p>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Tabs */}
                 <div className="flex gap-4 mt-8 pb-2 overflow-x-auto">
                     {[
@@ -358,28 +386,46 @@ const Approvals: React.FC = () => {
                                                 {t('download_form', { defaultValue: 'Download Form' })}
                                             </button>
                                             {step.stage === 'GENERAL_MANAGER' && (
-                                                <label className="flex items-center gap-2 text-xs font-bold text-[#e3c4a2] bg-[#300a15]/50 border border-[#e3c4a2]/25 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-[#300a15]/70 transition-colors">
-                                                    <Paperclip className="w-4 h-4 shrink-0" />
-                                                    <span className="truncate max-w-[180px]">
-                                                        {gmDocs[step.id]?.name || t('upload_document_required', { defaultValue: 'Upload document (required)' })}
-                                                    </span>
-                                                    <input
-                                                        type="file"
-                                                        className="hidden"
-                                                        onChange={e => setGmDocs(prev => ({ ...prev, [step.id]: e.target.files?.[0] || null }))}
-                                                    />
-                                                </label>
+                                                gmDocs[step.id] ? (
+                                                    /* Selected — show the chosen file with a clear way to replace/remove it. */
+                                                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-xl px-3 py-2.5">
+                                                        <FileCheck className="w-4 h-4 shrink-0" />
+                                                        <span className="truncate max-w-[150px]" title={gmDocs[step.id]?.name}>{gmDocs[step.id]?.name}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setGmDocs(prev => { const n = { ...prev }; delete n[step.id]; return n; })}
+                                                            className="ml-auto shrink-0 text-red-300 hover:text-red-200"
+                                                            title={t('remove_file', { defaultValue: 'Remove' })}
+                                                        >
+                                                            <XCircle className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <label className="flex items-center gap-2 text-xs font-bold text-[#e3c4a2] bg-[#300a15]/50 border border-[#e3c4a2]/25 rounded-xl px-3 py-2.5 cursor-pointer hover:bg-[#300a15]/70 transition-colors">
+                                                        <Paperclip className="w-4 h-4 shrink-0" />
+                                                        <span className="truncate max-w-[180px]">
+                                                            {t('upload_document_required', { defaultValue: 'Upload document (required)' })}
+                                                        </span>
+                                                        <input
+                                                            type="file"
+                                                            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                                            className="hidden"
+                                                            onChange={e => setGmDocs(prev => ({ ...prev, [step.id]: e.target.files?.[0] || null }))}
+                                                        />
+                                                    </label>
+                                                )
                                             )}
                                             <div className="flex items-center gap-3">
                                                 <button
                                                     onClick={() => handleStepDecision(step, 'APPROVE')}
-                                                    disabled={step.stage === 'GENERAL_MANAGER' && !gmDocs[step.id]}
+                                                    disabled={(step.stage === 'GENERAL_MANAGER' && !gmDocs[step.id]) || submittingStep === step.id}
                                                     className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-900/30 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                                                 >
                                                     <Check className="w-5 h-5" />
-                                                    Approve
+                                                    {submittingStep === step.id ? t('submitting', { defaultValue: 'Submitting…' }) : t('approve', { defaultValue: 'Approve' })}
                                                 </button>
                                                 <button
+                                                    disabled={submittingStep === step.id}
                                                     onClick={async () => {
                                                         const note = await prompt({
                                                             title: t('reject_request', { defaultValue: 'Reject Request' }),
@@ -391,10 +437,10 @@ const Approvals: React.FC = () => {
                                                         if (note === null) return; // cancelled — don't reject
                                                         handleStepDecision(step, 'REJECT', note);
                                                     }}
-                                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
+                                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     <XCircle className="w-5 h-5" />
-                                                    Reject
+                                                    {t('reject', { defaultValue: 'Reject' })}
                                                 </button>
                                             </div>
                                         </div>
@@ -524,6 +570,28 @@ const Approvals: React.FC = () => {
                                     <div className="bg-slate-50 p-3 rounded-xl flex-1 max-w-md italic text-xs text-slate-500 border border-slate-100">
                                         "{req.reason || t('no_specific_note')}"
                                     </div>
+
+                                    {/* Uploaded final document (the GM's signed copy) — shown so the decision
+                                        archive links straight to the document instead of re-generating a form. */}
+                                    {req.finalDocumentUrl ? (
+                                        <a
+                                            href={`${SERVER_URL}${req.finalDocumentUrl}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            title={req.finalDocumentName || t('final_document', { defaultValue: 'Final Document' })}
+                                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors"
+                                        >
+                                            <FileCheck className="w-4 h-4" /> {t('view_document', { defaultValue: 'View Document' })}
+                                        </a>
+                                    ) : req.status === 'COMPLETED' && (
+                                        <button
+                                            onClick={() => downloadRequestForm(req.id, req.type)}
+                                            title={t('download_form', { defaultValue: 'Download Form' })}
+                                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors"
+                                        >
+                                            <Download className="w-4 h-4" /> {t('form', { defaultValue: 'Form' })}
+                                        </button>
+                                    )}
 
                                     {/* History Status Nodes */}
                                     <div className="flex items-center gap-2 text-[8px] font-bold uppercase text-slate-400">

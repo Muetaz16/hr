@@ -25,11 +25,32 @@ const requestStorage = multer.diskStorage({
         cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
-const requestUpload = multer({ storage: requestStorage });
+const requestUpload = multer({
+    storage: requestStorage,
+    // Generous cap for a signed PDF/scan; keeps a runaway upload from filling the disk.
+    limits: { fileSize: 25 * 1024 * 1024 },
+});
+
+// Wrap multer's single-file middleware so upload failures (oversized file, disk error) come back as
+// a clean JSON 400 the client can show, instead of multer's default HTML error page (which the
+// front-end can't parse — the GM upload would look like it silently "did nothing").
+const singleRequestUpload = (field: string) => (req: any, res: any, next: any) => {
+    requestUpload.single(field)(req, res, (err: any) => {
+        if (err) {
+            const msg = err.code === 'LIMIT_FILE_SIZE'
+                ? 'The file is too large — please keep it under 25 MB.'
+                : (err.message || 'File upload failed. Please try again.');
+            return res.status(400).json({ error: msg });
+        }
+        next();
+    });
+};
 
 // Requests
-router.post('/requests', requestUpload.single('attachment'), staffHubController.createLeaveRequest);
+router.post('/requests', singleRequestUpload('attachment'), staffHubController.createLeaveRequest);
 router.patch('/requests/:id/status', staffHubController.updateRequestStatus);
+// The creator withdraws their own in-flight request (any type). Ownership is verified server-side.
+router.patch('/requests/:id/cancel', staffHubController.cancelRequest);
 router.get('/requests/employee/:employeeId', staffHubController.getRequestsByEmployee);
 router.get('/requests/:id/form', staffHubController.getLeaveRequestForm);
 router.get('/requests/pending', staffHubController.getPendingRequests);
@@ -42,7 +63,7 @@ router.patch('/requests/:id/replacement-decision', staffHubController.decideRepl
 // New org-chain approval steps (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only) — server-verified,
 // separate from the legacy status-based flow above which the other request types still use.
 router.get('/requests/my-pending-steps', staffHubController.getMyPendingSteps);
-router.patch('/requests/:requestId/steps/:stepId/decision', requestUpload.single('document'), staffHubController.decideApprovalStep);
+router.patch('/requests/:requestId/steps/:stepId/decision', singleRequestUpload('document'), staffHubController.decideApprovalStep);
 
 // Exceptional Performance Award nomination — a Head picks from their own team, previews
 // eligibility, and tracks their own submitted nominations (employeeId there is the nominee, not

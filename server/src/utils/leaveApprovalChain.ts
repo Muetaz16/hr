@@ -35,6 +35,13 @@ export const PERMISSION_STAGE_SEQUENCE: Record<string, number> = {
     GENERAL_MANAGER: 3,
 };
 
+// The short 2-stage chain for a Missing Biometric Log (missing-punch) request, matching the
+// "Missing Biometric Log Form": Head of Department/Division -> Head of Attendance & Payroll.
+export const MISSING_PUNCH_STAGE_SEQUENCE: Record<string, number> = {
+    DEPT_HEAD: 0,
+    HEAD_ATTENDANCE: 1,
+};
+
 export interface ResolvedApprovalStep {
     stage: ApprovalStage;
     approverUserId: string;
@@ -274,6 +281,59 @@ export async function resolveApprovalChain(
         }
     }
 
+    return { steps };
+}
+
+// Builds the Missing Biometric Log chain: Head of Department/Division -> Head of Attendance &
+// Payroll. The manager stage cascades like the permission chain's direct supervisor — the
+// employee's department head, else their division head, else their directorate head — so an
+// employee with no dept head is still covered by whoever sits above them. Head of Attendance is the
+// only mandatory stage. On final approval the forgotten punch is written to BioTime (see
+// staffHubController.decideApprovalStep).
+export async function resolveMissingPunchChain(
+    prisma: PrismaClient,
+    employee: Employee
+): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+    const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
+
+    // Head of Department/Division — dept head, else division head, else directorate head.
+    let mgrIds: string[] = [];
+    if (employee.departmentId) {
+        const deptHeads = await prisma.user.findMany({
+            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
+            select: { id: true },
+        });
+        mgrIds = deptHeads.map(u => u.id);
+    }
+    if (mgrIds.length === 0 && employee.divisionId) {
+        const divHeads = await prisma.user.findMany({ where: { role: 'HEAD_DIVISION', divisionId: employee.divisionId }, select: { id: true } });
+        mgrIds = divHeads.map(u => u.id);
+    }
+    if (mgrIds.length === 0 && employee.departmentId) {
+        const dirHeads = await prisma.user.findMany({ where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } }, select: { id: true } });
+        mgrIds = dirHeads.map(u => u.id);
+    }
+    rawStages.push({ stage: 'DEPT_HEAD', userIds: mgrIds });
+
+    // Head of Attendance & Payroll — granted by approve_attendance (directly, via a hat, or
+    // SUPER_ADMIN). Mandatory: no holder means a real misconfiguration.
+    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
+    rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
+
+    const requiredNonEmpty: ApprovalStage[] = ['HEAD_ATTENDANCE'];
+    const seen = new Set<string>();
+    const steps: ResolvedApprovalStep[] = [];
+    for (const raw of rawStages) {
+        const distinctIds = Array.from(new Set(raw.userIds));
+        if (distinctIds.length === 0 && requiredNonEmpty.includes(raw.stage)) {
+            return { steps: [], blockedStage: raw.stage };
+        }
+        const eligible = distinctIds.filter(id => id !== employee.userId && !seen.has(id));
+        for (const userId of eligible) {
+            seen.add(userId);
+            steps.push({ stage: raw.stage, approverUserId: userId, coversStages: [raw.stage] });
+        }
+    }
     return { steps };
 }
 

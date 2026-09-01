@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Paperclip, AlertCircle, UserSquare2 } from 'lucide-react';
@@ -41,6 +42,7 @@ const Row: React.FC<{ label: string; value: React.ReactNode; rtl?: boolean }> = 
 const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 const DisciplinaryCaseDetailPage: React.FC = () => {
+    const { t } = useTranslation();
     const { caseId } = useParams<{ caseId: string }>();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -139,11 +141,11 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                 subjectPositionTitle, subjectPositionTitleAr, subjectDepartment, subjectDepartmentAr,
                 incidentPlace, incidentPlaceAr, incidentDescription, incidentDescriptionAr,
             });
-            toast.success('Details saved.');
+            toast.success(t('details_saved', { defaultValue: 'Details saved.' }));
             setEditing(false);
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save details.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_details', { defaultValue: 'Failed to save details.' }));
         } finally {
             setBusy(false);
         }
@@ -156,10 +158,10 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
         setBusy(true);
         try {
             await disciplinaryService.updateDetails(c.id, data);
-            toast.success('Draft saved.');
+            toast.success(t('draft_saved', { defaultValue: 'Draft saved.' }));
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save draft.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_draft', { defaultValue: 'Failed to save draft.' }));
         } finally {
             setBusy(false);
         }
@@ -210,16 +212,16 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
             a.download = `${stage}_${c.caseNumber}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Form generated. Collect the required signature(s), then upload the signed copy below.');
+            toast.success(t('form_generated_collect_signatures_upload', { defaultValue: 'Form generated. Collect the required signature(s), then upload the signed copy below.' }));
         } catch (err: any) {
-            toast.error('Failed to generate the form.');
+            toast.error(t('failed_to_generate_the_form', { defaultValue: 'Failed to generate the form.' }));
         } finally {
             setBusy(false);
         }
     };
 
     const uploadFile = async (file: File | null): Promise<{ documentUrl: string; documentName: string } | null> => {
-        if (!file) { toast.error('Attach a document before continuing.'); return null; }
+        if (!file) { toast.error(t('attach_a_document_before_continuing', { defaultValue: 'Attach a document before continuing.' })); return null; }
         const { url, name } = await employeeService.uploadDocument(file);
         return { documentUrl: url, documentName: name };
     };
@@ -231,33 +233,33 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
             setSignedFile(null);
             setDismissFile(null);
             setClosureReason('');
-            toast.success('Case updated.');
+            toast.success(t('case_updated', { defaultValue: 'Case updated.' }));
             if (result.biotimeSuspensionSynced === false) {
-                toast.error('The case closed, but syncing the suspension to the attendance system failed — add it there manually.');
+                toast.error(t('case_closed_suspension_sync_failed_add_manually', { defaultValue: 'The case closed, but syncing the suspension to the attendance system failed — add it there manually.' }));
             }
             if (result.offboardingCase) {
-                toast.success(`Offboarding case ${result.offboardingCase.caseNumber} opened at Clearance.`, {
-                    action: { label: 'View', onClick: () => navigate(`/personnel-relations/offboarding/${result.offboardingCase!.id}`) },
+                toast.success(t('offboarding_case_opened_at_clearance', { caseNumber: result.offboardingCase.caseNumber, defaultValue: 'Offboarding case {{caseNumber}} opened at Clearance.' }), {
+                    action: { label: t('view', { defaultValue: 'View' }), onClick: () => navigate(`/personnel-relations/offboarding/${result.offboardingCase!.id}`) },
                 });
             }
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Action failed.');
+            toast.error(err?.response?.data?.error || t('action_failed', { defaultValue: 'Action failed.' }));
         } finally {
             setBusy(false);
         }
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Loading case…</div>;
+        return <div className="p-8 text-center text-slate-400 text-sm">{t('loading_case', { defaultValue: 'Loading case…' })}</div>;
     }
     if (error || !c) {
         return (
             <div className="p-8 text-center space-y-4">
                 <AlertCircle size={40} className="mx-auto text-red-500" />
-                <h2 className="text-lg font-bold text-slate-800">Case not found.</h2>
+                <h2 className="text-lg font-bold text-slate-800">{t('case_not_found', { defaultValue: 'Case not found.' })}</h2>
                 <button onClick={() => navigate('/personnel-relations/disciplinary')} className="text-red-700 font-bold hover:underline text-sm">
-                    Back to Disciplinary Cases
+                    {t('back_to_disciplinary_cases', { defaultValue: 'Back to Disciplinary Cases' })}
                 </button>
             </div>
         );
@@ -271,40 +273,40 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
         const doc = (urlField: keyof DisciplinaryCase, nameField: keyof DisciplinaryCase) =>
             c[urlField] ? (
                 <a href={`${SERVER_URL}${c[urlField]}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                    {(c[nameField] as string) || 'Signed document'}
+                    {(c[nameField] as string) || t('signed_document', { defaultValue: 'Signed document' })}
                 </a>
-            ) : <span className="text-slate-400">No document uploaded</span>;
+            ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>;
 
         let body: React.ReactNode = null;
         if (stage === 'INCIDENT_REPORT') {
             body = <>
-                <Row label="Prepared By (EN / AR)" value={`${c.preparedByName || '—'} / ${c.preparedByNameAr || '—'}`} />
-                <Row label="Signed document" value={doc('incidentReportDocumentUrl', 'incidentReportDocumentName')} />
+                <Row label={t('prepared_by_en_ar', { defaultValue: 'Prepared By (EN / AR)' })} value={`${c.preparedByName || '—'} / ${c.preparedByNameAr || '—'}`} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={doc('incidentReportDocumentUrl', 'incidentReportDocumentName')} />
             </>;
         } else if (stage === 'NOTICE_TO_EXPLAIN') {
             body = <>
-                <Row label="Formal Rewrite (EN)" value={c.noticeToExplainDescription || '—'} />
-                <Row label="Formal Rewrite (AR)" value={c.noticeToExplainDescriptionAr || '—'} rtl />
-                <Row label="Signed document" value={doc('noticeToExplainDocumentUrl', 'noticeToExplainDocumentName')} />
+                <Row label={t('formal_rewrite_en', { defaultValue: 'Formal Rewrite (EN)' })} value={c.noticeToExplainDescription || '—'} />
+                <Row label={t('formal_rewrite_ar', { defaultValue: 'Formal Rewrite (AR)' })} value={c.noticeToExplainDescriptionAr || '—'} rtl />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={doc('noticeToExplainDocumentUrl', 'noticeToExplainDocumentName')} />
             </>;
         } else if (stage === 'INVESTIGATION_RESULT') {
             body = <>
-                <Row label="Confirmed Violation" value={c.violationId ? (VIOLATIONS_BY_ID[c.violationId]?.description || c.violationId) : 'No Violation'} />
-                <Row label="Code of Conduct Status" value={c.investigationOutcome || '—'} />
-                <Row label="Result of Investigation (EN)" value={c.investigationResult || '—'} />
-                <Row label="Result of Investigation (AR)" value={c.investigationResultAr || '—'} rtl />
-                <Row label="Recommendation (EN)" value={c.investigationRecommendation || '—'} />
-                <Row label="Recommendation (AR)" value={c.investigationRecommendationAr || '—'} rtl />
-                <Row label="Action Taken (EN)" value={c.investigationActionTaken || '—'} />
-                <Row label="Action Taken (AR)" value={c.investigationActionTakenAr || '—'} rtl />
-                <Row label="Signed document" value={doc('investigationDocumentUrl', 'investigationDocumentName')} />
+                <Row label={t('confirmed_violation', { defaultValue: 'Confirmed Violation' })} value={c.violationId ? (VIOLATIONS_BY_ID[c.violationId]?.description || c.violationId) : t('no_violation', { defaultValue: 'No Violation' })} />
+                <Row label={t('code_of_conduct_status', { defaultValue: 'Code of Conduct Status' })} value={c.investigationOutcome || '—'} />
+                <Row label={t('result_of_investigation_en', { defaultValue: 'Result of Investigation (EN)' })} value={c.investigationResult || '—'} />
+                <Row label={t('result_of_investigation_ar', { defaultValue: 'Result of Investigation (AR)' })} value={c.investigationResultAr || '—'} rtl />
+                <Row label={t('recommendation_en', { defaultValue: 'Recommendation (EN)' })} value={c.investigationRecommendation || '—'} />
+                <Row label={t('recommendation_ar', { defaultValue: 'Recommendation (AR)' })} value={c.investigationRecommendationAr || '—'} rtl />
+                <Row label={t('action_taken_en', { defaultValue: 'Action Taken (EN)' })} value={c.investigationActionTaken || '—'} />
+                <Row label={t('action_taken_ar', { defaultValue: 'Action Taken (AR)' })} value={c.investigationActionTakenAr || '—'} rtl />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={doc('investigationDocumentUrl', 'investigationDocumentName')} />
             </>;
         } else if (stage === 'DISCIPLINARY_ACTION') {
             body = <>
-                <Row label="Action Type" value={c.actionType ? DISCIPLINARY_ACTION_LABELS[c.actionType] : '—'} />
-                <Row label="Effective Start Date" value={c.actionEffectiveDate ? format(new Date(c.actionEffectiveDate), 'dd MMM yyyy') : '—'} />
-                <Row label="Additional Info" value={c.actionAdditionalInfo || '—'} />
-                <Row label="Signed document" value={doc('actionDocumentUrl', 'actionDocumentName')} />
+                <Row label={t('action_type', { defaultValue: 'Action Type' })} value={c.actionType ? DISCIPLINARY_ACTION_LABELS[c.actionType] : '—'} />
+                <Row label={t('effective_start_date', { defaultValue: 'Effective Start Date' })} value={c.actionEffectiveDate ? format(new Date(c.actionEffectiveDate), 'dd MMM yyyy') : '—'} />
+                <Row label={t('additional_info', { defaultValue: 'Additional Info' })} value={c.actionAdditionalInfo || '—'} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={doc('actionDocumentUrl', 'actionDocumentName')} />
             </>;
         }
 
@@ -327,7 +329,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
             <div className="flex items-center gap-3">
                 <button
-                    onClick={() => navigate('/personnel-relations/disciplinary')}
+                    onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/personnel-relations/disciplinary'))}
                     className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
                 >
                     <ArrowLeft size={16} />
@@ -335,31 +337,31 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                 <div className="flex-1">
                     <h1 className="text-lg font-black text-[#511d29]">{c.caseNumber} — {c.employee?.fullName || ''}</h1>
                     <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">
-                        {c.stage === 'CLOSED' ? (c.closureReason ? 'Closed — Dismissed' : 'Closed — Resolved') : STAGE_LABELS[c.stage]}
+                        {c.stage === 'CLOSED' ? (c.closureReason ? t('closed_dismissed', { defaultValue: 'Closed — Dismissed' }) : t('closed_resolved', { defaultValue: 'Closed — Resolved' })) : STAGE_LABELS[c.stage]}
                     </p>
                 </div>
                 <button
                     onClick={() => navigate(`/personnel-relations/lifecycle?employeeId=${c.employeeId}`)}
                     className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50"
                 >
-                    <UserSquare2 size={14} /> View Employee File
+                    <UserSquare2 size={14} /> {t('view_employee_file', { defaultValue: 'View Employee File' })}
                 </button>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-slate-600">
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Category</span><div>{c.category ? DISCIPLINARY_CATEGORY_LABELS[c.category as DisciplinaryCategory] : 'Pending Investigation'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Offense #</span><div>{c.offenseNumber || '—'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Source</span><div>{c.source === 'SYSTEM_ATTENDANCE' ? 'System (Attendance)' : 'Employee Report'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Reported by</span><div>{c.source === 'SYSTEM_ATTENDANCE' ? '—' : (c.reportedByName || 'Not specified')}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('category', { defaultValue: 'Category' })}</span><div>{c.category ? DISCIPLINARY_CATEGORY_LABELS[c.category as DisciplinaryCategory] : t('pending_investigation', { defaultValue: 'Pending Investigation' })}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('offense_number', { defaultValue: 'Offense #' })}</span><div>{c.offenseNumber || '—'}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('source', { defaultValue: 'Source' })}</span><div>{c.source === 'SYSTEM_ATTENDANCE' ? t('system_attendance', { defaultValue: 'System (Attendance)' }) : t('employee_report', { defaultValue: 'Employee Report' })}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('reported_by', { defaultValue: 'Reported by' })}</span><div>{c.source === 'SYSTEM_ATTENDANCE' ? '—' : (c.reportedByName || t('not_specified', { defaultValue: 'Not specified' }))}</div></div>
                 </div>
 
                 {!!c.evidence?.length && (
                     <div>
-                        <span className="font-black uppercase text-[10px] text-red-700">Evidence</span>
+                        <span className="font-black uppercase text-[10px] text-red-700">{t('evidence', { defaultValue: 'Evidence' })}</span>
                         <ul className="mt-1 space-y-1">
                             {c.evidence.map(ev => (
-                                <li key={ev.id}><a href={`${SERVER_URL}${ev.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{ev.fileName || 'File'}</a></li>
+                                <li key={ev.id}><a href={`${SERVER_URL}${ev.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{ev.fileName || t('file', { defaultValue: 'File' })}</a></li>
                             ))}
                         </ul>
                     </div>
@@ -367,7 +369,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
 
                 {c.actionType && (
                     <div className="p-3 bg-red-50 border border-red-100 rounded">
-                        <span className="font-black uppercase text-[10px] text-red-700">Decided Action</span>
+                        <span className="font-black uppercase text-[10px] text-red-700">{t('decided_action', { defaultValue: 'Decided Action' })}</span>
                         <div className="text-slate-700 font-bold">{DISCIPLINARY_ACTION_LABELS[c.actionType]}</div>
                     </div>
                 )}
@@ -377,13 +379,13 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                         {c.closureReason ? (
                             <>
                                 <p className="text-amber-600 font-bold">
-                                    Dismissed — No Grounds to Pursue{c.closedAt ? ` (${format(new Date(c.closedAt), 'dd MMM yyyy')})` : ''}.
+                                    {t('dismissed_no_grounds_to_pursue', { defaultValue: 'Dismissed — No Grounds to Pursue' })}{c.closedAt ? ` (${format(new Date(c.closedAt), 'dd MMM yyyy')})` : ''}.
                                 </p>
-                                <p className="text-slate-500 mt-1">Reason: {c.closureReason}</p>
+                                <p className="text-slate-500 mt-1">{t('reason', { defaultValue: 'Reason:' })} {c.closureReason}</p>
                             </>
                         ) : (
                             <p className="text-emerald-600 font-bold">
-                                Resolved — Case closed{c.closedAt ? ` on ${format(new Date(c.closedAt), 'dd MMM yyyy')}` : ''}.
+                                {t('resolved_case_closed', { defaultValue: 'Resolved — Case closed' })}{c.closedAt ? ` on ${format(new Date(c.closedAt), 'dd MMM yyyy')}` : ''}.
                             </p>
                         )}
                     </div>
@@ -394,103 +396,103 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                correct fields and add the missing translation here at any time. */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
                 <div className="flex items-center justify-between">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Report Details</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('report_details', { defaultValue: 'Report Details' })}</span>
                     {canManage && canEditReportDetails && !editing && (
-                        <button onClick={() => setEditing(true)} className="text-[10px] font-black uppercase text-red-700 hover:underline">Edit</button>
+                        <button onClick={() => setEditing(true)} className="text-[10px] font-black uppercase text-red-700 hover:underline">{t('edit', { defaultValue: 'Edit' })}</button>
                     )}
                     {canManage && !canEditReportDetails && (
-                        <span className="text-[10px] font-bold text-slate-400">Locked after Incident Report</span>
+                        <span className="text-[10px] font-bold text-slate-400">{t('locked_after_incident_report', { defaultValue: 'Locked after Incident Report' })}</span>
                     )}
                 </div>
 
                 {!editing ? (
                     <div className="grid grid-cols-2 gap-3 text-slate-600">
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Date Reported</span><div>{reportedDate || '—'}</div></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Date Happened</span><div>{incidentDate || '—'}</div></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Position (EN / AR)</span><div>{subjectPositionTitle || '—'} / {subjectPositionTitleAr || '—'}</div></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Department (EN / AR)</span><div>{subjectDepartment || '—'} / {subjectDepartmentAr || '—'}</div></div>
-                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">Place of Incident (EN / AR)</span><div>{incidentPlace || '—'} / {incidentPlaceAr || '—'}</div></div>
-                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">Description (EN)</span><p className="mt-1">{incidentDescription || '—'}</p></div>
-                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">Description (AR)</span><p className="mt-1" dir="rtl">{incidentDescriptionAr || '—'}</p></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Reported By</span><div>{reportedByName || '—'}</div></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Contact Email</span><div>{reportedByEmail || '—'}</div></div>
-                        <div><span className="font-black uppercase text-[10px] text-slate-400">Prepared By (EN / AR)</span><div>{preparedByName || '—'} / {preparedByNameAr || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('date_reported', { defaultValue: 'Date Reported' })}</span><div>{reportedDate || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('date_happened', { defaultValue: 'Date Happened' })}</span><div>{incidentDate || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('position_en_ar', { defaultValue: 'Position (EN / AR)' })}</span><div>{subjectPositionTitle || '—'} / {subjectPositionTitleAr || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('department_en_ar', { defaultValue: 'Department (EN / AR)' })}</span><div>{subjectDepartment || '—'} / {subjectDepartmentAr || '—'}</div></div>
+                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">{t('place_of_incident_en_ar', { defaultValue: 'Place of Incident (EN / AR)' })}</span><div>{incidentPlace || '—'} / {incidentPlaceAr || '—'}</div></div>
+                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">{t('description_en', { defaultValue: 'Description (EN)' })}</span><p className="mt-1">{incidentDescription || '—'}</p></div>
+                        <div className="col-span-2"><span className="font-black uppercase text-[10px] text-slate-400">{t('description_ar', { defaultValue: 'Description (AR)' })}</span><p className="mt-1" dir="rtl">{incidentDescriptionAr || '—'}</p></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('reported_by_label', { defaultValue: 'Reported By' })}</span><div>{reportedByName || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('contact_email', { defaultValue: 'Contact Email' })}</span><div>{reportedByEmail || '—'}</div></div>
+                        <div><span className="font-black uppercase text-[10px] text-slate-400">{t('prepared_by_en_ar', { defaultValue: 'Prepared By (EN / AR)' })}</span><div>{preparedByName || '—'} / {preparedByNameAr || '—'}</div></div>
                     </div>
                 ) : (
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Date Reported</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('date_reported', { defaultValue: 'Date Reported' })}</label>
                                 <input type="date" value={reportedDate} onChange={e => setReportedDate(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Date Happened</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('date_happened', { defaultValue: 'Date Happened' })}</label>
                                 <input type="date" value={incidentDate} onChange={e => setIncidentDate(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Position Title (EN)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('position_title_en', { defaultValue: 'Position Title (EN)' })}</label>
                                 <input value={subjectPositionTitle} onChange={e => setSubjectPositionTitle(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Position Title (AR)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('position_title_ar', { defaultValue: 'Position Title (AR)' })}</label>
                                 <input dir="rtl" value={subjectPositionTitleAr} onChange={e => setSubjectPositionTitleAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Department (EN)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('department_en', { defaultValue: 'Department (EN)' })}</label>
                                 <input value={subjectDepartment} onChange={e => setSubjectDepartment(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Department (AR)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('department_ar', { defaultValue: 'Department (AR)' })}</label>
                                 <input dir="rtl" value={subjectDepartmentAr} onChange={e => setSubjectDepartmentAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Place of Incident (EN)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('place_of_incident_en', { defaultValue: 'Place of Incident (EN)' })}</label>
                                 <input value={incidentPlace} onChange={e => setIncidentPlace(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Place of Incident (AR)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('place_of_incident_ar', { defaultValue: 'Place of Incident (AR)' })}</label>
                                 <input dir="rtl" value={incidentPlaceAr} onChange={e => setIncidentPlaceAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Description (EN)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('description_en', { defaultValue: 'Description (EN)' })}</label>
                                 <textarea rows={3} value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Description (AR)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('description_ar', { defaultValue: 'Description (AR)' })}</label>
                                 <textarea dir="rtl" rows={3} value={incidentDescriptionAr} onChange={e => setIncidentDescriptionAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Reported By</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('reported_by_label', { defaultValue: 'Reported By' })}</label>
                                 <input value={reportedByName} onChange={e => setReportedByName(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Contact Email</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('contact_email', { defaultValue: 'Contact Email' })}</label>
                                 <input value={reportedByEmail} onChange={e => setReportedByEmail(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Prepared By (EN)</label>
-                                <input value={preparedByName} onChange={e => setPreparedByName(e.target.value)} placeholder="Name printed on the 'Prepared by' line" className="w-full p-2 border border-slate-200 rounded" />
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('prepared_by_en', { defaultValue: 'Prepared By (EN)' })}</label>
+                                <input value={preparedByName} onChange={e => setPreparedByName(e.target.value)} placeholder={t('name_printed_on_prepared_by_line', { defaultValue: "Name printed on the 'Prepared by' line" })} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                             <div>
-                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">Prepared By (AR)</label>
+                                <label className="block font-black uppercase text-[10px] text-slate-400 mb-1">{t('prepared_by_ar', { defaultValue: 'Prepared By (AR)' })}</label>
                                 <input dir="rtl" value={preparedByNameAr} onChange={e => setPreparedByNameAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button disabled={busy} onClick={handleSaveDetails} className="px-4 py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded">Save Changes</button>
-                            <button disabled={busy} onClick={() => setEditing(false)} className="px-4 py-2 bg-slate-100 text-slate-600 font-black uppercase text-[10px] rounded">Cancel</button>
+                            <button disabled={busy} onClick={handleSaveDetails} className="px-4 py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded">{t('save_changes', { defaultValue: 'Save Changes' })}</button>
+                            <button disabled={busy} onClick={() => setEditing(false)} className="px-4 py-2 bg-slate-100 text-slate-600 font-black uppercase text-[10px] rounded">{t('cancel', { defaultValue: 'Cancel' })}</button>
                         </div>
                     </div>
                 )}
@@ -498,20 +500,20 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
 
             {completedStages.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Case History</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('case_history', { defaultValue: 'Case History' })}</span>
                     {completedStages.map(renderStageSummary)}
                 </div>
             )}
 
             {canManage && c.stage === 'NOTICE_TO_EXPLAIN' && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Formal Rewrite</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('formal_rewrite', { defaultValue: 'Formal Rewrite' })}</span>
                     <p className="text-[10px] text-slate-400">
-                        Pre-filled from the original complaint as a starting point — rewrite it in formal language for the printed notice, then generate the form. The original complaint text is kept as-is regardless.
+                        {t('formal_rewrite_prefilled_help', { defaultValue: 'Pre-filled from the original complaint as a starting point — rewrite it in formal language for the printed notice, then generate the form. The original complaint text is kept as-is regardless.' })}
                     </p>
-                    <label className="block font-black uppercase text-[10px] text-red-700">Incident description — formal rewrite (EN)</label>
-                    <textarea rows={4} value={noticeToExplainDescription} onChange={e => setNoticeToExplainDescription(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Rewrite the incident description in formal, academic language for the official notice…" />
-                    <label className="block font-black uppercase text-[10px] text-red-700">Incident description — formal rewrite (AR)</label>
+                    <label className="block font-black uppercase text-[10px] text-red-700">{t('incident_description_formal_rewrite_en', { defaultValue: 'Incident description — formal rewrite (EN)' })}</label>
+                    <textarea rows={4} value={noticeToExplainDescription} onChange={e => setNoticeToExplainDescription(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('rewrite_incident_description_formal_placeholder', { defaultValue: 'Rewrite the incident description in formal, academic language for the official notice…' })} />
+                    <label className="block font-black uppercase text-[10px] text-red-700">{t('incident_description_formal_rewrite_ar', { defaultValue: 'Incident description — formal rewrite (AR)' })}</label>
                     <textarea dir="rtl" rows={4} value={noticeToExplainDescriptionAr} onChange={e => setNoticeToExplainDescriptionAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                     <div className="flex justify-center pt-1">
                         <button
@@ -519,7 +521,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             onClick={() => saveStageDraft({ noticeToExplainDescription, noticeToExplainDescriptionAr })}
                             className="px-6 py-2 bg-slate-100 text-slate-700 font-black uppercase text-[10px] rounded"
                         >
-                            Save
+                            {t('save', { defaultValue: 'Save' })}
                         </button>
                     </div>
                 </div>
@@ -527,14 +529,14 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
 
             {canManage && c.stage === 'INVESTIGATION_RESULT' && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Investigation</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('investigation', { defaultValue: 'Investigation' })}</span>
 
                     <div className="relative">
                         <div className="flex items-center justify-between mb-1">
-                            <label className="block font-black uppercase text-[10px] text-red-700">Confirmed violation</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('confirmed_violation_label', { defaultValue: 'Confirmed violation' })}</label>
                             {confirmedViolationId && (
                                 <button type="button" onMouseDown={e => e.preventDefault()} onClick={clearViolation} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">
-                                    ✕ Clear (No Violation)
+                                    ✕ {t('clear_no_violation', { defaultValue: 'Clear (No Violation)' })}
                                 </button>
                             )}
                         </div>
@@ -544,7 +546,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             onChange={e => { setViolationSearchQuery(e.target.value); setShowViolationSuggestions(true); }}
                             onFocus={() => setShowViolationSuggestions(true)}
                             onBlur={() => setTimeout(() => setShowViolationSuggestions(false), 150)}
-                            placeholder="Search violations by name or code…"
+                            placeholder={t('search_violations_by_name_or_code', { defaultValue: 'Search violations by name or code…' })}
                             className="w-full p-2 border border-slate-200 rounded"
                             autoComplete="off"
                         />
@@ -577,35 +579,35 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                         )}
                     </div>
 
-                    <label className="block font-black uppercase text-[10px] text-red-700">Code of Conduct violation status</label>
-                    <p className="text-[10px] text-slate-400 -mt-2 mb-1">Derived from the confirmed violation above — not editable directly.</p>
+                    <label className="block font-black uppercase text-[10px] text-red-700">{t('code_of_conduct_violation_status', { defaultValue: 'Code of Conduct violation status' })}</label>
+                    <p className="text-[10px] text-slate-400 -mt-2 mb-1">{t('derived_from_confirmed_violation_not_editable', { defaultValue: 'Derived from the confirmed violation above — not editable directly.' })}</p>
                     <select value={investigationOutcome} disabled className="w-full p-2 border border-slate-200 rounded bg-slate-50 text-slate-500">
-                        <option value="NON_VIOLATION">Non Violation — close the case</option>
-                        <option value="MINOR">Minor Violation</option>
-                        <option value="SERIOUS">Serious Violation</option>
-                        <option value="MAJOR">Major Violation</option>
+                        <option value="NON_VIOLATION">{t('non_violation_close_the_case', { defaultValue: 'Non Violation — close the case' })}</option>
+                        <option value="MINOR">{t('minor_violation', { defaultValue: 'Minor Violation' })}</option>
+                        <option value="SERIOUS">{t('serious_violation', { defaultValue: 'Serious Violation' })}</option>
+                        <option value="MAJOR">{t('major_violation', { defaultValue: 'Major Violation' })}</option>
                     </select>
 
                     <div className="grid grid-cols-2 gap-2">
-                        <textarea rows={3} value={investigationResult} onChange={e => setInvestigationResult(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Result of Investigation (EN)…" />
+                        <textarea rows={3} value={investigationResult} onChange={e => setInvestigationResult(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('result_of_investigation_en_placeholder', { defaultValue: 'Result of Investigation (EN)…' })} />
                         <textarea dir="rtl" rows={3} value={investigationResultAr} onChange={e => setInvestigationResultAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="نتيجة التحقيق (AR)…" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <textarea rows={3} value={investigationRecommendation} onChange={e => setInvestigationRecommendation(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Recommendation (EN)…" />
+                        <textarea rows={3} value={investigationRecommendation} onChange={e => setInvestigationRecommendation(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('recommendation_en_placeholder', { defaultValue: 'Recommendation (EN)…' })} />
                         <textarea dir="rtl" rows={3} value={investigationRecommendationAr} onChange={e => setInvestigationRecommendationAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="التوصيات (AR)…" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <textarea rows={3} value={investigationActionTaken} onChange={e => setInvestigationActionTaken(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Action Taken (EN)…" />
+                        <textarea rows={3} value={investigationActionTaken} onChange={e => setInvestigationActionTaken(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('action_taken_en_placeholder', { defaultValue: 'Action Taken (EN)…' })} />
                         <textarea dir="rtl" rows={3} value={investigationActionTakenAr} onChange={e => setInvestigationActionTakenAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="الإجراءات المتخذة (AR)…" />
                     </div>
 
                     <div className="border-t border-slate-100 pt-3">
-                        <label className="block font-black uppercase text-[10px] text-red-700 mb-1">Action to apply (from this violation's penalty ladder)</label>
+                        <label className="block font-black uppercase text-[10px] text-red-700 mb-1">{t('action_to_apply_from_penalty_ladder', { defaultValue: "Action to apply (from this violation's penalty ladder)" })}</label>
                         <p className="text-[10px] text-slate-400 mb-1">
-                            Internal only — not printed on the form. Carries forward as the default at the Disciplinary Action stage; track repeat offenses of the same violation here to escalate the penalty.
+                            {t('action_to_apply_internal_only_help', { defaultValue: 'Internal only — not printed on the form. Carries forward as the default at the Disciplinary Action stage; track repeat offenses of the same violation here to escalate the penalty.' })}
                         </p>
                         <select value={actionType} onChange={e => setActionType(e.target.value as DisciplinaryActionType)} className="w-full p-2 border border-slate-200 rounded">
-                            {confirmedViolationLadder.length === 0 && <option value="">Select a violation first…</option>}
+                            {confirmedViolationLadder.length === 0 && <option value="">{t('select_a_violation_first', { defaultValue: 'Select a violation first…' })}</option>}
                             {confirmedViolationLadder.map((action, i) => (
                                 <option key={action} value={action}>{`${OFFENSE_ORDINALS[i] || `${i + 1}th`} Offense — ${DISCIPLINARY_ACTION_LABELS[action]}`}</option>
                             ))}
@@ -624,7 +626,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             })}
                             className="px-6 py-2 bg-slate-100 text-slate-700 font-black uppercase text-[10px] rounded"
                         >
-                            Save
+                            {t('save', { defaultValue: 'Save' })}
                         </button>
                     </div>
                 </div>
@@ -633,18 +635,18 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
             {canManage && c.stage !== 'CLOSED' && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
                     <button disabled={busy} onClick={() => handleGenerateForm(c.stage)} className="w-full py-2 bg-slate-700 text-white font-black uppercase text-[10px] rounded">
-                        Generate {STAGE_LABELS[c.stage]} Form
+                        {t('generate_stage_form', { stage: STAGE_LABELS[c.stage], defaultValue: 'Generate {{stage}} Form' })}
                     </button>
 
                     {c.stage === 'DISCIPLINARY_ACTION' && (
                         <div className="space-y-2">
-                            <label className="block font-black uppercase text-[10px] text-red-700">Disciplinary action</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('disciplinary_action', { defaultValue: 'Disciplinary action' })}</label>
                             <select value={actionType} onChange={e => setActionType(e.target.value as DisciplinaryActionType)} className="w-full p-2 border border-slate-200 rounded">
                                 {Object.entries(DISCIPLINARY_ACTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                             </select>
-                            <label className="block font-black uppercase text-[10px] text-red-700">Effective start date</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('effective_start_date_label', { defaultValue: 'Effective start date' })}</label>
                             <input type="date" value={actionEffectiveDate} onChange={e => setActionEffectiveDate(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <textarea rows={2} value={actionAdditionalInfo} onChange={e => setActionAdditionalInfo(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Additional info (optional)…" />
+                            <textarea rows={2} value={actionAdditionalInfo} onChange={e => setActionAdditionalInfo(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('additional_info_optional', { defaultValue: 'Additional info (optional)…' })} />
                         </div>
                     )}
 

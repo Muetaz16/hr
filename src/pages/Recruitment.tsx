@@ -229,8 +229,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
         }
     };
     const statusLabel = (s: string) => ({
-        PENDING: 'Pending', DEPT_APPROVED: 'Division Approved', HR_APPROVED: 'HR Approved',
-        FULLY_APPROVED: 'Fully Approved', REJECTED: 'Rejected'
+        PENDING: t('pending', { defaultValue: 'Pending' }), DEPT_APPROVED: t('division_approved', { defaultValue: 'Division Approved' }), HR_APPROVED: t('hr_approved', { defaultValue: 'HR Approved' }),
+        FULLY_APPROVED: t('fully_approved', { defaultValue: 'Fully Approved' }), REJECTED: t('rejected', { defaultValue: 'Rejected' })
     } as any)[s] || s;
 
     const scopeName = (r: RecruitmentRequest) =>
@@ -252,8 +252,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     // ---- HIRE requisition: staged Personnel Requisition Form (PRF) approval flow ----
     const PRF_STAGES = ['deptHead', 'divHead', 'hrManager', 'hrRecruitment', 'gm'] as const;
     const PRF_STAGE_LABEL: Record<string, string> = {
-        deptHead: 'Head of Department', divHead: 'Head of Division/Office', hrManager: 'Head of HR',
-        hrRecruitment: 'Head of Hiring Unit', gm: 'General Manager',
+        deptHead: t('head_of_department', { defaultValue: 'Head of Department' }), divHead: t('head_of_division_office', { defaultValue: 'Head of Division/Office' }), hrManager: t('head_of_hr', { defaultValue: 'Head of HR' }),
+        hrRecruitment: t('head_of_hiring_unit', { defaultValue: 'Head of Hiring Unit' }), gm: t('general_manager', { defaultValue: 'General Manager' }),
     };
     const prfNextStage = (r: RecruitmentRequest): string | null => {
         const a: any = (r as any).prfApprovals || {};
@@ -368,7 +368,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             {selectedRequest.type === 'JD_CHANGE' ? <FileText className="w-8 h-8 text-purple-500" /> : <Briefcase className="w-8 h-8 text-indigo-500" />}
                         </div>
                         <div className="flex-1 space-y-1">
-                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">{selectedRequest.type === 'JD_CHANGE' ? 'JD Change Request' : 'Hire Requisition'}</p>
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">{selectedRequest.type === 'JD_CHANGE' ? t('jd_change_request', { defaultValue: 'JD Change Request' }) : t('hire_requisition', { defaultValue: 'Hire Requisition' })}</p>
                             <h3 className="text-2xl font-black text-slate-800 tracking-tight uppercase">{selectedRequest.jobTitle}</h3>
                             <div className="flex gap-4 flex-wrap">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1"><Building2 className="w-3 h-3" />{scopeName(selectedRequest)}</span>
@@ -379,16 +379,16 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
                     {/* Request overview — everything needed to review at a glance */}
                     <div className="space-y-3">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Request Overview</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('request_overview', { defaultValue: 'Request Overview' })}</p>
                         <div className="grid grid-cols-2 gap-3">
-                            <InfoCell label="Request Type" value={selectedRequest.type === 'JD_CHANGE' ? 'Job Description Change' : 'Hire Requisition'} />
-                            <InfoCell label="Current Status" value={STATUS_LABELS[selectedRequest.status] || selectedRequest.status} />
-                            <InfoCell label="Requested By" value={selectedRequest.requester ? `${selectedRequest.requester.fullName} (${String(selectedRequest.requester.role || '').replace(/_/g, ' ')})` : '—'} />
-                            <InfoCell label="Scope" value={scopeName(selectedRequest)} />
+                            <InfoCell label={t('request_type', { defaultValue: 'Request Type' })} value={selectedRequest.type === 'JD_CHANGE' ? t('job_description_change', { defaultValue: 'Job Description Change' }) : t('hire_requisition', { defaultValue: 'Hire Requisition' })} />
+                            <InfoCell label={t('current_status', { defaultValue: 'Current Status' })} value={STATUS_LABELS[selectedRequest.status] || selectedRequest.status} />
+                            <InfoCell label={t('requested_by', { defaultValue: 'Requested By' })} value={selectedRequest.requester ? `${selectedRequest.requester.fullName} (${String(selectedRequest.requester.role || '').replace(/_/g, ' ')})` : '—'} />
+                            <InfoCell label={t('scope', { defaultValue: 'Scope' })} value={scopeName(selectedRequest)} />
                             {selectedRequest.type === 'HIRE'
-                                ? <InfoCell label="Positions Requested" value={selectedRequest.quantity ?? 1} />
-                                : <InfoCell label="Change Mode" value={selectedRequest.jdPayload?.mode === 'edit' ? 'Edit existing JD' : 'New position'} />}
-                            <InfoCell label="Submitted" value={new Date(selectedRequest.createdAt).toLocaleDateString()} />
+                                ? <InfoCell label={t('positions_requested', { defaultValue: 'Positions Requested' })} value={selectedRequest.quantity ?? 1} />
+                                : <InfoCell label={t('change_mode', { defaultValue: 'Change Mode' })} value={selectedRequest.jdPayload?.mode === 'edit' ? t('edit_existing_jd', { defaultValue: 'Edit existing JD' }) : t('new_position', { defaultValue: 'New position' })} />}
+                            <InfoCell label={t('submitted', { defaultValue: 'Submitted' })} value={new Date(selectedRequest.createdAt).toLocaleDateString()} />
                         </div>
                     </div>
 

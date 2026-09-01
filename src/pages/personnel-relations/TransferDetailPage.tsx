@@ -62,10 +62,10 @@ const TransferDetailPage: React.FC = () => {
     ] as Array<[string, React.ReactNode]>).filter(([, v]) => v);
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6 pb-20">
+        <div className="w-full space-y-6 pb-20">
             <div className="flex items-center gap-3">
                 <button
-                    onClick={() => d.employeeId ? navigate(`/personnel-relations/lifecycle?employeeId=${d.employeeId}`) : navigate(-1)}
+                    onClick={() => (window.history.length > 1 ? navigate(-1) : d.employeeId ? navigate(`/personnel-relations/lifecycle?employeeId=${d.employeeId}`) : navigate('/personnel-relations'))}
                     className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
                 >
                     <ArrowLeft size={16} />
@@ -94,7 +94,7 @@ const TransferDetailPage: React.FC = () => {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-4 text-xs">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-4 text-xs">
                     {rows.map(([label, value]) => <Field key={label} label={label} value={value} />)}
                 </div>
             </div>

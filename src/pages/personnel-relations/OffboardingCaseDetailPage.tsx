@@ -10,6 +10,7 @@ import { REASON_FOR_LEAVING_OPTIONS, RATING_CATEGORIES } from '../../constants/o
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
+import { useTranslation } from 'react-i18next';
 
 const STAGE_LABELS: Record<OffboardingStage, string> = {
     RESIGNATION_REQUEST: 'Resignation Request',
@@ -60,6 +61,7 @@ const OffboardingCaseDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { currentUser } = useAuth();
+    const { t } = useTranslation();
     const canManage = canAccess(currentUser, [], ['manage_offboarding']);
 
     const { data: c, isLoading, error } = useQuery({
@@ -116,9 +118,9 @@ const OffboardingCaseDetailPage: React.FC = () => {
             a.download = `${stage}_${c.caseNumber}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Form generated. Collect the required signature(s), then upload the signed copy below.');
+            toast.success(t('form_generated_collect_the_required_signature_s_then', { defaultValue: 'Form generated. Collect the required signature(s), then upload the signed copy below.' }));
         } catch (err: any) {
-            toast.error('Failed to generate the form.');
+            toast.error(t('failed_to_generate_the_form', { defaultValue: 'Failed to generate the form.' }));
         } finally {
             setBusy(false);
         }
@@ -135,17 +137,17 @@ const OffboardingCaseDetailPage: React.FC = () => {
             a.download = `Certificate_of_Employment_${c.caseNumber}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Certificate of Employment issued.');
+            toast.success(t('certificate_of_employment_issued', { defaultValue: 'Certificate of Employment issued.' }));
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to issue the certificate.');
+            toast.error(err?.response?.data?.error || t('failed_to_issue_the_certificate', { defaultValue: 'Failed to issue the certificate.' }));
         } finally {
             setBusy(false);
         }
     };
 
     const uploadFile = async (file: File | null): Promise<{ documentUrl: string; documentName: string } | null> => {
-        if (!file) { toast.error('Attach a document before continuing.'); return null; }
+        if (!file) { toast.error(t('attach_a_document_before_continuing', { defaultValue: 'Attach a document before continuing.' })); return null; }
         const { url, name } = await employeeService.uploadDocument(file);
         return { documentUrl: url, documentName: name };
     };
@@ -155,25 +157,25 @@ const OffboardingCaseDetailPage: React.FC = () => {
         try {
             await fn();
             setSignedFile(null);
-            toast.success('Case updated.');
+            toast.success(t('case_updated', { defaultValue: 'Case updated.' }));
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Action failed.');
+            toast.error(err?.response?.data?.error || t('action_failed', { defaultValue: 'Action failed.' }));
         } finally {
             setBusy(false);
         }
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Loading case…</div>;
+        return <div className="p-8 text-center text-slate-400 text-sm">{t('loading_case', { defaultValue: 'Loading case…' })}</div>;
     }
     if (error || !c) {
         return (
             <div className="p-8 text-center space-y-4">
                 <AlertCircle size={40} className="mx-auto text-red-500" />
-                <h2 className="text-lg font-bold text-slate-800">Case not found.</h2>
+                <h2 className="text-lg font-bold text-slate-800">{t('case_not_found', { defaultValue: 'Case not found.' })}</h2>
                 <button onClick={() => navigate('/personnel-relations/offboarding')} className="text-red-700 font-bold hover:underline text-sm">
-                    Back to Offboarding Cases
+                    {t('back_to_offboarding_cases', { defaultValue: 'Back to Offboarding Cases' })}
                 </button>
             </div>
         );
@@ -183,35 +185,35 @@ const OffboardingCaseDetailPage: React.FC = () => {
         let body: React.ReactNode = null;
         if (stage === 'RESIGNATION_REQUEST') {
             body = <>
-                <Row label="Reason" value={c.resignationReason || '—'} />
-                <Row label="Resignation Letter" value={c.resignationLetterText ? <span className="whitespace-pre-wrap">{c.resignationLetterText}</span> : '—'} />
+                <Row label={t('reason', { defaultValue: 'Reason' })} value={c.resignationReason || '—'} />
+                <Row label={t('resignation_letter', { defaultValue: 'Resignation Letter' })} value={c.resignationLetterText ? <span className="whitespace-pre-wrap">{c.resignationLetterText}</span> : '—'} />
                 {!!c.resignationAttachmentUrls?.length && (
-                    <Row label="Attachments" value={
+                    <Row label={t('attachments', { defaultValue: 'Attachments' })} value={
                         <ul className="space-y-0.5">
                             {c.resignationAttachmentUrls.map((url, i) => (
-                                <li key={url}><a href={`${SERVER_URL}${url}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.resignationAttachmentNames?.[i] || `Attachment ${i + 1}`}</a></li>
+                                <li key={url}><a href={`${SERVER_URL}${url}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.resignationAttachmentNames?.[i] || t('attachment_n', { defaultValue: 'Attachment {{n}}', n: i + 1 })}</a></li>
                             ))}
                         </ul>
                     } />
                 )}
-                <Row label="Effective Date" value={c.resignationEffectiveDate ? format(new Date(c.resignationEffectiveDate), 'dd MMM yyyy') : '—'} />
-                <Row label="Final Working Date" value={c.finalWorkingDate ? format(new Date(c.finalWorkingDate), 'dd MMM yyyy') : '—'} />
-                <Row label="Signed document" value={c.resignationDocumentUrl ? (
-                    <a href={`${SERVER_URL}${c.resignationDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.resignationDocumentName || 'Signed document'}</a>
-                ) : <span className="text-slate-400">No document uploaded</span>} />
+                <Row label={t('effective_date', { defaultValue: 'Effective Date' })} value={c.resignationEffectiveDate ? format(new Date(c.resignationEffectiveDate), 'dd MMM yyyy') : '—'} />
+                <Row label={t('final_working_date', { defaultValue: 'Final Working Date' })} value={c.finalWorkingDate ? format(new Date(c.finalWorkingDate), 'dd MMM yyyy') : '—'} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={c.resignationDocumentUrl ? (
+                    <a href={`${SERVER_URL}${c.resignationDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.resignationDocumentName || t('signed_document', { defaultValue: 'Signed document' })}</a>
+                ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>} />
             </>;
         } else if (stage === 'CLEARANCE') {
             body = <>
-                <Row label="Date of Separation" value={c.dateOfSeparation ? format(new Date(c.dateOfSeparation), 'dd MMM yyyy') : '—'} />
-                <Row label="Signed document" value={c.clearanceDocumentUrl ? (
-                    <a href={`${SERVER_URL}${c.clearanceDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.clearanceDocumentName || 'Signed document'}</a>
-                ) : <span className="text-slate-400">No document uploaded</span>} />
+                <Row label={t('date_of_separation', { defaultValue: 'Date of Separation' })} value={c.dateOfSeparation ? format(new Date(c.dateOfSeparation), 'dd MMM yyyy') : '—'} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={c.clearanceDocumentUrl ? (
+                    <a href={`${SERVER_URL}${c.clearanceDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.clearanceDocumentName || t('signed_document', { defaultValue: 'Signed document' })}</a>
+                ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>} />
             </>;
         } else if (stage === 'SEPARATION_LETTER') {
             body = <>
-                <Row label="Signed document" value={c.separationDocumentUrl ? (
-                    <a href={`${SERVER_URL}${c.separationDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.separationDocumentName || 'Signed document'}</a>
-                ) : <span className="text-slate-400">No document uploaded</span>} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={c.separationDocumentUrl ? (
+                    <a href={`${SERVER_URL}${c.separationDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.separationDocumentName || t('signed_document', { defaultValue: 'Signed document' })}</a>
+                ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>} />
             </>;
         }
         return (
@@ -228,7 +230,7 @@ const OffboardingCaseDetailPage: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
             <div className="flex items-center gap-3">
                 <button
-                    onClick={() => navigate('/personnel-relations/offboarding')}
+                    onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/personnel-relations/offboarding'))}
                     className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
                 >
                     <ArrowLeft size={16} />
@@ -236,28 +238,28 @@ const OffboardingCaseDetailPage: React.FC = () => {
                 <div className="flex-1">
                     <h1 className="text-lg font-black text-[#511d29]">{c.caseNumber} — {c.employee?.fullName || ''}</h1>
                     <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">
-                        {c.stage === 'CLOSED' ? (c.employee?.enrollmentStatus === 'SEPARATED' ? 'Closed — Separated' : 'Closed — Pending Separation Date') : STAGE_LABELS[c.stage]}
+                        {c.stage === 'CLOSED' ? (c.employee?.enrollmentStatus === 'SEPARATED' ? t('closed_separated', { defaultValue: 'Closed — Separated' }) : t('closed_pending_separation_date', { defaultValue: 'Closed — Pending Separation Date' })) : STAGE_LABELS[c.stage]}
                     </p>
                 </div>
                 <button
                     onClick={() => navigate(`/personnel-relations/lifecycle?employeeId=${c.employeeId}`)}
                     className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50"
                 >
-                    <UserSquare2 size={14} /> View Employee File
+                    <UserSquare2 size={14} /> {t('view_employee_file', { defaultValue: 'View Employee File' })}
                 </button>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-slate-600">
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Type</span><div>{c.type === 'VOLUNTARY' ? 'Voluntary' : 'Involuntary'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Source</span><div>{SOURCE_LABELS[c.source] || c.source}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Filed</span><div>{format(new Date(c.createdAt), 'dd MMM yyyy')}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('type', { defaultValue: 'Type' })}</span><div>{c.type === 'VOLUNTARY' ? t('voluntary', { defaultValue: 'Voluntary' }) : t('involuntary', { defaultValue: 'Involuntary' })}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('source', { defaultValue: 'Source' })}</span><div>{SOURCE_LABELS[c.source] || c.source}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('filed', { defaultValue: 'Filed' })}</span><div>{format(new Date(c.createdAt), 'dd MMM yyyy')}</div></div>
                     <div>
-                        <span className="font-black uppercase text-[10px] text-red-700">Exit Interview</span>
+                        <span className="font-black uppercase text-[10px] text-red-700">{t('exit_interview', { defaultValue: 'Exit Interview' })}</span>
                         <div>
-                            {c.exitInterviewSubmittedAt ? 'Submitted' : exitInterviewRequired ? (
-                                <span className="text-amber-600 font-bold">Pending — required</span>
-                            ) : 'Not required (Termination)'}
+                            {c.exitInterviewSubmittedAt ? t('submitted', { defaultValue: 'Submitted' }) : exitInterviewRequired ? (
+                                <span className="text-amber-600 font-bold">{t('pending_required', { defaultValue: 'Pending — required' })}</span>
+                            ) : t('not_required_termination', { defaultValue: 'Not required (Termination)' })}
                         </div>
                     </div>
                 </div>
@@ -267,7 +269,7 @@ const OffboardingCaseDetailPage: React.FC = () => {
                         onClick={() => navigate(`/personnel-relations/disciplinary/${c.linkedDisciplinaryCaseId}`)}
                         className="text-[#511d29] hover:underline text-[11px] font-bold"
                     >
-                        View linked disciplinary case →
+                        {t('view_linked_disciplinary_case', { defaultValue: 'View linked disciplinary case →' })}
                     </button>
                 )}
 
@@ -287,49 +289,49 @@ const OffboardingCaseDetailPage: React.FC = () => {
 
             {completedStages.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Case History</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('case_history', { defaultValue: 'Case History' })}</span>
                     {completedStages.map(renderStageSummary)}
                 </div>
             )}
 
             {canManage && c.exitInterviewSubmittedAt && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Exit Interview</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('exit_interview', { defaultValue: 'Exit Interview' })}</span>
                     <div className="grid grid-cols-2 gap-3">
-                        <Row label="Reason for Leaving" value={
+                        <Row label={t('reason_for_leaving', { defaultValue: 'Reason for Leaving' })} value={
                             (REASON_FOR_LEAVING_OPTIONS.find(o => o.value === c.exitInterviewReasonCategory)?.label || c.exitInterviewReasonCategory || '—')
                             + (c.exitInterviewReasonCategory === 'OTHERS' && c.exitInterviewReasonOther ? ` — ${c.exitInterviewReasonOther}` : '')
                         } />
-                        <Row label="Interested in Re-employment" value={c.exitInterviewInterestedInReemployment === null || c.exitInterviewInterestedInReemployment === undefined ? '—' : c.exitInterviewInterestedInReemployment ? 'Yes' : 'No'} />
-                        <Row label="Would Recommend IPH" value={c.exitInterviewWouldRecommend === null || c.exitInterviewWouldRecommend === undefined ? '—' : c.exitInterviewWouldRecommend ? 'Yes' : 'No'} />
+                        <Row label={t('interested_in_re_employment', { defaultValue: 'Interested in Re-employment' })} value={c.exitInterviewInterestedInReemployment === null || c.exitInterviewInterestedInReemployment === undefined ? '—' : c.exitInterviewInterestedInReemployment ? t('yes', { defaultValue: 'Yes' }) : t('no', { defaultValue: 'No' })} />
+                        <Row label={t('would_recommend_iph', { defaultValue: 'Would Recommend IPH' })} value={c.exitInterviewWouldRecommend === null || c.exitInterviewWouldRecommend === undefined ? '—' : c.exitInterviewWouldRecommend ? t('yes', { defaultValue: 'Yes' }) : t('no', { defaultValue: 'No' })} />
                         {(c.exitInterviewContactEmail || c.exitInterviewContactNumber) && (
-                            <Row label="Contact" value={[c.exitInterviewContactEmail, c.exitInterviewContactNumber].filter(Boolean).join(' · ')} />
+                            <Row label={t('contact', { defaultValue: 'Contact' })} value={[c.exitInterviewContactEmail, c.exitInterviewContactNumber].filter(Boolean).join(' · ')} />
                         )}
                     </div>
                     <details className="border border-slate-200 rounded-lg p-3">
-                        <summary className="cursor-pointer font-black uppercase text-[10px] text-slate-500">Ratings</summary>
+                        <summary className="cursor-pointer font-black uppercase text-[10px] text-slate-500">{t('ratings', { defaultValue: 'Ratings' })}</summary>
                         <div className="mt-2 grid grid-cols-2 gap-2">
                             {RATING_CATEGORIES.map(cat => (
                                 <Row key={cat.key} label={cat.label} value={(c as any)[`exitInterviewRating${cat.key.charAt(0).toUpperCase()}${cat.key.slice(1)}`] || '—'} />
                             ))}
                         </div>
                     </details>
-                    <Row label="Appreciated Most" value={c.exitInterviewAppreciatedMost || '—'} />
-                    <Row label="Liked Least" value={c.exitInterviewLikedLeast || '—'} />
-                    <Row label="Improvement Suggestions" value={c.exitInterviewImprovementSuggestions || '—'} />
+                    <Row label={t('appreciated_most', { defaultValue: 'Appreciated Most' })} value={c.exitInterviewAppreciatedMost || '—'} />
+                    <Row label={t('liked_least', { defaultValue: 'Liked Least' })} value={c.exitInterviewLikedLeast || '—'} />
+                    <Row label={t('improvement_suggestions', { defaultValue: 'Improvement Suggestions' })} value={c.exitInterviewImprovementSuggestions || '—'} />
                 </div>
             )}
 
             {canManage && c.clearanceCompletedAt && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Certificate of Employment</span>
-                    <p className="text-slate-500">Available on request, any time after clearance completes.</p>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('certificate_of_employment', { defaultValue: 'Certificate of Employment' })}</span>
+                    <p className="text-slate-500">{t('available_on_request_any_time_after_clearance_completes', { defaultValue: 'Available on request, any time after clearance completes.' })}</p>
                     <button
                         disabled={busy}
                         onClick={handleIssueCertificate}
                         className="w-full py-2 bg-slate-700 text-white font-black uppercase text-[10px] rounded flex items-center justify-center gap-2"
                     >
-                        <FileBadge size={14} /> Issue Certificate of Employment
+                        <FileBadge size={14} /> {t('issue_certificate_of_employment', { defaultValue: 'Issue Certificate of Employment' })}
                     </button>
                 </div>
             )}
@@ -340,62 +342,62 @@ const OffboardingCaseDetailPage: React.FC = () => {
 
                     {c.stage === 'RESIGNATION_REQUEST' && (
                         <div className="space-y-2">
-                            <label className="block font-black uppercase text-[10px] text-red-700">Reason for resignation</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('reason_for_resignation', { defaultValue: 'Reason for resignation' })}</label>
                             <textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <label className="block font-black uppercase text-[10px] text-red-700">Reason — Arabic translation (printed form is bilingual; the employee only typed one language)</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('reason_arabic_translation_printed_form_is_bilingual_the', { defaultValue: 'Reason — Arabic translation (printed form is bilingual; the employee only typed one language)' })}</label>
                             <textarea rows={2} dir="rtl" value={resignationReasonAr} onChange={e => setResignationReasonAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
 
                             {c.resignationLetterText && (
                                 <>
-                                    <label className="block font-black uppercase text-[10px] text-red-700">Resignation letter (as written by the employee)</label>
+                                    <label className="block font-black uppercase text-[10px] text-red-700">{t('resignation_letter_as_written_by_the_employee', { defaultValue: 'Resignation letter (as written by the employee)' })}</label>
                                     <p className="w-full p-2 bg-slate-50 border border-slate-200 rounded whitespace-pre-wrap text-slate-600">{c.resignationLetterText}</p>
                                 </>
                             )}
-                            <label className="block font-black uppercase text-[10px] text-red-700">Resignation letter — Arabic translation</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('resignation_letter_arabic_translation', { defaultValue: 'Resignation letter — Arabic translation' })}</label>
                             <textarea rows={4} dir="rtl" value={resignationLetterTextAr} onChange={e => setResignationLetterTextAr(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
 
-                            <label className="block font-black uppercase text-[10px] text-red-700">Effective date</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('effective_date', { defaultValue: 'Effective date' })}</label>
                             <input type="date" value={dateOfSeparation} onChange={e => setDateOfSeparation(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <label className="block font-black uppercase text-[10px] text-red-700">Head of Division (auto-detected from the org chart — override only if wrong)</label>
-                            <input value={headOfDivision} onChange={e => setHeadOfDivision(e.target.value)} placeholder="Leave blank to auto-detect" className="w-full p-2 border border-slate-200 rounded" />
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('head_of_division_auto_detected_from_the_org', { defaultValue: 'Head of Division (auto-detected from the org chart — override only if wrong)' })}</label>
+                            <input value={headOfDivision} onChange={e => setHeadOfDivision(e.target.value)} placeholder={t('leave_blank_to_auto_detect', { defaultValue: 'Leave blank to auto-detect' })} className="w-full p-2 border border-slate-200 rounded" />
                         </div>
                     )}
                     {c.stage === 'CLEARANCE' && (
                         <div className="space-y-2">
-                            <label className="block font-black uppercase text-[10px] text-red-700">Reason for Registration</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('reason_for_registration', { defaultValue: 'Reason for Registration' })}</label>
                             <textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <label className="block font-black uppercase text-[10px] text-red-700">Date of separation</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('date_of_separation', { defaultValue: 'Date of separation' })}</label>
                             <input type="date" value={dateOfSeparation} onChange={e => setDateOfSeparation(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <label className="block font-black uppercase text-[10px] text-red-700">Reports to (printed on form)</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('reports_to_printed_on_form', { defaultValue: 'Reports to (printed on form)' })}</label>
                             <input value={reportsTo} onChange={e => setReportsTo(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                         </div>
                     )}
                     {c.stage === 'SEPARATION_LETTER' && (
                         <div className="space-y-2">
-                            <label className="block font-black uppercase text-[10px] text-red-700">Date of separation</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('date_of_separation', { defaultValue: 'Date of separation' })}</label>
                             <input type="date" value={dateOfSeparation} onChange={e => setDateOfSeparation(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
-                            <label className="block font-black uppercase text-[10px] text-red-700">Reports to (printed on form)</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('reports_to_printed_on_form', { defaultValue: 'Reports to (printed on form)' })}</label>
                             <input value={reportsTo} onChange={e => setReportsTo(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                             <p className="text-slate-500">
-                                Printed "Reason:" — <span className="font-bold text-slate-700">{separationReasonLabel(c)}</span> (derived from how this case was opened, not editable here)
+                                {t('printed_reason', { defaultValue: 'Printed "Reason:" —' })} <span className="font-bold text-slate-700">{separationReasonLabel(c)}</span> {t('derived_from_how_this_case_was_opened_not', { defaultValue: '(derived from how this case was opened, not editable here)' })}
                             </p>
                         </div>
                     )}
 
                     <button disabled={busy} onClick={() => handleGenerateForm(c.stage)} className="w-full py-2 bg-slate-700 text-white font-black uppercase text-[10px] rounded">
-                        Generate {STAGE_LABELS[c.stage]} Form
+                        {t('generate', { defaultValue: 'Generate' })} {STAGE_LABELS[c.stage]} {t('form', { defaultValue: 'Form' })}
                     </button>
 
                     {c.stage === 'RESIGNATION_REQUEST' && (
                         <div>
-                            <label className="block font-black uppercase text-[10px] text-red-700 mb-1">Final working date</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700 mb-1">{t('final_working_date', { defaultValue: 'Final working date' })}</label>
                             <input type="date" value={finalWorkingDate} onChange={e => setFinalWorkingDate(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                         </div>
                     )}
 
                     <div>
                         <label className="flex items-center gap-2 text-[10px] font-black uppercase text-red-700 mb-1">
-                            <Paperclip size={12} /> Upload signed copy
+                            <Paperclip size={12} /> {t('upload_signed_copy', { defaultValue: 'Upload signed copy' })}
                         </label>
                         <input type="file" onChange={e => setSignedFile(e.target.files?.[0] || null)} className="w-full text-xs" />
                     </div>
@@ -410,7 +412,7 @@ const OffboardingCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Move to Clearance
+                            {t('complete_move_to_clearance', { defaultValue: 'Complete & Move to Clearance' })}
                         </button>
                     )}
                     {c.stage === 'CLEARANCE' && (
@@ -423,14 +425,14 @@ const OffboardingCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Move to Separation Letter
+                            {t('complete_move_to_separation_letter', { defaultValue: 'Complete & Move to Separation Letter' })}
                         </button>
                     )}
                     {c.stage === 'SEPARATION_LETTER' && (
                         <>
                             {!exitInterviewSatisfied && (
                                 <p className="text-amber-600 text-[11px] font-bold text-center">
-                                    The employee must submit their Exit Interview before this case can be closed.
+                                    {t('the_employee_must_submit_their_exit_interview_before', { defaultValue: 'The employee must submit their Exit Interview before this case can be closed.' })}
                                 </p>
                             )}
                             <button
@@ -442,7 +444,7 @@ const OffboardingCaseDetailPage: React.FC = () => {
                                 })}
                                 className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Complete & Close Case
+                                {t('complete_close_case', { defaultValue: 'Complete & Close Case' })}
                             </button>
                         </>
                     )}

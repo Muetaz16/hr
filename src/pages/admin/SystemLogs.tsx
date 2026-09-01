@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { auditLogService } from '../../services/auditLogService';
 import { Search, ScrollText, ChevronLeft, ChevronRight, User } from 'lucide-react';
@@ -12,6 +13,7 @@ const METHOD_STYLE: Record<string, string> = {
 };
 
 const SystemLogs: React.FC = () => {
+    const { t } = useTranslation();
     const [searchInput, setSearchInput] = useState('');
     const [q, setQ] = useState('');
     const [method, setMethod] = useState('');
@@ -43,11 +45,11 @@ const SystemLogs: React.FC = () => {
                         <ScrollText className="w-6 h-6" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-outfit font-black text-slate-800 tracking-tight">System Activity Log</h1>
-                        <p className="text-slate-500 text-sm font-medium">Every create, update and delete across the system — who did it and when.</p>
+                        <h1 className="text-2xl font-outfit font-black text-slate-800 tracking-tight">{t('system_activity_log', { defaultValue: 'System Activity Log' })}</h1>
+                        <p className="text-slate-500 text-sm font-medium">{t('every_create_update_and_delete_across_the_system', { defaultValue: 'Every create, update and delete across the system — who did it and when.' })}</p>
                     </div>
                 </div>
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{total.toLocaleString()} entries</span>
+                <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{total.toLocaleString()} {t('entries', { defaultValue: 'entries' })}</span>
             </div>
 
             {/* Filters */}
@@ -58,7 +60,7 @@ const SystemLogs: React.FC = () => {
                         type="text"
                         value={searchInput}
                         onChange={e => setSearchInput(e.target.value)}
-                        placeholder="Search by user, action, role or path… (e.g. “admin deleted”)"
+                        placeholder={t('search_by_user_action_role_or_path', { defaultValue: 'Search by user, action, role or path… (e.g. “admin deleted”)' })}
                         className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-[#511d29]/15 focus:border-[#511d29] transition-all"
                     />
                 </div>
