@@ -2028,7 +2028,7 @@ const AttendancePage: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Value</label>
-                        <input type="text" placeholder="e.g. 09:00:00" value={settingForm.valueString} onChange={e => setSettingForm(f => ({ ...f, valueString: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                        <input type="time" value={settingForm.valueString} onChange={e => setSettingForm(f => ({ ...f, valueString: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
@@ -2107,22 +2107,22 @@ const AttendancePage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work Start (HH:mm:ss)</label>
-                            <input type="text" placeholder="09:00:00" value={mfForm.workStart} onChange={e => setMfForm(f => ({ ...f, workStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work Start</label>
+                            <input type="time" value={mfForm.workStart} onChange={e => setMfForm(f => ({ ...f, workStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work End (HH:mm:ss)</label>
-                            <input type="text" placeholder="15:00:00" value={mfForm.workEnd} onChange={e => setMfForm(f => ({ ...f, workEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work End</label>
+                            <input type="time" value={mfForm.workEnd} onChange={e => setMfForm(f => ({ ...f, workEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Grace Period (HH:mm:ss)</label>
-                            <input type="text" placeholder="00:15:00" value={mfForm.gracePeriod} onChange={e => setMfForm(f => ({ ...f, gracePeriod: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Grace Period</label>
+                            <input type="time" value={mfForm.gracePeriod} onChange={e => setMfForm(f => ({ ...f, gracePeriod: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">OT Threshold (HH:mm:ss)</label>
-                            <input type="text" placeholder="15:30:00" value={mfForm.otThreshold} onChange={e => setMfForm(f => ({ ...f, otThreshold: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">OT Threshold</label>
+                            <input type="time" value={mfForm.otThreshold} onChange={e => setMfForm(f => ({ ...f, otThreshold: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <button type="button" onClick={submitMultiplier} disabled={savingMf} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
