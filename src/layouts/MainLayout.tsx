@@ -256,7 +256,7 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_exceptional_performance', { defaultValue: 'Exceptional Performance' }),
             items: [
                 {
-                    label: 'Exceptional Performance Award', path: '/exceptional-performance', icon: Award,
+                    label: t('nav_exceptional_performance_award', { defaultValue: 'Exceptional Performance Award' }), path: '/exceptional-performance', icon: Award,
                     roles: ['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'],
                     permissions: ['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards'],
                 },
@@ -271,29 +271,29 @@ const MainLayout: React.FC = () => {
                     roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
                     permissions: ['view_time_tracking', 'manage_time_tracking', 'view_payroll', 'manage_payroll'],
                     children: [
-                        { label: 'Overview', path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_overview', { defaultValue: 'Overview' }), path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: 'Exceptions', path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: 'Daily Logging', path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: 'Employees', path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: 'Settings', path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
+                        { label: t('nav_exceptions', { defaultValue: 'Exceptions' }), path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_daily_logging', { defaultValue: 'Daily Logging' }), path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_employees', { defaultValue: 'Employees' }), path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_settings', { defaultValue: 'Settings' }), path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
                     ]
                 },
                 {
-                    label: 'Personnel Relations Department',
+                    label: t('nav_personnel_relations_dept', { defaultValue: 'Personnel Relations Department' }),
                     icon: HeartHandshake,
                     roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'],
                     permissions: ['view_personnel_relations'],
                     children: [
-                        { label: 'Employee Lifecycle', path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
-                        { label: 'Contract Renewals', path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
-                        { label: 'Personnel Action Forms', path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
-                        { label: 'Promotion Management', path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_promotions'] },
-                        { label: 'Rewards & Recognition', path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
-                        { label: 'Disciplinary Actions', path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
-                        { label: 'Offboarding', path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
+                        { label: t('nav_employee_lifecycle', { defaultValue: 'Employee Lifecycle' }), path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
+                        { label: t('nav_contract_renewals', { defaultValue: 'Contract Renewals' }), path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
+                        { label: t('nav_personnel_action_forms', { defaultValue: 'Personnel Action Forms' }), path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: t('nav_promotion_management', { defaultValue: 'Promotion Management' }), path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_promotions'] },
+                        { label: t('nav_rewards_recognition', { defaultValue: 'Rewards & Recognition' }), path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
+                        { label: t('nav_disciplinary_actions', { defaultValue: 'Disciplinary Actions' }), path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
+                        { label: t('nav_offboarding', { defaultValue: 'Offboarding' }), path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
                         { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
-                        { label: 'Employee Control', path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
+                        { label: t('nav_employee_control', { defaultValue: 'Employee Control' }), path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
                     ]
                 }
             ]
@@ -427,12 +427,12 @@ const MainLayout: React.FC = () => {
     return (
         <div 
             className="flex h-screen bg-[#541c2c] overflow-hidden font-inter"
-            style={{ '--sidebar-width': isSidebarOpen ? '16rem' : '5rem' } as React.CSSProperties}
+            style={{ '--sidebar-width': isSidebarOpen ? '20rem' : '5rem' } as React.CSSProperties}
         >
             {/* Desktop Sidebar */}
             <aside
                 className={`flex flex-col bg-[#300a15] border-r border-[#e3c4a2]/15 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-30 shadow-2xl shadow-[#300a15]/50 relative
-                    ${isSidebarOpen ? 'w-64' : 'w-20'}`}
+                    ${isSidebarOpen ? 'w-80' : 'w-20'}`}
             >
                 {/* Logo Section */}
                 <div className="h-22 flex items-center px-6 border-b border-[#e3c4a2]/15 justify-center">

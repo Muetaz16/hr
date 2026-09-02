@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -31,11 +32,14 @@ export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
 
 // One shared badge for every Draft/Completed indicator across the tab — same formula the
 // Disciplinary tab (this page's sibling) already uses for its own status chips.
-const CaseStatusBadge: React.FC<{ completed: boolean }> = ({ completed }) => (
-    <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${completed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-        {completed ? 'Completed' : 'Draft'}
-    </span>
-);
+const CaseStatusBadge: React.FC<{ completed: boolean }> = ({ completed }) => {
+    const { t } = useTranslation();
+    return (
+        <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${completed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+            {completed ? t('completed', { defaultValue: 'Completed' }) : t('draft', { defaultValue: 'Draft' })}
+        </span>
+    );
+};
 
 // Shared table shell — Rewards' own #511d29 maroon accent, same structural formula the
 // Disciplinary tab already uses with its own red-700 accent.
@@ -52,6 +56,7 @@ const defaultPrevMonth = (): string => {
 };
 
 const RewardsTab: React.FC = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { currentUser } = useAuth();
@@ -92,7 +97,7 @@ const RewardsTab: React.FC = () => {
             const { candidates } = await rewardService.getMonthCandidates(momMonth);
             setMomCandidates(candidates);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to compute candidates.');
+            toast.error(err?.response?.data?.error || t('failed_to_compute_candidates', { defaultValue: 'Failed to compute candidates.' }));
         } finally {
             setMomLoading(false);
         }
@@ -111,7 +116,7 @@ const RewardsTab: React.FC = () => {
             const result = await rewardService.getAttendanceCandidates(attMonth);
             setAttResult(result);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to compute candidates.');
+            toast.error(err?.response?.data?.error || t('failed_to_compute_candidates', { defaultValue: 'Failed to compute candidates.' }));
         } finally {
             setAttLoading(false);
         }
@@ -122,10 +127,10 @@ const RewardsTab: React.FC = () => {
             try {
                 await rewardService.createAttendanceCase(c.employeeId, attMonth);
             } catch (err: any) {
-                toast.error(`${c.employee.fullName}: ${err?.response?.data?.error || 'Failed to open a case.'}`);
+                toast.error(`${c.employee.fullName}: ${err?.response?.data?.error || t('failed_to_open_a_case', { defaultValue: 'Failed to open a case.' })}`);
             }
         }
-        toast.success('Cases opened for all eligible employees — complete each one below to apply the award.');
+        toast.success(t('cases_opened_for_all_eligible', { defaultValue: 'Cases opened for all eligible employees — complete each one below to apply the award.' }));
         setAttResult(null);
         refreshRewards();
     };
@@ -143,7 +148,7 @@ const RewardsTab: React.FC = () => {
             setLoyaltyCandidates(candidates);
             setLoyaltyExcluded(excluded);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to check milestones.');
+            toast.error(err?.response?.data?.error || t('failed_to_check_milestones', { defaultValue: 'Failed to check milestones.' }));
         } finally {
             setLoyaltyLoading(false);
         }
@@ -162,7 +167,7 @@ const RewardsTab: React.FC = () => {
             const { candidates } = await rewardService.getYearCandidates(eoyYear);
             setEoyCandidates(candidates);
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to compute candidates.');
+            toast.error(err?.response?.data?.error || t('failed_to_compute_candidates', { defaultValue: 'Failed to compute candidates.' }));
         } finally {
             setEoyLoading(false);
         }
@@ -190,11 +195,9 @@ const RewardsTab: React.FC = () => {
                             <Award className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Rewards & Recognition</h3>
+                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('rewards_and_recognition', { defaultValue: 'Rewards & Recognition' })}</h3>
                             <p className="text-sm text-slate-600 mt-1">
-                                Nothing here runs automatically — candidates are computed on demand, and no award is
-                                applied to the employee until its case is completed with a signed, uploaded document.
-                                Bi-Annual Bonus is not yet configured.
+                                {t('rewards_intro', { defaultValue: 'Nothing here runs automatically — candidates are computed on demand, and no award is applied to the employee until its case is completed with a signed, uploaded document. Bi-Annual Bonus is not yet configured.' })}
                             </p>
                         </div>
                     </div>
@@ -203,13 +206,13 @@ const RewardsTab: React.FC = () => {
                             onClick={() => setView('awards')}
                             className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${view === 'awards' ? 'bg-[#511d29] text-white' : 'bg-white border border-[#511d29]/20 text-[#511d29]'}`}
                         >
-                            Awards
+                            {t('awards', { defaultValue: 'Awards' })}
                         </button>
                         <button
                             onClick={() => setView('history')}
                             className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${view === 'history' ? 'bg-[#511d29] text-white' : 'bg-white border border-[#511d29]/20 text-[#511d29]'}`}
                         >
-                            History{rewardCases.length > 0 ? ` (${rewardCases.length})` : ''}
+                            {t('history', { defaultValue: 'History' })}{rewardCases.length > 0 ? ` (${rewardCases.length})` : ''}
                         </button>
                     </div>
                 </div>
@@ -221,16 +224,15 @@ const RewardsTab: React.FC = () => {
                         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Employee of the Month</h4>
+                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{t('employee_of_the_month', { defaultValue: 'Employee of the Month' })}</h4>
                                     <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                        Ranked by finalized monthly evaluation score. Requires active full-time employment,
-                                        6+ months tenure, and no confirmed disciplinary action in the last 6 months.
+                                        {t('employee_of_month_hint', { defaultValue: 'Ranked by finalized monthly evaluation score. Requires active full-time employment, 6+ months tenure, and no confirmed disciplinary action in the last 6 months.' })}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     <input type="month" value={momMonth} onChange={e => setMomMonth(e.target.value)} className="p-2 border border-slate-200 rounded text-xs font-semibold" />
                                     <button onClick={computeMonthCandidates} disabled={momLoading} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d] disabled:opacity-50">
-                                        {momLoading ? 'Computing…' : 'Compute Candidates'}
+                                        {momLoading ? t('computing', { defaultValue: 'Computing…' }) : t('compute_candidates', { defaultValue: 'Compute Candidates' })}
                                     </button>
                                 </div>
                             </div>
@@ -241,23 +243,23 @@ const RewardsTab: React.FC = () => {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <CaseStatusBadge completed={!!existingCase.completedAt} />
                                             <p className="text-xs font-black text-slate-700">{existingCase.employee?.fullName} — {existingCase.caseNumber}</p>
-                                            {existingCase.finalScoreSnapshot != null && <span className="text-[10px] text-slate-400">Score {existingCase.finalScoreSnapshot.toFixed(2)}%</span>}
+                                            {existingCase.finalScoreSnapshot != null && <span className="text-[10px] text-slate-400">{t('score', { defaultValue: 'Score' })} {existingCase.finalScoreSnapshot.toFixed(2)}%</span>}
                                         </div>
                                         <button onClick={() => navigate(`/personnel-relations/rewards/${existingCase.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
-                                            {existingCase.completedAt ? 'View Case' : 'Complete Case'}
+                                            {existingCase.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}
                                         </button>
                                     </div>
                                 );
-                                if (momCandidates === null) return <p className="text-xs text-slate-400 font-semibold">Pick a month and click "Compute Candidates" to see the ranked list.</p>;
-                                if (momCandidates.length === 0) return <p className="text-xs text-slate-400 font-semibold">No eligible candidates found for {momMonth}.</p>;
+                                if (momCandidates === null) return <p className="text-xs text-slate-400 font-semibold">{t('pick_month_compute_ranked', { defaultValue: 'Pick a month and click "Compute Candidates" to see the ranked list.' })}</p>;
+                                if (momCandidates.length === 0) return <p className="text-xs text-slate-400 font-semibold">{t('no_eligible_candidates_for', { period: momMonth, defaultValue: 'No eligible candidates found for {{period}}.' })}</p>;
                                 return (
                                     <div className="overflow-x-auto border border-slate-100 rounded-lg">
                                         <table className="w-full text-left border-collapse text-xs">
                                             <thead><tr className={THEAD_TR}>
-                                                <th className={TH}>Rank</th>
-                                                <th className={TH}>Employee</th>
-                                                <th className={TH}>Score</th>
-                                                <th className={`${TH} text-right`}>Action</th>
+                                                <th className={TH}>{t('rank', { defaultValue: 'Rank' })}</th>
+                                                <th className={TH}>{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className={TH}>{t('score', { defaultValue: 'Score' })}</th>
+                                                <th className={`${TH} text-right`}>{t('action', { defaultValue: 'Action' })}</th>
                                             </tr></thead>
                                             <tbody className={TBODY}>
                                                 {momCandidates.map((c, i) => (
@@ -269,7 +271,7 @@ const RewardsTab: React.FC = () => {
                                                         </td>
                                                         <td className="p-3 font-bold">{c.finalScore.toFixed(2)}%</td>
                                                         <td className="p-3 text-right">
-                                                            <button onClick={() => navigate(`/personnel-relations/rewards/candidates/month/${c.employeeId}?period=${momMonth}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Review</button>
+                                                            <button onClick={() => navigate(`/personnel-relations/rewards/candidates/month/${c.employeeId}?period=${momMonth}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">{t('review', { defaultValue: 'Review' })}</button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -284,17 +286,15 @@ const RewardsTab: React.FC = () => {
                         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Monthly Attendance & Timeliness Excellence Award</h4>
+                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{t('attendance_excellence_award', { defaultValue: 'Monthly Attendance & Timeliness Excellence Award' })}</h4>
                                     <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                        Threshold award — every qualifying employee is eligible, not just one winner. Requires
-                                        BioTime-resident status (no company transportation), zero late arrivals or unauthorized
-                                        absences, no leave filed, and no confirmed disciplinary record this cycle.
+                                        {t('attendance_excellence_hint', { defaultValue: 'Threshold award — every qualifying employee is eligible, not just one winner. Requires BioTime-resident status (no company transportation), zero late arrivals or unauthorized absences, no leave filed, and no confirmed disciplinary record this cycle.' })}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     <input type="month" value={attMonth} onChange={e => setAttMonth(e.target.value)} className="p-2 border border-slate-200 rounded text-xs font-semibold" />
                                     <button onClick={computeAttendanceCandidates} disabled={attLoading} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d] disabled:opacity-50">
-                                        {attLoading ? 'Computing…' : 'Compute Candidates'}
+                                        {attLoading ? t('computing', { defaultValue: 'Computing…' }) : t('compute_candidates', { defaultValue: 'Compute Candidates' })}
                                     </button>
                                 </div>
                             </div>
@@ -311,26 +311,26 @@ const RewardsTab: React.FC = () => {
                                                             <p className="text-xs font-black text-slate-700">{g.employee?.fullName} — {g.caseNumber}</p>
                                                         </div>
                                                         <button onClick={() => navigate(`/personnel-relations/rewards/${g.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
-                                                            {g.completedAt ? 'View Case' : 'Complete Case'}
+                                                            {g.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}
                                                         </button>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
                                         {attResult === null ? (
-                                            <p className="text-xs text-slate-400 font-semibold">Pick a month and click "Compute Candidates" to check who qualifies.</p>
+                                            <p className="text-xs text-slate-400 font-semibold">{t('pick_month_compute_qualifies', { defaultValue: 'Pick a month and click "Compute Candidates" to check who qualifies.' })}</p>
                                         ) : attResult.candidates.length === 0 ? (
-                                            <p className="text-xs text-slate-400 font-semibold">No qualifying employees for this month.</p>
+                                            <p className="text-xs text-slate-400 font-semibold">{t('no_qualifying_employees_this_month', { defaultValue: 'No qualifying employees for this month.' })}</p>
                                         ) : (
                                             <div className="space-y-2">
                                                 <div className="flex justify-end">
-                                                    <button onClick={openAllAttendanceCases} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Open Cases for All Eligible</button>
+                                                    <button onClick={openAllAttendanceCases} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">{t('open_cases_for_all_eligible', { defaultValue: 'Open Cases for All Eligible' })}</button>
                                                 </div>
                                                 <div className="overflow-x-auto border border-slate-100 rounded-lg">
                                                     <table className="w-full text-left border-collapse text-xs">
                                                         <thead><tr className={THEAD_TR}>
-                                                            <th className={TH}>Employee</th>
-                                                            <th className={`${TH} text-right`}>Action</th>
+                                                            <th className={TH}>{t('employee', { defaultValue: 'Employee' })}</th>
+                                                            <th className={`${TH} text-right`}>{t('action', { defaultValue: 'Action' })}</th>
                                                         </tr></thead>
                                                         <tbody className={TBODY}>
                                                             {attResult.candidates.map(c => (
@@ -340,7 +340,7 @@ const RewardsTab: React.FC = () => {
                                                                         <p className="text-[10px] text-slate-400 font-mono">{c.employee.staffId}</p>
                                                                     </td>
                                                                     <td className="p-3 text-right">
-                                                                        <button onClick={() => navigate(`/personnel-relations/rewards/candidates/attendance/${c.employeeId}?period=${attMonth}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Review</button>
+                                                                        <button onClick={() => navigate(`/personnel-relations/rewards/candidates/attendance/${c.employeeId}?period=${attMonth}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">{t('review', { defaultValue: 'Review' })}</button>
                                                                     </td>
                                                                 </tr>
                                                             ))}
@@ -351,10 +351,10 @@ const RewardsTab: React.FC = () => {
                                         )}
                                         {attResult && attResult.excluded.length > 0 && (
                                             <details className="text-[11px] text-slate-400">
-                                                <summary className="cursor-pointer font-black uppercase tracking-widest text-slate-400">Excluded ({attResult.excluded.length})</summary>
+                                                <summary className="cursor-pointer font-black uppercase tracking-widest text-slate-400">{t('excluded_count', { count: attResult.excluded.length, defaultValue: 'Excluded ({{count}})' })}</summary>
                                                 <ul className="mt-2 space-y-1">
                                                     {attResult.excluded.map(e => (
-                                                        <li key={e.employeeId}>{e.employeeName} — {e.reason === 'NO_BIO_ID' ? 'No attendance device linked' : e.reason === 'BIOTIME_UNREACHABLE' ? 'Could not reach BioTime to confirm residency — try again' : 'Attendance data unavailable'}</li>
+                                                        <li key={e.employeeId}>{e.employeeName} — {e.reason === 'NO_BIO_ID' ? t('no_attendance_device_linked', { defaultValue: 'No attendance device linked' }) : e.reason === 'BIOTIME_UNREACHABLE' ? t('could_not_reach_biotime', { defaultValue: 'Could not reach BioTime to confirm residency — try again' }) : t('attendance_data_unavailable', { defaultValue: 'Attendance data unavailable' })}</li>
                                                     ))}
                                                 </ul>
                                             </details>
@@ -368,17 +368,15 @@ const RewardsTab: React.FC = () => {
                         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Employee of the Year</h4>
+                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{t('employee_of_the_year', { defaultValue: 'Employee of the Year' })}</h4>
                                     <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                        Restricted to employees with 12+ months tenure, no confirmed disciplinary action in
-                                        the last 12 months, and at least one Employee of the Month win this year. The final
-                                        pick among these candidates is still a manual HR/Management decision.
+                                        {t('employee_of_year_hint', { defaultValue: 'Restricted to employees with 12+ months tenure, no confirmed disciplinary action in the last 12 months, and at least one Employee of the Month win this year. The final pick among these candidates is still a manual HR/Management decision.' })}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     <input type="number" value={eoyYear} onChange={e => setEoyYear(e.target.value)} className="w-24 p-2 border border-slate-200 rounded text-xs font-semibold" />
                                     <button onClick={computeYearCandidates} disabled={eoyLoading} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d] disabled:opacity-50">
-                                        {eoyLoading ? 'Computing…' : 'Compute Candidates'}
+                                        {eoyLoading ? t('computing', { defaultValue: 'Computing…' }) : t('compute_candidates', { defaultValue: 'Compute Candidates' })}
                                     </button>
                                 </div>
                             </div>
@@ -391,23 +389,23 @@ const RewardsTab: React.FC = () => {
                                                 <CaseStatusBadge completed={!!existingCase.completedAt} />
                                                 <p className="text-xs font-black text-slate-700">{existingCase.employee?.fullName} — {existingCase.caseNumber}</p>
                                             </div>
-                                            <span className="text-[10px] text-slate-400 font-bold">{existingCase.bonusPercent != null ? `${existingCase.bonusPercent}% bonus — Pending Payroll Integration` : 'No bonus % set'}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold">{existingCase.bonusPercent != null ? t('bonus_pending_payroll', { percent: existingCase.bonusPercent, defaultValue: '{{percent}}% bonus — Pending Payroll Integration' }) : t('no_bonus_set', { defaultValue: 'No bonus % set' })}</span>
                                         </div>
                                         {existingCase.notes && <p className="text-[11px] italic text-slate-500">"{existingCase.notes}"</p>}
                                         <button onClick={() => navigate(`/personnel-relations/rewards/${existingCase.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
-                                            {existingCase.completedAt ? 'View Case' : 'Complete Case'}
+                                            {existingCase.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}
                                         </button>
                                     </div>
                                 );
-                                if (eoyCandidates === null) return <p className="text-xs text-slate-400 font-semibold">Pick a year and click "Compute Candidates" to see who's eligible.</p>;
-                                if (eoyCandidates.length === 0) return <p className="text-xs text-slate-400 font-semibold">No eligible candidates found for {eoyYear}.</p>;
+                                if (eoyCandidates === null) return <p className="text-xs text-slate-400 font-semibold">{t('pick_year_compute_eligible', { defaultValue: "Pick a year and click \"Compute Candidates\" to see who's eligible." })}</p>;
+                                if (eoyCandidates.length === 0) return <p className="text-xs text-slate-400 font-semibold">{t('no_eligible_candidates_for', { period: eoyYear, defaultValue: 'No eligible candidates found for {{period}}.' })}</p>;
                                 return (
                                     <div className="overflow-x-auto border border-slate-100 rounded-lg">
                                         <table className="w-full text-left border-collapse text-xs">
                                             <thead><tr className={THEAD_TR}>
-                                                <th className={TH}>Employee</th>
-                                                <th className={TH}>Month Wins This Year</th>
-                                                <th className={`${TH} text-right`}>Action</th>
+                                                <th className={TH}>{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className={TH}>{t('month_wins_this_year', { defaultValue: 'Month Wins This Year' })}</th>
+                                                <th className={`${TH} text-right`}>{t('action', { defaultValue: 'Action' })}</th>
                                             </tr></thead>
                                             <tbody className={TBODY}>
                                                 {eoyCandidates.map(c => (
@@ -418,7 +416,7 @@ const RewardsTab: React.FC = () => {
                                                         </td>
                                                         <td className="p-3 font-bold">{c.monthWinsThisYear.length}</td>
                                                         <td className="p-3 text-right">
-                                                            <button onClick={() => navigate(`/personnel-relations/rewards/candidates/year/${c.employeeId}?year=${eoyYear}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Review</button>
+                                                            <button onClick={() => navigate(`/personnel-relations/rewards/candidates/year/${c.employeeId}?year=${eoyYear}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">{t('review', { defaultValue: 'Review' })}</button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -433,27 +431,26 @@ const RewardsTab: React.FC = () => {
                         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Loyalty & Service Milestone Award</h4>
+                                    <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{t('loyalty_milestone_award', { defaultValue: 'Loyalty & Service Milestone Award' })}</h4>
                                     <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                        Surfaces employees who newly reached 5 or 10 years of continuous active service. Each
-                                        milestone is granted once per employee.
+                                        {t('loyalty_milestone_hint', { defaultValue: 'Surfaces employees who newly reached 5 or 10 years of continuous active service. Each milestone is granted once per employee.' })}
                                     </p>
                                 </div>
                                 <button onClick={checkLoyaltyMilestones} disabled={loyaltyLoading} className="px-3 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#3a151d] disabled:opacity-50 shrink-0">
-                                    {loyaltyLoading ? 'Checking…' : 'Check Milestones'}
+                                    {loyaltyLoading ? t('checking', { defaultValue: 'Checking…' }) : t('check_milestones', { defaultValue: 'Check Milestones' })}
                                 </button>
                             </div>
                             {loyaltyCandidates === null ? (
-                                <p className="text-xs text-slate-400 font-semibold">Click "Check Milestones" to find employees who newly reached 5 or 10 years of service.</p>
+                                <p className="text-xs text-slate-400 font-semibold">{t('click_check_milestones_hint', { defaultValue: 'Click "Check Milestones" to find employees who newly reached 5 or 10 years of service.' })}</p>
                             ) : loyaltyCandidates.length === 0 ? (
-                                <p className="text-xs text-slate-400 font-semibold">No new milestones reached.</p>
+                                <p className="text-xs text-slate-400 font-semibold">{t('no_new_milestones_reached', { defaultValue: 'No new milestones reached.' })}</p>
                             ) : (
                                 <div className="overflow-x-auto border border-slate-100 rounded-lg">
                                     <table className="w-full text-left border-collapse text-xs">
                                         <thead><tr className={THEAD_TR}>
-                                            <th className={TH}>Employee</th>
-                                            <th className={TH}>Milestone</th>
-                                            <th className={`${TH} text-right`}>Action</th>
+                                            <th className={TH}>{t('employee', { defaultValue: 'Employee' })}</th>
+                                            <th className={TH}>{t('milestone', { defaultValue: 'Milestone' })}</th>
+                                            <th className={`${TH} text-right`}>{t('action', { defaultValue: 'Action' })}</th>
                                         </tr></thead>
                                         <tbody className={TBODY}>
                                             {loyaltyCandidates.map(c => (
@@ -462,9 +459,9 @@ const RewardsTab: React.FC = () => {
                                                         <p className="font-bold text-slate-800">{c.employee.fullName}</p>
                                                         <p className="text-[10px] text-slate-400 font-mono">{c.employee.staffId}</p>
                                                     </td>
-                                                    <td className="p-3 font-bold">{c.milestoneYears}-year</td>
+                                                    <td className="p-3 font-bold">{t('n_year', { years: c.milestoneYears, defaultValue: '{{years}}-year' })}</td>
                                                     <td className="p-3 text-right">
-                                                        <button onClick={() => navigate(`/personnel-relations/rewards/candidates/loyalty/${c.employeeId}?milestoneYears=${c.milestoneYears}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">Review</button>
+                                                        <button onClick={() => navigate(`/personnel-relations/rewards/candidates/loyalty/${c.employeeId}?milestoneYears=${c.milestoneYears}`)} className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-800">{t('review', { defaultValue: 'Review' })}</button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -477,16 +474,16 @@ const RewardsTab: React.FC = () => {
                                 if (opened.length === 0) return null;
                                 return (
                                     <div className="pt-2 border-t border-slate-100 space-y-2">
-                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Cases</span>
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('cases', { defaultValue: 'Cases' })}</span>
                                         {opened.map(g => (
                                             <div key={g.id} className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex flex-wrap items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <CaseStatusBadge completed={!!g.completedAt} />
-                                                    <p className="text-xs font-black text-slate-700">{g.employee?.fullName} — {g.milestoneYears}-year Milestone</p>
-                                                    <span className="text-[10px] text-slate-400">{g.bonusPercent}% bonus — Pending Payroll Integration{g.physicalRewardFulfilledAt ? ' · Gift Fulfilled' : ''}</span>
+                                                    <p className="text-xs font-black text-slate-700">{g.employee?.fullName} — {t('n_year_milestone', { years: g.milestoneYears, defaultValue: '{{years}}-year Milestone' })}</p>
+                                                    <span className="text-[10px] text-slate-400">{t('bonus_pending_payroll', { percent: g.bonusPercent, defaultValue: '{{percent}}% bonus — Pending Payroll Integration' })}{g.physicalRewardFulfilledAt ? t('gift_fulfilled_suffix', { defaultValue: ' · Gift Fulfilled' }) : ''}</span>
                                                 </div>
                                                 <button onClick={() => navigate(`/personnel-relations/rewards/${g.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
-                                                    {g.completedAt ? 'View Case' : 'Complete Case'}
+                                                    {g.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}
                                                 </button>
                                             </div>
                                         ))}
@@ -495,10 +492,10 @@ const RewardsTab: React.FC = () => {
                             })()}
                             {loyaltyExcluded.length > 0 && (
                                 <details className="text-[11px] text-slate-400">
-                                    <summary className="cursor-pointer font-black uppercase tracking-widest text-slate-400">Excluded ({loyaltyExcluded.length})</summary>
+                                    <summary className="cursor-pointer font-black uppercase tracking-widest text-slate-400">{t('excluded_count', { count: loyaltyExcluded.length, defaultValue: 'Excluded ({{count}})' })}</summary>
                                     <ul className="mt-2 space-y-1">
                                         {loyaltyExcluded.map(e => (
-                                            <li key={e.employeeId}>{e.employeeName} — {e.reason === 'NO_BIO_ID' ? 'No attendance device linked' : 'Attendance data unavailable'}</li>
+                                            <li key={e.employeeId}>{e.employeeName} — {e.reason === 'NO_BIO_ID' ? t('no_attendance_device_linked', { defaultValue: 'No attendance device linked' }) : t('attendance_data_unavailable', { defaultValue: 'Attendance data unavailable' })}</li>
                                         ))}
                                     </ul>
                                 </details>
@@ -511,24 +508,22 @@ const RewardsTab: React.FC = () => {
                             return (
                                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
                                     <div>
-                                        <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">Exceptional Performance / Exceptional Contribution Award</h4>
+                                        <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide">{t('exceptional_performance_award', { defaultValue: 'Exceptional Performance / Exceptional Contribution Award' })}</h4>
                                         <p className="text-[11px] text-slate-400 mt-1 max-w-xl">
-                                            Nominated by a Head, approved by HR Manager then the General Manager — via Staff
-                                            Hub → Approvals, not this screen. A case appears here automatically once that
-                                            chain fully completes, ready for the usual signed-document finalize step.
+                                            {t('exceptional_performance_hint', { defaultValue: 'Nominated by a Head, approved by HR Manager then the General Manager — via Staff Hub → Approvals, not this screen. A case appears here automatically once that chain fully completes, ready for the usual signed-document finalize step.' })}
                                         </p>
                                     </div>
                                     {readyToFinalize.length === 0 ? (
-                                        <p className="text-xs text-slate-400 font-semibold">No approved nominations awaiting finalization.</p>
+                                        <p className="text-xs text-slate-400 font-semibold">{t('no_approved_nominations', { defaultValue: 'No approved nominations awaiting finalization.' })}</p>
                                     ) : (
                                         <div className="space-y-2">
                                             {readyToFinalize.map(rc => (
                                                 <div key={rc.id} className="p-3 rounded-lg bg-slate-50 border border-slate-100 flex flex-wrap items-center justify-between gap-3">
                                                     <div>
                                                         <p className="text-xs font-black text-slate-700">{rc.employee?.fullName} — {rc.caseNumber}</p>
-                                                        <p className="text-[10px] text-slate-400">Nominated by {rc.createdByName || 'a Head'} · {rc.bonusPercent}% proposed</p>
+                                                        <p className="text-[10px] text-slate-400">{t('nominated_by_proposed', { name: rc.createdByName || t('a_head', { defaultValue: 'a Head' }), percent: rc.bonusPercent, defaultValue: 'Nominated by {{name}} · {{percent}}% proposed' })}</p>
                                                     </div>
-                                                    <button onClick={() => navigate(`/personnel-relations/rewards/${rc.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">Complete Case</button>
+                                                    <button onClick={() => navigate(`/personnel-relations/rewards/${rc.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">{t('complete_case', { defaultValue: 'Complete Case' })}</button>
                                                 </div>
                                             ))}
                                         </div>
@@ -546,7 +541,7 @@ const RewardsTab: React.FC = () => {
                                 <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
                                 <input
                                     type="text"
-                                    placeholder="Search employee or case number..."
+                                    placeholder={t('search_employee_or_case', { defaultValue: 'Search employee or case number...' })}
                                     value={historySearch}
                                     onChange={e => setHistorySearch(e.target.value)}
                                     className="pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold w-64"
@@ -559,29 +554,29 @@ const RewardsTab: React.FC = () => {
                                     onChange={e => setHistoryTypeFilter(e.target.value as 'all' | RewardType)}
                                     className="pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold appearance-none cursor-pointer"
                                 >
-                                    <option value="all">All Types</option>
+                                    <option value="all">{t('all_types', { defaultValue: 'All Types' })}</option>
                                     {Object.entries(REWARD_TYPE_LABELS).map(([key, label]) => (
                                         <option key={key} value={key}>{label}</option>
                                     ))}
                                 </select>
                             </div>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-auto">
-                                {filteredHistory.length} / {rewardCases.length} shown
+                                {filteredHistory.length} / {rewardCases.length} {t('shown', { defaultValue: 'shown' })}
                             </span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead><tr className={THEAD_TR}>
-                                    <th className={TH}>Case #</th>
-                                    <th className={TH}>Employee</th>
-                                    <th className={TH}>Type</th>
-                                    <th className={TH}>Period</th>
-                                    <th className={TH}>Status</th>
-                                    <th className={`${TH} text-right`}>Action</th>
+                                    <th className={TH}>{t('case_number_hash', { defaultValue: 'Case #' })}</th>
+                                    <th className={TH}>{t('employee', { defaultValue: 'Employee' })}</th>
+                                    <th className={TH}>{t('type', { defaultValue: 'Type' })}</th>
+                                    <th className={TH}>{t('period', { defaultValue: 'Period' })}</th>
+                                    <th className={TH}>{t('status', { defaultValue: 'Status' })}</th>
+                                    <th className={`${TH} text-right`}>{t('action', { defaultValue: 'Action' })}</th>
                                 </tr></thead>
                                 <tbody className={TBODY}>
                                     {filteredHistory.length === 0 && (
-                                        <tr><td colSpan={6} className="p-6 text-center text-slate-400">No reward cases found.</td></tr>
+                                        <tr><td colSpan={6} className="p-6 text-center text-slate-400">{t('no_reward_cases_found', { defaultValue: 'No reward cases found.' })}</td></tr>
                                     )}
                                     {filteredHistory.map(rc => (
                                         <tr key={rc.id} className={TR_HOVER}>
@@ -595,7 +590,7 @@ const RewardsTab: React.FC = () => {
                                             </td>
                                             <td className="p-3 text-right">
                                                 <button onClick={() => navigate(`/personnel-relations/rewards/${rc.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
-                                                    {rc.completedAt ? 'View Case' : 'Complete Case'}
+                                                    {rc.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}
                                                 </button>
                                             </td>
                                         </tr>

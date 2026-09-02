@@ -148,7 +148,7 @@ const Organization: React.FC = () => {
                             <div className="w-10 md:w-12 flex items-center justify-center bg-[#511d29] text-white flex-shrink-0">
                                 <Crown className="w-5 h-5" />
                             </div>
-                            <div className="flex-1 p-3 text-left">
+                            <div className="flex-1 p-3 text-start">
                                 <p className="text-[8px] sm:text-[9px] md:text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">{t('top_leadership', { defaultValue: 'Top Leadership' })}</p>
                                 <h4 className="text-xs sm:text-sm font-black text-[#511d29] tracking-tight leading-tight">
                                     {topLeader ? topLeader.fullName : t('chairman_general_manager', { defaultValue: 'Chairman & General Manager' })}
@@ -212,10 +212,13 @@ const Organization: React.FC = () => {
                     {/* Level 3: Directorates (Horizontal row) */}
                     <div className="w-full pb-8 overflow-x-auto custom-scrollbar">
                         <div className="min-w-max flex justify-center relative pt-4 px-8">
-                            {allDirectorates.length > 1 && (
-                                <div className="absolute top-0 left-[50%] right-[50%] w-[calc(100%-24rem)] -translate-x-1/2 h-[2px] bg-[#511d29]"></div>
-                            )}
-                            <div className="flex justify-center gap-12">
+                            <div className="flex justify-center gap-12 relative">
+                                {/* Horizontal rail linking the directorate nodes. Inset on each side by
+                                    half a node's width so it starts/ends exactly at the outer nodes'
+                                    center stems — symmetric, so it's correct for any count and in RTL. */}
+                                {allDirectorates.length > 1 && (
+                                    <div className="absolute top-[-16px] left-[6rem] right-[6rem] sm:left-[7rem] sm:right-[7rem] md:left-[8rem] md:right-[8rem] h-[2px] bg-[#511d29]"></div>
+                                )}
                                 {allDirectorates.map(dir => {
                                     const isSelected = selectedEntity?.id === dir.id && selectedEntity?.type === 'DIRECTORATE';
                                     const assignedDivisions = allDivisions.filter(d => d.directorateId === dir.id);
@@ -236,7 +239,7 @@ const Organization: React.FC = () => {
                                                 return (
                                                     <button
                                                         onClick={(ev) => { ev.stopPropagation(); setSelectedEmployee(headDir); }}
-                                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left mt-1"
+                                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-start mt-1"
                                                     >
                                                         <div className="w-5 h-5 sm:w-6 h-6 flex items-center justify-center text-[8px] sm:text-[10px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                             {headDir.fullName[0].toUpperCase()}
@@ -254,11 +257,12 @@ const Organization: React.FC = () => {
                                                 <div className="flex flex-col items-center mt-6 relative w-max px-4 animate-in slide-in-from-top-4 fade-in duration-300">
                                                     <div className="absolute top-[-24px] w-[2px] h-[24px] bg-[#511d29]"></div>
 
-                                                    {assignedDivisions.length > 1 && (
-                                                        <div className="absolute top-0 left-[50%] right-[50%] w-[calc(100%-16rem)] -translate-x-1/2 h-[2px] bg-[#511d29]"></div>
-                                                    )}
-
                                                     <div className="w-full flex justify-center gap-6 pt-4 relative">
+                                                        {/* Rail across the division nodes — inset by half a node so it meets
+                                                            the outer nodes' stems; symmetric, so RTL-safe. */}
+                                                        {assignedDivisions.length > 1 && (
+                                                            <div className="absolute top-0 left-[6rem] right-[6rem] sm:left-[7rem] sm:right-[7rem] h-[2px] bg-[#511d29]"></div>
+                                                        )}
                                                         {assignedDivisions.map(div => {
                                                             const isDivSelected = selectedEntity?.id === div.id && selectedEntity?.type === 'DIVISION';
                                                             return (
@@ -276,7 +280,7 @@ const Organization: React.FC = () => {
                                                                             const headOfDivision = allEmployees.find(e => e.divisionId === div.id && e.role === 'HEAD_DIVISION');
                                                                             if (headOfDivision) {
                                                                                 return (
-                                                                                    <button onClick={() => setSelectedEmployee(headOfDivision)} className="w-full flex items-center gap-2 p-1.5 sm:p-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left">
+                                                                                    <button onClick={() => setSelectedEmployee(headOfDivision)} className="w-full flex items-center gap-2 p-1.5 sm:p-2 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-start">
                                                                                         <div className="w-5 h-5 sm:w-6 h-6 flex items-center justify-center text-[8px] sm:text-[10px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                                                             {headOfDivision.fullName[0].toUpperCase()}
                                                                                         </div>
@@ -376,12 +380,12 @@ const Organization: React.FC = () => {
                                                                     const headOfDept = allEmployees.find(e => e.departmentId === dept.id && e.role === 'HEAD_DEPARTMENT');
                                                                     if (headOfDept) {
                                                                         return (
-                                                                            <button onClick={() => setSelectedEmployee(headOfDept)} className="flex items-center gap-2 px-3 py-1.5 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-left">
+                                                                            <button onClick={() => setSelectedEmployee(headOfDept)} className="flex items-center gap-2 px-3 py-1.5 bg-[#f5ebd9] border border-[#511d29]/30 hover:border-[#511d29] shadow-sm transition-all text-start">
                                                                                 <div className="w-5 h-5 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                                                                     {headOfDept.fullName[0].toUpperCase()}
                                                                                 </div>
                                                                                 <div className="min-w-0">
-                                                                                    <p className="text-[8px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">Head of Department</p>
+                                                                                    <p className="text-[8px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_department', { defaultValue: 'Head of Department' })}</p>
                                                                                     <p className="text-[10px] font-bold text-[#511d29] truncate max-w-[120px]">{headOfDept.fullName}</p>
                                                                                 </div>
                                                                             </button>
@@ -394,7 +398,7 @@ const Organization: React.FC = () => {
                                                         </div>
                                                     )
                                                 })}
-                                                {divDepts.length === 0 && <p className="text-center text-[#511d29]/60 col-span-2 py-8 font-bold italic">No Departments assigned to this division.</p>}
+                                                {divDepts.length === 0 && <p className="text-center text-[#511d29]/60 col-span-2 py-8 font-bold italic">{t('no_departments_assigned_to_division', { defaultValue: 'No Departments assigned to this division.' })}</p>}
                                             </div>
                                         </div>
                                     )
@@ -407,7 +411,7 @@ const Organization: React.FC = () => {
             </section>
 
             {/* Employee Detail Modal */}
-            <Modal isOpen={!!selectedEmployee} onClose={() => setSelectedEmployee(null)} title="Personnel Profile" maxWidth="max-w-3xl">
+            <Modal isOpen={!!selectedEmployee} onClose={() => setSelectedEmployee(null)} title={t('personnel_profile', { defaultValue: 'Personnel Profile' })} maxWidth="max-w-3xl">
                 {selectedEmployee && (
                     <div className="flex flex-col items-center gap-6 py-4 px-2">
                         <div className="w-24 h-24 bg-[#511d29] flex items-center justify-center text-[#f5ebd9] text-4xl font-black border-4 border-[#f5ebd9] shadow-xl">
@@ -424,8 +428,8 @@ const Organization: React.FC = () => {
                                     <Briefcase className="w-6 h-6 text-[#511d29]" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-1">Assigned Position</p>
-                                    <p className="text-md font-black text-[#511d29] leading-none">{selectedEmployee.jobDescription?.title || selectedEmployee.position || 'Standard Employee'}</p>
+                                    <p className="text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-1">{t('assigned_position', { defaultValue: 'Assigned Position' })}</p>
+                                    <p className="text-md font-black text-[#511d29] leading-none">{selectedEmployee.jobDescription?.title || selectedEmployee.position || t('standard_employee', { defaultValue: 'Standard Employee' })}</p>
                                 </div>
                             </div>
 
@@ -433,7 +437,7 @@ const Organization: React.FC = () => {
                                 <div className="p-5 bg-white border border-[#511d29]/20">
                                     <div className="flex items-center gap-2 mb-4">
                                         <FileText className="w-4 h-4 text-[#511d29]" />
-                                        <p className="text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none">Job Description</p>
+                                        <p className="text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none">{t('job_description', { defaultValue: 'Job Description' })}</p>
                                     </div>
                                     <div className="max-h-[55vh] overflow-y-auto custom-scrollbar pr-1">
                                         <JobDescriptionView jd={selectedEmployee.jobDescription} accent="text-[#511d29]" />
@@ -443,7 +447,7 @@ const Organization: React.FC = () => {
                         </div>
 
                         <button onClick={() => setSelectedEmployee(null)} className="mt-4 w-full py-4 bg-[#511d29] text-[#f5ebd9] font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-colors">
-                            Dismiss Profile
+                            {t('dismiss_profile', { defaultValue: 'Dismiss Profile' })}
                         </button>
                     </div>
                 )}
@@ -455,7 +459,7 @@ const Organization: React.FC = () => {
 const TreeNode = ({ title, subtitle, badge, isSelected, onClick }: any) => (
     <button
         onClick={onClick}
-        className={`w-full flex flex-row items-stretch border transition-all text-left group ${isSelected ? 'border-[#511d29] shadow-md scale-[1.01]' : 'border-[#511d29]/30 hover:border-[#511d29] hover:shadow-sm'}`}
+        className={`w-full flex flex-row items-stretch border transition-all text-start group ${isSelected ? 'border-[#511d29] shadow-md scale-[1.01]' : 'border-[#511d29]/30 hover:border-[#511d29] hover:shadow-sm'}`}
         style={{ backgroundColor: '#f5ebd9' }}
     >
         <div className={`w-8 md:w-10 flex items-center justify-center transition-colors flex-shrink-0 ${isSelected ? 'bg-[#511d29] text-[#f5ebd9]' : 'bg-[#511d29]/90 text-white group-hover:bg-[#511d29]'}`}>
@@ -463,12 +467,13 @@ const TreeNode = ({ title, subtitle, badge, isSelected, onClick }: any) => (
         </div>
         <div className="flex-1 p-1.5 md:p-2 min-w-0">
             <p className="text-[7px] md:text-[8px] font-black text-[#511d29]/60 uppercase tracking-widest mb-0.5 leading-none">{subtitle}</p>
-            <h5 className="text-[11px] md:text-xs font-bold text-[#511d29] leading-tight truncate pr-1" title={title}>{title}</h5>
+            <h5 className="text-[11px] md:text-xs font-bold text-[#511d29] leading-tight truncate pe-1" title={title}>{title}</h5>
         </div>
     </button>
 );
 
 const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = [], staffPlanFor }: any) => {
+    const { t } = useTranslation();
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {units.map((unit: any) => {
@@ -476,8 +481,8 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                 const plan = staffPlanFor ? staffPlanFor('unitId', unit.id) : null;
                 return (
                     <div key={unit.id} className="bg-[#f5ebd9] p-4 border border-[#511d29]/20 relative">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-[#511d29]"></div>
-                        <div className="flex items-center justify-between mb-3 pl-2">
+                        <div className="absolute top-0 start-0 w-1 h-full bg-[#511d29]"></div>
+                        <div className="flex items-center justify-between mb-3 ps-2">
                             <h5 className="font-bold text-[#511d29] text-sm uppercase tracking-widest">{unit.name}</h5>
                             {plan && plan.planned > 0 && (
                                 <span className="text-[10px] font-black uppercase tracking-widest">
@@ -488,7 +493,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                         </div>
                         <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
                             {unitMates.map((c: any) => (
-                                <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-white/60 transition-all text-left">
+                                <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-white/60 transition-all text-start">
                                     <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                         {c.fullName[0].toUpperCase()}
                                     </div>
@@ -497,7 +502,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                                     </div>
                                 </button>
                             ))}
-                            {unitMates.length === 0 && <p className="text-[10px] text-[#511d29]/50 italic pl-2">No members.</p>}
+                            {unitMates.length === 0 && <p className="text-[10px] text-[#511d29]/50 italic pl-2">{t('no_members', { defaultValue: 'No members.' })}</p>}
                         </div>
                     </div>
                 )
@@ -506,10 +511,10 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
             {directEmployees && directEmployees.length > 0 && (
                 <div className="bg-white p-4 border border-[#511d29]/20 relative shadow-sm md:col-span-2">
                     <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                    <h5 className="font-bold text-[#511d29] text-sm mb-3 uppercase tracking-widest pl-2">Direct Employees</h5>
+                    <h5 className="font-bold text-[#511d29] text-sm mb-3 uppercase tracking-widest pl-2">{t('direct_employees', { defaultValue: 'Direct Employees' })}</h5>
                     <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
                         {directEmployees.map((c: any) => (
-                            <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-[#f5ebd9]/50 transition-all text-left">
+                            <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-[#f5ebd9]/50 transition-all text-start">
                                 <div className="w-6 h-6 flex items-center justify-center text-[8px] font-black bg-[#511d29] text-white flex-shrink-0">
                                     {c.fullName[0].toUpperCase()}
                                 </div>

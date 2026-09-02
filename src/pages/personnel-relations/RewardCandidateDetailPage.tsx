@@ -119,7 +119,7 @@ const RewardCandidateDetailPage: React.FC = () => {
                             employeeId, year, notes: notes || undefined,
                             bonusPercent: bonusPercent ? Number(bonusPercent) : undefined,
                         });
-            toast.success(`Case ${created.caseNumber} opened — complete it to apply the award.`);
+            toast.success(t('case_opened_complete_it_to_apply_the_award', { defaultValue: 'Case {{caseNumber}} opened — complete it to apply the award.', caseNumber: created.caseNumber }));
             navigate(`/personnel-relations/rewards/${created.id}`);
         } catch (err: any) {
             toast.error(err?.response?.data?.error || t('failed_to_open_the_case', { defaultValue: 'Failed to open the case.' }));
@@ -168,15 +168,15 @@ const RewardCandidateDetailPage: React.FC = () => {
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm grid grid-cols-2 gap-3 text-xs text-slate-600">
-                <div><span className="block font-black uppercase text-[10px] text-red-700">Staff ID</span>{employee.staffId || '—'}</div>
-                <div><span className="block font-black uppercase text-[10px] text-red-700">Department</span>{(employee as any).department?.name || '—'}</div>
+                <div><span className="block font-black uppercase text-[10px] text-red-700">{t('staff_id', { defaultValue: 'Staff ID' })}</span>{employee.staffId || '—'}</div>
+                <div><span className="block font-black uppercase text-[10px] text-red-700">{t('department', { defaultValue: 'Department' })}</span>{(employee as any).department?.name || '—'}</div>
             </div>
 
             {validType === 'month' && monthDetail.data && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                     <div className="flex items-center gap-8">
-                        <div><span className="block font-black uppercase text-[10px] text-red-700">Rank</span><span className="text-2xl font-black text-[#511d29]">#{monthDetail.data.rank}</span></div>
-                        <div><span className="block font-black uppercase text-[10px] text-red-700">Final Score</span><span className="text-2xl font-black text-[#511d29]">{monthDetail.data.finalScore.toFixed(2)}%</span></div>
+                        <div><span className="block font-black uppercase text-[10px] text-red-700">{t('rank', { defaultValue: 'Rank' })}</span><span className="text-2xl font-black text-[#511d29]">#{monthDetail.data.rank}</span></div>
+                        <div><span className="block font-black uppercase text-[10px] text-red-700">{t('final_score', { defaultValue: 'Final Score' })}</span><span className="text-2xl font-black text-[#511d29]">{monthDetail.data.finalScore.toFixed(2)}%</span></div>
                     </div>
                     {breakdownQuery.data && <EvaluationBreakdownView employee={employee} breakdown={breakdownQuery.data} />}
                 </div>
@@ -184,31 +184,31 @@ const RewardCandidateDetailPage: React.FC = () => {
 
             {validType === 'attendance' && attendanceDetail.data && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-xs">
-                    <p className="text-slate-400 font-semibold mb-2">Cycle: {attendanceDetail.data.cycleStart} → {attendanceDetail.data.cycleEnd}</p>
-                    <CriteriaRow label="No late arrivals" ok={attendanceDetail.data.attendanceSummary.lateDays === 0} detail={`${attendanceDetail.data.attendanceSummary.lateDays} late day(s)`} />
-                    <CriteriaRow label="No unauthorized absences" ok={attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays === 0} detail={`${attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays} day(s)`} />
-                    <CriteriaRow label="No early departures" ok={attendanceDetail.data.attendanceSummary.earlyOutDays === 0} detail={`${attendanceDetail.data.attendanceSummary.earlyOutDays} day(s)`} />
-                    <CriteriaRow label="No leave requests filed this period" ok={!attendanceDetail.data.hasLeaveRequestFiled} />
-                    <CriteriaRow label="No confirmed disciplinary record" ok={!attendanceDetail.data.hasConfirmedDisciplinaryRecord} />
-                    <CriteriaRow label="Resident per BioTime (not using company transportation)" ok />
+                    <p className="text-slate-400 font-semibold mb-2">{t('cycle_start_end', { defaultValue: 'Cycle: {{start}} → {{end}}', start: attendanceDetail.data.cycleStart, end: attendanceDetail.data.cycleEnd })}</p>
+                    <CriteriaRow label={t('no_late_arrivals', { defaultValue: 'No late arrivals' })} ok={attendanceDetail.data.attendanceSummary.lateDays === 0} detail={`${attendanceDetail.data.attendanceSummary.lateDays} late day(s)`} />
+                    <CriteriaRow label={t('no_unauthorized_absences', { defaultValue: 'No unauthorized absences' })} ok={attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays === 0} detail={`${attendanceDetail.data.attendanceSummary.unauthorizedAbsenceDays} day(s)`} />
+                    <CriteriaRow label={t('no_early_departures', { defaultValue: 'No early departures' })} ok={attendanceDetail.data.attendanceSummary.earlyOutDays === 0} detail={`${attendanceDetail.data.attendanceSummary.earlyOutDays} day(s)`} />
+                    <CriteriaRow label={t('no_leave_requests_filed_this_period', { defaultValue: 'No leave requests filed this period' })} ok={!attendanceDetail.data.hasLeaveRequestFiled} />
+                    <CriteriaRow label={t('no_confirmed_disciplinary_record', { defaultValue: 'No confirmed disciplinary record' })} ok={!attendanceDetail.data.hasConfirmedDisciplinaryRecord} />
+                    <CriteriaRow label={t('resident_per_biotime_not_using_company_transportation', { defaultValue: 'Resident per BioTime (not using company transportation)' })} ok />
                 </div>
             )}
 
             {validType === 'loyalty' && loyaltyDetail.data && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <p><span className="font-black uppercase text-[10px] text-red-700">Join Date:</span> {employee.joinDate ? format(parseISO(employee.joinDate), 'dd MMM yyyy') : '—'}</p>
-                    <p><span className="font-black uppercase text-[10px] text-red-700">Tenure:</span> {formatTenure(loyaltyDetail.data.tenureMonths)}</p>
-                    <p><span className="font-black uppercase text-[10px] text-red-700">Milestone Reached:</span> {format(parseISO(loyaltyDetail.data.milestoneDate), 'dd MMM yyyy')} ({loyaltyDetail.data.milestoneYears} years)</p>
+                    <p><span className="font-black uppercase text-[10px] text-red-700">{t('join_date', { defaultValue: 'Join Date:' })}</span> {employee.joinDate ? format(parseISO(employee.joinDate), 'dd MMM yyyy') : '—'}</p>
+                    <p><span className="font-black uppercase text-[10px] text-red-700">{t('tenure', { defaultValue: 'Tenure:' })}</span> {formatTenure(loyaltyDetail.data.tenureMonths)}</p>
+                    <p><span className="font-black uppercase text-[10px] text-red-700">{t('milestone_reached', { defaultValue: 'Milestone Reached:' })}</span> {format(parseISO(loyaltyDetail.data.milestoneDate), 'dd MMM yyyy')} ({loyaltyDetail.data.milestoneYears} years)</p>
                 </div>
             )}
 
             {validType === 'year' && yearDetail.data && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
-                    <CriteriaRow label="12+ months tenure" ok detail={formatTenure(yearDetail.data.tenureMonths)} />
-                    <CriteriaRow label="No confirmed disciplinary record (past 12 months)" ok />
-                    <CriteriaRow label="Employee of the Month win(s) this year" ok detail={`${yearDetail.data.monthWinsThisYear.length} win(s): ${yearDetail.data.monthWinsThisYear.join(', ')}`} />
+                    <CriteriaRow label={t('12_months_tenure', { defaultValue: '12+ months tenure' })} ok detail={formatTenure(yearDetail.data.tenureMonths)} />
+                    <CriteriaRow label={t('no_confirmed_disciplinary_record_past_12_months', { defaultValue: 'No confirmed disciplinary record (past 12 months)' })} ok />
+                    <CriteriaRow label={t('employee_of_the_month_win_s_this_year', { defaultValue: 'Employee of the Month win(s) this year' })} ok detail={`${yearDetail.data.monthWinsThisYear.length} win(s): ${yearDetail.data.monthWinsThisYear.join(', ')}`} />
                     <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Evaluation Reference (not a filter)</p>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('evaluation_reference_not_a_filter', { defaultValue: 'Evaluation Reference (not a filter)' })}</p>
                         {yearEvalHistory.data?.allowed && yearEvalHistory.data.months.filter(m => m.finalization).length > 0 ? (
                             <ul className="text-[11px] text-slate-500 space-y-0.5">
                                 {[...yearEvalHistory.data.months]
@@ -220,7 +220,7 @@ const RewardCandidateDetailPage: React.FC = () => {
                                     ))}
                             </ul>
                         ) : (
-                            <p className="text-[11px] text-slate-400">No finalized monthly evaluations on file.</p>
+                            <p className="text-[11px] text-slate-400">{t('no_finalized_monthly_evaluations_on_file', { defaultValue: 'No finalized monthly evaluations on file.' })}</p>
                         )}
                     </div>
                 </div>
@@ -229,17 +229,17 @@ const RewardCandidateDetailPage: React.FC = () => {
             {validType === 'year' && yearDetail.data && canManage && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                     <div>
-                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Selection Justification</label>
+                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">{t('selection_justification', { defaultValue: 'Selection Justification' })}</label>
                         <textarea
                             rows={3}
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
-                            placeholder="Why this employee — outstanding performance, contribution, values alignment…"
+                            placeholder={t('why_this_employee_outstanding_performance_contribution_values_alignment', { defaultValue: 'Why this employee — outstanding performance, contribution, values alignment…' })}
                             className="w-full p-2 border border-slate-200 rounded"
                         />
                     </div>
                     <div>
-                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">Bonus % of Salary (subject to management approval)</label>
+                        <label className="block text-red-700 font-black uppercase text-[10px] mb-1">{t('bonus_of_salary_subject_to_management_approval', { defaultValue: 'Bonus % of Salary (subject to management approval)' })}</label>
                         <input
                             type="number" min={0} max={100} step="0.1"
                             value={bonusPercent}
@@ -247,14 +247,14 @@ const RewardCandidateDetailPage: React.FC = () => {
                             placeholder="e.g. 10"
                             className="w-full p-2 border border-slate-200 rounded"
                         />
-                        <p className="text-[10px] text-slate-400 mt-1">The actual currency amount is pending Payroll Integration — this only records the agreed percentage.</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{t('the_actual_currency_amount_is_pending_payroll_integration', { defaultValue: 'The actual currency amount is pending Payroll Integration — this only records the agreed percentage.' })}</p>
                     </div>
                 </div>
             )}
 
             {canManage && (
                 <button disabled={busy} onClick={handleOpenCase} className="w-full py-3 bg-red-700 text-white font-black uppercase text-[10px] rounded">
-                    {validType === 'year' ? 'Grant Employee of the Year' : 'Open Case'}
+                    {validType === 'year' ? t('grant_employee_of_the_year', { defaultValue: 'Grant Employee of the Year' }) : t('open_case', { defaultValue: 'Open Case' })}
                 </button>
             )}
         </div>

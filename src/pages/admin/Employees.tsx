@@ -34,8 +34,21 @@ import Skeleton from '../../components/Skeleton';
 import { useConfirm } from '../../components/ConfirmDialog';
 
 const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { currentUser } = useAuth();
+    // In Arabic mode, show the employee's saved Arabic name (fullNameArabic) where available,
+    // falling back to the English fullName when no Arabic name has been entered.
+    const isArabic = i18n.language?.startsWith('ar');
+    const displayName = (emp: any) => (isArabic && emp?.fullNameArabic?.trim()) ? emp.fullNameArabic : emp?.fullName;
+    // The "contract type" field actually stores the residency classification. Show its friendly,
+    // translated label instead of the raw enum value (RESDANT / DIRCT NONE RESDANT / NONE RESDANT).
+    const contractTypeLabel = (type?: string | null): string => {
+        if (!type) return '—';
+        if (type === 'RESDANT') return t('rs_resident', { defaultValue: 'Resident' });
+        if (type === 'DIRCT NONE RESDANT') return t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' });
+        if (type === 'NONE RESDANT') return t('rs_service_provider', { defaultValue: 'Service Provider' });
+        return type;
+    };
     const confirm = useConfirm();
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -504,7 +517,7 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-start">
                         <thead>
                             <tr className="bg-slate-50/50 border-b border-slate-100">
                                 <th className="px-6 py-4 w-10">
@@ -524,19 +537,19 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                 {minimal ? (
                                     <>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('name')}>
-                                            <div className="flex items-center gap-1">Name {sortIndicator('name')}</div>
+                                            <div className="flex items-center gap-1">{t('name', { defaultValue: 'Name' })} {sortIndicator('name')}</div>
                                         </th>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('staffId')}>
-                                            <div className="flex items-center gap-1">Staff ID {sortIndicator('staffId')}</div>
+                                            <div className="flex items-center gap-1">{t('staff_id', { defaultValue: 'Staff ID' })} {sortIndicator('staffId')}</div>
                                         </th>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('contractType')}>
-                                            <div className="flex items-center gap-1">Contract Type {sortIndicator('contractType')}</div>
+                                            <div className="flex items-center gap-1">{t('contract_type', { defaultValue: 'Contract Type' })} {sortIndicator('contractType')}</div>
                                         </th>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('position')}>
-                                            <div className="flex items-center gap-1">Position {sortIndicator('position')}</div>
+                                            <div className="flex items-center gap-1">{t('position', { defaultValue: 'Position' })} {sortIndicator('position')}</div>
                                         </th>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none hover:text-slate-600" onClick={() => handleSort('place')}>
-                                            <div className="flex items-center gap-1">Place {sortIndicator('place')}</div>
+                                            <div className="flex items-center gap-1">{t('place', { defaultValue: 'Place' })} {sortIndicator('place')}</div>
                                         </th>
                                     </>
                                 ) : (
@@ -560,11 +573,11 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                             <div className="flex items-center justify-center gap-1">{t('holiday_balance')} {sortIndicator('holidays')}</div>
                                         </th>
                                         <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
-                                            Salary Structure
+                                            {t('salary_structure', { defaultValue: 'Salary Structure' })}
                                         </th>
                                     </>
                                 )}
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">{t('actions')}</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-end">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -601,14 +614,14 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                             <>
                                                 <td className="px-8 py-5 whitespace-nowrap">
                                                     <div className="flex items-center">
-                                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold mr-3 shadow-sm group-hover:scale-105 transition-transform`}>
-                                                            {emp.fullName.charAt(0)}
+                                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold me-3 shadow-sm group-hover:scale-105 transition-transform`}>
+                                                            {displayName(emp)?.charAt(0)}
                                                         </div>
-                                                        <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
+                                                        <p className="font-bold text-slate-800 group-hover:text-slate-900">{displayName(emp)}</p>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-5 text-sm font-bold text-indigo-500">{emp.staffId || t('no_id')}</td>
-                                                <td className="px-8 py-5 text-sm text-slate-600">{emp.contractType || '—'}</td>
+                                                <td className="px-8 py-5 text-sm text-slate-600">{contractTypeLabel(emp.contractType)}</td>
                                                 <td className="px-8 py-5 text-sm text-slate-600">{emp.position || '—'}</td>
                                                 <td className="px-8 py-5 text-sm text-slate-600">{getPlace(emp)}</td>
                                             </>
@@ -616,18 +629,18 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                             <>
                                                 <td className="px-8 py-5 whitespace-nowrap">
                                                     <div className="flex items-center">
-                                                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold text-lg mr-4 shadow-sm group-hover:scale-105 transition-transform`}>
-                                                            {emp.fullName.charAt(0)}
+                                                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${empTheme.gradient} flex items-center justify-center text-white font-bold text-lg me-4 shadow-sm group-hover:scale-105 transition-transform`}>
+                                                            {displayName(emp)?.charAt(0)}
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-slate-800 group-hover:text-slate-900">{emp.fullName}</p>
+                                                            <p className="font-bold text-slate-800 group-hover:text-slate-900">{displayName(emp)}</p>
                                                             <div className="flex items-center text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
-                                                                <span className="mr-2 text-indigo-500">{emp.staffId || t('no_id')}</span>
-                                                                <Calendar className="w-3 h-3 mr-1" /> {t('bound')} {emp.joinDate ? format(new Date(emp.joinDate), 'dd MMM yyyy') : 'N/A'}
+                                                                <span className="me-2 text-indigo-500">{emp.staffId || t('no_id')}</span>
+                                                                <Calendar className="w-3 h-3 me-1" /> {t('bound')} {emp.joinDate ? format(new Date(emp.joinDate), 'dd MMM yyyy') : 'N/A'}
                                                                 {emp.contractEndDate && (
                                                                     <Link
                                                                         to={`/contracts/${emp.id}`}
-                                                                        className={`ml-3 px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tighter uppercase transition-transform hover:scale-105 active:scale-95 ${new Date(emp.contractEndDate) < new Date() ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}
+                                                                        className={`ms-3 px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tighter uppercase transition-transform hover:scale-105 active:scale-95 ${new Date(emp.contractEndDate) < new Date() ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'}`}
                                                                     >
                                                                         {t('expires')}: {format(new Date(emp.contractEndDate), 'dd MMM yyyy')}
                                                                     </Link>
@@ -669,7 +682,7 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                                 </td>
                                             </>
                                         )}
-                                        <td className="px-8 py-5 text-right">
+                                        <td className="px-8 py-5 text-end">
                                             <div className="flex justify-end gap-2">
                                                 {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('edit_employees')) && (
                                                     <button

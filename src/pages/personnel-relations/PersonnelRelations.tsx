@@ -93,7 +93,7 @@ const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', 
                 <button
                     type="button"
                     onClick={onToggle}
-                    className="flex-1 min-w-0 flex items-center gap-2.5 px-4 py-3 text-left"
+                    className="flex-1 min-w-0 flex items-center gap-2.5 px-4 py-3 text-start"
                 >
                     {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
                     {Icon && <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}><Icon className="w-3.5 h-3.5" /></div>}
@@ -140,7 +140,7 @@ const SearchSelect: React.FC<{
     return (
         <div className="relative" ref={ref}>
             <button type="button" onClick={() => setOpen(o => !o)}
-                className="w-full p-2 border border-[#511d29]/20 bg-white text-left flex items-center justify-between gap-2">
+                className="w-full p-2 border border-[#511d29]/20 bg-white text-start flex items-center justify-between gap-2">
                 <span className={`truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>{selected ? selected.label : (placeholder || t('select_ellipsis', { defaultValue: 'Select…' }))}</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
@@ -159,7 +159,7 @@ const SearchSelect: React.FC<{
                             {g && <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 sticky top-[49px]">{g}</div>}
                             {groups[g].map(o => (
                                 <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
-                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-[#511d29]/5 ${o.value === value ? 'bg-[#511d29]/10 font-black text-[#511d29]' : 'text-slate-600'}`}>
+                                    className={`w-full text-start px-3 py-2 text-xs hover:bg-[#511d29]/5 ${o.value === value ? 'bg-[#511d29]/10 font-black text-[#511d29]' : 'text-slate-600'}`}>
                                     {o.label}{o.sub ? <span className="text-slate-400 font-normal"> · {o.sub}</span> : null}
                                 </button>
                             ))}
@@ -216,7 +216,19 @@ const OFFBOARDING_SOURCE_LABELS: Record<string, string> = {
 };
 
 const PersonnelRelations: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    // In Arabic mode, prefer the employee's saved Arabic name (fullNameArabic) for display,
+    // falling back to the English fullName when no Arabic name has been entered.
+    const isArabic = i18n.language?.startsWith('ar');
+    const displayName = (emp: any) => (isArabic && emp?.fullNameArabic?.trim()) ? emp.fullNameArabic : emp?.fullName;
+    // The "contract type" field stores the residency classification — show its translated label.
+    const contractTypeLabel = (type?: string | null): string => {
+        if (!type) return '---';
+        if (type === 'RESDANT') return t('rs_resident', { defaultValue: 'Resident' });
+        if (type === 'DIRCT NONE RESDANT') return t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' });
+        if (type === 'NONE RESDANT') return t('rs_service_provider', { defaultValue: 'Service Provider' });
+        return type;
+    };
     const location = useLocation();
     const navigate = useNavigate();
     const currentPath = location.pathname;
@@ -1123,7 +1135,7 @@ const PersonnelRelations: React.FC = () => {
                                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search by name, ID or Passport..."
+                                    placeholder={t('search_by_name_id_or_passport', { defaultValue: 'Search by name, ID or Passport...' })}
                                     value={lifecycleSearch}
                                     onChange={(e) => setLifecycleSearch(e.target.value)}
                                     className="pl-10 pr-4 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold focus:ring-2 focus:ring-[#511d29]/10 focus:border-[#511d29] transition-all w-72"
@@ -1136,7 +1148,7 @@ const PersonnelRelations: React.FC = () => {
                                     onChange={(e) => setLifecycleFilterType(e.target.value)}
                                     className="pl-10 pr-8 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold focus:ring-2 focus:ring-[#511d29]/10 appearance-none cursor-pointer"
                                 >
-                                    <option value="All">All Types</option>
+                                    <option value="All">{t('all_types', { defaultValue: 'All Types' })}</option>
                                     <option value="RESDANT">RESDANT</option>
                                     <option value="DIRCT NONE RESDANT">DIRCT NONE RESDANT</option>
                                     <option value="NONE RESDANT">NONE RESDANT</option>
@@ -1147,28 +1159,28 @@ const PersonnelRelations: React.FC = () => {
                             onClick={exportLifecycleExcel}
                             className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[11px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2 active:scale-95 shrink-0"
                         >
-                            <ExcelIcon className="w-4 h-4" /> Export Excel
+                            <ExcelIcon className="w-4 h-4" /> {t('export_excel', { defaultValue: 'Export Excel' })}
                         </button>
                     </div>
 
                     {/* Table */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Active Workforce Status</span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{filteredLifecycleEmployees.length} Records Found</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('active_workforce_status', { defaultValue: 'Active Workforce Status' })}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{filteredLifecycleEmployees.length} {t('records_found', { defaultValue: 'Records Found' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Staff ID</th>
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Position</th>
-                                        <th className="p-4">Department / Division</th>
-                                        <th className="p-4">Contract Type</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4">Joined Date</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('staff_id', { defaultValue: 'Staff ID' })}</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('position', { defaultValue: 'Position' })}</th>
+                                        <th className="p-4">{t('department_division', { defaultValue: 'Department / Division' })}</th>
+                                        <th className="p-4">{t('contract_type', { defaultValue: 'Contract Type' })}</th>
+                                        <th className="p-4">{t('status', { defaultValue: 'Status' })}</th>
+                                        <th className="p-4">{t('joined_date', { defaultValue: 'Joined Date' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1178,34 +1190,34 @@ const PersonnelRelations: React.FC = () => {
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-full bg-[#511d29] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                                                        {emp.fullName?.trim()?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
+                                                        {displayName(emp)?.trim()?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="font-bold text-slate-800 truncate">{emp.fullName}</p>
+                                                        <p className="font-bold text-slate-800 truncate">{displayName(emp)}</p>
                                                         <p className="text-[10px] text-slate-500 truncate">{emp.email}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="p-4">{emp.position || 'Standard Staff'}</td>
+                                            <td className="p-4">{emp.position || t('standard_staff', { defaultValue: 'Standard Staff' })}</td>
                                             <td className="p-4 text-slate-500">{orgUnitName(emp)}</td>
                                             <td className="p-4">
                                                 <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded bg-[#511d29]/5 text-[#511d29] border border-[#511d29]/10">
-                                                    {emp.contractType || '---'}
+                                                    {contractTypeLabel(emp.contractType)}
                                                 </span>
                                             </td>
                                             <td className="p-4">
                                                 {emp.enrollmentStatus === 'SEPARATED' ? (
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle('Terminated')}`}>
-                                                        Separated
+                                                        {t('separated', { defaultValue: 'Separated' })}
                                                     </span>
                                                 ) : (emp as any).enrollmentStatus === 'TRANSFERRED' ? (
                                                     <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded border bg-[#aa7a51]/15 text-[#8f6544] border-[#aa7a51]/30"
-                                                        title={(emp as any).transferredCompany ? `Transferred to ${(emp as any).transferredCompany}` : 'Transferred'}>
-                                                        Transferred{(emp as any).transferredCompany ? ` → ${(emp as any).transferredCompany}` : ''}
+                                                        title={(emp as any).transferredCompany ? t('transferred_to_company', { defaultValue: 'Transferred to {{company}}', company: (emp as any).transferredCompany }) : t('transferred', { defaultValue: 'Transferred' })}>
+                                                        {t('transferred', { defaultValue: 'Transferred' })}{(emp as any).transferredCompany ? ` → ${(emp as any).transferredCompany}` : ''}
                                                     </span>
                                                 ) : (
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${getLifecycleStatusStyle(emp.contractStatus)}`}>
-                                                        {emp.contractStatus || 'Active'}
+                                                        {emp.contractStatus || t('active', { defaultValue: 'Active' })}
                                                     </span>
                                                 )}
                                             </td>
@@ -1215,14 +1227,14 @@ const PersonnelRelations: React.FC = () => {
                                                     onClick={() => { setDetailEmp(emp); navigate(`/personnel-relations/lifecycle?employeeId=${emp.id}`); }}
                                                     className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5"
                                                 >
-                                                    <Eye className="w-3.5 h-3.5" /> Details
+                                                    <Eye className="w-3.5 h-3.5" /> {t('details', { defaultValue: 'Details' })}
                                                 </button>
                                             </td>
                                         </tr>
                                     ))}
                                     {filteredLifecycleEmployees.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="p-10 text-center text-slate-400 font-bold">No matching employees found.</td>
+                                            <td colSpan={8} className="p-10 text-center text-slate-400 font-bold">{t('no_matching_employees_found', { defaultValue: 'No matching employees found.' })}</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -1239,27 +1251,27 @@ const PersonnelRelations: React.FC = () => {
                             <Clock className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-outfit font-black text-lg text-amber-800 uppercase">Contract Renewal Control</h3>
+                            <h3 className="font-outfit font-black text-lg text-amber-800 uppercase">{t('contract_renewal_control', { defaultValue: 'Contract Renewal Control' })}</h3>
                             <p className="text-sm text-amber-900/80 mt-1">
-                                Contract renewals must be reviewed and processed exactly **one month (30 days) before the end of the contract**.
+                                {t('contract_renewals_must_be_reviewed_one_month_before', { defaultValue: 'Contract renewals must be reviewed and processed exactly **one month (30 days) before the end of the contract**.' })}
                             </p>
                         </div>
                     </div>
 
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Contracts Expiring Within 30 Days</span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{contractsNeedingRenewal.length} {contractsNeedingRenewal.length === 1 ? 'Employee' : 'Employees'}</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('contracts_expiring_within_30_days', { defaultValue: 'Contracts Expiring Within 30 Days' })}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{contractsNeedingRenewal.length} {contractsNeedingRenewal.length === 1 ? t('employee', { defaultValue: 'Employee' }) : t('employees', { defaultValue: 'Employees' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">End Date</th>
-                                        <th className="p-4">Days Left</th>
-                                        <th className="p-4">Renewal Status</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('end_date', { defaultValue: 'End Date' })}</th>
+                                        <th className="p-4">{t('days_left', { defaultValue: 'Days Left' })}</th>
+                                        <th className="p-4">{t('renewal_status', { defaultValue: 'Renewal Status' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1270,19 +1282,19 @@ const PersonnelRelations: React.FC = () => {
                                             <tr key={emp.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4">
                                                     <p className="font-bold text-slate-800">{emp.fullName}</p>
-                                                    <p className="text-[10px] text-slate-500">{emp.position || 'Standard Staff'}</p>
+                                                    <p className="text-[10px] text-slate-500">{emp.position || t('standard_staff', { defaultValue: 'Standard Staff' })}</p>
                                                 </td>
                                                 <td className="p-4 font-bold">{format(parseISO(emp.contractEndDate), 'dd MMM yyyy')}</td>
                                                 <td className="p-4">
                                                     <span className={`font-bold ${isUrgent ? 'text-red-600 font-black animate-pulse' : 'text-amber-600'}`}>
-                                                        {isOverdue ? `${Math.abs(emp.daysLeft)} days overdue` : `${emp.daysLeft} days`}
+                                                        {isOverdue ? t('days_overdue', { defaultValue: '{{count}} days overdue', count: Math.abs(emp.daysLeft) }) : t('days_count', { defaultValue: '{{count}} days', count: emp.daysLeft })}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${
                                                         isOverdue ? 'bg-red-100 text-red-800' : isUrgent ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                                                     }`}>
-                                                        {isOverdue ? 'Overdue' : isUrgent ? 'Urgent' : 'Action Required'}
+                                                        {isOverdue ? t('overdue', { defaultValue: 'Overdue' }) : isUrgent ? t('urgent', { defaultValue: 'Urgent' }) : t('action_required', { defaultValue: 'Action Required' })}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-right">
@@ -1293,13 +1305,13 @@ const PersonnelRelations: React.FC = () => {
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
                                                         >
                                                             <FileText className="w-3 h-3" />
-                                                            {renewalFormBusy === emp.id ? 'Generating…' : 'Generate Form'}
+                                                            {renewalFormBusy === emp.id ? t('generating_ellipsis', { defaultValue: 'Generating…' }) : t('generate_form', { defaultValue: 'Generate Form' })}
                                                         </button>
                                                         <button
                                                             onClick={() => openRenewalModal(emp)}
                                                             className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-amber-700 transition-colors"
                                                         >
-                                                            Initiate Renewal
+                                                            {t('initiate_renewal', { defaultValue: 'Initiate Renewal' })}
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1308,7 +1320,7 @@ const PersonnelRelations: React.FC = () => {
                                     })}
                                     {contractsNeedingRenewal.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">No contracts are nearing expiration.</td>
+                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">{t('no_contracts_are_nearing_expiration', { defaultValue: 'No contracts are nearing expiration.' })}</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -1326,9 +1338,9 @@ const PersonnelRelations: React.FC = () => {
                                 <FileText className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Personnel Action Forms</h3>
+                                <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('personnel_action_forms', { defaultValue: 'Personnel Action Forms' })}</h3>
                                 <p className="text-sm text-slate-600 mt-1">
-                                    Internal transfers driven by the target Job Description. Generate the form, collect signatures, upload the signed copy, then accept to move the employee.
+                                    {t('internal_transfers_driven_by_the_target_job', { defaultValue: 'Internal transfers driven by the target Job Description. Generate the form, collect signatures, upload the signed copy, then accept to move the employee.' })}
                                 </p>
                             </div>
                         </div>
@@ -1337,31 +1349,31 @@ const PersonnelRelations: React.FC = () => {
                                 onClick={openCreatePaf}
                                 className="px-4 py-2 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] inline-flex items-center gap-2"
                             >
-                                <Plus className="w-4 h-4" /> Create Internal Transfer
+                                <Plus className="w-4 h-4" /> {t('create_internal_transfer', { defaultValue: 'Create Internal Transfer' })}
                             </button>
                             <button
                                 onClick={openCreateIc}
                                 className="px-4 py-2 bg-[#aa7a51] text-white text-xs font-black uppercase tracking-widest hover:bg-[#8f6544] inline-flex items-center gap-2"
                             >
-                                <ExternalLink className="w-4 h-4" /> Create Inter-Company Transfer
+                                <ExternalLink className="w-4 h-4" /> {t('create_inter_company_transfer', { defaultValue: 'Create Inter-Company Transfer' })}
                             </button>
                         </div>
                     </div>
 
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex justify-between items-center">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Transfer Requests</span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{personnelActions.length} {personnelActions.length === 1 ? 'Form' : 'Forms'}</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('transfer_requests', { defaultValue: 'Transfer Requests' })}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{personnelActions.length} {personnelActions.length === 1 ? t('form', { defaultValue: 'Form' }) : t('forms', { defaultValue: 'Forms' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Move</th>
-                                        <th className="p-4">Effective</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('move', { defaultValue: 'Move' })}</th>
+                                        <th className="p-4">{t('effective', { defaultValue: 'Effective' })}</th>
+                                        <th className="p-4">{t('status', { defaultValue: 'Status' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1381,9 +1393,9 @@ const PersonnelRelations: React.FC = () => {
                                                     <p className="font-bold text-slate-800">{paf.employee?.fullName || '—'}</p>
                                                     <p className="text-[10px] text-slate-500">
                                                         <span className={`inline-block mr-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${isIc ? 'bg-[#aa7a51]/15 text-[#8f6544]' : 'bg-[#511d29]/10 text-[#511d29]'}`}>
-                                                            {isIc ? 'Inter-Company' : 'Internal'}
+                                                            {isIc ? t('inter_company', { defaultValue: 'Inter-Company' }) : t('internal', { defaultValue: 'Internal' })}
                                                         </span>
-                                                        {paf.newPositionTitle || paf.typeOfTransfer || 'Transfer'}
+                                                        {paf.newPositionTitle || paf.typeOfTransfer || t('transfer', { defaultValue: 'Transfer' })}
                                                     </p>
                                                 </td>
                                                 <td className="p-4">
@@ -1396,7 +1408,7 @@ const PersonnelRelations: React.FC = () => {
                                                 <td className="p-4 font-bold">{paf.effectiveDate ? format(parseISO(paf.effectiveDate), 'dd MMM yyyy') : '—'}</td>
                                                 <td className="p-4">
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${badge}`}>{paf.status}</span>
-                                                    {paf.decidedByName && <p className="text-[9px] text-slate-400 mt-1">by {paf.decidedByName}</p>}
+                                                    {paf.decidedByName && <p className="text-[9px] text-slate-400 mt-1">{t('by', { defaultValue: 'by' })} {paf.decidedByName}</p>}
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
@@ -1406,14 +1418,14 @@ const PersonnelRelations: React.FC = () => {
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5 disabled:opacity-60"
                                                         >
                                                             <FileText className="w-3 h-3" />
-                                                            {pafGenBusy === paf.id ? 'Generating…' : 'Generate Form'}
+                                                            {pafGenBusy === paf.id ? t('generating_ellipsis', { defaultValue: 'Generating…' }) : t('generate_form', { defaultValue: 'Generate Form' })}
                                                         </button>
                                                         {paf.status === 'PENDING' && (
                                                             <button
                                                                 onClick={() => { setDecidePaf(paf); setDecideFile(null); }}
                                                                 className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-amber-700 transition-colors inline-flex items-center gap-1.5"
                                                             >
-                                                                <Upload className="w-3 h-3" /> Upload &amp; Decide
+                                                                <Upload className="w-3 h-3" /> {t('upload_and_decide', { defaultValue: 'Upload & Decide' })}
                                                             </button>
                                                         )}
                                                     </div>
@@ -1423,7 +1435,7 @@ const PersonnelRelations: React.FC = () => {
                                     })}
                                     {personnelActions.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">No transfer requests yet. Create one to get started.</td>
+                                            <td colSpan={5} className="p-10 text-center text-slate-400 font-bold">{t('no_transfer_requests_yet_create_one', { defaultValue: 'No transfer requests yet. Create one to get started.' })}</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -1443,10 +1455,9 @@ const PersonnelRelations: React.FC = () => {
                                 <AlertOctagon className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-outfit font-black text-lg text-red-700 uppercase">Disciplinary Action Workflows</h3>
+                                <h3 className="font-outfit font-black text-lg text-red-700 uppercase">{t('disciplinary_action_workflows', { defaultValue: 'Disciplinary Action Workflows' })}</h3>
                                 <p className="text-sm text-slate-600 mt-1">
-                                    Incident Report → Notice to Explain → Investigation Result → Notice of Disciplinary Action.
-                                    Any employee can file an incident report from the "Report an Incident" page.
+                                    {t('disciplinary_workflow_stages_description', { defaultValue: 'Incident Report → Notice to Explain → Investigation Result → Notice of Disciplinary Action. Any employee can file an incident report from the "Report an Incident" page.' })}
                                 </p>
                             </div>
                         </div>
@@ -1455,13 +1466,13 @@ const PersonnelRelations: React.FC = () => {
                                 onClick={() => setDisciplinaryView('board')}
                                 className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${disciplinaryView === 'board' ? 'bg-red-700 text-white' : 'bg-white border border-red-700/20 text-red-700'}`}
                             >
-                                Cases Board
+                                {t('cases_board', { defaultValue: 'Cases Board' })}
                             </button>
                             <button
                                 onClick={() => setDisciplinaryView('attendance')}
                                 className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${disciplinaryView === 'attendance' ? 'bg-red-700 text-white' : 'bg-white border border-red-700/20 text-red-700'}`}
                             >
-                                Attendance Candidates
+                                {t('attendance_candidates', { defaultValue: 'Attendance Candidates' })}
                             </button>
                         </div>
                     </div>
@@ -1477,19 +1488,19 @@ const PersonnelRelations: React.FC = () => {
                                             <span className="text-[10px] font-black text-red-700/60">{cases.length}</span>
                                         </div>
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse text-xs">
+                                            <table className="w-full text-start border-collapse text-xs">
                                                 <thead>
                                                     <tr className="bg-red-700/5 text-red-700 uppercase font-black tracking-wider text-[10px] border-b border-red-700/10">
-                                                        <th className="p-3">Case #</th>
-                                                        <th className="p-3">Employee</th>
-                                                        <th className="p-3">Category</th>
-                                                        <th className="p-3">Source</th>
+                                                        <th className="p-3">{t('case_number_short', { defaultValue: 'Case #' })}</th>
+                                                        <th className="p-3">{t('employee', { defaultValue: 'Employee' })}</th>
+                                                        <th className="p-3">{t('category', { defaultValue: 'Category' })}</th>
+                                                        <th className="p-3">{t('source', { defaultValue: 'Source' })}</th>
                                                         <th className="p-3"></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                                                     {cases.length === 0 && (
-                                                        <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                                        <tr><td colSpan={5} className="p-4 text-center text-slate-400">{t('no_cases', { defaultValue: 'No cases' })}</td></tr>
                                                     )}
                                                     {cases.map(c => (
                                                         <tr key={c.id} className="hover:bg-red-50/10">
@@ -1499,16 +1510,16 @@ const PersonnelRelations: React.FC = () => {
                                                                 <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${
                                                                     !c.category ? 'bg-slate-100 text-slate-500' : c.category === 'MINOR' ? 'bg-amber-100 text-amber-800' : c.category === 'SERIOUS' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'
                                                                 }`}>
-                                                                    {c.category ? DISCIPLINARY_CATEGORY_LABELS[c.category as DisciplinaryCategory] : 'Pending Investigation'}
+                                                                    {c.category ? DISCIPLINARY_CATEGORY_LABELS[c.category as DisciplinaryCategory] : t('pending_investigation', { defaultValue: 'Pending Investigation' })}
                                                                 </span>
                                                             </td>
-                                                            <td className="p-3">{c.source === 'SYSTEM_ATTENDANCE' ? 'Attendance' : 'Report'}</td>
+                                                            <td className="p-3">{c.source === 'SYSTEM_ATTENDANCE' ? t('attendance', { defaultValue: 'Attendance' }) : t('report', { defaultValue: 'Report' })}</td>
                                                             <td className="p-3 text-right">
                                                                 <button
                                                                     onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
                                                                     className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-800"
                                                                 >
-                                                                    Details
+                                                                    {t('details', { defaultValue: 'Details' })}
                                                                 </button>
                                                             </td>
                                                         </tr>
@@ -1521,15 +1532,15 @@ const PersonnelRelations: React.FC = () => {
                             })}
 
                             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                <button onClick={() => setShowClosedCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                                <button onClick={() => setShowClosedCases(v => !v)} className="w-full p-4 flex items-center justify-between text-start">
                                     <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                                        Closed Cases ({disciplinaryCases.filter(c => c.stage === 'CLOSED').length})
+                                        {t('closed_cases', { defaultValue: 'Closed Cases' })} ({disciplinaryCases.filter(c => c.stage === 'CLOSED').length})
                                     </span>
                                     <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedCases ? 'rotate-180' : ''}`} />
                                 </button>
                                 {showClosedCases && (
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse text-xs">
+                                        <table className="w-full text-start border-collapse text-xs">
                                             <tbody className="divide-y divide-slate-100">
                                                 {disciplinaryCases.filter(c => c.stage === 'CLOSED').map(c => (
                                                     <tr key={c.id} className="hover:bg-slate-50/50">
@@ -1537,7 +1548,7 @@ const PersonnelRelations: React.FC = () => {
                                                         <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
                                                         <td className="p-3 px-4">
                                                             <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${c.closureReason ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                                                                {c.closureReason ? 'Dismissed' : 'Resolved'}
+                                                                {c.closureReason ? t('dismissed', { defaultValue: 'Dismissed' }) : t('resolved', { defaultValue: 'Resolved' })}
                                                             </span>
                                                         </td>
                                                         <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
@@ -1546,7 +1557,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
                                                                 className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
                                                             >
-                                                                Details
+                                                                {t('details', { defaultValue: 'Details' })}
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -1554,7 +1565,7 @@ const PersonnelRelations: React.FC = () => {
                                             </tbody>
                                         </table>
                                         {disciplinaryCases.filter(c => c.stage === 'CLOSED').length === 0 && (
-                                            <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                            <p className="text-center text-[11px] text-slate-400 py-4">{t('no_closed_cases', { defaultValue: 'No closed cases.' })}</p>
                                         )}
                                     </div>
                                 )}
@@ -1567,10 +1578,10 @@ const PersonnelRelations: React.FC = () => {
                             <div className="p-4 border-b border-red-700/10 bg-red-50/20 flex items-center justify-between gap-4">
                                 <div>
                                     <span className="text-xs font-black text-red-700 uppercase tracking-wider">
-                                        Attendance Candidates {attendanceCandidatesQuery.data ? `(${attendanceCandidatesQuery.data.cycleStart} → ${attendanceCandidatesQuery.data.cycleEnd})` : ''}
+                                        {t('attendance_candidates', { defaultValue: 'Attendance Candidates' })} {attendanceCandidatesQuery.data ? `(${attendanceCandidatesQuery.data.cycleStart} → ${attendanceCandidatesQuery.data.cycleEnd})` : ''}
                                     </span>
                                     <p className="text-[11px] text-slate-500 mt-1">
-                                        Employees who triggered an attendance-based violation this cycle (5+ late arrivals, an unauthorized full-day absence, or 3+ consecutive unauthorized absent days). Nothing is executed automatically — review and execute per employee.
+                                        {t('attendance_candidates_cycle_description', { defaultValue: 'Employees who triggered an attendance-based violation this cycle (5+ late arrivals, an unauthorized full-day absence, or 3+ consecutive unauthorized absent days). Nothing is executed automatically — review and execute per employee.' })}
                                     </p>
                                 </div>
                                 <select
@@ -1584,21 +1595,21 @@ const PersonnelRelations: React.FC = () => {
                                 </select>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-red-700/5 text-red-700 uppercase font-black tracking-wider text-[10px] border-b border-red-700/10">
-                                            <th className="p-4">Employee</th>
-                                            <th className="p-4">Violation</th>
-                                            <th className="p-4">Detail</th>
+                                            <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                            <th className="p-4">{t('violation', { defaultValue: 'Violation' })}</th>
+                                            <th className="p-4">{t('detail', { defaultValue: 'Detail' })}</th>
                                             <th className="p-4"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-red-700/5 font-medium text-slate-700">
                                         {attendanceCandidatesQuery.isLoading && (
-                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">Computing candidates…</td></tr>
+                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">{t('computing_candidates', { defaultValue: 'Computing candidates…' })}</td></tr>
                                         )}
                                         {!attendanceCandidatesQuery.isLoading && (attendanceCandidatesQuery.data?.candidates.length || 0) === 0 && (
-                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">No employees currently meet any attendance-violation threshold.</td></tr>
+                                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">{t('no_employees_meet_attendance_violation_threshold', { defaultValue: 'No employees currently meet any attendance-violation threshold.' })}</td></tr>
                                         )}
                                         {attendanceCandidatesQuery.data?.candidates.map(cand => (
                                             <tr key={`${cand.employeeId}-${cand.violationId}`} className="hover:bg-slate-50/50">
@@ -1610,7 +1621,7 @@ const PersonnelRelations: React.FC = () => {
                                                         onClick={() => handleExecuteAttendanceCase(cand.employeeId, cand.violationId)}
                                                         className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-800"
                                                     >
-                                                        Execute
+                                                        {t('execute', { defaultValue: 'Execute' })}
                                                     </button>
                                                 </td>
                                             </tr>
@@ -1630,16 +1641,16 @@ const PersonnelRelations: React.FC = () => {
                             <ShieldAlert className="w-6 h-6 animate-pulse" />
                         </div>
                         <div className="flex-1">
-                            <h3 className="font-outfit font-black text-lg text-red-700 uppercase">Payroll Withholding Notice</h3>
+                            <h3 className="font-outfit font-black text-lg text-red-700 uppercase">{t('payroll_withholding_notice', { defaultValue: 'Payroll Withholding Notice' })}</h3>
                             <p className="text-sm text-red-950 mt-1 font-bold">
-                                Offboarding is directly connected with Payroll. The Company has the right to withhold the last payment of the employee without proper clearance and offboarding documentation.
+                                {t('offboarding_connected_with_payroll_notice', { defaultValue: 'Offboarding is directly connected with Payroll. The Company has the right to withhold the last payment of the employee without proper clearance and offboarding documentation.' })}
                             </p>
                         </div>
                         <button
                             onClick={() => setIsOffboardingModalOpen(true)}
                             className="flex-shrink-0 px-4 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d]"
                         >
-                            Initiate Offboarding
+                            {t('initiate_offboarding', { defaultValue: 'Initiate Offboarding' })}
                         </button>
                     </div>
 
@@ -1652,32 +1663,32 @@ const PersonnelRelations: React.FC = () => {
                                     <span className="text-[10px] font-black text-[#511d29]/60">{cases.length}</span>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse text-xs">
+                                    <table className="w-full text-start border-collapse text-xs">
                                         <thead>
                                             <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                                <th className="p-3">Case #</th>
-                                                <th className="p-3">Employee</th>
-                                                <th className="p-3">Type</th>
-                                                <th className="p-3">Source</th>
+                                                <th className="p-3">{t('case_number_short', { defaultValue: 'Case #' })}</th>
+                                                <th className="p-3">{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className="p-3">{t('type', { defaultValue: 'Type' })}</th>
+                                                <th className="p-3">{t('source', { defaultValue: 'Source' })}</th>
                                                 <th className="p-3"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                                             {cases.length === 0 && (
-                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">{t('no_cases', { defaultValue: 'No cases' })}</td></tr>
                                             )}
                                             {cases.map(c => (
                                                 <tr key={c.id} className="hover:bg-red-50/10">
                                                     <td className="p-3 text-slate-400">{c.caseNumber}</td>
                                                     <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
-                                                    <td className="p-3">{c.type === 'VOLUNTARY' ? 'Voluntary' : 'Involuntary'}</td>
+                                                    <td className="p-3">{c.type === 'VOLUNTARY' ? t('voluntary', { defaultValue: 'Voluntary' }) : t('involuntary', { defaultValue: 'Involuntary' })}</td>
                                                     <td className="p-3">{c.source.replace(/_/g, ' ')}</td>
                                                     <td className="p-3 text-right">
                                                         <button
                                                             onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
                                                         >
-                                                            Details
+                                                            {t('details', { defaultValue: 'Details' })}
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -1690,15 +1701,15 @@ const PersonnelRelations: React.FC = () => {
                     })}
 
                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                        <button onClick={() => setShowClosedOffboardingCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                        <button onClick={() => setShowClosedOffboardingCases(v => !v)} className="w-full p-4 flex items-center justify-between text-start">
                             <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                                Closed Cases ({offboardingCases.filter(c => c.stage === 'CLOSED').length})
+                                {t('closed_cases', { defaultValue: 'Closed Cases' })} ({offboardingCases.filter(c => c.stage === 'CLOSED').length})
                             </span>
                             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedOffboardingCases ? 'rotate-180' : ''}`} />
                         </button>
                         {showClosedOffboardingCases && (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs">
+                                <table className="w-full text-start border-collapse text-xs">
                                     <tbody className="divide-y divide-slate-100">
                                         {offboardingCases.filter(c => c.stage === 'CLOSED').map(c => (
                                             <tr key={c.id} className="hover:bg-slate-50/50">
@@ -1710,7 +1721,7 @@ const PersonnelRelations: React.FC = () => {
                                                         onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
                                                         className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
                                                     >
-                                                        Details
+                                                        {t('details', { defaultValue: 'Details' })}
                                                     </button>
                                                 </td>
                                             </tr>
@@ -1718,7 +1729,7 @@ const PersonnelRelations: React.FC = () => {
                                     </tbody>
                                 </table>
                                 {offboardingCases.filter(c => c.stage === 'CLOSED').length === 0 && (
-                                    <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                    <p className="text-center text-[11px] text-slate-400 py-4">{t('no_closed_cases', { defaultValue: 'No closed cases.' })}</p>
                                 )}
                             </div>
                         )}
@@ -1735,7 +1746,7 @@ const PersonnelRelations: React.FC = () => {
                     <EvaluationsPage />
                 ) : (
                     <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
-                        You don't have permission to view evaluation controls.
+                        {t('no_permission_to_view_evaluation_controls', { defaultValue: "You don't have permission to view evaluation controls." })}
                     </div>
                 )
             )}
@@ -1745,7 +1756,7 @@ const PersonnelRelations: React.FC = () => {
                     <EmployeesPage minimal />
                 ) : (
                     <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
-                        You don't have permission to view employee control.
+                        {t('no_permission_to_view_employee_control', { defaultValue: "You don't have permission to view employee control." })}
                     </div>
                 )
             )}
@@ -1758,17 +1769,16 @@ const PersonnelRelations: React.FC = () => {
                             <Award className="w-6 h-6" />
                         </div>
                         <div className="flex-1">
-                            <h2 className="text-lg font-black text-[#511d29]">Promotion Management</h2>
+                            <h2 className="text-lg font-black text-[#511d29]">{t('promotion_management', { defaultValue: 'Promotion Management' })}</h2>
                             <p className="text-slate-500 text-sm font-medium mt-0.5">
-                                Track promotion-eligible employees and open a promotion case. Trainees and Interns become
-                                eligible on tenure; every grade above that once its Evaluation Index reaches {EVALUATION_INDEX_THRESHOLD}.
+                                {t('promotion_management_description', { defaultValue: 'Track promotion-eligible employees and open a promotion case. Trainees and Interns become eligible on tenure; every grade above that once its Evaluation Index reaches {{threshold}}.', threshold: EVALUATION_INDEX_THRESHOLD })}
                             </p>
                         </div>
                         <button
                             onClick={() => setIsExceptionalPromotionModalOpen(true)}
                             className="flex-shrink-0 px-4 py-2 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d]"
                         >
-                            Add Exceptional Promotion
+                            {t('add_exceptional_promotion', { defaultValue: 'Add Exceptional Promotion' })}
                         </button>
                     </div>
 
@@ -1788,19 +1798,19 @@ const PersonnelRelations: React.FC = () => {
                                     <span className="text-[10px] font-black text-[#511d29]/60">{rowCount}</span>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse text-xs">
+                                    <table className="w-full text-start border-collapse text-xs">
                                         <thead>
                                             <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                                <th className="p-3">Case #</th>
-                                                <th className="p-3">Employee</th>
-                                                <th className="p-3">Grade</th>
-                                                <th className="p-3">Basis</th>
+                                                <th className="p-3">{t('case_number_short', { defaultValue: 'Case #' })}</th>
+                                                <th className="p-3">{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className="p-3">{t('grade', { defaultValue: 'Grade' })}</th>
+                                                <th className="p-3">{t('basis', { defaultValue: 'Basis' })}</th>
                                                 <th className="p-3"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                                             {rowCount === 0 && (
-                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">No cases</td></tr>
+                                                <tr><td colSpan={5} className="p-4 text-center text-slate-400">{t('no_cases', { defaultValue: 'No cases' })}</td></tr>
                                             )}
                                             {cases.map(c => (
                                                 <tr key={c.id} className="hover:bg-red-50/10">
@@ -1813,7 +1823,7 @@ const PersonnelRelations: React.FC = () => {
                                                             onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
                                                         >
-                                                            Details
+                                                            {t('details', { defaultValue: 'Details' })}
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -1823,7 +1833,7 @@ const PersonnelRelations: React.FC = () => {
                                                 const progress = cand.progress as any;
                                                 return (
                                                     <tr key={cand.employeeId} className="hover:bg-amber-50/30 bg-amber-50/10">
-                                                        <td className="p-3 text-amber-600 font-bold uppercase text-[10px]">Eligible — no case yet</td>
+                                                        <td className="p-3 text-amber-600 font-bold uppercase text-[10px]">{t('eligible_no_case_yet', { defaultValue: 'Eligible — no case yet' })}</td>
                                                         <td className="p-3 font-bold">{cand.employee.fullName || '—'}</td>
                                                         <td className="p-3">{cand.employee.jobGrade || '—'} → {cand.toGrade}</td>
                                                         <td className="p-3">
@@ -1837,7 +1847,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 onClick={() => openCaseFromCandidate(cand.employeeId)}
                                                                 className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-700"
                                                             >
-                                                                Details
+                                                                {t('details', { defaultValue: 'Details' })}
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -1851,28 +1861,28 @@ const PersonnelRelations: React.FC = () => {
                     })}
 
                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                        <button onClick={() => setShowClosedPromotionCases(v => !v)} className="w-full p-4 flex items-center justify-between text-left">
+                        <button onClick={() => setShowClosedPromotionCases(v => !v)} className="w-full p-4 flex items-center justify-between text-start">
                             <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                                Closed Cases ({promotionCases.filter(c => c.stage === 'CLOSED').length})
+                                {t('closed_cases', { defaultValue: 'Closed Cases' })} ({promotionCases.filter(c => c.stage === 'CLOSED').length})
                             </span>
                             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showClosedPromotionCases ? 'rotate-180' : ''}`} />
                         </button>
                         {showClosedPromotionCases && (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs">
+                                <table className="w-full text-start border-collapse text-xs">
                                     <tbody className="divide-y divide-slate-100">
                                         {promotionCases.filter(c => c.stage === 'CLOSED').map(c => (
                                             <tr key={c.id} className="hover:bg-slate-50/50">
                                                 <td className="p-3 px-4 text-slate-400">{c.caseNumber}</td>
                                                 <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
-                                                <td className="p-3 px-4 text-slate-500">Promoted to {c.toGrade}</td>
+                                                <td className="p-3 px-4 text-slate-500">{t('promoted_to', { defaultValue: 'Promoted to' })} {c.toGrade}</td>
                                                 <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
                                                 <td className="p-3 px-4 text-right">
                                                     <button
                                                         onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
                                                         className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
                                                     >
-                                                        Details
+                                                        {t('details', { defaultValue: 'Details' })}
                                                     </button>
                                                 </td>
                                             </tr>
@@ -1880,7 +1890,7 @@ const PersonnelRelations: React.FC = () => {
                                     </tbody>
                                 </table>
                                 {promotionCases.filter(c => c.stage === 'CLOSED').length === 0 && (
-                                    <p className="text-center text-[11px] text-slate-400 py-4">No closed cases.</p>
+                                    <p className="text-center text-[11px] text-slate-400 py-4">{t('no_closed_cases', { defaultValue: 'No closed cases.' })}</p>
                                 )}
                             </div>
                         )}
@@ -1890,23 +1900,23 @@ const PersonnelRelations: React.FC = () => {
 
             {/* MODALS */}
             {/* Modal 1: Create Internal Transfer (Personnel Action Form) */}
-            <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title="Create Internal Transfer" maxWidth="max-w-xl">
+            <Modal isOpen={isActionFormModalOpen} onClose={() => setIsActionFormModalOpen(false)} title={t('create_internal_transfer', { defaultValue: 'Create Internal Transfer' })} maxWidth="max-w-xl">
                 <form onSubmit={handleActionFormSubmit} className="space-y-5 text-xs font-semibold text-slate-700">
                     <p className="flex items-start gap-2 text-[11px] font-medium text-slate-500 leading-relaxed">
                         <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-[#511d29]" />
-                        Move an employee into a new position. The transfer starts as a draft form for review and signature before it takes effect.
+                        {t('move_an_employee_into_a_new_position_draft', { defaultValue: 'Move an employee into a new position. The transfer starts as a draft form for review and signature before it takes effect.' })}
                     </p>
 
                     {/* Section: Employee */}
                     <div className="space-y-1.5">
                         <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
-                            <User className="w-3.5 h-3.5" /> Employee <span className="text-red-500">*</span>
+                            <User className="w-3.5 h-3.5" /> {t('employee', { defaultValue: 'Employee' })} <span className="text-red-500">*</span>
                         </label>
                         <SearchSelect
                             value={pafForm.employeeId}
                             onChange={(v) => setPafForm(prev => ({ ...prev, employeeId: v }))}
-                            placeholder="— Select employee —"
-                            emptyText="No employees match"
+                            placeholder={t('select_employee_dash', { defaultValue: '— Select employee —' })}
+                            emptyText={t('no_employees_match', { defaultValue: 'No employees match' })}
                             options={[...employees]
                                 .sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || ''))
                                 .map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined }))}
@@ -1916,24 +1926,24 @@ const PersonnelRelations: React.FC = () => {
                     {/* Section: Target Position — grouped in a subtle card */}
                     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
                         <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
-                            <Briefcase className="w-3.5 h-3.5" /> Target Position — Job Description <span className="text-red-500">*</span>
+                            <Briefcase className="w-3.5 h-3.5" /> {t('target_position_job_description', { defaultValue: 'Target Position — Job Description' })} <span className="text-red-500">*</span>
                         </label>
                         <div>
-                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Filter by directorate / division / office</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{t('filter_by_directorate_division_office', { defaultValue: 'Filter by directorate / division / office' })}</span>
                             <select value={pafJdScope} onChange={e => setPafJdScope(e.target.value)}
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
-                                <option value="">All directorates / divisions / offices</option>
-                                <optgroup label="Directorates">
+                                <option value="">{t('all_directorates_divisions_offices', { defaultValue: 'All directorates / divisions / offices' })}</option>
+                                <optgroup label={t('directorates', { defaultValue: 'Directorates' })}>
                                     {[...directorates].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
                                         <option key={`dir-${d.id}`} value={`dir:${d.id}`}>{d.name}</option>
                                     ))}
                                 </optgroup>
-                                <optgroup label="Divisions">
+                                <optgroup label={t('divisions', { defaultValue: 'Divisions' })}>
                                     {[...divisions].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
                                         <option key={`div-${d.id}`} value={`div:${d.id}`}>{d.name}</option>
                                     ))}
                                 </optgroup>
-                                <optgroup label="Offices">
+                                <optgroup label={t('offices', { defaultValue: 'Offices' })}>
                                     {(departments as any[]).filter((d: any) => d.isOffice)
                                         .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((d: any) => (
                                             <option key={`off-${d.id}`} value={`off:${d.id}`}>{d.name}</option>
@@ -1942,12 +1952,12 @@ const PersonnelRelations: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Position to move into</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{t('position_to_move_into', { defaultValue: 'Position to move into' })}</span>
                             <SearchSelect
                                 value={pafForm.newJobDescriptionId}
                                 onChange={selectJd}
-                                placeholder="— Select the position to move into —"
-                                emptyText="No positions match this filter/search"
+                                placeholder={t('select_the_position_to_move_into_dash', { defaultValue: '— Select the position to move into —' })}
+                                emptyText={t('no_positions_match_this_filter_search', { defaultValue: 'No positions match this filter/search' })}
                                 options={(jobDescriptions as any[])
                                     .filter((j) => {
                                         if (!pafJdScope) return true;
@@ -1960,12 +1970,12 @@ const PersonnelRelations: React.FC = () => {
                                     .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
                                     .map((j) => ({
                                         value: j.id,
-                                        label: j.title || 'Untitled',
-                                        group: departments.find((d: any) => d.id === jdDepartmentId(j))?.name || 'Division-level (no department)',
+                                        label: j.title || t('untitled', { defaultValue: 'Untitled' }),
+                                        group: departments.find((d: any) => d.id === jdDepartmentId(j))?.name || t('division_level_no_department', { defaultValue: 'Division-level (no department)' }),
                                     }))}
                             />
                         </div>
-                        <p className="text-[10px] font-medium text-slate-400 leading-relaxed">The new division / department / unit / position / category come from the selected Job Description. On accept the employee is assigned to it.</p>
+                        <p className="text-[10px] font-medium text-slate-400 leading-relaxed">{t('new_placement_comes_from_selected_jd', { defaultValue: 'The new division / department / unit / position / category come from the selected Job Description. On accept the employee is assigned to it.' })}</p>
                     </div>
 
                     {(() => {
@@ -1974,13 +1984,13 @@ const PersonnelRelations: React.FC = () => {
                         if (cats.length <= 1) return null; // single (or no) category — nothing to choose.
                         return (
                             <div className="space-y-1.5">
-                                <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Job Category <span className="text-red-500">*</span></label>
+                                <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('job_category', { defaultValue: 'Job Category' })} <span className="text-red-500">*</span></label>
                                 <select value={pafForm.newJobCategory} onChange={e => setPafForm({ ...pafForm, newJobCategory: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
-                                    <option value="">— Select a job category —</option>
+                                    <option value="">{t('select_a_job_category_dash', { defaultValue: '— Select a job category —' })}</option>
                                     {cats.map((c) => (<option key={c} value={c}>{c}</option>))}
                                 </select>
-                                <p className="text-[10px] font-medium text-slate-400">This Job Description covers several categories — pick the one for this transfer.</p>
+                                <p className="text-[10px] font-medium text-slate-400">{t('jd_covers_several_categories_pick_one', { defaultValue: 'This Job Description covers several categories — pick the one for this transfer.' })}</p>
                             </div>
                         );
                     })()}
@@ -1989,19 +1999,19 @@ const PersonnelRelations: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
-                                <CalendarDays className="w-3.5 h-3.5" /> Effectivity Date
+                                <CalendarDays className="w-3.5 h-3.5" /> {t('effectivity_date', { defaultValue: 'Effectivity Date' })}
                             </label>
                             <input type="date" value={pafForm.effectiveDate} onChange={e => setPafForm({ ...pafForm, effectiveDate: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">New Job Grade</label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('new_job_grade', { defaultValue: 'New Job Grade' })}</label>
                             {(() => {
                                 const cur: any = (employees as any[]).find(e => e.id === pafForm.employeeId);
                                 return (
                                     <select value={pafForm.newJobGrade} onChange={e => setPafForm({ ...pafForm, newJobGrade: e.target.value })}
                                         className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
-                                        <option value="">{cur?.jobGrade ? `Same grade (${cur.jobGrade})` : 'Same as current grade'}</option>
+                                        <option value="">{cur?.jobGrade ? t('same_grade_value', { defaultValue: 'Same grade ({{grade}})', grade: cur.jobGrade }) : t('same_as_current_grade', { defaultValue: 'Same as current grade' })}</option>
                                         {JOB_GRADES.filter(g => g !== cur?.jobGrade).map(g => (
                                             <option key={g} value={g}>{g}</option>
                                         ))}
@@ -2012,45 +2022,45 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Reports To</label>
-                        <input type="text" value={pafForm.reportsTo} placeholder="Head of the selected position (auto-filled)" onChange={e => setPafForm({ ...pafForm, reportsTo: e.target.value })}
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('reports_to', { defaultValue: 'Reports To' })}</label>
+                        <input type="text" value={pafForm.reportsTo} placeholder={t('head_of_the_selected_position_auto_filled', { defaultValue: 'Head of the selected position (auto-filled)' })} onChange={e => setPafForm({ ...pafForm, reportsTo: e.target.value })}
                             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Type of Transfer <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('type_of_transfer', { defaultValue: 'Type of Transfer' })} <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
                         <select value={pafForm.typeOfTransfer} onChange={e => setPafForm({ ...pafForm, typeOfTransfer: e.target.value })}
                             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none transition focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
-                            <option value="">— Select —</option>
-                            <option value="Lateral transfer">Lateral transfer / نقل على نفس الدرجة</option>
-                            <option value="Promotion">Promotion / ترقية</option>
+                            <option value="">{t('select_dash', { defaultValue: '— Select —' })}</option>
+                            <option value="Lateral transfer">{t('lateral_transfer', { defaultValue: 'Lateral transfer' })} / نقل على نفس الدرجة</option>
+                            <option value="Promotion">{t('promotion', { defaultValue: 'Promotion' })} / ترقية</option>
                         </select>
                     </div>
 
                     <button type="submit" disabled={pafSubmitting}
                         className="w-full py-3.5 rounded-xl bg-[#511d29] text-white font-black uppercase tracking-widest shadow-sm hover:bg-[#3a151d] disabled:opacity-60 disabled:cursor-not-allowed transition inline-flex items-center justify-center gap-2">
-                        {pafSubmitting ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Transfer Form</>)}
+                        {pafSubmitting ? t('creating_ellipsis', { defaultValue: 'Creating…' }) : (<><Plus className="w-4 h-4" /> {t('create_transfer_form', { defaultValue: 'Create Transfer Form' })}</>)}
                     </button>
                 </form>
             </Modal>
 
             {/* Modal 1c: Create Inter-Company Transfer (free-text destination + factors) */}
-            <Modal isOpen={isIcModalOpen} onClose={() => setIsIcModalOpen(false)} title="Create Inter-Company Transfer" maxWidth="max-w-xl">
+            <Modal isOpen={isIcModalOpen} onClose={() => setIsIcModalOpen(false)} title={t('create_inter_company_transfer', { defaultValue: 'Create Inter-Company Transfer' })} maxWidth="max-w-xl">
                 <form onSubmit={handleIcSubmit} className="space-y-5 text-xs font-semibold text-slate-700">
                     <p className="flex items-start gap-2 text-[11px] font-medium text-slate-500 leading-relaxed">
                         <ExternalLink className="w-4 h-4 mt-0.5 shrink-0 text-[#aa7a51]" />
-                        Transfer an employee to another company. Fill the new placement (free text), generate the form for signatures, upload the signed copy, then accept — the employee becomes <b>Transferred</b> (data kept, remains in attendance, excluded from evaluation &amp; payroll).
+                        {t('inter_company_transfer_intro_before', { defaultValue: 'Transfer an employee to another company. Fill the new placement (free text), generate the form for signatures, upload the signed copy, then accept — the employee becomes' })} <b>{t('transferred', { defaultValue: 'Transferred' })}</b> {t('inter_company_transfer_intro_after', { defaultValue: '(data kept, remains in attendance, excluded from evaluation & payroll).' })}
                     </p>
 
                     <div className="space-y-1.5">
                         <label className="flex items-center gap-1.5 text-[#511d29] font-black uppercase text-[10px] tracking-wide">
-                            <User className="w-3.5 h-3.5" /> Employee <span className="text-red-500">*</span>
+                            <User className="w-3.5 h-3.5" /> {t('employee', { defaultValue: 'Employee' })} <span className="text-red-500">*</span>
                         </label>
                         <SearchSelect
                             value={icForm.employeeId}
                             onChange={(v) => setIcForm(prev => ({ ...prev, employeeId: v }))}
-                            placeholder="— Select employee —"
-                            emptyText="No employees match"
+                            placeholder={t('select_employee_dash', { defaultValue: '— Select employee —' })}
+                            emptyText={t('no_employees_match', { defaultValue: 'No employees match' })}
                             options={[...employees]
                                 .sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || ''))
                                 .map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined }))}
@@ -2058,21 +2068,21 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">New Company <span className="text-red-500">*</span> <span className="text-slate-400 font-bold normal-case">/ الشركة الجديدة</span></label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('new_company', { defaultValue: 'New Company' })} <span className="text-red-500">*</span> <span className="text-slate-400 font-bold normal-case">/ الشركة الجديدة</span></label>
                         <input type="text" value={icForm.newCompany} onChange={e => setIcForm({ ...icForm, newCompany: e.target.value })}
                             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         {([
-                            ['newDivisionName', 'New Division', 'الادارة الجديدة'],
-                            ['newDepartmentName', 'New Department', 'القسم الجديد'],
-                            ['newUnitName', 'New Unit', 'الوحدة الجديدة'],
-                            ['newPositionTitle', 'New Position Title', 'المسمى الوظيفي الجديد'],
-                            ['newJobCategory', 'New Job Category', 'الفئة الوظيفة الجديدة'],
-                            ['newJobGrade', 'New Job Grade', 'درجة الوظيفة الجديدة'],
-                            ['reportsTo', 'Reports To', 'يقدم تقريره الي'],
-                            ['newPlaceOfWork', 'Place of Work', 'مكان العمل'],
+                            ['newDivisionName', t('new_division', { defaultValue: 'New Division' }), 'الادارة الجديدة'],
+                            ['newDepartmentName', t('new_department', { defaultValue: 'New Department' }), 'القسم الجديد'],
+                            ['newUnitName', t('new_unit', { defaultValue: 'New Unit' }), 'الوحدة الجديدة'],
+                            ['newPositionTitle', t('new_position_title', { defaultValue: 'New Position Title' }), 'المسمى الوظيفي الجديد'],
+                            ['newJobCategory', t('new_job_category', { defaultValue: 'New Job Category' }), 'الفئة الوظيفة الجديدة'],
+                            ['newJobGrade', t('new_job_grade', { defaultValue: 'New Job Grade' }), 'درجة الوظيفة الجديدة'],
+                            ['reportsTo', t('reports_to', { defaultValue: 'Reports To' }), 'يقدم تقريره الي'],
+                            ['newPlaceOfWork', t('place_of_work', { defaultValue: 'Place of Work' }), 'مكان العمل'],
                         ] as const).map(([key, en, ar]) => (
                             <div key={key} className="space-y-1.5">
                                 <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{en} <span className="text-slate-400 font-bold normal-case">/ {ar}</span></label>
@@ -2084,10 +2094,10 @@ const PersonnelRelations: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                         {([
-                            ['englishFactor', 'English Factor', 'علاوة اللغة'],
-                            ['positionFactor', 'Factor for Position', 'علاوه وظيفة'],
-                            ['locationFactor', 'Factor for Location / Frontline', 'عامل الموقع/الخط الأمامي'],
-                            ['skillFactor', 'Skill Factor', 'عامل المهارة'],
+                            ['englishFactor', t('english_factor', { defaultValue: 'English Factor' }), 'علاوة اللغة'],
+                            ['positionFactor', t('factor_for_position', { defaultValue: 'Factor for Position' }), 'علاوه وظيفة'],
+                            ['locationFactor', t('factor_for_location_frontline', { defaultValue: 'Factor for Location / Frontline' }), 'عامل الموقع/الخط الأمامي'],
+                            ['skillFactor', t('skill_factor', { defaultValue: 'Skill Factor' }), 'عامل المهارة'],
                         ] as const).map(([key, en, ar]) => (
                             <div key={key} className="space-y-1.5">
                                 <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{en} <span className="text-slate-400 font-bold normal-case">/ {ar}</span></label>
@@ -2099,16 +2109,16 @@ const PersonnelRelations: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Type of Transfer <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('type_of_transfer', { defaultValue: 'Type of Transfer' })} <span className="text-slate-400 font-bold normal-case">/ نوع الانتقال</span></label>
                             <select value={icForm.typeOfTransfer} onChange={e => setIcForm({ ...icForm, typeOfTransfer: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15">
-                                <option value="">— Select —</option>
-                                <option value="Lateral transfer">Lateral transfer / نقل على نفس الدرجة</option>
-                                <option value="Promotion">Promotion / ترقية</option>
+                                <option value="">{t('select_dash', { defaultValue: '— Select —' })}</option>
+                                <option value="Lateral transfer">{t('lateral_transfer', { defaultValue: 'Lateral transfer' })} / نقل على نفس الدرجة</option>
+                                <option value="Promotion">{t('promotion', { defaultValue: 'Promotion' })} / ترقية</option>
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">Effectivity Date <span className="text-slate-400 font-bold normal-case">/ تاريخ السريان</span></label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] tracking-wide">{t('effectivity_date', { defaultValue: 'Effectivity Date' })} <span className="text-slate-400 font-bold normal-case">/ تاريخ السريان</span></label>
                             <input type="date" value={icForm.effectiveDate} onChange={e => setIcForm({ ...icForm, effectiveDate: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
                         </div>
@@ -2116,17 +2126,17 @@ const PersonnelRelations: React.FC = () => {
 
                     <button type="submit" disabled={icSubmitting}
                         className="w-full py-3.5 rounded-xl bg-[#aa7a51] text-white font-black uppercase tracking-widest shadow-sm hover:bg-[#8f6544] disabled:opacity-60 disabled:cursor-not-allowed transition inline-flex items-center justify-center gap-2">
-                        {icSubmitting ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Inter-Company Transfer</>)}
+                        {icSubmitting ? t('creating_ellipsis', { defaultValue: 'Creating…' }) : (<><Plus className="w-4 h-4" /> {t('create_inter_company_transfer', { defaultValue: 'Create Inter-Company Transfer' })}</>)}
                     </button>
                 </form>
             </Modal>
 
             {/* Modal 1b: Upload signed form + Accept/Reject */}
-            <Modal isOpen={!!decidePaf} onClose={() => { setDecidePaf(null); setDecideFile(null); setDecideNewCompany(''); }} title="Personnel Action — Decision" maxWidth="max-w-md">
+            <Modal isOpen={!!decidePaf} onClose={() => { setDecidePaf(null); setDecideFile(null); setDecideNewCompany(''); }} title={t('personnel_action_decision', { defaultValue: 'Personnel Action — Decision' })} maxWidth="max-w-md">
                 <div className="space-y-4 text-xs font-semibold text-slate-700">
-                    <p className="text-slate-500">Employee: <span className="font-black text-[#511d29]">{decidePaf?.employee?.fullName}</span></p>
+                    <p className="text-slate-500">{t('employee', { defaultValue: 'Employee' })}: <span className="font-black text-[#511d29]">{decidePaf?.employee?.fullName}</span></p>
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Signed Form <span className="text-red-500">*</span></label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('signed_form', { defaultValue: 'Signed Form' })} <span className="text-red-500">*</span></label>
                         <input type="file" accept=".pdf,.doc,.docx,image/*"
                             onChange={e => setDecideFile(e.target.files?.[0] || null)}
                             className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
@@ -2134,8 +2144,8 @@ const PersonnelRelations: React.FC = () => {
                     </div>
                     {decidePaf?.actionType === 'INTER_COMPANY_TRANSFER' && (
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Company <span className="text-red-500">*</span></label>
-                            <input type="text" placeholder="Company the employee is transferring to"
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('new_company', { defaultValue: 'New Company' })} <span className="text-red-500">*</span></label>
+                            <input type="text" placeholder={t('company_the_employee_is_transferring_to', { defaultValue: 'Company the employee is transferring to' })}
                                 value={decideNewCompany || decidePaf?.newCompany || ''}
                                 onChange={e => setDecideNewCompany(e.target.value)}
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none focus:border-[#511d29] focus:ring-2 focus:ring-[#511d29]/15" />
@@ -2143,45 +2153,45 @@ const PersonnelRelations: React.FC = () => {
                     )}
                     <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">
                         {decidePaf?.actionType === 'INTER_COMPANY_TRANSFER'
-                            ? 'Accepting marks the employee as Transferred to the new company: their data is kept and stays visible, and they remain in attendance, but they are excluded from evaluation and payroll. The signed form is filed to their Lifecycle documents.'
-                            : 'Accepting will move the employee into the target Job Description (division/department/unit/position/category) and file the signed form to their Lifecycle documents. Blocked if the JD is above its staffing plan.'}
+                            ? t('accepting_marks_employee_transferred_notice', { defaultValue: 'Accepting marks the employee as Transferred to the new company: their data is kept and stays visible, and they remain in attendance, but they are excluded from evaluation and payroll. The signed form is filed to their Lifecycle documents.' })
+                            : t('accepting_moves_employee_into_target_jd_notice', { defaultValue: 'Accepting will move the employee into the target Job Description (division/department/unit/position/category) and file the signed form to their Lifecycle documents. Blocked if the JD is above its staffing plan.' })}
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => handleDecide('REJECT')} disabled={!!decideBusy}
                             className="flex-1 py-3 bg-white border border-red-300 text-red-600 font-black uppercase tracking-widest hover:bg-red-50 disabled:opacity-60 inline-flex items-center justify-center gap-1.5">
-                            <X className="w-4 h-4" /> {decideBusy === 'REJECT' ? 'Rejecting…' : 'Reject'}
+                            <X className="w-4 h-4" /> {decideBusy === 'REJECT' ? t('rejecting_ellipsis', { defaultValue: 'Rejecting…' }) : t('reject', { defaultValue: 'Reject' })}
                         </button>
                         <button onClick={() => handleDecide('ACCEPT')} disabled={!!decideBusy}
                             className="flex-1 py-3 bg-emerald-600 text-white font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-60 inline-flex items-center justify-center gap-1.5">
-                            <Check className="w-4 h-4" /> {decideBusy === 'ACCEPT' ? 'Applying…' : 'Accept & Apply'}
+                            <Check className="w-4 h-4" /> {decideBusy === 'ACCEPT' ? t('applying_ellipsis', { defaultValue: 'Applying…' }) : t('accept_and_apply', { defaultValue: 'Accept & Apply' })}
                         </button>
                     </div>
                 </div>
             </Modal>
 
             {/* Modal 2: Contract Renewal */}
-            <Modal isOpen={isRenewalModalOpen} onClose={() => setIsRenewalModalOpen(false)} title="Initiate Contract Renewal" maxWidth="max-w-md">
+            <Modal isOpen={isRenewalModalOpen} onClose={() => setIsRenewalModalOpen(false)} title={t('initiate_contract_renewal', { defaultValue: 'Initiate Contract Renewal' })} maxWidth="max-w-md">
                 <form onSubmit={handleRenewalSubmit} className="space-y-4 text-xs font-semibold text-slate-700">
-                    <p className="text-slate-500 mb-2">Renew contract for: <span className="font-black text-[#511d29]">{selectedEmployee?.fullName}</span></p>
+                    <p className="text-slate-500 mb-2">{t('renew_contract_for', { defaultValue: 'Renew contract for' })}: <span className="font-black text-[#511d29]">{selectedEmployee?.fullName}</span></p>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New Start Date</label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('new_start_date', { defaultValue: 'New Start Date' })}</label>
                             <input type="date" value={renewForm.startDate}
                                 onChange={e => setRenewForm({ ...renewForm, startDate: e.target.value })}
                                 className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">New End Date</label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('new_end_date', { defaultValue: 'New End Date' })}</label>
                             <input type="date" value={renewForm.endDate}
                                 onChange={e => setRenewForm({ ...renewForm, endDate: e.target.value })}
                                 className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 -mt-2">Pre-filled to 6 months from the day after the current contract ends — adjust if needed.</p>
+                    <p className="text-[10px] text-slate-400 -mt-2">{t('prefilled_to_6_months_adjust_if_needed', { defaultValue: 'Pre-filled to 6 months from the day after the current contract ends — adjust if needed.' })}</p>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Signed Contract <span className="text-red-500">*</span></label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('signed_contract', { defaultValue: 'Signed Contract' })} <span className="text-red-500">*</span></label>
                         <input type="file" accept=".pdf,.doc,.docx,image/*"
                             onChange={e => setRenewFile(e.target.files?.[0] || null)}
                             className="w-full p-2 border border-[#511d29]/20 bg-white text-slate-600" />
@@ -2189,18 +2199,18 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <div className="bg-amber-50/60 border border-amber-200 p-2.5 rounded text-[10px] text-amber-900/90 leading-relaxed">
-                        Confirming will archive the current contract, start the new one, carry over remaining paid leave (capped at 14 days), reset emergency &amp; unpaid leave, and file the signed contract to the employee's Lifecycle documents.
+                        {t('confirming_renewal_archives_contract_notice', { defaultValue: "Confirming will archive the current contract, start the new one, carry over remaining paid leave (capped at 14 days), reset emergency & unpaid leave, and file the signed contract to the employee's Lifecycle documents." })}
                     </div>
 
                     <button type="submit" disabled={renewSubmitting}
                         className="w-full py-3 bg-amber-600 text-white font-black uppercase tracking-widest hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed">
-                        {renewSubmitting ? 'Processing…' : 'Confirm Renewal'}
+                        {renewSubmitting ? t('processing_ellipsis', { defaultValue: 'Processing…' }) : t('confirm_renewal', { defaultValue: 'Confirm Renewal' })}
                     </button>
                 </form>
             </Modal>
 
             {/* Modal 5: Offboarding Log */}
-            <Modal isOpen={isOffboardingModalOpen} onClose={() => setIsOffboardingModalOpen(false)} title="Initiate Offboarding Manually" maxWidth="max-w-md">
+            <Modal isOpen={isOffboardingModalOpen} onClose={() => setIsOffboardingModalOpen(false)} title={t('initiate_offboarding_manually', { defaultValue: 'Initiate Offboarding Manually' })} maxWidth="max-w-md">
                 <form
                     onSubmit={async (e) => {
                         e.preventDefault();
@@ -2222,19 +2232,17 @@ const PersonnelRelations: React.FC = () => {
                     className="space-y-4 text-xs font-semibold text-slate-700"
                 >
                     <p className="text-[10px] text-slate-400 font-normal normal-case">
-                        Use this only when the case didn't come through its own dedicated path — a disciplinary
-                        action reaching Termination, or the employee's own Resignation Request page — already
-                        open their offboarding case automatically.
+                        {t('manual_offboarding_dedicated_path_notice', { defaultValue: "Use this only when the case didn't come through its own dedicated path — a disciplinary action reaching Termination, or the employee's own Resignation Request page — already open their offboarding case automatically." })}
                     </p>
                     <div className="relative">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('select_employee', { defaultValue: 'Select Employee' })}</label>
                         <input
                             type="text"
                             value={involuntaryEmployeeQuery}
                             onChange={e => handleInvoluntaryEmployeeChange(e.target.value)}
                             onFocus={() => setShowInvoluntarySuggestions(true)}
                             onBlur={() => { involuntaryBlurTimeout.current = window.setTimeout(() => setShowInvoluntarySuggestions(false), 150); }}
-                            placeholder="Start typing the employee's name…"
+                            placeholder={t('start_typing_the_employees_name', { defaultValue: "Start typing the employee's name…" })}
                             className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
                             autoComplete="off"
                         />
@@ -2246,7 +2254,7 @@ const PersonnelRelations: React.FC = () => {
                                             type="button"
                                             onMouseDown={e => e.preventDefault()}
                                             onClick={() => selectInvoluntaryEmployee(emp)}
-                                            className="w-full text-left px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
+                                            className="w-full text-start px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
                                         >
                                             {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
                                         </button>
@@ -2257,38 +2265,38 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Reason</label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('reason', { defaultValue: 'Reason' })}</label>
                         <select value={involuntarySource} onChange={e => setInvoluntarySource(e.target.value as typeof involuntarySource)} className="w-full p-2 border border-[#511d29]/20 bg-white">
-                            <option value="TERMINATION">Termination</option>
-                            <option value="EMPLOYEE_RESIGNATION">Resignation</option>
-                            <option value="CONTRACT_NON_RENEWAL_COMPANY">Contract Non-Renewal (by Company)</option>
-                            <option value="CONTRACT_NON_RENEWAL_EMPLOYEE">Contract Non-Renewal (by Employee)</option>
+                            <option value="TERMINATION">{t('termination', { defaultValue: 'Termination' })}</option>
+                            <option value="EMPLOYEE_RESIGNATION">{t('resignation', { defaultValue: 'Resignation' })}</option>
+                            <option value="CONTRACT_NON_RENEWAL_COMPANY">{t('contract_non_renewal_by_company', { defaultValue: 'Contract Non-Renewal (by Company)' })}</option>
+                            <option value="CONTRACT_NON_RENEWAL_EMPLOYEE">{t('contract_non_renewal_by_employee', { defaultValue: 'Contract Non-Renewal (by Employee)' })}</option>
                         </select>
                     </div>
 
                     {involuntarySource !== 'EMPLOYEE_RESIGNATION' && (
                         <div>
-                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Date of separation</label>
+                            <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('date_of_separation', { defaultValue: 'Date of separation' })}</label>
                             <input type="date" value={involuntaryDate} onChange={e => setInvoluntaryDate(e.target.value)} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Notes (optional)</label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('notes_optional', { defaultValue: 'Notes (optional)' })}</label>
                         <textarea value={involuntaryReason} onChange={e => setInvoluntaryReason(e.target.value)} rows={2} className="w-full p-2 border border-[#511d29]/20 bg-white" />
                     </div>
 
                     <div className="bg-red-50 p-3 border border-red-200 text-[10px] text-red-700 font-bold uppercase">
-                        ⚠️ Note: Last payment withholding will be automatically flagged in Payroll until all clearance items are complete.
+                        ⚠️ {t('last_payment_withholding_flagged_notice', { defaultValue: 'Note: Last payment withholding will be automatically flagged in Payroll until all clearance items are complete.' })}
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
-                        Initialize Offboarding
+                        {t('initialize_offboarding', { defaultValue: 'Initialize Offboarding' })}
                     </button>
                 </form>
             </Modal>
 
-            <Modal isOpen={isExceptionalPromotionModalOpen} onClose={() => setIsExceptionalPromotionModalOpen(false)} title="Add Exceptional Promotion" maxWidth="max-w-md">
+            <Modal isOpen={isExceptionalPromotionModalOpen} onClose={() => setIsExceptionalPromotionModalOpen(false)} title={t('add_exceptional_promotion', { defaultValue: 'Add Exceptional Promotion' })} maxWidth="max-w-md">
                 <form
                     onSubmit={async (e) => {
                         e.preventDefault();
@@ -2310,18 +2318,17 @@ const PersonnelRelations: React.FC = () => {
                     className="space-y-4 text-xs font-semibold text-slate-700"
                 >
                     <p className="text-[10px] text-slate-400 font-normal normal-case">
-                        Use this to promote an employee outside the normal tenure/Evaluation Index eligibility rules.
-                        The case skips straight to Promotion Report.
+                        {t('exceptional_promotion_outside_normal_rules_notice', { defaultValue: 'Use this to promote an employee outside the normal tenure/Evaluation Index eligibility rules. The case skips straight to Promotion Report.' })}
                     </p>
                     <div className="relative">
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Select Employee</label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('select_employee', { defaultValue: 'Select Employee' })}</label>
                         <input
                             type="text"
                             value={exceptionalEmployeeQuery}
                             onChange={e => handleExceptionalEmployeeChange(e.target.value)}
                             onFocus={() => setShowExceptionalSuggestions(true)}
                             onBlur={() => { exceptionalBlurTimeout.current = window.setTimeout(() => setShowExceptionalSuggestions(false), 150); }}
-                            placeholder="Start typing the employee's name…"
+                            placeholder={t('start_typing_the_employees_name', { defaultValue: "Start typing the employee's name…" })}
                             className="w-full p-2 border border-[#511d29]/20 bg-white font-normal normal-case"
                             autoComplete="off"
                         />
@@ -2333,7 +2340,7 @@ const PersonnelRelations: React.FC = () => {
                                             type="button"
                                             onMouseDown={e => e.preventDefault()}
                                             onClick={() => selectExceptionalEmployee(emp)}
-                                            className="w-full text-left px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
+                                            className="w-full text-start px-3 py-2 text-xs font-normal normal-case hover:bg-slate-50"
                                         >
                                             {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
                                         </button>
@@ -2344,14 +2351,14 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <div>
-                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">Target Job Grade</label>
+                        <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('target_job_grade', { defaultValue: 'Target Job Grade' })}</label>
                         <select
                             value={exceptionalToGrade}
                             onChange={e => setExceptionalToGrade(e.target.value)}
                             disabled={!exceptionalEmployee}
                             className="w-full p-2 border border-[#511d29]/20 bg-white disabled:bg-slate-50 disabled:text-slate-400"
                         >
-                            <option value="">— Select grade —</option>
+                            <option value="">{t('select_grade_dash', { defaultValue: '— Select grade —' })}</option>
                             {exceptionalEmployee && JOB_GRADES
                                 .filter((g, idx) => idx > JOB_GRADES.indexOf(exceptionalEmployee.jobGrade))
                                 .map(g => <option key={g} value={g}>{g}</option>)}
@@ -2359,7 +2366,7 @@ const PersonnelRelations: React.FC = () => {
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest hover:bg-[#3a151d]">
-                        Create Exceptional Promotion
+                        {t('create_exceptional_promotion', { defaultValue: 'Create Exceptional Promotion' })}
                     </button>
                 </form>
             </Modal>
@@ -2397,18 +2404,18 @@ const PersonnelRelations: React.FC = () => {
                     const showField = makeFieldVisibility(emp.contractType);
 
                     const docs = [
-                        { label: 'CV / Resume', k: 'cvUrl' },
-                        { label: 'University Degree', k: 'degreeUrl' },
-                        { label: 'Birth Certificate', k: 'birthCertUrl' },
-                        { label: 'Passport Copy', k: 'passportCopyUrl' },
-                        { label: 'Cancelled Bank Check', k: 'bankCheckUrl' },
-                        { label: 'Photo', k: 'photoUrl' },
-                        { label: 'ID & Driving Card', k: 'idCardUrl' },
-                        { label: 'Signed Job Offer', k: 'jobOfferUrl' },
-                        { label: 'Health Certificate', k: 'healthCertUrl' },
-                        { label: 'Airplane Ticket', k: 'ticketUrl' },
-                        { label: 'Residency Document', k: 'residencyDocumentUrl' },
-                        { label: 'Interview Evaluation', k: 'interviewEvaluationUrl' },
+                        { label: t('cv_resume', { defaultValue: 'CV / Resume' }), k: 'cvUrl' },
+                        { label: t('university_degree', { defaultValue: 'University Degree' }), k: 'degreeUrl' },
+                        { label: t('birth_certificate', { defaultValue: 'Birth Certificate' }), k: 'birthCertUrl' },
+                        { label: t('passport_copy', { defaultValue: 'Passport Copy' }), k: 'passportCopyUrl' },
+                        { label: t('cancelled_bank_check', { defaultValue: 'Cancelled Bank Check' }), k: 'bankCheckUrl' },
+                        { label: t('photo', { defaultValue: 'Photo' }), k: 'photoUrl' },
+                        { label: t('id_driving_card', { defaultValue: 'ID & Driving Card' }), k: 'idCardUrl' },
+                        { label: t('signed_job_offer', { defaultValue: 'Signed Job Offer' }), k: 'jobOfferUrl' },
+                        { label: t('health_certificate', { defaultValue: 'Health Certificate' }), k: 'healthCertUrl' },
+                        { label: t('airplane_ticket', { defaultValue: 'Airplane Ticket' }), k: 'ticketUrl' },
+                        { label: t('residency_document', { defaultValue: 'Residency Document' }), k: 'residencyDocumentUrl' },
+                        { label: t('interview_evaluation', { defaultValue: 'Interview Evaluation' }), k: 'interviewEvaluationUrl' },
                     ].filter(d => showField(d.k));
                     const uploadedDocsCount = docs.filter(d => emp[d.k as keyof Employee]).length;
 
@@ -2448,7 +2455,7 @@ const PersonnelRelations: React.FC = () => {
                                         <div className="text-2xl font-black tracking-tight truncate">{emp.fullName}</div>
                                         {emp.fullNameArabic
                                             ? <div className="text-sm font-bold text-white/70 truncate mt-0.5" dir="rtl">{emp.fullNameArabic}</div>
-                                            : <div className="text-xs font-bold text-white/50 truncate mt-0.5">{emp.email || 'No email on file'}</div>}
+                                            : <div className="text-xs font-bold text-white/50 truncate mt-0.5">{emp.email || t('no_email_on_file', { defaultValue: 'No email on file' })}</div>}
                                         <div className="flex flex-wrap items-center gap-2 mt-3">
                                             {emp.staffId && <span className="px-3 py-1 rounded-full bg-white/15 border border-white/10 backdrop-blur-sm text-[11px] font-mono font-black tracking-tight">{emp.staffId}</span>}
                                             {emp.role && (
@@ -2462,11 +2469,11 @@ const PersonnelRelations: React.FC = () => {
                                             </span>
                                             {emp.enrollmentStatus === 'SEPARATED' ? (
                                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-rose-500/20 border-rose-300/30 text-rose-50">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />Separated
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{t('separated', { defaultValue: 'Separated' })}
                                                 </span>
                                             ) : (
                                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${emp.contractStatus === 'Active' || !emp.contractStatus ? 'bg-emerald-400/20 border-emerald-300/30 text-emerald-50' : 'bg-white/10 border-white/15 text-white/80'}`}>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{emp.contractStatus || 'Active'}
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{emp.contractStatus || t('active', { defaultValue: 'Active' })}
                                                 </span>
                                             )}
                                         </div>
@@ -2474,11 +2481,11 @@ const PersonnelRelations: React.FC = () => {
                                     <button
                                         onClick={() => handleGenerateSummary(emp)}
                                         disabled={summaryBusy === emp.id}
-                                        title="Download a one-page summary (profile, attendance, last evaluation, leave balances) on the IPH letterhead"
+                                        title={t('download_one_page_summary_iph_letterhead', { defaultValue: 'Download a one-page summary (profile, attendance, last evaluation, leave balances) on the IPH letterhead' })}
                                         className="self-start shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 border border-white/20 text-white font-black text-[11px] uppercase tracking-widest hover:bg-white/25 transition-colors disabled:opacity-50 backdrop-blur-sm"
                                     >
                                         <FileText className="w-4 h-4" />
-                                        {summaryBusy === emp.id ? 'Generating…' : 'Extract Summary (Word)'}
+                                        {summaryBusy === emp.id ? t('generating_ellipsis', { defaultValue: 'Generating…' }) : t('extract_summary_word', { defaultValue: 'Extract Summary (Word)' })}
                                     </button>
                                 </div>
                             </div>
@@ -2486,23 +2493,23 @@ const PersonnelRelations: React.FC = () => {
                             {emp.enrollmentStatus === 'SEPARATED' && (
                                 <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
                                     <div className="flex items-center gap-2 font-black text-rose-700 uppercase text-xs tracking-widest">
-                                        <span className="w-2 h-2 rounded-full bg-rose-500" /> Separation Details
+                                        <span className="w-2 h-2 rounded-full bg-rose-500" /> {t('separation_details', { defaultValue: 'Separation Details' })}
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] font-black uppercase text-rose-400">Separation Date</span>
+                                        <span className="block text-[10px] font-black uppercase text-rose-400">{t('separation_date', { defaultValue: 'Separation Date' })}</span>
                                         <span className="font-bold text-rose-800">{emp.separationDate ? format(parseISO(emp.separationDate), 'dd MMM yyyy') : '—'}</span>
                                     </div>
                                     {detailSeparationCase && (
                                         <>
                                             <div>
-                                                <span className="block text-[10px] font-black uppercase text-rose-400">Reason</span>
+                                                <span className="block text-[10px] font-black uppercase text-rose-400">{t('reason', { defaultValue: 'Reason' })}</span>
                                                 <span className="font-bold text-rose-800">{OFFBOARDING_SOURCE_LABELS[detailSeparationCase.source] || detailSeparationCase.source}</span>
                                             </div>
                                             <button
                                                 onClick={() => navigate(`/personnel-relations/offboarding/${detailSeparationCase.id}`)}
                                                 className="ml-auto text-rose-700 hover:underline font-black text-xs uppercase tracking-wider"
                                             >
-                                                View Offboarding Case ({detailSeparationCase.caseNumber}) →
+                                                {t('view_offboarding_case_casenumber', { defaultValue: 'View Offboarding Case ({{caseNumber}}) →', caseNumber: detailSeparationCase.caseNumber })}
                                             </button>
                                         </>
                                     )}
@@ -2512,43 +2519,43 @@ const PersonnelRelations: React.FC = () => {
                             {/* The information tree — one collapsible branch per category, file-explorer
                                 style. See TreeBranch/expandedNodes above for how expand state works. */}
                             <div className="space-y-2">
-                                <TreeBranch isOpen={expandedNodes.has('personal')} onToggle={() => toggleNode('personal')} icon={User} title="Personal Information" color="bg-indigo-50 text-indigo-600">
+                                <TreeBranch isOpen={expandedNodes.has('personal')} onToggle={() => toggleNode('personal')} icon={User} title={t('personal_information', { defaultValue: 'Personal Information' })} color="bg-indigo-50 text-indigo-600">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                        {showField('gender') && <Field emp={emp} label="Gender" k="gender" />}
-                                        <Field emp={emp} label="Date of Birth" k="dateOfBirth" type="date" />
-                                        <Field emp={emp} label="Place of Birth" k="placeOfBirth" />
-                                        {showField('placeOfBirthArabic') && <Field emp={emp} label="Place of Birth (Arabic)" k="placeOfBirthArabic" dir="rtl" />}
-                                        <Field emp={emp} label="Nationality" k="nationality" />
-                                        {showField('nationalityArabic') && <Field emp={emp} label="Nationality (Arabic)" k="nationalityArabic" dir="rtl" />}
-                                        {showField('nationalId') && <Field emp={emp} label="National ID" k="nationalId" />}
-                                        <Field emp={emp} label="Blood Type" k="bloodType" />
-                                        <Field emp={emp} label="Academic Qualification" k="academicQualification" />
-                                        {showField('academicQualificationArabic') && <Field emp={emp} label="Academic Qualification (Arabic)" k="academicQualificationArabic" dir="rtl" />}
+                                        {showField('gender') && <Field emp={emp} label={t('gender', { defaultValue: 'Gender' })} k="gender" />}
+                                        <Field emp={emp} label={t('date_of_birth', { defaultValue: 'Date of Birth' })} k="dateOfBirth" type="date" />
+                                        <Field emp={emp} label={t('place_of_birth', { defaultValue: 'Place of Birth' })} k="placeOfBirth" />
+                                        {showField('placeOfBirthArabic') && <Field emp={emp} label={t('place_of_birth_arabic', { defaultValue: 'Place of Birth (Arabic)' })} k="placeOfBirthArabic" dir="rtl" />}
+                                        <Field emp={emp} label={t('nationality', { defaultValue: 'Nationality' })} k="nationality" />
+                                        {showField('nationalityArabic') && <Field emp={emp} label={t('nationality_arabic', { defaultValue: 'Nationality (Arabic)' })} k="nationalityArabic" dir="rtl" />}
+                                        {showField('nationalId') && <Field emp={emp} label={t('national_id', { defaultValue: 'National ID' })} k="nationalId" />}
+                                        <Field emp={emp} label={t('blood_type', { defaultValue: 'Blood Type' })} k="bloodType" />
+                                        <Field emp={emp} label={t('academic_qualification', { defaultValue: 'Academic Qualification' })} k="academicQualification" />
+                                        {showField('academicQualificationArabic') && <Field emp={emp} label={t('academic_qualification_arabic', { defaultValue: 'Academic Qualification (Arabic)' })} k="academicQualificationArabic" dir="rtl" />}
                                     </div>
                                 </TreeBranch>
 
-                                <TreeBranch isOpen={expandedNodes.has('identity')} onToggle={() => toggleNode('identity')} icon={CreditCard} title="Identity & Documents" color="bg-teal-50 text-teal-600">
+                                <TreeBranch isOpen={expandedNodes.has('identity')} onToggle={() => toggleNode('identity')} icon={CreditCard} title={t('identity_documents', { defaultValue: 'Identity & Documents' })} color="bg-teal-50 text-teal-600">
                                     <div className="space-y-2">
-                                        <TreeBranch isOpen={expandedNodes.has('identity.idpassport')} onToggle={() => toggleNode('identity.idpassport')} level={1} icon={CreditCard} title="ID, Passport & License" color="bg-teal-50 text-teal-600">
+                                        <TreeBranch isOpen={expandedNodes.has('identity.idpassport')} onToggle={() => toggleNode('identity.idpassport')} level={1} icon={CreditCard} title={t('id_passport_license', { defaultValue: 'ID, Passport & License' })} color="bg-teal-50 text-teal-600">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                                {showField('idCardNumber') && <Field emp={emp} label="ID Card Number" k="idCardNumber" />}
-                                                {showField('idPlaceOfIssue') && <Field emp={emp} label="ID Place of Issue" k="idPlaceOfIssue" />}
-                                                {showField('idPlaceOfIssueArabic') && <Field emp={emp} label="ID Place of Issue (Arabic)" k="idPlaceOfIssueArabic" dir="rtl" />}
-                                                {showField('idIssueDate') && <Field emp={emp} label="ID Issue Date" k="idIssueDate" type="date" />}
-                                                <Field emp={emp} label="Passport Number" k="passportNumber" />
-                                                {showField('passportPlaceOfIssue') && <Field emp={emp} label="Passport Place of Issue" k="passportPlaceOfIssue" />}
-                                                {showField('passportPlaceOfIssueArabic') && <Field emp={emp} label="Passport Place of Issue (Arabic)" k="passportPlaceOfIssueArabic" dir="rtl" />}
-                                                <Field emp={emp} label="Passport Expiry" k="passportExpiryDate" type="date" />
-                                                {showField('drivingLicenseType') && <Field emp={emp} label="License Type" k="drivingLicenseType" />}
-                                                {showField('drivingLicenseTypeArabic') && <Field emp={emp} label="License Type (Arabic)" k="drivingLicenseTypeArabic" dir="rtl" />}
-                                                {showField('drivingLicenseNumber') && <Field emp={emp} label="License Number" k="drivingLicenseNumber" />}
-                                                {showField('drivingLicenseExpiry') && <Field emp={emp} label="License Expiry" k="drivingLicenseExpiry" type="date" />}
-                                                {showField('drivingLicensePlaceOfIssue') && <Field emp={emp} label="License Place of Issue" k="drivingLicensePlaceOfIssue" />}
-                                                {showField('drivingLicensePlaceOfIssueArabic') && <Field emp={emp} label="License Place of Issue (Arabic)" k="drivingLicensePlaceOfIssueArabic" dir="rtl" />}
+                                                {showField('idCardNumber') && <Field emp={emp} label={t('id_card_number', { defaultValue: 'ID Card Number' })} k="idCardNumber" />}
+                                                {showField('idPlaceOfIssue') && <Field emp={emp} label={t('id_place_of_issue', { defaultValue: 'ID Place of Issue' })} k="idPlaceOfIssue" />}
+                                                {showField('idPlaceOfIssueArabic') && <Field emp={emp} label={t('id_place_of_issue_arabic', { defaultValue: 'ID Place of Issue (Arabic)' })} k="idPlaceOfIssueArabic" dir="rtl" />}
+                                                {showField('idIssueDate') && <Field emp={emp} label={t('id_issue_date', { defaultValue: 'ID Issue Date' })} k="idIssueDate" type="date" />}
+                                                <Field emp={emp} label={t('passport_number', { defaultValue: 'Passport Number' })} k="passportNumber" />
+                                                {showField('passportPlaceOfIssue') && <Field emp={emp} label={t('passport_place_of_issue', { defaultValue: 'Passport Place of Issue' })} k="passportPlaceOfIssue" />}
+                                                {showField('passportPlaceOfIssueArabic') && <Field emp={emp} label={t('passport_place_of_issue_arabic', { defaultValue: 'Passport Place of Issue (Arabic)' })} k="passportPlaceOfIssueArabic" dir="rtl" />}
+                                                <Field emp={emp} label={t('passport_expiry', { defaultValue: 'Passport Expiry' })} k="passportExpiryDate" type="date" />
+                                                {showField('drivingLicenseType') && <Field emp={emp} label={t('license_type', { defaultValue: 'License Type' })} k="drivingLicenseType" />}
+                                                {showField('drivingLicenseTypeArabic') && <Field emp={emp} label={t('license_type_arabic', { defaultValue: 'License Type (Arabic)' })} k="drivingLicenseTypeArabic" dir="rtl" />}
+                                                {showField('drivingLicenseNumber') && <Field emp={emp} label={t('license_number', { defaultValue: 'License Number' })} k="drivingLicenseNumber" />}
+                                                {showField('drivingLicenseExpiry') && <Field emp={emp} label={t('license_expiry', { defaultValue: 'License Expiry' })} k="drivingLicenseExpiry" type="date" />}
+                                                {showField('drivingLicensePlaceOfIssue') && <Field emp={emp} label={t('license_place_of_issue', { defaultValue: 'License Place of Issue' })} k="drivingLicensePlaceOfIssue" />}
+                                                {showField('drivingLicensePlaceOfIssueArabic') && <Field emp={emp} label={t('license_place_of_issue_arabic', { defaultValue: 'License Place of Issue (Arabic)' })} k="drivingLicensePlaceOfIssueArabic" dir="rtl" />}
                                             </div>
                                         </TreeBranch>
 
-                                        <TreeBranch isOpen={expandedNodes.has('identity.documents')} onToggle={() => toggleNode('identity.documents')} level={1} icon={Paperclip} title="Documents & Attachments" color="bg-indigo-50 text-indigo-600" count={`${uploadedDocsCount}/${docs.length}`}>
+                                        <TreeBranch isOpen={expandedNodes.has('identity.documents')} onToggle={() => toggleNode('identity.documents')} level={1} icon={Paperclip} title={t('documents_attachments', { defaultValue: 'Documents & Attachments' })} color="bg-indigo-50 text-indigo-600" count={`${uploadedDocsCount}/${docs.length}`}>
                                             <div className="space-y-2">
                                                 {docs.map(d => {
                                                     const raw = emp[d.k as keyof Employee] as string | undefined;
@@ -2560,7 +2567,7 @@ const PersonnelRelations: React.FC = () => {
                                                             <div className="flex items-center gap-2 shrink-0">
                                                                 {raw && (
                                                                     <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
-                                                                        View <ExternalLink className="w-3 h-3" />
+                                                                        {t('view', { defaultValue: 'View' })} <ExternalLink className="w-3 h-3" />
                                                                     </a>
                                                                 )}
                                                                 {!raw && !isHRRole && <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">—</span>}
@@ -2573,7 +2580,7 @@ const PersonnelRelations: React.FC = () => {
                                                                             accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
                                                                             onChange={e => handleFixedDocUpload(emp.id, d.k, e.target.files?.[0])}
                                                                         />
-                                                                        {busy ? 'Uploading…' : (raw ? 'Replace' : 'Upload')}
+                                                                        {busy ? t('uploading_ellipsis', { defaultValue: 'Uploading…' }) : (raw ? t('replace', { defaultValue: 'Replace' }) : t('upload', { defaultValue: 'Upload' }))}
                                                                     </label>
                                                                 )}
                                                             </div>
@@ -2586,10 +2593,10 @@ const PersonnelRelations: React.FC = () => {
                                         {/* Always rendered now (was HR-only-or-non-empty before) — an empty branch is
                                             still a branch. Non-HR viewers still never fetch this list (query stays
                                             isHRRole-gated below), so they just see the empty state either way. */}
-                                        <TreeBranch isOpen={expandedNodes.has('identity.additional')} onToggle={() => toggleNode('identity.additional')} level={1} icon={FileText} title="Additional Documents" color="bg-cyan-50 text-cyan-600" count={employeeDocuments.length}>
+                                        <TreeBranch isOpen={expandedNodes.has('identity.additional')} onToggle={() => toggleNode('identity.additional')} level={1} icon={FileText} title={t('additional_documents', { defaultValue: 'Additional Documents' })} color="bg-cyan-50 text-cyan-600" count={employeeDocuments.length}>
                                             <div className="space-y-3">
                                                 {employeeDocuments.length === 0 && (
-                                                    <p className="text-xs text-slate-400 font-medium">No additional documents on file.</p>
+                                                    <p className="text-xs text-slate-400 font-medium">{t('no_additional_documents_on_file', { defaultValue: 'No additional documents on file.' })}</p>
                                                 )}
                                                 {employeeDocuments.map((doc: EmployeeDocument) => {
                                                     const href = doc.fileUrl.startsWith('http') ? doc.fileUrl : `${SERVER_URL}${doc.fileUrl}`;
@@ -2603,14 +2610,14 @@ const PersonnelRelations: React.FC = () => {
                                                             </div>
                                                             <div className="flex items-center gap-3 shrink-0">
                                                                 <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider">
-                                                                    View <ExternalLink className="w-3 h-3" />
+                                                                    {t('view', { defaultValue: 'View' })} <ExternalLink className="w-3 h-3" />
                                                                 </a>
                                                                 {isHRRole && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleDeleteDocument(emp.id, doc.id)}
                                                                         className="text-slate-400 hover:text-rose-600 transition-colors"
-                                                                        title="Remove document"
+                                                                        title={t('remove_document', { defaultValue: 'Remove document' })}
                                                                     >
                                                                         <Trash2 className="w-4 h-4" />
                                                                     </button>
@@ -2627,7 +2634,7 @@ const PersonnelRelations: React.FC = () => {
                                                             onClick={() => setAddDocModalOpen(true)}
                                                             className="px-4 py-2.5 bg-[#511d29] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2"
                                                         >
-                                                            <FileText className="w-3.5 h-3.5" /> Add Document
+                                                            <FileText className="w-3.5 h-3.5" /> {t('add_document', { defaultValue: 'Add Document' })}
                                                         </button>
                                                     </div>
                                                 )}
@@ -2636,66 +2643,66 @@ const PersonnelRelations: React.FC = () => {
                                     </div>
                                 </TreeBranch>
 
-                                <TreeBranch isOpen={expandedNodes.has('contact')} onToggle={() => toggleNode('contact')} icon={Phone} title="Contact & Address" color="bg-emerald-50 text-emerald-600">
+                                <TreeBranch isOpen={expandedNodes.has('contact')} onToggle={() => toggleNode('contact')} icon={Phone} title={t('contact_address', { defaultValue: 'Contact & Address' })} color="bg-emerald-50 text-emerald-600">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                        <Field emp={emp} label="Personal Phone" k="personalPhone" />
-                                        <Field emp={emp} label="Personal E-mail" k="personalEmail" />
-                                        <Field emp={emp} label="Login Email" k="email" />
-                                        <Field emp={emp} label="Emergency Contact" k="emergencyContactNumber" />
-                                        <Field emp={emp} label="Residential Address" k="residentialAddress" />
-                                        {showField('residentialAddressArabic') && <Field emp={emp} label="Residential Address (Arabic)" k="residentialAddressArabic" dir="rtl" />}
+                                        <Field emp={emp} label={t('personal_phone', { defaultValue: 'Personal Phone' })} k="personalPhone" />
+                                        <Field emp={emp} label={t('personal_email', { defaultValue: 'Personal E-mail' })} k="personalEmail" />
+                                        <Field emp={emp} label={t('login_email', { defaultValue: 'Login Email' })} k="email" />
+                                        <Field emp={emp} label={t('emergency_contact', { defaultValue: 'Emergency Contact' })} k="emergencyContactNumber" />
+                                        <Field emp={emp} label={t('residential_address', { defaultValue: 'Residential Address' })} k="residentialAddress" />
+                                        {showField('residentialAddressArabic') && <Field emp={emp} label={t('residential_address_arabic', { defaultValue: 'Residential Address (Arabic)' })} k="residentialAddressArabic" dir="rtl" />}
                                     </div>
                                 </TreeBranch>
 
-                                <TreeBranch isOpen={expandedNodes.has('employment')} onToggle={() => toggleNode('employment')} icon={Briefcase} title="Employment & Career History" color="bg-blue-50 text-blue-600">
+                                <TreeBranch isOpen={expandedNodes.has('employment')} onToggle={() => toggleNode('employment')} icon={Briefcase} title={t('employment_career_history', { defaultValue: 'Employment & Career History' })} color="bg-blue-50 text-blue-600">
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                            <Row label="Role" value={emp.role} />
-                                            <Row label="Enrollment Status" value={emp.enrollmentStatus || 'ACTIVE'} />
-                                            <Field emp={emp} label="Position" k="position" />
-                                            <Field emp={emp} label="Place of Work" k="placeOfWork" />
-                                            <Field emp={emp} label="Job Category" k="jobCategory" />
-                                            <Field emp={emp} label="Job Grade" k="jobGrade" />
-                                            <Field emp={emp} label="Contract Type" k="contractType" />
-                                            <Field emp={emp} label="Status" k="contractStatus" />
-                                            <Row label="In Current Grade Since" value={fmt(emp.currentGradeSince)} />
-                                            <Row label="Join Date" value={fmt(firstContractStartDate)} />
-                                            <Field emp={emp} label="Contract Start" k="contractStartDate" type="date" />
-                                            <Field emp={emp} label="Contract End" k="contractEndDate" type="date" />
-                                            <Field emp={emp} label="Worked Before?" k="workedBefore" />
-                                            {showField('hasRelativesInCompany') && <Field emp={emp} label="Relatives in Company?" k="hasRelativesInCompany" />}
-                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && <Field emp={emp} label="Relatives' Names" k="relativesNames" />}
-                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && showField('relativesNamesArabic') && <Field emp={emp} label="Relatives' Names (Arabic)" k="relativesNamesArabic" dir="rtl" />}
-                                            <Row label="Directorate" value={nameOfOrgUnit(directorates, emp.directorateId)} />
-                                            <Row label="Division" value={nameOfOrgUnit(divisions, emp.divisionId)} />
-                                            <Row label="Department" value={nameOfOrgUnit(departments, emp.departmentId)} />
-                                            <Row label="Unit" value={nameOfOrgUnit(units, emp.unitId)} />
-                                            <Row label="Login Account" value={emp.userId ? 'Yes' : 'No'} />
+                                            <Row label={t('role', { defaultValue: 'Role' })} value={emp.role} />
+                                            <Row label={t('enrollment_status', { defaultValue: 'Enrollment Status' })} value={emp.enrollmentStatus || 'ACTIVE'} />
+                                            <Field emp={emp} label={t('position', { defaultValue: 'Position' })} k="position" />
+                                            <Field emp={emp} label={t('place_of_work', { defaultValue: 'Place of Work' })} k="placeOfWork" />
+                                            <Field emp={emp} label={t('job_category', { defaultValue: 'Job Category' })} k="jobCategory" />
+                                            <Field emp={emp} label={t('job_grade', { defaultValue: 'Job Grade' })} k="jobGrade" />
+                                            <Field emp={emp} label={t('contract_type', { defaultValue: 'Contract Type' })} k="contractType" />
+                                            <Field emp={emp} label={t('status', { defaultValue: 'Status' })} k="contractStatus" />
+                                            <Row label={t('in_current_grade_since', { defaultValue: 'In Current Grade Since' })} value={fmt(emp.currentGradeSince)} />
+                                            <Row label={t('join_date', { defaultValue: 'Join Date' })} value={fmt(firstContractStartDate)} />
+                                            <Field emp={emp} label={t('contract_start', { defaultValue: 'Contract Start' })} k="contractStartDate" type="date" />
+                                            <Field emp={emp} label={t('contract_end', { defaultValue: 'Contract End' })} k="contractEndDate" type="date" />
+                                            <Field emp={emp} label={t('worked_before', { defaultValue: 'Worked Before?' })} k="workedBefore" />
+                                            {showField('hasRelativesInCompany') && <Field emp={emp} label={t('relatives_in_company', { defaultValue: 'Relatives in Company?' })} k="hasRelativesInCompany" />}
+                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && <Field emp={emp} label={t('relatives_names', { defaultValue: "Relatives' Names" })} k="relativesNames" />}
+                                            {showField('hasRelativesInCompany') && emp.hasRelativesInCompany === 'Yes' && showField('relativesNamesArabic') && <Field emp={emp} label={t('relatives_names_arabic', { defaultValue: "Relatives' Names (Arabic)" })} k="relativesNamesArabic" dir="rtl" />}
+                                            <Row label={t('directorate', { defaultValue: 'Directorate' })} value={nameOfOrgUnit(directorates, emp.directorateId)} />
+                                            <Row label={t('division', { defaultValue: 'Division' })} value={nameOfOrgUnit(divisions, emp.divisionId)} />
+                                            <Row label={t('department', { defaultValue: 'Department' })} value={nameOfOrgUnit(departments, emp.departmentId)} />
+                                            <Row label={t('unit', { defaultValue: 'Unit' })} value={nameOfOrgUnit(units, emp.unitId)} />
+                                            <Row label={t('login_account', { defaultValue: 'Login Account' })} value={emp.userId ? t('yes', { defaultValue: 'Yes' }) : t('no', { defaultValue: 'No' })} />
                                         </div>
 
                                         {(showField('serviceProviderCompany') || showField('employeeTravelDate') || showField('employeeStartDate')) && (emp.serviceProviderCompany || emp.employeeTravelDate || emp.employeeStartDate) && (
-                                            <TreeBranch isOpen={expandedNodes.has('employment.onboarding')} onToggle={() => toggleNode('employment.onboarding')} level={1} icon={Building2} title="Onboarding Submission Details" color="bg-cyan-50 text-cyan-600">
+                                            <TreeBranch isOpen={expandedNodes.has('employment.onboarding')} onToggle={() => toggleNode('employment.onboarding')} level={1} icon={Building2} title={t('onboarding_submission_details', { defaultValue: 'Onboarding Submission Details' })} color="bg-cyan-50 text-cyan-600">
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                                    <Field emp={emp} label="Service Provider Company" k="serviceProviderCompany" />
-                                                    <Field emp={emp} label="Travel Date" k="employeeTravelDate" type="date" />
-                                                    <Field emp={emp} label="Employee Start Date" k="employeeStartDate" type="date" />
+                                                    <Field emp={emp} label={t('service_provider_company', { defaultValue: 'Service Provider Company' })} k="serviceProviderCompany" />
+                                                    <Field emp={emp} label={t('travel_date', { defaultValue: 'Travel Date' })} k="employeeTravelDate" type="date" />
+                                                    <Field emp={emp} label={t('employee_start_date', { defaultValue: 'Employee Start Date' })} k="employeeStartDate" type="date" />
                                                 </div>
                                             </TreeBranch>
                                         )}
 
-                                        <TreeBranch isOpen={expandedNodes.has('employment.jobdescription')} onToggle={() => toggleNode('employment.jobdescription')} level={1} icon={Building2} title="Assigned Job Description" color="bg-indigo-50 text-indigo-600">
+                                        <TreeBranch isOpen={expandedNodes.has('employment.jobdescription')} onToggle={() => toggleNode('employment.jobdescription')} level={1} icon={Building2} title={t('assigned_job_description', { defaultValue: 'Assigned Job Description' })} color="bg-indigo-50 text-indigo-600">
                                             {(detailFull as any)?.jobDescription ? (
                                                 <JobDescriptionView jd={(detailFull as any).jobDescription} accent="text-[#511d29]" />
                                             ) : (
-                                                <div className="text-sm font-bold text-slate-300">No job description assigned.</div>
+                                                <div className="text-sm font-bold text-slate-300">{t('no_job_description_assigned', { defaultValue: 'No job description assigned.' })}</div>
                                             )}
                                         </TreeBranch>
 
                                         {/* Every renewal archives the old contract and adds a new one, so a
                                             renewed employee shows Contract 1 (archived) + Contract 2 (active). */}
-                                        <TreeBranch isOpen={expandedNodes.has('employment.contracts')} onToggle={() => toggleNode('employment.contracts')} level={1} icon={FileText} title="Contract History" color="bg-rose-50 text-rose-600" count={detailContracts.length}>
+                                        <TreeBranch isOpen={expandedNodes.has('employment.contracts')} onToggle={() => toggleNode('employment.contracts')} level={1} icon={FileText} title={t('contract_history', { defaultValue: 'Contract History' })} color="bg-rose-50 text-rose-600" count={detailContracts.length}>
                                             {detailContracts.length === 0 ? (
-                                                <div className="text-sm font-bold text-slate-300">No contract records yet.</div>
+                                                <div className="text-sm font-bold text-slate-300">{t('no_contract_records_yet', { defaultValue: 'No contract records yet.' })}</div>
                                             ) : (
                                                 <div className="space-y-2">
                                                     {[...detailContracts]
@@ -2709,7 +2716,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 <div className="flex items-center gap-3 min-w-0">
                                                                     <span className="w-7 h-7 rounded-lg bg-[#511d29] text-white text-[11px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
                                                                     <div className="min-w-0">
-                                                                        <p className="text-xs font-black text-slate-700 truncate">Contract {i + 1}{c.contractNumber ? ` · ${c.contractNumber}` : ''}{c.type ? ` · ${c.type}` : ''}</p>
+                                                                        <p className="text-xs font-black text-slate-700 truncate">{t('contract', { defaultValue: 'Contract' })} {i + 1}{c.contractNumber ? ` · ${c.contractNumber}` : ''}{c.type ? ` · ${c.type}` : ''}</p>
                                                                         <p className="text-[10px] text-slate-500">
                                                                             {c.startDate ? fmt(c.startDate) : '—'}{c.endDate ? ` → ${fmt(c.endDate)}` : ''}
                                                                             {c.position ? ` · ${c.position}` : ''}
@@ -2726,9 +2733,9 @@ const PersonnelRelations: React.FC = () => {
 
                                         {/* New — internal transfer history (PersonnelActionForm). Ungated beyond
                                             authentication, same exposure level as Contract History above. */}
-                                        <TreeBranch isOpen={expandedNodes.has('employment.transfers')} onToggle={() => toggleNode('employment.transfers')} level={1} icon={ArrowRight} title="Career Transfers & Internal Moves" color="bg-orange-50 text-orange-600" count={detailTransfers.length}>
+                                        <TreeBranch isOpen={expandedNodes.has('employment.transfers')} onToggle={() => toggleNode('employment.transfers')} level={1} icon={ArrowRight} title={t('career_transfers_internal_moves', { defaultValue: 'Career Transfers & Internal Moves' })} color="bg-orange-50 text-orange-600" count={detailTransfers.length}>
                                             {detailTransfers.length === 0 ? (
-                                                <div className="text-sm font-bold text-slate-300">No transfer records yet.</div>
+                                                <div className="text-sm font-bold text-slate-300">{t('no_transfer_records_yet', { defaultValue: 'No transfer records yet.' })}</div>
                                             ) : (
                                                 <div className="space-y-2">
                                                     {detailTransfers.map((t) => {
@@ -2788,10 +2795,10 @@ const PersonnelRelations: React.FC = () => {
                                 <TreeBranch
                                     isOpen={expandedNodes.has('evaluations')} onToggle={() => toggleNode('evaluations')}
                                     icon={TrendingUp}
-                                    title="Monthly Performance Evaluations"
+                                    title={t('monthly_performance_evaluations', { defaultValue: 'Monthly Performance Evaluations' })}
                                     color="bg-purple-50 text-purple-600"
                                     count={detailEvalHistory.allowed ? detailEvalHistory.months.length : undefined}
-                                    restricted={!detailEvalHistory.allowed ? 'Restricted to HR/Personnel or the employee' : undefined}
+                                    restricted={!detailEvalHistory.allowed ? t('restricted_to_hr_personnel_or_the_employee', { defaultValue: 'Restricted to HR/Personnel or the employee' }) : undefined}
                                 >
                                     <div className="space-y-2">
                                         {detailEvalHistory.allowed && (() => {
@@ -2799,9 +2806,9 @@ const PersonnelRelations: React.FC = () => {
                                             const points = emp.evaluationPoints || 0;
                                             return (
                                                 <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100">
-                                                    <span className="text-xs font-black text-amber-700 flex items-center gap-1.5">★ Evaluation Index: {points.toFixed(2)}</span>
+                                                    <span className="text-xs font-black text-amber-700 flex items-center gap-1.5">★ {t('evaluation_index', { defaultValue: 'Evaluation Index' })}: {points.toFixed(2)}</span>
                                                     <span className="text-[10px] font-bold text-amber-600/70 uppercase tracking-wider">
-                                                        {!rule ? 'Top grade reached' : rule.type === 'EVALUATION'
+                                                        {!rule ? t('top_grade_reached', { defaultValue: 'Top grade reached' }) : rule.type === 'EVALUATION'
                                                             ? `${points.toFixed(2)} / ${rule.threshold} to promotion (${rule.nextGrade})`
                                                             : `${Math.max(0, monthsSince(emp.currentGradeSince || emp.contractStartDate || emp.joinDate))} / ${rule.months} months to promotion (${rule.nextGrade})`}
                                                     </span>
@@ -2809,7 +2816,7 @@ const PersonnelRelations: React.FC = () => {
                                             );
                                         })()}
                                         {detailEvalHistory.months.length === 0 ? (
-                                            <div className="text-sm font-bold text-slate-300">No evaluation records yet.</div>
+                                            <div className="text-sm font-bold text-slate-300">{t('no_evaluation_records_yet', { defaultValue: 'No evaluation records yet.' })}</div>
                                         ) : (
                                             [...detailEvalHistory.months].sort((a, b) => b.month.localeCompare(a.month)).map((m) => {
                                                 const requiredLevels = getRequiredLevels(emp);
@@ -2823,7 +2830,7 @@ const PersonnelRelations: React.FC = () => {
                                                     persEval: m.personnel || null,
                                                 });
                                                 const monthLabel = format(parseISO(`${m.month}-01`), 'MMM yyyy');
-                                                const statusLabel = m.finalization ? 'Finalized' : 'Provisional';
+                                                const statusLabel = m.finalization ? t('finalized', { defaultValue: 'Finalized' }) : t('provisional', { defaultValue: 'Provisional' });
                                                 const evalKey = `${emp.id}:${m.month}`;
                                                 return (
                                                     <TreeBranch key={m.month} isOpen={expandedNodes.has(`evaluations.${m.month}`)} onToggle={() => toggleNode(`evaluations.${m.month}`)} level={1} title={`${monthLabel} — ${statusLabel} ${breakdown.finalScore.toFixed(1)}%`}
@@ -2832,11 +2839,11 @@ const PersonnelRelations: React.FC = () => {
                                                                 type="button"
                                                                 onClick={() => downloadEvalForm(emp.id, m.month, emp.fullName)}
                                                                 disabled={evalDocBusy === evalKey}
-                                                                title="Export this month's evaluation as the official Word form"
+                                                                title={t('export_month_evaluation_official_word_form', { defaultValue: "Export this month's evaluation as the official Word form" })}
                                                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50"
                                                             >
                                                                 <FileText className="w-3.5 h-3.5" />
-                                                                {evalDocBusy === evalKey ? 'Generating…' : 'Export Form'}
+                                                                {evalDocBusy === evalKey ? t('generating_ellipsis', { defaultValue: 'Generating…' }) : t('export_form', { defaultValue: 'Export Form' })}
                                                             </button>
                                                         }
                                                     >
@@ -2852,28 +2859,28 @@ const PersonnelRelations: React.FC = () => {
                                     same pattern as the Confirmed Disciplinary Record above. */}
                                 <TreeBranch
                                     isOpen={expandedNodes.has('promotions')} onToggle={() => toggleNode('promotions')}
-                                    icon={Award} title="Promotion Record" color="bg-yellow-50 text-yellow-700"
+                                    icon={Award} title={t('promotion_record', { defaultValue: 'Promotion Record' })} color="bg-yellow-50 text-yellow-700"
                                     count={canSeePromotionRecord ? detailPromotionCases.length : undefined}
-                                    restricted={!canSeePromotionRecord ? 'Restricted to Personnel Relations' : undefined}
+                                    restricted={!canSeePromotionRecord ? t('restricted_to_personnel_relations', { defaultValue: 'Restricted to Personnel Relations' }) : undefined}
                                 >
                                     {detailPromotionCases.length === 0 ? (
-                                        <div className="text-sm font-bold text-slate-300">No promotion records yet.</div>
+                                        <div className="text-sm font-bold text-slate-300">{t('no_promotion_records_yet', { defaultValue: 'No promotion records yet.' })}</div>
                                     ) : (
                                         <div className="space-y-2">
                                             {[...detailPromotionCases]
                                                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                                                 .map((c: PromotionCase) => {
-                                                    const stageLabel = c.stage === 'CLOSED' ? 'Closed' : (PROMOTION_STAGE_COLUMNS.find(s => s.key === c.stage)?.label || c.stage);
+                                                    const stageLabel = c.stage === 'CLOSED' ? t('closed', { defaultValue: 'Closed' }) : (PROMOTION_STAGE_COLUMNS.find(s => s.key === c.stage)?.label || c.stage);
                                                     const statusStyle = c.stage === 'CLOSED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
                                                     return (
                                                         <div key={c.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
                                                             <div className="flex items-center justify-between gap-3">
-                                                                <p className="text-xs font-black text-slate-700 truncate">{c.caseNumber}{c.isExceptional ? ' · Exceptional' : ''}</p>
+                                                                <p className="text-xs font-black text-slate-700 truncate">{c.caseNumber}{c.isExceptional ? ` · ${t('exceptional', { defaultValue: 'Exceptional' })}` : ''}</p>
                                                                 <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{stageLabel}</span>
                                                             </div>
                                                             <p className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                                                                 {c.stage === 'CLOSED' ? (
-                                                                    <span className="font-bold text-emerald-700">Promoted to {c.toGrade}</span>
+                                                                    <span className="font-bold text-emerald-700">{t('promoted_to', { defaultValue: 'Promoted to' })} {c.toGrade}</span>
                                                                 ) : (
                                                                     <>
                                                                         <span className="font-bold">{emp.jobGrade || '—'}</span>
@@ -2884,7 +2891,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 {c.basis && <span className="text-slate-400">· {BASIS_LABELS[c.basis] || c.basis}</span>}
                                                             </p>
                                                             <p className="text-[10px] text-slate-400">
-                                                                Filed {fmt(c.createdAt)}
+                                                                {t('filed', { defaultValue: 'Filed' })} {fmt(c.createdAt)}
                                                                 {c.effectiveDate ? ` · Effective ${fmt(c.effectiveDate)}` : ''}
                                                                 {c.stage === 'CLOSED' && c.closedAt ? ` · Closed ${fmt(c.closedAt)}` : ''}
                                                                 {c.createdByName ? ` · Filed by ${c.createdByName}` : ''}
@@ -2894,7 +2901,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
                                                                 className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
                                                             >
-                                                                View Case <ExternalLink className="w-3 h-3" />
+                                                                {t('view_case', { defaultValue: 'View Case' })} <ExternalLink className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     );
@@ -2907,12 +2914,12 @@ const PersonnelRelations: React.FC = () => {
                                     same pattern as the Promotion Record above. */}
                                 <TreeBranch
                                     isOpen={expandedNodes.has('rewards')} onToggle={() => toggleNode('rewards')}
-                                    icon={Award} title="Rewards Record" color="bg-emerald-50 text-emerald-700"
+                                    icon={Award} title={t('rewards_record', { defaultValue: 'Rewards Record' })} color="bg-emerald-50 text-emerald-700"
                                     count={canSeeRewardsRecord ? detailRewardCases.length : undefined}
-                                    restricted={!canSeeRewardsRecord ? 'Restricted to Personnel Relations' : undefined}
+                                    restricted={!canSeeRewardsRecord ? t('restricted_to_personnel_relations', { defaultValue: 'Restricted to Personnel Relations' }) : undefined}
                                 >
                                     {detailRewardCases.length === 0 ? (
-                                        <div className="text-sm font-bold text-slate-300">No reward records yet.</div>
+                                        <div className="text-sm font-bold text-slate-300">{t('no_reward_records_yet', { defaultValue: 'No reward records yet.' })}</div>
                                     ) : (
                                         <div className="space-y-2">
                                             {[...detailRewardCases]
@@ -2928,13 +2935,13 @@ const PersonnelRelations: React.FC = () => {
                                                         <div key={c.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
                                                             <div className="flex items-center justify-between gap-3">
                                                                 <p className="text-xs font-black text-slate-700 truncate">{c.caseNumber} · {REWARD_TYPE_LABELS[c.type]}</p>
-                                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{c.completedAt ? 'Completed' : 'Draft'}</span>
+                                                                <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded shrink-0 ${statusStyle}`}>{c.completedAt ? t('completed', { defaultValue: 'Completed' }) : t('draft', { defaultValue: 'Draft' })}</span>
                                                             </div>
                                                             {detailParts.length > 0 && (
                                                                 <p className="text-[11px] text-slate-500">{detailParts.join(' · ')}</p>
                                                             )}
                                                             <p className="text-[10px] text-slate-400">
-                                                                Filed {fmt(c.createdAt)}
+                                                                {t('filed', { defaultValue: 'Filed' })} {fmt(c.createdAt)}
                                                                 {c.completedAt ? ` · Completed ${fmt(c.completedAt)}` : ''}
                                                                 {c.physicalRewardFulfilledAt ? ' · Gift Fulfilled' : ''}
                                                                 {c.createdByName ? ` · Filed by ${c.createdByName}` : ''}
@@ -2944,7 +2951,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 onClick={() => navigate(`/personnel-relations/rewards/${c.id}`)}
                                                                 className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
                                                             >
-                                                                View Case <ExternalLink className="w-3 h-3" />
+                                                                {t('view_case', { defaultValue: 'View Case' })} <ExternalLink className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     );
@@ -2953,19 +2960,19 @@ const PersonnelRelations: React.FC = () => {
                                     )}
                                 </TreeBranch>
 
-                                <TreeBranch isOpen={expandedNodes.has('attendance')} onToggle={() => toggleNode('attendance')} icon={CalendarDays} title="Attendance & Leave" color="bg-amber-50 text-amber-600">
+                                <TreeBranch isOpen={expandedNodes.has('attendance')} onToggle={() => toggleNode('attendance')} icon={CalendarDays} title={t('attendance_leave', { defaultValue: 'Attendance & Leave' })} color="bg-amber-50 text-amber-600">
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                            <Row label="Paid Leave Balance" value={paidRemaining} />
-                                            <Row label="Unpaid Leave Balance" value={14 - unpaidTaken} />
-                                            <Row label="Emergency Leave Balance" value={3 - emergTaken} />
+                                            <Row label={t('paid_leave_balance', { defaultValue: 'Paid Leave Balance' })} value={paidRemaining} />
+                                            <Row label={t('unpaid_leave_balance', { defaultValue: 'Unpaid Leave Balance' })} value={14 - unpaidTaken} />
+                                            <Row label={t('emergency_leave_balance', { defaultValue: 'Emergency Leave Balance' })} value={3 - emergTaken} />
                                         </div>
 
                                         {/* New — monthly attendance aggregates (TimeRecord). Ungated beyond
                                             authentication, same exposure level as the Leave Balances above. */}
-                                        <TreeBranch isOpen={expandedNodes.has('attendance.timerecords')} onToggle={() => toggleNode('attendance.timerecords')} level={1} icon={Clock} title="Monthly Time Records" color="bg-amber-50 text-amber-600" count={detailTimeRecords.length}>
+                                        <TreeBranch isOpen={expandedNodes.has('attendance.timerecords')} onToggle={() => toggleNode('attendance.timerecords')} level={1} icon={Clock} title={t('monthly_time_records', { defaultValue: 'Monthly Time Records' })} color="bg-amber-50 text-amber-600" count={detailTimeRecords.length}>
                                             {detailTimeRecords.length === 0 ? (
-                                                <div className="text-sm font-bold text-slate-300">No attendance records yet.</div>
+                                                <div className="text-sm font-bold text-slate-300">{t('no_attendance_records_yet', { defaultValue: 'No attendance records yet.' })}</div>
                                             ) : (
                                                 <div className="space-y-2">
                                                     {[...detailTimeRecords].sort((a: any, b: any) => b.month.localeCompare(a.month)).map((tr: any) => (
@@ -2984,9 +2991,9 @@ const PersonnelRelations: React.FC = () => {
 
                                         {/* New — individual leave requests (reuses the same endpoint the Staff Hub
                                             uses), beyond the balance numbers above. Ungated beyond authentication. */}
-                                        <TreeBranch isOpen={expandedNodes.has('attendance.leaverequests')} onToggle={() => toggleNode('attendance.leaverequests')} level={1} icon={CalendarDays} title="Leave Requests" color="bg-amber-50 text-amber-600" count={detailLeaveRequests.length}>
+                                        <TreeBranch isOpen={expandedNodes.has('attendance.leaverequests')} onToggle={() => toggleNode('attendance.leaverequests')} level={1} icon={CalendarDays} title={t('leave_requests', { defaultValue: 'Leave Requests' })} color="bg-amber-50 text-amber-600" count={detailLeaveRequests.length}>
                                             {detailLeaveRequests.length === 0 ? (
-                                                <div className="text-sm font-bold text-slate-300">No leave requests yet.</div>
+                                                <div className="text-sm font-bold text-slate-300">{t('no_leave_requests_yet', { defaultValue: 'No leave requests yet.' })}</div>
                                             ) : (
                                                 <div className="space-y-2">
                                                     {detailLeaveRequests.map((lr: any) => {
@@ -3015,20 +3022,20 @@ const PersonnelRelations: React.FC = () => {
                                 <TreeBranch
                                     isOpen={expandedNodes.has('disciplinary')} onToggle={() => toggleNode('disciplinary')}
                                     icon={AlertOctagon}
-                                    title="Disciplinary Record"
+                                    title={t('disciplinary_record', { defaultValue: 'Disciplinary Record' })}
                                     color="bg-red-50 text-red-700"
                                     count={canSeeDisciplinaryRecord ? detailDisciplinaryRecord.length : undefined}
-                                    restricted={!canSeeDisciplinaryRecord ? 'Restricted to Personnel Relations' : undefined}
+                                    restricted={!canSeeDisciplinaryRecord ? t('restricted_to_personnel_relations', { defaultValue: 'Restricted to Personnel Relations' }) : undefined}
                                 >
                                     {detailDisciplinaryRecord.length === 0 ? (
-                                        <div className="text-sm font-bold text-slate-300">No confirmed disciplinary actions on record.</div>
+                                        <div className="text-sm font-bold text-slate-300">{t('no_confirmed_disciplinary_actions_on_record', { defaultValue: 'No confirmed disciplinary actions on record.' })}</div>
                                     ) : (
                                         <div className="space-y-2">
                                             {[...detailDisciplinaryRecord].sort((a, b) => new Date(b.actionCompletedAt || 0).getTime() - new Date(a.actionCompletedAt || 0).getTime()).map(dc => (
                                                 <div key={dc.id} className="px-4 py-3 rounded-2xl bg-red-50/50 border border-red-100 space-y-1">
                                                     <div className="flex items-center justify-between gap-3">
                                                         <p className="text-xs font-black text-slate-700">
-                                                            {dc.violationId ? VIOLATIONS_BY_ID[dc.violationId]?.description || dc.violationId : 'Violation not specified'}
+                                                            {dc.violationId ? VIOLATIONS_BY_ID[dc.violationId]?.description || dc.violationId : t('violation_not_specified', { defaultValue: 'Violation not specified' })}
                                                         </p>
                                                         <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-red-100 text-red-700 shrink-0">
                                                             {dc.category ? DISCIPLINARY_CATEGORY_LABELS[dc.category as DisciplinaryCategory] : ''}
@@ -3045,7 +3052,7 @@ const PersonnelRelations: React.FC = () => {
                                                             onClick={() => navigate(`/personnel-relations/disciplinary/${dc.id}`)}
                                                             className="text-[#511d29] hover:text-[#3a151d] inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider"
                                                         >
-                                                            View case <ExternalLink className="w-3 h-3" />
+                                                            {t('view_case', { defaultValue: 'View case' })} <ExternalLink className="w-3 h-3" />
                                                         </button>
                                                     </div>
                                                 </div>
@@ -3054,25 +3061,25 @@ const PersonnelRelations: React.FC = () => {
                                     )}
                                 </TreeBranch>
 
-                                <TreeBranch isOpen={expandedNodes.has('factors')} onToggle={() => toggleNode('factors')} icon={TrendingUp} title="System & Scoring Factors" color="bg-slate-100 text-slate-600">
+                                <TreeBranch isOpen={expandedNodes.has('factors')} onToggle={() => toggleNode('factors')} icon={TrendingUp} title={t('system_scoring_factors', { defaultValue: 'System & Scoring Factors' })} color="bg-slate-100 text-slate-600">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                        <Field emp={emp} label="Position Factor" k="positionFactor" />
-                                        <Field emp={emp} label="Site Factor" k="siteFactor" />
-                                        <Field emp={emp} label="Skill Factor" k="skillFactor" />
-                                        <Field emp={emp} label="Language Factor" k="languageFactor" />
-                                        <Field emp={emp} label="Salary Structure Type" k="salaryStructureType" />
-                                        <Field emp={emp} label="BioTime ID" k="bioId" />
+                                        <Field emp={emp} label={t('position_factor', { defaultValue: 'Position Factor' })} k="positionFactor" />
+                                        <Field emp={emp} label={t('site_factor', { defaultValue: 'Site Factor' })} k="siteFactor" />
+                                        <Field emp={emp} label={t('skill_factor', { defaultValue: 'Skill Factor' })} k="skillFactor" />
+                                        <Field emp={emp} label={t('language_factor', { defaultValue: 'Language Factor' })} k="languageFactor" />
+                                        <Field emp={emp} label={t('salary_structure_type', { defaultValue: 'Salary Structure Type' })} k="salaryStructureType" />
+                                        <Field emp={emp} label={t('biotime_id', { defaultValue: 'BioTime ID' })} k="bioId" />
                                     </div>
                                 </TreeBranch>
 
                                 {showField('bankName') && (
-                                    <TreeBranch isOpen={expandedNodes.has('bank')} onToggle={() => toggleNode('bank')} icon={Landmark} title="Bank Details" color="bg-slate-100 text-slate-600">
+                                    <TreeBranch isOpen={expandedNodes.has('bank')} onToggle={() => toggleNode('bank')} icon={Landmark} title={t('bank_details', { defaultValue: 'Bank Details' })} color="bg-slate-100 text-slate-600">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                                            <Field emp={emp} label="Bank Name" k="bankName" />
-                                            <Field emp={emp} label="Bank Name (Arabic)" k="bankNameArabic" dir="rtl" />
-                                            <Field emp={emp} label="Bank Branch" k="bankBranchName" />
-                                            <Field emp={emp} label="Bank Branch (Arabic)" k="bankBranchNameArabic" dir="rtl" />
-                                            <Field emp={emp} label="Account Number" k="bankAccountNumber" />
+                                            <Field emp={emp} label={t('bank_name', { defaultValue: 'Bank Name' })} k="bankName" />
+                                            <Field emp={emp} label={t('bank_name_arabic', { defaultValue: 'Bank Name (Arabic)' })} k="bankNameArabic" dir="rtl" />
+                                            <Field emp={emp} label={t('bank_branch', { defaultValue: 'Bank Branch' })} k="bankBranchName" />
+                                            <Field emp={emp} label={t('bank_branch_arabic', { defaultValue: 'Bank Branch (Arabic)' })} k="bankBranchNameArabic" dir="rtl" />
+                                            <Field emp={emp} label={t('account_number', { defaultValue: 'Account Number' })} k="bankAccountNumber" />
                                         </div>
                                     </TreeBranch>
                                 )}
@@ -3087,25 +3094,25 @@ const PersonnelRelations: React.FC = () => {
             <Modal
                 isOpen={addDocModalOpen}
                 onClose={() => { setAddDocModalOpen(false); setNewDocName(''); setNewDocFile(null); }}
-                title="Add Document"
+                title={t('add_document', { defaultValue: 'Add Document' })}
                 maxWidth="max-w-md"
             >
                 <div className="space-y-4">
                     <p className="text-xs text-slate-500 font-medium">
-                        Attach a new document for <span className="font-black text-[#511d29]">{detailEmp?.fullName}</span>.
+                        {t('attach_a_new_document_for', { defaultValue: 'Attach a new document for' })} <span className="font-black text-[#511d29]">{detailEmp?.fullName}</span>.
                     </p>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Document Name</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('document_name', { defaultValue: 'Document Name' })}</label>
                         <input
                             type="text"
                             value={newDocName}
                             onChange={e => setNewDocName(e.target.value)}
-                            placeholder="e.g. Training Certificate"
+                            placeholder={t('eg_training_certificate', { defaultValue: 'e.g. Training Certificate' })}
                             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#511d29]/10 focus:border-[#511d29] transition-all"
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">File</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('file', { defaultValue: 'File' })}</label>
                         <input
                             type="file"
                             accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
@@ -3119,7 +3126,7 @@ const PersonnelRelations: React.FC = () => {
                         disabled={addingDoc}
                         className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50"
                     >
-                        {addingDoc ? 'Adding…' : 'Add Document'}
+                        {addingDoc ? t('adding_ellipsis', { defaultValue: 'Adding…' }) : t('add_document', { defaultValue: 'Add Document' })}
                     </button>
                 </div>
             </Modal>

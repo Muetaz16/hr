@@ -652,7 +652,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
 
                     <div>
                         <label className="flex items-center gap-2 text-[10px] font-black uppercase text-red-700 mb-1">
-                            <Paperclip size={12} /> Upload signed copy
+                            <Paperclip size={12} /> {t('upload_signed_copy', { defaultValue: 'Upload signed copy' })}
                         </label>
                         <input type="file" onChange={e => setSignedFile(e.target.files?.[0] || null)} className="w-full text-xs" />
                     </div>
@@ -667,7 +667,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Proceed — Move to Notice to Explain
+                            {t('proceed_move_to_notice_to_explain', { defaultValue: 'Proceed — Move to Notice to Explain' })}
                         </button>
                     )}
                     {c.stage === 'NOTICE_TO_EXPLAIN' && (
@@ -680,7 +680,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Move to Investigation
+                            {t('complete_move_to_investigation', { defaultValue: 'Complete & Move to Investigation' })}
                         </button>
                     )}
                     {c.stage === 'INVESTIGATION_RESULT' && (
@@ -699,7 +699,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            {investigationOutcome === 'NON_VIOLATION' ? 'Complete & Close Case (No Violation)' : 'Complete & Move to Disciplinary Action'}
+                            {investigationOutcome === 'NON_VIOLATION' ? t('complete_close_case_no_violation', { defaultValue: 'Complete & Close Case (No Violation)' }) : t('complete_move_to_disciplinary_action', { defaultValue: 'Complete & Move to Disciplinary Action' })}
                         </button>
                     )}
                     {c.stage === 'DISCIPLINARY_ACTION' && (
@@ -712,7 +712,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Close Case
+                            {t('complete_close_case', { defaultValue: 'Complete & Close Case' })}
                         </button>
                     )}
                 </div>
@@ -720,24 +720,24 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
 
             {canManage && c.stage === 'INCIDENT_REPORT' && (
                 <div className="bg-white border border-amber-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
-                    <span className="font-black uppercase text-[10px] text-amber-700 tracking-wider">Stop Complaint — Not Pursued</span>
+                    <span className="font-black uppercase text-[10px] text-amber-700 tracking-wider">{t('stop_complaint_not_pursued', { defaultValue: 'Stop Complaint — Not Pursued' })}</span>
                     <p className="text-slate-500">
-                        After reviewing the complaint, if it doesn't warrant proceeding to Notice to Explain, close it here instead.
+                        {t('stop_complaint_help', { defaultValue: "After reviewing the complaint, if it doesn't warrant proceeding to Notice to Explain, close it here instead." })}
                     </p>
                     <div>
-                        <label className="block font-black uppercase text-[10px] text-amber-700 mb-1">Reason for closing</label>
-                        <textarea rows={3} value={closureReason} onChange={e => setClosureReason(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder="Why this complaint does not warrant proceeding further…" />
+                        <label className="block font-black uppercase text-[10px] text-amber-700 mb-1">{t('reason_for_closing', { defaultValue: 'Reason for closing' })}</label>
+                        <textarea rows={3} value={closureReason} onChange={e => setClosureReason(e.target.value)} className="w-full p-2 border border-slate-200 rounded" placeholder={t('reason_for_closing_placeholder', { defaultValue: 'Why this complaint does not warrant proceeding further…' })} />
                     </div>
                     <div>
                         <label className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-700 mb-1">
-                            <Paperclip size={12} /> Upload reviewed document
+                            <Paperclip size={12} /> {t('upload_reviewed_document', { defaultValue: 'Upload reviewed document' })}
                         </label>
                         <input type="file" onChange={e => setDismissFile(e.target.files?.[0] || null)} className="w-full text-xs" />
                     </div>
                     <button
                         disabled={busy}
                         onClick={() => {
-                            if (!closureReason.trim()) return toast.error('A reason for closing the case is required.');
+                            if (!closureReason.trim()) return toast.error(t('reason_for_closing_required', { defaultValue: 'A reason for closing the case is required.' }));
                             run(async () => {
                                 const doc = await uploadFile(dismissFile);
                                 if (!doc) throw new Error('no-file');
@@ -746,7 +746,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
                         }}
                         className="w-full py-2 bg-amber-600 text-white font-black uppercase text-[10px] rounded"
                     >
-                        Stop — Close Case (Not Pursued)
+                        {t('stop_close_case_not_pursued', { defaultValue: 'Stop — Close Case (Not Pursued)' })}
                     </button>
                 </div>
             )}

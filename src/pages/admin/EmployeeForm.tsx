@@ -658,7 +658,7 @@ const EmployeeForm: React.FC = () => {
         }
     };
 
-    if (orgLoading && !isEditMode) return <div className="p-8 text-center text-slate-500">Loading form data...</div>;
+    if (orgLoading && !isEditMode) return <div className="p-8 text-center text-slate-500">{t('loading_form_data', { defaultValue: 'Loading form data...' })}</div>;
 
     // --- Reusable field renderers for the extended Identity Details ---
     const setField = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }));
@@ -1085,29 +1085,29 @@ const EmployeeForm: React.FC = () => {
                                     <option value="EMPLOYEE">{t('role_employee')}</option>
                                     <option value="HEAD_UNIT">{t('role_head_unit', { defaultValue: 'Head of Unit' })}</option>
                                     <option value="HEAD_DEPARTMENT">{t('role_head_department')}</option>
-                                    <option value="HEAD_OFFICE">Head of Office</option>
-                                    <option value="HEAD_DIVISION">Head of Division</option>
+                                    <option value="HEAD_OFFICE">{t('role_head_office', { defaultValue: 'Head of Office' })}</option>
+                                    <option value="HEAD_DIVISION">{t('role_head_division', { defaultValue: 'Head of Division' })}</option>
                                     <option value="HEAD_DIRECTOR">{t('role_head_director')}</option>
-                                    <option value="GENERAL_MANAGER">General Manager</option>
-                                    <option value="CHAIRMAN">Chairman</option>
+                                    <option value="GENERAL_MANAGER">{t('role_general_manager', { defaultValue: 'General Manager' })}</option>
+                                    <option value="CHAIRMAN">{t('role_chairman', { defaultValue: 'Chairman' })}</option>
                                 </select>
                             </div>
 
                             {['CHAIRMAN', 'GENERAL_MANAGER'].includes(formData.role || '') ? (
                                 <div className="md:col-span-2 text-sm font-bold text-slate-500 italic p-6 bg-slate-50 border border-slate-200 border-dashed rounded-2xl flex items-center justify-center h-full">
-                                    This role has global scope and does not require specific unit assignment.
+                                    {t('role_global_scope_notice', { defaultValue: 'This role has global scope and does not require specific unit assignment.' })}
                                 </div>
                             ) : (
                                 <>
                                     {formData.role === 'HEAD_DIVISION' ? (
                                         <div className="space-y-2 md:col-span-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Assigned Division</label>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('assigned_division', { defaultValue: 'Assigned Division' })}</label>
                                             <select
                                                 value={formData.divisionId || ''}
                                                 onChange={(e) => setFormData({ ...formData, divisionId: e.target.value })}
                                                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                             >
-                                                <option value="">Select Division</option>
+                                                <option value="">{t('select_division', { defaultValue: 'Select Division' })}</option>
                                                 {divisions.map(d => (
                                                     <option key={d.id} value={d.id}>{d.name}</option>
                                                 ))}
@@ -1115,7 +1115,7 @@ const EmployeeForm: React.FC = () => {
                                         </div>
                                     ) : formData.role === 'HEAD_OFFICE' ? (
                                         <div className="space-y-2 md:col-span-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Assigned Office</label>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('assigned_office', { defaultValue: 'Assigned Office' })}</label>
                                             <select
                                                 value={formData.departmentId || ''}
                                                 onChange={(e) => {
@@ -1124,7 +1124,7 @@ const EmployeeForm: React.FC = () => {
                                                 }}
                                                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                             >
-                                                <option value="">Select Office</option>
+                                                <option value="">{t('select_office', { defaultValue: 'Select Office' })}</option>
                                                 {departments.filter(d => d.isOffice).map(d => (
                                                     <option key={d.id} value={d.id}>{d.name}</option>
                                                 ))}
@@ -1132,13 +1132,13 @@ const EmployeeForm: React.FC = () => {
                                         </div>
                                     ) : formData.role === 'HEAD_DIRECTOR' ? (
                                         <div className="space-y-2 md:col-span-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Directorate Name</label>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('directorate_name', { defaultValue: 'Directorate Name' })}</label>
                                             <select
                                                 value={formData.directorateId || ''}
                                                 onChange={(e) => setFormData({ ...formData, directorateId: e.target.value })}
                                                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                             >
-                                                <option value="">Select Directorate</option>
+                                                <option value="">{t('select_directorate', { defaultValue: 'Select Directorate' })}</option>
                                                 {directorates.map(dir => (
                                                     <option key={dir.id} value={dir.id}>{dir.name}</option>
                                                 ))}
@@ -1150,7 +1150,7 @@ const EmployeeForm: React.FC = () => {
                                                 from the selected department. */}
                                             <>
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('department')} / Office</label>
+                                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('department')} / {t('office', { defaultValue: 'Office' })}</label>
                                                     <div className="relative" ref={deptRef}>
                                                         <button
                                                             type="button"
@@ -1173,7 +1173,7 @@ const EmployeeForm: React.FC = () => {
                                                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                                                         <input
                                                                             type="text"
-                                                                            placeholder="Search department..."
+                                                                            placeholder={t('search_department', { defaultValue: 'Search department...' })}
                                                                             value={deptSearchTerm}
                                                                             onChange={e => setDeptSearchTerm(e.target.value)}
                                                                             className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 outline-none text-sm"
@@ -1205,7 +1205,7 @@ const EmployeeForm: React.FC = () => {
                                                                                 }}
                                                                                 className={`px-4 py-3 text-sm rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${formData.departmentId === d.id ? 'bg-blue-50/50 font-bold text-blue-600' : 'text-slate-700'}`}
                                                                             >
-                                                                                {d.name} {d.isOffice ? '(Office)' : ''}
+                                                                                {d.name} {d.isOffice ? t('office_paren', { defaultValue: '(Office)' }) : ''}
                                                                             </div>
                                                                         ))
                                                                     }
@@ -1266,7 +1266,7 @@ const EmployeeForm: React.FC = () => {
                                                     const filled = jd._count?.employees || 0;
                                                     return (
                                                         <option key={jd.id} value={jd.id}>
-                                                            {jd.title} {jd.isHead ? '(Head)' : ''} — {filled}/{jd.plannedCount}
+                                                            {jd.title} {jd.isHead ? t('head_paren', { defaultValue: '(Head)' }) : ''} — {filled}/{jd.plannedCount}
                                                         </option>
                                                     );
                                                 })}
@@ -1294,14 +1294,14 @@ const EmployeeForm: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider  items-center gap-1.5 flex">Position Title {positionLocked && <Lock size={12} className="text-slate-400" />}</label>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider  items-center gap-1.5 flex">{t('position_title', { defaultValue: 'Position Title' })} {positionLocked && <Lock size={12} className="text-slate-400" />}</label>
                                 <input
                                     type="text"
                                     value={formData.position || ''}
                                     onChange={(e) => setFormData({ ...formData, position: e.target.value })}
                                     disabled={positionLocked}
                                     className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800 shadow-sm ${positionLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200'}`}
-                                    placeholder="e.g. Senior Developer"
+                                    placeholder={t('position_title_example', { defaultValue: 'e.g. Senior Developer' })}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -1312,7 +1312,7 @@ const EmployeeForm: React.FC = () => {
                                     disabled={employmentLocked}
                                     className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold shadow-sm ${employmentLocked ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white border-slate-200 text-slate-800 cursor-pointer'}`}
                                 >
-                                    <option value="">Select Nationality</option>
+                                    <option value="">{t('select_nationality', { defaultValue: 'Select Nationality' })}</option>
                                     {/* Preserve an existing value that predates this list (e.g. imported records) instead of silently dropping it. */}
                                     {formData.nationality && !NATIONALITIES.includes(formData.nationality) && (
                                         <option value={formData.nationality}>{formData.nationality}</option>
@@ -1332,7 +1332,7 @@ const EmployeeForm: React.FC = () => {
                                         onChange={(e) => setFormData({ ...formData, jobCategory: e.target.value })}
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                     >
-                                        <option value="">Select Category</option>
+                                        <option value="">{t('select_category', { defaultValue: 'Select Category' })}</option>
                                         {(categoryChoice ? jdCategories : JOB_CATEGORIES).map(cat => (
                                             <option key={cat} value={cat}>{cat}</option>
                                         ))}
@@ -1366,7 +1366,7 @@ const EmployeeForm: React.FC = () => {
                                         onChange={(e) => setFormData({ ...formData, jobGrade: e.target.value })}
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                     >
-                                        <option value="">Select Grade</option>
+                                        <option value="">{t('select_grade', { defaultValue: 'Select Grade' })}</option>
                                         {JOB_GRADES.map(grade => (
                                             <option key={grade} value={grade}>{grade}</option>
                                         ))}
@@ -1374,7 +1374,7 @@ const EmployeeForm: React.FC = () => {
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider items-center gap-1.5 flex">Evaluation Index {employmentLocked && <Lock size={12} className="text-emerald-400" />}</label>
+                                <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider items-center gap-1.5 flex">{t('evaluation_index_label', { defaultValue: 'Evaluation Index' })} {employmentLocked && <Lock size={12} className="text-emerald-400" />}</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -1415,7 +1415,7 @@ const EmployeeForm: React.FC = () => {
                                         className="flex items-center gap-2 px-4 py-2.5 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-xs font-bold text-indigo-200 hover:bg-indigo-500/40 transition-all shadow-sm backdrop-blur-md"
                                     >
                                         <Sparkles size={14} />
-                                        Generate Suggestion
+                                        {t('generate_suggestion', { defaultValue: 'Generate Suggestion' })}
                                     </button>
                                 )}
                             </div>
@@ -1444,7 +1444,7 @@ const EmployeeForm: React.FC = () => {
                                             value={formData.password || ''}
                                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                             className="w-full pl-12 pr-5 py-4 bg-white/10 border border-indigo-400/20 rounded-2xl focus:ring-4 focus:ring-indigo-500/30 transition-all font-bold text-white placeholder:text-indigo-200/40 backdrop-blur-md"
-                                            placeholder={isEditMode ? "•••••••• (Leave blank to keep)" : "••••••••"}
+                                            placeholder={isEditMode ? t('password_leave_blank', { defaultValue: '•••••••• (Leave blank to keep)' }) : "••••••••"}
                                         />
                                     </div>
                                 </div>
@@ -1461,15 +1461,15 @@ const EmployeeForm: React.FC = () => {
                             <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center shadow-sm">
                                 <CreditCard size={20} />
                             </div>
-                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">Financials & Multipliers</h2>
+                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('financials_and_multipliers', { defaultValue: 'Financials & Multipliers' })}</h2>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
                             {/* Factors */}
                             <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
-                                <h3 className="col-span-full text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Salary Factors</h3>
+                                <h3 className="col-span-full text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t('salary_factors', { defaultValue: 'Salary Factors' })}</h3>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block">Position Factor</label>
+                                    <label className="text-xs font-bold text-blue-500 uppercase tracking-wider block">{t('position_factor', { defaultValue: 'Position Factor' })}</label>
                                     {(() => {
                                         const isHeadRole = ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(formData.role || '');
                                         let dynamicFactor = 1.0;
@@ -1492,13 +1492,13 @@ const EmployeeForm: React.FC = () => {
 
                                         return (
                                             <div className={`w-full px-5 py-4 border-transparent rounded-2xl transition-all font-bold shadow-inner ${!isHeadRole ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                                                {isHeadRole ? `Auto-Assigned: ${dynamicFactor.toFixed(2)}` : 'Standard (1.00)'}
+                                                {isHeadRole ? t('auto_assigned_factor', { defaultValue: 'Auto-Assigned: {{factor}}', factor: dynamicFactor.toFixed(2) }) : t('standard_1_00', { defaultValue: 'Standard (1.00)' })}
                                             </div>
                                         );
                                     })()}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-indigo-500 uppercase tracking-wider block">Skill Factor</label>
+                                    <label className="text-xs font-bold text-indigo-500 uppercase tracking-wider block">{t('skill_factor', { defaultValue: 'Skill Factor' })}</label>
                                     <select
                                         value={formData.skillFactor || 1.0}
                                         onChange={(e) => {
@@ -1511,20 +1511,20 @@ const EmployeeForm: React.FC = () => {
                                         }}
                                         className="w-full px-5 py-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-indigo-900  shadow-sm cursor-pointer"
                                     >
-                                        <option value={1.0}>Standard (1.0)</option>
+                                        <option value={1.0}>{t('standard_1_0', { defaultValue: 'Standard (1.0)' })}</option>
                                         {SKILL_FACTORS.map(f => (
                                             <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-purple-500 uppercase tracking-wider block">Site Factor</label>
+                                    <label className="text-xs font-bold text-purple-500 uppercase tracking-wider block">{t('site_factor', { defaultValue: 'Site Factor' })}</label>
                                     <select
                                         value={formData.siteFactor || 1.0}
                                         onChange={(e) => setFormData({ ...formData, siteFactor: Number(e.target.value) })}
                                         className="w-full px-5 py-4 bg-purple-50/50 border border-purple-100 rounded-2xl focus:ring-4 focus:ring-purple-100 transition-all font-bold text-purple-900  shadow-sm cursor-pointer"
                                     >
-                                        <option value={1.0}>Office (1.0)</option>
+                                        <option value={1.0}>{t('office_1_0', { defaultValue: 'Office (1.0)' })}</option>
                                         {SITE_FACTORS.map(f => (
                                             <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
                                         ))}
@@ -1532,13 +1532,13 @@ const EmployeeForm: React.FC = () => {
                                 </div>
                                 {!formData.contractType?.includes('NONE RESDANT') && (
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-pink-500 uppercase tracking-wider block">Language Factor</label>
+                                        <label className="text-xs font-bold text-pink-500 uppercase tracking-wider block">{t('language_factor', { defaultValue: 'Language Factor' })}</label>
                                         <select
                                             value={formData.languageFactor || 1.0}
                                             onChange={(e) => setFormData({ ...formData, languageFactor: Number(e.target.value) })}
                                             className="w-full px-5 py-4 bg-pink-50/50 border border-pink-100 rounded-2xl focus:ring-4 focus:ring-pink-100 transition-all font-bold text-pink-900  shadow-sm cursor-pointer"
                                         >
-                                            <option value={1.0}>Native (1.0)</option>
+                                            <option value={1.0}>{t('native_1_0', { defaultValue: 'Native (1.0)' })}</option>
                                             {LANGUAGE_FACTORS.map(f => (
                                                 <option key={f.name} value={f.value}>{f.name} ({f.value})</option>
                                             ))}
@@ -1550,7 +1550,7 @@ const EmployeeForm: React.FC = () => {
                             {/* Calculations */}
                             <div className="lg:col-span-5 space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">Salary Structure <span className="text-red-500">*</span> {fromOnboarding && <Lock size={12} className="text-slate-400" />}</label>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider items-center gap-1.5 flex">{t('salary_structure', { defaultValue: 'Salary Structure' })} <span className="text-red-500">*</span> {fromOnboarding && <Lock size={12} className="text-slate-400" />}</label>
                                     <select
                                         required
                                         disabled={fromOnboarding}
@@ -1558,7 +1558,7 @@ const EmployeeForm: React.FC = () => {
                                         onChange={(e) => setFormData({ ...formData, salaryStructureType: e.target.value })}
                                         className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 transition-all font-bold text-slate-800 shadow-sm ${fromOnboarding ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500' : 'bg-white cursor-pointer'} ${!fromOnboarding && (formData.salaryStructureType ? 'border-slate-200 focus:ring-slate-100 focus:border-slate-500' : 'border-red-300 focus:ring-red-100 focus:border-red-500')}`}
                                     >
-                                        <option value="">Select Structure</option>
+                                        <option value="">{t('select_structure', { defaultValue: 'Select Structure' })}</option>
                                         <option value="SS-01-LYD">SS-01-LYD</option>
                                         <option value="SS-02-USD">SS-02-USD</option>
                                         <option value="SS-03-USD">SS-03-USD</option>
@@ -1582,7 +1582,7 @@ const EmployeeForm: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Factored Salary</label>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{t('factored_salary', { defaultValue: 'Factored Salary' })}</label>
                                         <div className="flex bg-emerald-50/50 border border-emerald-200 rounded-2xl overflow-hidden shadow-inner">
                                             <div className="flex items-center justify-center px-4 border-r border-emerald-200 bg-emerald-100/50">
                                                 <span className="text-sm font-black text-emerald-600">{getCurrencySymbol(formData.salaryStructureType)}</span>
@@ -1609,7 +1609,7 @@ const EmployeeForm: React.FC = () => {
                             <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center shadow-sm">
                                 <CalendarDays size={20} />
                             </div>
-                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('contract_details')} & Leaves</h2>
+                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{t('contract_details')} & {t('leaves', { defaultValue: 'Leaves' })}</h2>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10 mb-8">
@@ -1671,11 +1671,11 @@ const EmployeeForm: React.FC = () => {
                                     onChange={(e) => setFormData({ ...formData, contractNumber: e.target.value })}
                                     className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-cyan-50 focus:border-cyan-500 transition-all font-bold text-slate-800  shadow-sm cursor-pointer"
                                 >
-                                    <option value="1st">1st Contract</option>
-                                    <option value="2nd">2nd Contract</option>
-                                    <option value="3rd">3rd Contract</option>
-                                    <option value="4th">4th Contract</option>
-                                    <option value="Permanent">Permanent</option>
+                                    <option value="1st">{t('contract_1st', { defaultValue: '1st Contract' })}</option>
+                                    <option value="2nd">{t('contract_2nd', { defaultValue: '2nd Contract' })}</option>
+                                    <option value="3rd">{t('contract_3rd', { defaultValue: '3rd Contract' })}</option>
+                                    <option value="4th">{t('contract_4th', { defaultValue: '4th Contract' })}</option>
+                                    <option value="Permanent">{t('contract_permanent', { defaultValue: 'Permanent' })}</option>
                                 </select>
                             </div>
                             <div className="space-y-2">
@@ -1749,7 +1749,7 @@ const EmployeeForm: React.FC = () => {
                                 {isEditMode ? t('modify_personnel') : t('enroll_personnel')}
                             </h1>
                             <p className="text-sm font-medium text-slate-500 mt-1 hidden sm:block">
-                                {isEditMode ? `Updating record for ${formData.fullName}` : 'Complete the form below to board a new employee'}
+                                {isEditMode ? t('updating_record_for', { defaultValue: 'Updating record for {{name}}', name: formData.fullName }) : t('complete_form_board_employee', { defaultValue: 'Complete the form below to board a new employee' })}
                             </p>
                         </div>
                     </div>
