@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 
 @theme {
   --font-inter: "Inter", sans-serif;
   --font-outfit: "Outfit", sans-serif;
+  --font-cairo: "Cairo", sans-serif;
 
   /* Premium Burgundy (Main) & Gold (Sub) Palette */
   --color-primary-50: #fdfcf7;   /* Ultra-light cream gold */
@@ -46,7 +47,7 @@
     transition: color 0.3s ease;
   }
 
-  body.dark-theme h1, 
+  body.dark-theme h1,
   body.dark-theme h2, 
   body.dark-theme h3, 
   body.dark-theme h4, 
@@ -1019,4 +1020,17 @@ body.dark-theme .lifecycle-export-btn {
 
 body.dark-theme .lifecycle-export-btn:hover {
   background-color: #e3c4a2 !important;
+}
+/* ==========================================================================
+   Arabic mode → Cairo everywhere.
+   The language switcher sets <html lang="ar"> (and body dir="rtl") in Arabic.
+   This block is intentionally UNLAYERED: unlayered rules win over every
+   Tailwind cascade layer (base/components/utilities), so Cairo overrides ALL
+   font utilities — font-inter, font-outfit, font-sans, font-mono, font-serif —
+   and every element, guaranteeing the whole UI renders in Cairo in Arabic.
+   Inter/Outfit have no Arabic glyphs, so this also fixes fallback rendering.
+   ========================================================================== */
+html[lang="ar"],
+html[lang="ar"] * {
+  font-family: var(--font-cairo);
 }

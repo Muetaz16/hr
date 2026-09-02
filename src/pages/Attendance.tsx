@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock, Users, CalendarCheck, Fingerprint, Timer, Eye, AlertTriangle, PlusCircle, Search, Filter, Pencil, Trash2, ShieldCheck, ShieldOff, CalendarDays, Percent, CalendarClock, Settings as SettingsIcon } from 'lucide-react';
@@ -46,6 +47,7 @@ const EmployeeSearchSelect: React.FC<{
     disabled?: boolean;
     placeholder?: string;
 }> = ({ options, value, onChange, disabled, placeholder }) => {
+    const { t } = useTranslation();
     const [query, setQuery] = useState(() => {
         const match = options.find(o => o.code === value);
         return match ? `${match.name} (${match.code})` : '';
@@ -68,7 +70,7 @@ const EmployeeSearchSelect: React.FC<{
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => { blurTimeout.current = window.setTimeout(() => setShowSuggestions(false), 150); }}
                 disabled={disabled}
-                placeholder={placeholder || "Start typing the employee's name…"}
+                placeholder={placeholder || t('start_typing_the_employee_s_name', { defaultValue: "Start typing the employee's name…" })}
                 autoComplete="off"
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold disabled:bg-slate-50 disabled:text-slate-400"
             />
@@ -112,6 +114,7 @@ const BIOTIME_POSITIONS = [
 ];
 
 const AttendancePage: React.FC = () => {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const location = useLocation();
     const navigate = useNavigate();
@@ -244,8 +247,8 @@ const AttendancePage: React.FC = () => {
 
     const handleAddMissingPunch = async () => {
         const employee = allAttendanceRows.find(r => r.empCode === mpEmpCode);
-        if (!employee) { toast.error('Select an employee.'); return; }
-        if (!mpPunchTime) { toast.error('Choose the punch date & time.'); return; }
+        if (!employee) { toast.error(t('select_an_employee', { defaultValue: 'Select an employee.' })); return; }
+        if (!mpPunchTime) { toast.error(t('choose_the_punch_date_time', { defaultValue: 'Choose the punch date & time.' })); return; }
         setSubmittingPunch(true);
         try {
             await attendanceService.addMissingPunch({
@@ -259,13 +262,13 @@ const AttendancePage: React.FC = () => {
                 punchTime: `${mpPunchTime}:00`,
                 punchState: mpPunchState,
             });
-            toast.success('Missing punch logged.');
+            toast.success(t('missing_punch_logged', { defaultValue: 'Missing punch logged.' }));
             closeMissingPunch();
             queryClient.invalidateQueries({ queryKey: ['attendance-manual-tx'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
             console.error('Failed to log missing punch', err);
-            toast.error(err?.response?.data?.error || 'Failed to log the missing punch.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_missing_punch', { defaultValue: 'Failed to log the missing punch.' }));
         } finally {
             setSubmittingPunch(false);
         }
@@ -317,18 +320,18 @@ const AttendancePage: React.FC = () => {
     const [savingLeave, setSavingLeave] = useState(false);
     const submitLeave = async () => {
         if (!leaveForm.empCode || !leaveForm.leaveTypeId || !leaveForm.startDate || !leaveForm.endDate) {
-            toast.error('Select an employee, leave type, and both dates.'); return;
+            toast.error(t('select_an_employee_leave_type_and_both_dates', { defaultValue: 'Select an employee, leave type, and both dates.' })); return;
         }
         setSavingLeave(true);
         try {
             await attendanceService.addLeave({ ...leaveForm, leaveTypeId: Number(leaveForm.leaveTypeId) });
-            toast.success('Leave logged.');
+            toast.success(t('leave_logged', { defaultValue: 'Leave logged.' }));
             setLeaveOpen(false);
             setLeaveForm({ empCode: '', leaveTypeId: '', startDate: '', endDate: '', notes: '' });
             queryClient.invalidateQueries({ queryKey: ['attendance-employee-leaves'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to log the leave.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_leave', { defaultValue: 'Failed to log the leave.' }));
         } finally {
             setSavingLeave(false);
         }
@@ -338,17 +341,17 @@ const AttendancePage: React.FC = () => {
     const [otForm, setOtForm] = useState({ empCode: '', date: '', hours: '0', minutes: '0', reason: '' });
     const [savingOt, setSavingOt] = useState(false);
     const submitOvertime = async () => {
-        if (!otForm.empCode || !otForm.date) { toast.error('Select an employee and date.'); return; }
+        if (!otForm.empCode || !otForm.date) { toast.error(t('select_an_employee_and_date', { defaultValue: 'Select an employee and date.' })); return; }
         setSavingOt(true);
         try {
             await attendanceService.addOvertime({ ...otForm, hours: Number(otForm.hours) || 0, minutes: Number(otForm.minutes) || 0 });
-            toast.success('Overtime logged.');
+            toast.success(t('overtime_logged', { defaultValue: 'Overtime logged.' }));
             setOtOpen(false);
             setOtForm({ empCode: '', date: '', hours: '0', minutes: '0', reason: '' });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-dashboard'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to log the overtime.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_overtime', { defaultValue: 'Failed to log the overtime.' }));
         } finally {
             setSavingOt(false);
         }
@@ -358,17 +361,17 @@ const AttendancePage: React.FC = () => {
     const [owForm, setOwForm] = useState({ empCode: '', startDate: '', endDate: '', reason: '' });
     const [savingOw, setSavingOw] = useState(false);
     const submitOutWork = async () => {
-        if (!owForm.empCode || !owForm.startDate || !owForm.endDate) { toast.error('Select an employee and both dates.'); return; }
+        if (!owForm.empCode || !owForm.startDate || !owForm.endDate) { toast.error(t('select_an_employee_and_both_dates', { defaultValue: 'Select an employee and both dates.' })); return; }
         setSavingOw(true);
         try {
             await attendanceService.addOutWork(owForm);
-            toast.success('Out-work logged.');
+            toast.success(t('out_work_logged', { defaultValue: 'Out-work logged.' }));
             setOwOpen(false);
             setOwForm({ empCode: '', startDate: '', endDate: '', reason: '' });
             queryClient.invalidateQueries({ queryKey: ['attendance-out-works-list'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to log the out-work.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_out_work', { defaultValue: 'Failed to log the out-work.' }));
         } finally {
             setSavingOw(false);
         }
@@ -379,18 +382,18 @@ const AttendancePage: React.FC = () => {
     const [savingXl, setSavingXl] = useState(false);
     const submitExcusedLate = async () => {
         if (!xlForm.empCode || !xlForm.date || !xlForm.excusedMinutes) {
-            toast.error('Select an employee, the date, and the excused minutes.'); return;
+            toast.error(t('select_an_employee_the_date_and_the_excused_minutes', { defaultValue: 'Select an employee, the date, and the excused minutes.' })); return;
         }
         setSavingXl(true);
         try {
             await attendanceService.addExcusedLate({ ...xlForm, excusedMinutes: Number(xlForm.excusedMinutes) });
-            toast.success('Excused late logged.');
+            toast.success(t('excused_late_logged', { defaultValue: 'Excused late logged.' }));
             setXlOpen(false);
             setXlForm({ empCode: '', date: '', excusedMinutes: '', reason: '' });
             queryClient.invalidateQueries({ queryKey: ['attendance-excused-lates-list'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to log the excused late.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_excused_late', { defaultValue: 'Failed to log the excused late.' }));
         } finally {
             setSavingXl(false);
         }
@@ -401,55 +404,55 @@ const AttendancePage: React.FC = () => {
     const [savingEo, setSavingEo] = useState(false);
     const submitExcusedEarlyOut = async () => {
         if (!eoForm.empCode || !eoForm.date || !eoForm.excusedMinutes) {
-            toast.error('Select an employee, the date, and the excused minutes.'); return;
+            toast.error(t('select_an_employee_the_date_and_the_excused_minutes', { defaultValue: 'Select an employee, the date, and the excused minutes.' })); return;
         }
         setSavingEo(true);
         try {
             await attendanceService.addExcusedEarlyOut({ ...eoForm, excusedMinutes: Number(eoForm.excusedMinutes) });
-            toast.success('Excused early-out logged.');
+            toast.success(t('excused_early_out_logged', { defaultValue: 'Excused early-out logged.' }));
             setEoOpen(false);
             setEoForm({ empCode: '', date: '', excusedMinutes: '', reason: '' });
             queryClient.invalidateQueries({ queryKey: ['attendance-excused-early-outs-list'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to log the excused early-out.');
+            toast.error(err?.response?.data?.error || t('failed_to_log_the_excused_early_out', { defaultValue: 'Failed to log the excused early-out.' }));
         } finally {
             setSavingEo(false);
         }
     };
 
     const deleteEmployeeLeave = async (id: number) => {
-        if (!window.confirm('Remove this leave record? This cannot be undone.')) return;
+        if (!window.confirm(t('remove_this_leave_record_this_cannot_be_undone', { defaultValue: 'Remove this leave record? This cannot be undone.' }))) return;
         try {
             await attendanceService.deleteEmployeeLeave(id);
-            toast.success('Leave record removed.');
+            toast.success(t('leave_record_removed', { defaultValue: 'Leave record removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-employee-leaves'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-        } catch { toast.error('Failed to remove the leave record.'); }
+        } catch { toast.error(t('failed_to_remove_the_leave_record', { defaultValue: 'Failed to remove the leave record.' })); }
     };
     const deleteOutWorkRow = async (id: number) => {
-        if (!window.confirm('Remove this out-work record? This cannot be undone.')) return;
+        if (!window.confirm(t('remove_this_out_work_record_this_cannot_be_undone', { defaultValue: 'Remove this out-work record? This cannot be undone.' }))) return;
         try {
             await attendanceService.deleteOutWork(id);
-            toast.success('Out-work record removed.');
+            toast.success(t('out_work_record_removed', { defaultValue: 'Out-work record removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-out-works-list'] });
-        } catch { toast.error('Failed to remove the out-work record.'); }
+        } catch { toast.error(t('failed_to_remove_the_out_work_record', { defaultValue: 'Failed to remove the out-work record.' })); }
     };
     const deleteExcusedLateRow = async (id: number) => {
-        if (!window.confirm('Remove this excused-late record? This cannot be undone.')) return;
+        if (!window.confirm(t('remove_this_excused_late_record_this_cannot_be_undone', { defaultValue: 'Remove this excused-late record? This cannot be undone.' }))) return;
         try {
             await attendanceService.deleteExcusedLate(id);
-            toast.success('Excused-late record removed.');
+            toast.success(t('excused_late_record_removed', { defaultValue: 'Excused-late record removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-excused-lates-list'] });
-        } catch { toast.error('Failed to remove the excused-late record.'); }
+        } catch { toast.error(t('failed_to_remove_the_excused_late_record', { defaultValue: 'Failed to remove the excused-late record.' })); }
     };
     const deleteExcusedEarlyOutRow = async (id: number) => {
-        if (!window.confirm('Remove this excused early-out record? This cannot be undone.')) return;
+        if (!window.confirm(t('remove_this_excused_early_out_record_this_cannot_be_undone', { defaultValue: 'Remove this excused early-out record? This cannot be undone.' }))) return;
         try {
             await attendanceService.deleteExcusedEarlyOut(id);
-            toast.success('Excused early-out record removed.');
+            toast.success(t('excused_early_out_record_removed', { defaultValue: 'Excused early-out record removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-excused-early-outs-list'] });
-        } catch { toast.error('Failed to remove the excused early-out record.'); }
+        } catch { toast.error(t('failed_to_remove_the_excused_early_out_record', { defaultValue: 'Failed to remove the excused early-out record.' })); }
     };
 
     // Hoisted above the Employees tab query below — the Employee Shifts settings screen reuses
@@ -496,35 +499,35 @@ const AttendancePage: React.FC = () => {
 
     const submitEmployee = async () => {
         if (!empForm.empCode || !empForm.firstName || !empForm.positionId) {
-            toast.error('Enter the employee code, name, and position.'); return;
+            toast.error(t('enter_the_employee_code_name_and_position', { defaultValue: 'Enter the employee code, name, and position.' })); return;
         }
         setSavingEmp(true);
         try {
             if (empEditing) {
                 await attendanceService.updateBioTimeEmployee(empEditing.id, { firstName: empForm.firstName, positionId: Number(empForm.positionId) });
-                toast.success('Employee updated.');
+                toast.success(t('employee_updated', { defaultValue: 'Employee updated.' }));
             } else {
                 await attendanceService.createBioTimeEmployee({ empCode: empForm.empCode, firstName: empForm.firstName, positionId: Number(empForm.positionId) });
-                toast.success('Employee added.');
+                toast.success(t('employee_added', { defaultValue: 'Employee added.' }));
             }
             closeEmployeeModal();
             queryClient.invalidateQueries({ queryKey: ['attendance-biotime-employees'] });
             queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the employee.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_employee', { defaultValue: 'Failed to save the employee.' }));
         } finally {
             setSavingEmp(false);
         }
     };
 
     const deleteBioTimeEmployeeRow = async (emp: BioTimeEmployee) => {
-        if (!window.confirm(`Remove "${emp.first_name}" (${emp.emp_code}) from the attendance system? This cannot be undone.`)) return;
+        if (!window.confirm(t('remove_name_code_from_the_attendance_system', { name: emp.first_name, code: emp.emp_code, defaultValue: 'Remove "{{name}}" ({{code}}) from the attendance system? This cannot be undone.' }))) return;
         try {
             await attendanceService.deleteBioTimeEmployee(emp.id);
-            toast.success('Employee removed.');
+            toast.success(t('employee_removed', { defaultValue: 'Employee removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-biotime-employees'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to remove the employee.');
+            toast.error(err?.response?.data?.error || t('failed_to_remove_the_employee', { defaultValue: 'Failed to remove the employee.' }));
         }
     };
 
@@ -561,15 +564,15 @@ const AttendancePage: React.FC = () => {
         setSettingModalOpen(true);
     };
     const submitSetting = async () => {
-        if (!settingEditing || !settingForm.valueString) { toast.error('Enter a value.'); return; }
+        if (!settingEditing || !settingForm.valueString) { toast.error(t('enter_a_value', { defaultValue: 'Enter a value.' })); return; }
         setSavingSetting(true);
         try {
             await attendanceSettingsService.updateSetting(settingEditing.id, { key: settingForm.key, valueString: settingForm.valueString, description: settingForm.description || null, isDuration: settingForm.isDuration });
-            toast.success('Setting saved.');
+            toast.success(t('setting_saved', { defaultValue: 'Setting saved.' }));
             setSettingModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-snapshot'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the setting.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_setting', { defaultValue: 'Failed to save the setting.' }));
         } finally {
             setSavingSetting(false);
         }
@@ -581,15 +584,15 @@ const AttendancePage: React.FC = () => {
     const [savingLt, setSavingLt] = useState(false);
     const openEditLeaveType = (lt: LeaveTypeItem) => { setLtEditing(lt); setLtForm({ name: lt.name, isPaid: lt.isPaid }); setLtModalOpen(true); };
     const submitLeaveType = async () => {
-        if (!ltEditing || !ltForm.name) { toast.error('Enter a name.'); return; }
+        if (!ltEditing || !ltForm.name) { toast.error(t('enter_a_name', { defaultValue: 'Enter a name.' })); return; }
         setSavingLt(true);
         try {
             await attendanceSettingsService.updateLeaveType(ltEditing.id, ltForm);
-            toast.success('Leave type saved.');
+            toast.success(t('leave_type_saved', { defaultValue: 'Leave type saved.' }));
             setLtModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-snapshot'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the leave type.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_leave_type', { defaultValue: 'Failed to save the leave type.' }));
         } finally {
             setSavingLt(false);
         }
@@ -602,27 +605,27 @@ const AttendancePage: React.FC = () => {
     const openAddHoliday = () => { setHolEditing(null); setHolForm({ name: '', startDate: '', endDate: '' }); setHolModalOpen(true); };
     const openEditHoliday = (h: HolidayItem) => { setHolEditing(h); setHolForm({ name: h.name, startDate: h.startDate.slice(0, 10), endDate: h.endDate.slice(0, 10) }); setHolModalOpen(true); };
     const submitHoliday = async () => {
-        if (!holForm.name || !holForm.startDate || !holForm.endDate) { toast.error('Enter a name and both dates.'); return; }
+        if (!holForm.name || !holForm.startDate || !holForm.endDate) { toast.error(t('enter_a_name_and_both_dates', { defaultValue: 'Enter a name and both dates.' })); return; }
         setSavingHol(true);
         try {
             if (holEditing) await attendanceSettingsService.updateHoliday(holEditing.id, holForm);
             else await attendanceSettingsService.createHoliday(holForm);
-            toast.success('Holiday saved.');
+            toast.success(t('holiday_saved', { defaultValue: 'Holiday saved.' }));
             setHolModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-holidays'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the holiday.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_holiday', { defaultValue: 'Failed to save the holiday.' }));
         } finally {
             setSavingHol(false);
         }
     };
     const deleteHoliday = async (h: HolidayItem) => {
-        if (!window.confirm(`Remove the "${h.name}" holiday? This cannot be undone.`)) return;
+        if (!window.confirm(t('remove_the_name_holiday_this_cannot_be_undone', { name: h.name, defaultValue: 'Remove the "{{name}}" holiday? This cannot be undone.' }))) return;
         try {
             await attendanceSettingsService.deleteHoliday(h.id);
-            toast.success('Holiday removed.');
+            toast.success(t('holiday_removed', { defaultValue: 'Holiday removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-holidays'] });
-        } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to remove the holiday.'); }
+        } catch (err: any) { toast.error(err?.response?.data?.error || t('failed_to_remove_the_holiday', { defaultValue: 'Failed to remove the holiday.' })); }
     };
 
     const emptyMultiplierForm = { name: '', factorValue: '', type: '', dateStart: '', dateEnd: '', workStart: '', gracePeriod: '', workEnd: '', otThreshold: '' };
@@ -642,7 +645,7 @@ const AttendancePage: React.FC = () => {
     };
     const submitMultiplier = async () => {
         if (!mfForm.name || !mfForm.factorValue || !mfForm.type || !mfForm.dateStart || !mfForm.dateEnd) {
-            toast.error('Enter a name, factor value, type, and both dates.'); return;
+            toast.error(t('enter_a_name_factor_value_type_and_both_dates', { defaultValue: 'Enter a name, factor value, type, and both dates.' })); return;
         }
         setSavingMf(true);
         try {
@@ -655,22 +658,22 @@ const AttendancePage: React.FC = () => {
             };
             if (mfEditing) await attendanceSettingsService.updateMultiplierFactor(mfEditing.id, input);
             else await attendanceSettingsService.createMultiplierFactor(input);
-            toast.success('Multiplier factor saved.');
+            toast.success(t('multiplier_factor_saved', { defaultValue: 'Multiplier factor saved.' }));
             setMfModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-multipliers'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the multiplier factor.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_multiplier_factor', { defaultValue: 'Failed to save the multiplier factor.' }));
         } finally {
             setSavingMf(false);
         }
     };
     const deleteMultiplier = async (m: MultiplierFactorItem) => {
-        if (!window.confirm(`Remove the "${m.name}" multiplier factor? This cannot be undone.`)) return;
+        if (!window.confirm(t('remove_the_name_multiplier_factor_this_cannot_be_undone', { name: m.name, defaultValue: 'Remove the "{{name}}" multiplier factor? This cannot be undone.' }))) return;
         try {
             await attendanceSettingsService.deleteMultiplierFactor(m.id);
-            toast.success('Multiplier factor removed.');
+            toast.success(t('multiplier_factor_removed', { defaultValue: 'Multiplier factor removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-multipliers'] });
-        } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to remove the multiplier factor.'); }
+        } catch (err: any) { toast.error(err?.response?.data?.error || t('failed_to_remove_the_multiplier_factor', { defaultValue: 'Failed to remove the multiplier factor.' })); }
     };
 
     // Employee Shifts — per-employee date-range shift override (also written automatically when a
@@ -693,7 +696,7 @@ const AttendancePage: React.FC = () => {
     };
     const submitShift = async () => {
         if (!esForm.empCode || !esForm.startDate || !esForm.endDate || !esForm.workStart || !esForm.workEnd) {
-            toast.error('Select an employee, both dates, and both work-hour times.'); return;
+            toast.error(t('select_an_employee_both_dates_and_both_work_hour_times', { defaultValue: 'Select an employee, both dates, and both work-hour times.' })); return;
         }
         setSavingEs(true);
         try {
@@ -705,22 +708,22 @@ const AttendancePage: React.FC = () => {
             };
             if (esEditing) await attendanceSettingsService.updateEmployeeShift(esEditing.id, input);
             else await attendanceSettingsService.createEmployeeShift(input);
-            toast.success('Employee shift saved.');
+            toast.success(t('employee_shift_saved', { defaultValue: 'Employee shift saved.' }));
             setEsModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-employee-shifts'] });
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to save the employee shift.');
+            toast.error(err?.response?.data?.error || t('failed_to_save_the_employee_shift', { defaultValue: 'Failed to save the employee shift.' }));
         } finally {
             setSavingEs(false);
         }
     };
     const deleteShift = async (s: EmployeeShiftItem) => {
-        if (!window.confirm(`Remove the shift override for "${s.empName}"? This cannot be undone.`)) return;
+        if (!window.confirm(t('remove_the_shift_override_for_name_this_cannot_be_undone', { name: s.empName, defaultValue: 'Remove the shift override for "{{name}}"? This cannot be undone.' }))) return;
         try {
             await attendanceSettingsService.deleteEmployeeShift(s.id);
-            toast.success('Employee shift removed.');
+            toast.success(t('employee_shift_removed', { defaultValue: 'Employee shift removed.' }));
             queryClient.invalidateQueries({ queryKey: ['attendance-settings-employee-shifts'] });
-        } catch (err: any) { toast.error(err?.response?.data?.error || 'Failed to remove the employee shift.'); }
+        } catch (err: any) { toast.error(err?.response?.data?.error || t('failed_to_remove_the_employee_shift', { defaultValue: 'Failed to remove the employee shift.' })); }
     };
 
     return (
@@ -728,10 +731,10 @@ const AttendancePage: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-[#511d29]/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">
-                        Attendance & Leave Requests
+                        {t('attendance_leave_requests', { defaultValue: 'Attendance & Leave Requests' })}
                     </h1>
                     <p className="text-slate-500 mt-1 font-medium">
-                        Live punch, lateness, and leave data from the attendance system, matched to employee records by Staff ID.
+                        {t('live_punch_lateness_and_leave_data', { defaultValue: 'Live punch, lateness, and leave data from the attendance system, matched to employee records by Staff ID.' })}
                     </p>
                 </div>
             </div>
@@ -739,11 +742,11 @@ const AttendancePage: React.FC = () => {
             {/* Tabs */}
             <div className="flex items-center gap-2 border-b border-[#511d29]/10">
                 {[
-                    { key: 'overview' as Tab, label: 'Overview', Icon: Clock },
-                    { key: 'exceptions' as Tab, label: 'Exceptions', Icon: AlertTriangle },
-                    { key: 'daily-logging' as Tab, label: 'Daily Logging', Icon: PlusCircle },
-                    { key: 'employees' as Tab, label: 'Employees', Icon: Users },
-                    ...(isSuperAdmin ? [{ key: 'settings' as Tab, label: 'Settings', Icon: SettingsIcon }] : []),
+                    { key: 'overview' as Tab, label: t('overview', { defaultValue: 'Overview' }), Icon: Clock },
+                    { key: 'exceptions' as Tab, label: t('exceptions', { defaultValue: 'Exceptions' }), Icon: AlertTriangle },
+                    { key: 'daily-logging' as Tab, label: t('daily_logging', { defaultValue: 'Daily Logging' }), Icon: PlusCircle },
+                    { key: 'employees' as Tab, label: t('employees', { defaultValue: 'Employees' }), Icon: Users },
+                    ...(isSuperAdmin ? [{ key: 'settings' as Tab, label: t('settings', { defaultValue: 'Settings' }), Icon: SettingsIcon }] : []),
                 ].map(({ key, label, Icon }) => (
                     <button
                         key={key}
@@ -759,19 +762,19 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-8">
                     {/* Dashboard KPIs */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <StatCard icon={Users} label="Total Employees" value={dashboard?.totalEmployees ?? '—'} color="bg-indigo-50 text-indigo-600" />
-                        <StatCard icon={CalendarCheck} label="On Leave Today" value={dashboard?.onLeaveToday ?? '—'} color="bg-amber-50 text-amber-600" />
-                        <StatCard icon={Fingerprint} label="Punches Today" value={dashboard?.punchesToday ?? '—'} color="bg-emerald-50 text-emerald-600" />
-                        <StatCard icon={Timer} label="Overtimes Today" value={dashboard?.overtimesToday ?? '—'} color="bg-blue-50 text-blue-600" />
+                        <StatCard icon={Users} label={t('total_employees', { defaultValue: 'Total Employees' })} value={dashboard?.totalEmployees ?? '—'} color="bg-indigo-50 text-indigo-600" />
+                        <StatCard icon={CalendarCheck} label={t('on_leave_today', { defaultValue: 'On Leave Today' })} value={dashboard?.onLeaveToday ?? '—'} color="bg-amber-50 text-amber-600" />
+                        <StatCard icon={Fingerprint} label={t('punches_today', { defaultValue: 'Punches Today' })} value={dashboard?.punchesToday ?? '—'} color="bg-emerald-50 text-emerald-600" />
+                        <StatCard icon={Timer} label={t('overtimes_today', { defaultValue: 'Overtimes Today' })} value={dashboard?.overtimesToday ?? '—'} color="bg-blue-50 text-blue-600" />
                     </div>
                     {dashboard?.error && (
-                        <p className="text-xs font-bold text-rose-600">Dashboard note from the attendance system: {dashboard.error}</p>
+                        <p className="text-xs font-bold text-rose-600">{t('dashboard_note_from_the_attendance_system', { defaultValue: 'Dashboard note from the attendance system:' })} {dashboard.error}</p>
                     )}
 
                     <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 px-4 py-2.5 rounded-lg flex items-center gap-2.5">
                         <Clock className="w-4 h-4 text-[#511d29] shrink-0" />
                         <p className="text-xs text-slate-600">
-                            <span className="font-black text-[#511d29] uppercase tracking-wide">Presence &amp; Attendance —</span> late minutes and leave days here feed the monthly evaluation score, Disciplinary Action, Salary Deductions, and Contract Renewals.
+                            <span className="font-black text-[#511d29] uppercase tracking-wide">{t('presence_attendance', { defaultValue: 'Presence & Attendance —' })}</span> {t('late_minutes_and_leave_days_feed_evaluation', { defaultValue: 'late minutes and leave days here feed the monthly evaluation score, Disciplinary Action, Salary Deductions, and Contract Renewals.' })}
                         </p>
                     </div>
 
@@ -783,7 +786,7 @@ const AttendancePage: React.FC = () => {
                     {/* Attendance summary */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Attendance Summary</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('attendance_summary', { defaultValue: 'Attendance Summary' })}</span>
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
                                     type="date"
@@ -791,7 +794,7 @@ const AttendancePage: React.FC = () => {
                                     onChange={e => setAttendanceStart(e.target.value)}
                                     className="px-3 py-1.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold"
                                 />
-                                <span className="text-xs font-bold text-slate-400">to</span>
+                                <span className="text-xs font-bold text-slate-400">{t('to', { defaultValue: 'to' })}</span>
                                 <input
                                     type="date"
                                     value={attendanceEnd}
@@ -803,7 +806,7 @@ const AttendancePage: React.FC = () => {
                                         onClick={() => { setAttendanceStart(todayStr()); setAttendanceEnd(todayStr()); }}
                                         className="text-[10px] font-black text-[#511d29] uppercase tracking-wider underline"
                                     >
-                                        Today
+                                        {t('today', { defaultValue: 'Today' })}
                                     </button>
                                 )}
                             </div>
@@ -815,7 +818,7 @@ const AttendancePage: React.FC = () => {
                                 <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                                 <input
                                     type="text"
-                                    placeholder="Search name or staff code..."
+                                    placeholder={t('search_name_or_staff_code', { defaultValue: 'Search name or staff code...' })}
                                     value={summarySearch}
                                     onChange={e => setSummarySearch(e.target.value)}
                                     className="pl-10 pr-3 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold w-56"
@@ -828,23 +831,23 @@ const AttendancePage: React.FC = () => {
                                     onChange={e => setSummaryFilter(e.target.value as SummaryFilter)}
                                     className="pl-10 pr-8 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold appearance-none cursor-pointer"
                                 >
-                                    <option value="all">All Employees</option>
-                                    <option value="late">Late Only</option>
-                                    <option value="earlyOut">Early-Out Only</option>
-                                    <option value="onLeave">On Leave</option>
-                                    <option value="suspended">Suspended</option>
-                                    <option value="unmatched">Unmatched to IPH Record</option>
+                                    <option value="all">{t('all_employees', { defaultValue: 'All Employees' })}</option>
+                                    <option value="late">{t('late_only', { defaultValue: 'Late Only' })}</option>
+                                    <option value="earlyOut">{t('early_out_only', { defaultValue: 'Early-Out Only' })}</option>
+                                    <option value="onLeave">{t('on_leave', { defaultValue: 'On Leave' })}</option>
+                                    <option value="suspended">{t('suspended', { defaultValue: 'Suspended' })}</option>
+                                    <option value="unmatched">{t('unmatched_to_iph_record', { defaultValue: 'Unmatched to IPH Record' })}</option>
                                 </select>
                             </div>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-auto">
-                                {attendanceRows.length} / {allAttendanceRows.length} shown
+                                {attendanceRows.length} / {allAttendanceRows.length} {t('shown', { defaultValue: 'shown' })}
                             </span>
                         </div>
 
                         {isAttendanceError && (
                             <div className="p-10 text-center">
-                                <p className="text-sm font-bold text-rose-600">Could not reach the attendance system.</p>
-                                <p className="text-xs text-slate-400 mt-1">Make sure it's running and reachable at the configured address, then reload this page.</p>
+                                <p className="text-sm font-bold text-rose-600">{t('could_not_reach_the_attendance_system', { defaultValue: 'Could not reach the attendance system.' })}</p>
+                                <p className="text-xs text-slate-400 mt-1">{t('make_sure_it_s_running_and_reachable', { defaultValue: "Make sure it's running and reachable at the configured address, then reload this page." })}</p>
                             </div>
                         )}
 
@@ -853,12 +856,12 @@ const AttendancePage: React.FC = () => {
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Employee</th>
-                                            <th className="p-4">Worked</th>
-                                            <th className="p-4">Punctuality</th>
-                                            <th className="p-4">Overtime</th>
-                                            <th className="p-4">Leave / Other</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                            <th className="p-4">{t('worked', { defaultValue: 'Worked' })}</th>
+                                            <th className="p-4">{t('punctuality', { defaultValue: 'Punctuality' })}</th>
+                                            <th className="p-4">{t('overtime', { defaultValue: 'Overtime' })}</th>
+                                            <th className="p-4">{t('leave_other', { defaultValue: 'Leave / Other' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -872,41 +875,41 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4">
                                                     <div className="flex flex-col gap-0.5">
                                                         <span className={row.totalLateMins > 0 ? 'font-black text-red-600' : 'text-slate-400'}>
-                                                            Late: {formatMinutesAsHM(row.totalLateMins)}
+                                                            {t('late', { defaultValue: 'Late:' })} {formatMinutesAsHM(row.totalLateMins)}
                                                             {row.totalExcusedMins > 0 && <span className="text-emerald-600 font-bold"> (-{formatMinutesAsHM(row.totalExcusedMins)} excused)</span>}
                                                         </span>
                                                         <span className={row.totalEarlyOutMins > 0 ? 'font-black text-amber-600' : 'text-slate-400'}>
-                                                            Early: {formatMinutesAsHM(row.totalEarlyOutMins)}
+                                                            {t('early', { defaultValue: 'Early:' })} {formatMinutesAsHM(row.totalEarlyOutMins)}
                                                             {row.totalExcusedEarlyOutMins > 0 && <span className="text-emerald-600 font-bold"> (-{formatMinutesAsHM(row.totalExcusedEarlyOutMins)} excused)</span>}
                                                         </span>
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-blue-600">Approved: {formatMinutesAsHM(row.totalApprovedOTMins)}</span>
+                                                        <span className="font-black text-blue-600">{t('approved', { defaultValue: 'Approved:' })} {formatMinutesAsHM(row.totalApprovedOTMins)}</span>
                                                         {row.totalOTMins !== row.totalApprovedOTMins && (
-                                                            <span className="text-slate-400" title="Logged but not (yet) approved">Logged: {formatMinutesAsHM(row.totalOTMins)}</span>
+                                                            <span className="text-slate-400" title={t('logged_but_not_yet_approved', { defaultValue: 'Logged but not (yet) approved' })}>{t('logged', { defaultValue: 'Logged:' })} {formatMinutesAsHM(row.totalOTMins)}</span>
                                                         )}
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
                                                     <p className="font-bold space-x-1">
-                                                        <span className={row.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-400'}>P: {row.paidLeaveDays}</span>
+                                                        <span className={row.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-400'}>{t('p', { defaultValue: 'P:' })} {row.paidLeaveDays}</span>
                                                         <span className="text-slate-300">·</span>
-                                                        <span className={row.unpaidLeaveDays > 0 ? 'text-amber-600' : 'text-slate-400'}>U: {row.unpaidLeaveDays}</span>
+                                                        <span className={row.unpaidLeaveDays > 0 ? 'text-amber-600' : 'text-slate-400'}>{t('u', { defaultValue: 'U:' })} {row.unpaidLeaveDays}</span>
                                                         <span className="text-slate-300">·</span>
-                                                        <span className={row.emergencyLeaveDays > 0 ? 'text-rose-600' : 'text-slate-400'}>E: {row.emergencyLeaveDays}</span>
+                                                        <span className={row.emergencyLeaveDays > 0 ? 'text-rose-600' : 'text-slate-400'}>{t('e', { defaultValue: 'E:' })} {row.emergencyLeaveDays}</span>
                                                     </p>
                                                     {(row.holidayDays > 0 || row.outWorkDays > 0) && (
                                                         <p className="text-[10px] text-slate-500 mt-0.5">
-                                                            {row.holidayDays > 0 && <>Holiday: {row.holidayDays}d </>}
-                                                            {row.outWorkDays > 0 && <>Out-Work: {row.outWorkDays}d</>}
+                                                            {row.holidayDays > 0 && <>{t('holiday', { defaultValue: 'Holiday:' })} {row.holidayDays}d </>}
+                                                            {row.outWorkDays > 0 && <>{t('out_work', { defaultValue: 'Out-Work:' })} {row.outWorkDays}d</>}
                                                         </p>
                                                     )}
                                                     {(row.suspensionDays > 0 || row.absenceDays > 0) && (
                                                         <p className="text-[10px] mt-0.5">
-                                                            {row.suspensionDays > 0 && <span className="text-purple-600 font-bold">Suspended: {row.suspensionDays}d </span>}
-                                                            {row.absenceDays > 0 && <span className="text-red-600 font-bold">Absent: {row.absenceDays}d</span>}
+                                                            {row.suspensionDays > 0 && <span className="text-purple-600 font-bold">{t('suspended_label', { defaultValue: 'Suspended:' })} {row.suspensionDays}d </span>}
+                                                            {row.absenceDays > 0 && <span className="text-red-600 font-bold">{t('absent', { defaultValue: 'Absent:' })} {row.absenceDays}d</span>}
                                                         </p>
                                                     )}
                                                 </td>
@@ -915,19 +918,19 @@ const AttendancePage: React.FC = () => {
                                                         onClick={() => openDetail(row)}
                                                         className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5"
                                                     >
-                                                        <Eye className="w-3.5 h-3.5" /> Details
+                                                        <Eye className="w-3.5 h-3.5" /> {t('details', { defaultValue: 'Details' })}
                                                     </button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingAttendance && attendanceRows.length === 0 && (
                                             <tr>
-                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold">No attendance data for this range.</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold">{t('no_attendance_data_for_this_range', { defaultValue: 'No attendance data for this range.' })}</td>
                                             </tr>
                                         )}
                                         {isLoadingAttendance && (
                                             <tr>
-                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">Loading attendance data…</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">{t('loading_attendance_data', { defaultValue: 'Loading attendance data…' })}</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -943,12 +946,12 @@ const AttendancePage: React.FC = () => {
                         <div className="p-5 border-b border-[#511d29]/10 bg-[#511d29]/[0.03] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             <div>
                                 <h4 className="text-sm font-black text-[#511d29] uppercase tracking-wide flex items-center gap-2">
-                                    <CalendarCheck className="w-4 h-4" /> Approved Leaves
+                                    <CalendarCheck className="w-4 h-4" /> {t('approved_leaves', { defaultValue: 'Approved Leaves' })}
                                 </h4>
-                                <p className="text-xs text-slate-500 mt-1">Fully-approved leave requests — automatically recorded in the attendance system.</p>
+                                <p className="text-xs text-slate-500 mt-1">{t('fully_approved_leave_requests_recorded', { defaultValue: 'Fully-approved leave requests — automatically recorded in the attendance system.' })}</p>
                             </div>
                             <a href="/approved-leaves" className="shrink-0 px-4 py-2.5 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3a151d] transition-colors rounded-lg">
-                                View All
+                                {t('view_all', { defaultValue: 'View All' })}
                             </a>
                         </div>
                         <div className="divide-y divide-slate-100">
@@ -958,9 +961,9 @@ const AttendancePage: React.FC = () => {
                                 // Same palette as ApprovedLeaves.tsx's TYPE_META, for a consistent
                                 // paid=emerald / unpaid=amber / emergency=rose meaning app-wide.
                                 const typeMeta = ({
-                                    PAID_HOLIDAY: { label: 'Paid Leave', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-                                    EMERGENCY_LEAVE: { label: 'Emergency Leave', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-                                    UNPAID_LEAVE: { label: 'Unpaid Leave', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+                                    PAID_HOLIDAY: { label: t('paid_leave', { defaultValue: 'Paid Leave' }), className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                                    EMERGENCY_LEAVE: { label: t('emergency_leave', { defaultValue: 'Emergency Leave' }), className: 'bg-rose-50 text-rose-700 border-rose-200' },
+                                    UNPAID_LEAVE: { label: t('unpaid_leave', { defaultValue: 'Unpaid Leave' }), className: 'bg-amber-50 text-amber-700 border-amber-200' },
                                 } as Record<string, { label: string; className: string }>)[l.type]
                                     || { label: String(l.type).replace(/_/g, ' '), className: 'bg-slate-50 text-slate-700 border-slate-200' };
                                 return (
@@ -975,7 +978,7 @@ const AttendancePage: React.FC = () => {
                                 );
                             })}
                             {approvedLeaves.length === 0 && (
-                                <div className="px-5 py-8 text-center text-xs font-bold text-slate-400">No approved leaves yet.</div>
+                                <div className="px-5 py-8 text-center text-xs font-bold text-slate-400">{t('no_approved_leaves_yet', { defaultValue: 'No approved leaves yet.' })}</div>
                             )}
                         </div>
                     </div>
@@ -989,20 +992,20 @@ const AttendancePage: React.FC = () => {
                             <AlertTriangle className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Exceptions</h3>
+                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('exceptions', { defaultValue: 'Exceptions' })}</h3>
                             <p className="text-sm text-slate-600 mt-1">
-                                Punches that were hand-corrected rather than coming straight off a device, and logging a punch an employee forgot to make.
+                                {t('punches_hand_corrected_and_forgotten_punch', { defaultValue: 'Punches that were hand-corrected rather than coming straight off a device, and logging a punch an employee forgot to make.' })}
                             </p>
                         </div>
                     </div>
 
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Manual Transactions</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('manual_transactions', { defaultValue: 'Manual Transactions' })}</span>
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
                                     type="text"
-                                    placeholder="Search name or code..."
+                                    placeholder={t('search_name_or_code', { defaultValue: 'Search name or code...' })}
                                     value={excSearch}
                                     onChange={e => setExcSearch(e.target.value)}
                                     className="px-3 py-1.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold w-44"
@@ -1013,7 +1016,7 @@ const AttendancePage: React.FC = () => {
                                     onChange={e => setExcStart(e.target.value)}
                                     className="px-3 py-1.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold"
                                 />
-                                <span className="text-xs font-bold text-slate-400">to</span>
+                                <span className="text-xs font-bold text-slate-400">{t('to', { defaultValue: 'to' })}</span>
                                 <input
                                     type="date"
                                     value={excEnd}
@@ -1024,14 +1027,14 @@ const AttendancePage: React.FC = () => {
                                     onClick={() => setMissingPunchOpen(true)}
                                     className="px-4 py-2 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2"
                                 >
-                                    <PlusCircle className="w-3.5 h-3.5" /> Log Missing Punch
+                                    <PlusCircle className="w-3.5 h-3.5" /> {t('log_missing_punch', { defaultValue: 'Log Missing Punch' })}
                                 </button>
                             </div>
                         </div>
 
                         {isManualTxError && (
                             <div className="p-10 text-center">
-                                <p className="text-sm font-bold text-rose-600">Could not reach the attendance system.</p>
+                                <p className="text-sm font-bold text-rose-600">{t('could_not_reach_the_attendance_system', { defaultValue: 'Could not reach the attendance system.' })}</p>
                             </div>
                         )}
 
@@ -1040,12 +1043,12 @@ const AttendancePage: React.FC = () => {
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Employee</th>
-                                            <th className="p-4">Staff Code</th>
-                                            <th className="p-4">Department</th>
-                                            <th className="p-4">Date</th>
-                                            <th className="p-4">Time</th>
-                                            <th className="p-4">Type</th>
+                                            <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                            <th className="p-4">{t('staff_code', { defaultValue: 'Staff Code' })}</th>
+                                            <th className="p-4">{t('department', { defaultValue: 'Department' })}</th>
+                                            <th className="p-4">{t('date', { defaultValue: 'Date' })}</th>
+                                            <th className="p-4">{t('time', { defaultValue: 'Time' })}</th>
+                                            <th className="p-4">{t('type', { defaultValue: 'Type' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1065,12 +1068,12 @@ const AttendancePage: React.FC = () => {
                                         ))}
                                         {!isLoadingManualTx && manualTxRows.length === 0 && (
                                             <tr>
-                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold">No manual transactions for this range.</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold">{t('no_manual_transactions_for_this_range', { defaultValue: 'No manual transactions for this range.' })}</td>
                                             </tr>
                                         )}
                                         {isLoadingManualTx && (
                                             <tr>
-                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">Loading…</td>
+                                                <td colSpan={6} className="p-10 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -1088,47 +1091,47 @@ const AttendancePage: React.FC = () => {
                             <PlusCircle className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">Daily Logging</h3>
+                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('daily_logging', { defaultValue: 'Daily Logging' })}</h3>
                             <p className="text-sm text-slate-600 mt-1">
-                                Log leave, overtime, out-work, and excused-late allowances directly into the attendance system.
+                                {t('log_leave_overtime_out_work_excused_late', { defaultValue: 'Log leave, overtime, out-work, and excused-late allowances directly into the attendance system.' })}
                             </p>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
                         <button onClick={() => setLeaveOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> Log Leave
+                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_leave', { defaultValue: 'Log Leave' })}
                         </button>
                         <button onClick={() => setOtOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> Log Overtime
+                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_overtime', { defaultValue: 'Log Overtime' })}
                         </button>
                         <button onClick={() => setOwOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> Log Out-Work
+                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_out_work', { defaultValue: 'Log Out-Work' })}
                         </button>
                         <button onClick={() => setXlOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> Log Excused Late
+                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_excused_late', { defaultValue: 'Log Excused Late' })}
                         </button>
                         <button onClick={() => setEoOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> Log Excused Early-Out
+                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_excused_early_out', { defaultValue: 'Log Excused Early-Out' })}
                         </button>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium -mt-3">Overtime has no review list yet — the attendance system doesn't expose one (create-only).</p>
+                    <p className="text-[11px] text-slate-400 font-medium -mt-3">{t('overtime_has_no_review_list_yet', { defaultValue: "Overtime has no review list yet — the attendance system doesn't expose one (create-only)." })}</p>
 
                     {/* Leave records */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Leave Records</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('leave_records', { defaultValue: 'Leave Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Type</th>
-                                        <th className="p-4">Period</th>
-                                        <th className="p-4">Days</th>
-                                        <th className="p-4">Approved By</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('type', { defaultValue: 'Type' })}</th>
+                                        <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
+                                        <th className="p-4">{t('days', { defaultValue: 'Days' })}</th>
+                                        <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1140,15 +1143,15 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 font-bold">{row.daysCount}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
                                             <td className="p-4 text-right">
-                                                <button onClick={() => deleteEmployeeLeave(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">Remove</button>
+                                                <button onClick={() => deleteEmployeeLeave(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
                                     ))}
                                     {!isLoadingLeaves && employeeLeaves.length === 0 && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">No leave records.</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">{t('no_leave_records', { defaultValue: 'No leave records.' })}</td></tr>
                                     )}
                                     {isLoadingLeaves && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1158,18 +1161,18 @@ const AttendancePage: React.FC = () => {
                     {/* Out-work records */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Out-Work Records</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('out_work_records', { defaultValue: 'Out-Work Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Period</th>
-                                        <th className="p-4">Days</th>
-                                        <th className="p-4">Reason</th>
-                                        <th className="p-4">Approved By</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
+                                        <th className="p-4">{t('days', { defaultValue: 'Days' })}</th>
+                                        <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
+                                        <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1181,15 +1184,15 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
                                             <td className="p-4 text-right">
-                                                <button onClick={() => deleteOutWorkRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">Remove</button>
+                                                <button onClick={() => deleteOutWorkRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
                                     ))}
                                     {!isLoadingOutWorks && outWorksList.length === 0 && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">No out-work records.</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">{t('no_out_work_records', { defaultValue: 'No out-work records.' })}</td></tr>
                                     )}
                                     {isLoadingOutWorks && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1199,18 +1202,18 @@ const AttendancePage: React.FC = () => {
                     {/* Excused-late records */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Excused-Late Records</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('excused_late_records', { defaultValue: 'Excused-Late Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">Excused Mins</th>
-                                        <th className="p-4">Reason</th>
-                                        <th className="p-4">Approved By</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('date', { defaultValue: 'Date' })}</th>
+                                        <th className="p-4">{t('excused_mins', { defaultValue: 'Excused Mins' })}</th>
+                                        <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
+                                        <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1222,15 +1225,15 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
                                             <td className="p-4 text-right">
-                                                <button onClick={() => deleteExcusedLateRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">Remove</button>
+                                                <button onClick={() => deleteExcusedLateRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
                                     ))}
                                     {!isLoadingExcusedLates && excusedLatesList.length === 0 && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">No excused-late records.</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">{t('no_excused_late_records', { defaultValue: 'No excused-late records.' })}</td></tr>
                                     )}
                                     {isLoadingExcusedLates && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1240,18 +1243,18 @@ const AttendancePage: React.FC = () => {
                     {/* Excused early-out records */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Excused Early-Out Records</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('excused_early_out_records', { defaultValue: 'Excused Early-Out Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Employee</th>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">Excused Mins</th>
-                                        <th className="p-4">Reason</th>
-                                        <th className="p-4">Approved By</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                        <th className="p-4">{t('date', { defaultValue: 'Date' })}</th>
+                                        <th className="p-4">{t('excused_mins', { defaultValue: 'Excused Mins' })}</th>
+                                        <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
+                                        <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1263,15 +1266,15 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
                                             <td className="p-4 text-right">
-                                                <button onClick={() => deleteExcusedEarlyOutRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">Remove</button>
+                                                <button onClick={() => deleteExcusedEarlyOutRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
                                     ))}
                                     {!isLoadingExcusedEarlyOuts && excusedEarlyOutsList.length === 0 && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">No excused early-out records.</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">{t('no_excused_early_out_records', { defaultValue: 'No excused early-out records.' })}</td></tr>
                                     )}
                                     {isLoadingExcusedEarlyOuts && (
-                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1284,34 +1287,34 @@ const AttendancePage: React.FC = () => {
                 <div className="space-y-6">
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">BioTime Employee Roster</span>
+                            <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('biotime_employee_roster', { defaultValue: 'BioTime Employee Roster' })}</span>
                             <div className="flex flex-wrap items-center gap-2">
                                 <div className="relative flex items-center">
                                     <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                                     <input
                                         type="text"
-                                        placeholder="Search name or code..."
+                                        placeholder={t('search_name_or_code', { defaultValue: 'Search name or code...' })}
                                         value={empSearch}
                                         onChange={e => setEmpSearch(e.target.value)}
                                         className="pl-10 pr-3 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold w-56"
                                     />
                                 </div>
                                 <button onClick={openAddEmployee} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                                    <PlusCircle className="w-3.5 h-3.5" /> Add Employee
+                                    <PlusCircle className="w-3.5 h-3.5" /> {t('add_employee', { defaultValue: 'Add Employee' })}
                                 </button>
                             </div>
                         </div>
                         <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">
-                            This manages the employee record inside the attendance system itself (code, name, position) — not our HR employee record.
+                            {t('this_manages_the_employee_record_in_attendance', { defaultValue: 'This manages the employee record inside the attendance system itself (code, name, position) — not our HR employee record.' })}
                         </p>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">Code</th>
-                                        <th className="p-4">Name</th>
-                                        <th className="p-4">Position</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th className="p-4">{t('code', { defaultValue: 'Code' })}</th>
+                                        <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
+                                        <th className="p-4">{t('position', { defaultValue: 'Position' })}</th>
+                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1322,10 +1325,10 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4">{emp.position?.position_name || '—'}</td>
                                             <td className="p-4 text-right">
                                                 <div className="inline-flex items-center gap-3">
-                                                    <button onClick={() => openEditEmployee(emp)} className="text-slate-400 hover:text-[#511d29]" title="Edit">
+                                                    <button onClick={() => openEditEmployee(emp)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}>
                                                         <Pencil className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <button onClick={() => deleteBioTimeEmployeeRow(emp)} className="text-slate-400 hover:text-rose-600" title="Remove">
+                                                    <button onClick={() => deleteBioTimeEmployeeRow(emp)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}>
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
@@ -1333,10 +1336,10 @@ const AttendancePage: React.FC = () => {
                                         </tr>
                                     ))}
                                     {!isLoadingBioTimeEmployees && bioTimeEmployees.length === 0 && (
-                                        <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">No employees found.</td></tr>
+                                        <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">{t('no_employees_found', { defaultValue: 'No employees found.' })}</td></tr>
                                     )}
                                     {isLoadingBioTimeEmployees && (
-                                        <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                        <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1347,11 +1350,11 @@ const AttendancePage: React.FC = () => {
 
             {tab === 'settings' && (
                 !isSuperAdmin ? (
-                    <div className="p-10 text-center text-slate-400 font-bold">You don't have permission to view this section.</div>
+                    <div className="p-10 text-center text-slate-400 font-bold">{t('you_don_t_have_permission_to_view_this_section', { defaultValue: "You don't have permission to view this section." })}</div>
                 ) : (
                 <div className="space-y-6">
                     <div className="flex items-center gap-2 flex-wrap">
-                        {([['hours', 'Work Hours', Clock], ['leave-types', 'Leave Types', ShieldCheck], ['holidays', 'Holidays', CalendarDays], ['multipliers', 'Multiplier Factors', Percent], ['shifts', 'Employee Shifts', CalendarClock]] as const).map(([key, label, Icon]) => (
+                        {([['hours', t('work_hours', { defaultValue: 'Work Hours' }), Clock], ['leave-types', t('leave_types', { defaultValue: 'Leave Types' }), ShieldCheck], ['holidays', t('holidays', { defaultValue: 'Holidays' }), CalendarDays], ['multipliers', t('multiplier_factors', { defaultValue: 'Multiplier Factors' }), Percent], ['shifts', t('employee_shifts', { defaultValue: 'Employee Shifts' }), CalendarClock]] as const).map(([key, label, Icon]) => (
                             <button
                                 key={key}
                                 onClick={() => setSettingsSubTab(key)}
@@ -1365,17 +1368,17 @@ const AttendancePage: React.FC = () => {
                     {settingsSubTab === 'hours' && (
                         <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Work-Hour Settings</span>
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('work_hour_settings', { defaultValue: 'Work-Hour Settings' })}</span>
                             </div>
-                            <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">Values can be edited here, but entries can't be added or removed — this is fixed config the attendance system's own calculations reference by key.</p>
+                            <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">{t('values_editable_but_entries_fixed_config', { defaultValue: "Values can be edited here, but entries can't be added or removed — this is fixed config the attendance system's own calculations reference by key." })}</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Key</th>
-                                            <th className="p-4">Value</th>
-                                            <th className="p-4">Description</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('key', { defaultValue: 'Key' })}</th>
+                                            <th className="p-4">{t('value', { defaultValue: 'Value' })}</th>
+                                            <th className="p-4">{t('description', { defaultValue: 'Description' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1385,15 +1388,15 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 font-mono">{s.value}</td>
                                                 <td className="p-4 text-slate-500">{s.description}</td>
                                                 <td className="p-4 text-right">
-                                                    <button onClick={() => openEditSetting(s)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => openEditSetting(s)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingSnapshot && systemSettingsList.length === 0 && (
-                                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">No settings found.</td></tr>
+                                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">{t('no_settings_found', { defaultValue: 'No settings found.' })}</td></tr>
                                         )}
                                         {isLoadingSnapshot && (
-                                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1404,16 +1407,16 @@ const AttendancePage: React.FC = () => {
                     {settingsSubTab === 'leave-types' && (
                         <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50">
-                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Leave Types</span>
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('leave_types', { defaultValue: 'Leave Types' })}</span>
                             </div>
-                            <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">Values can be edited here, but entries can't be added or removed.</p>
+                            <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">{t('values_editable_but_entries_cannot_be_added_removed', { defaultValue: "Values can be edited here, but entries can't be added or removed." })}</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Paid</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
+                                            <th className="p-4">{t('paid', { defaultValue: 'Paid' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1421,18 +1424,18 @@ const AttendancePage: React.FC = () => {
                                             <tr key={lt.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4 font-bold text-slate-800">{lt.name}</td>
                                                 <td className="p-4">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${lt.isPaid ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{lt.isPaid ? 'Paid' : 'Unpaid'}</span>
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${lt.isPaid ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{lt.isPaid ? t('paid', { defaultValue: 'Paid' }) : t('unpaid', { defaultValue: 'Unpaid' })}</span>
                                                 </td>
                                                 <td className="p-4 text-right">
-                                                    <button onClick={() => openEditLeaveType(lt)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => openEditLeaveType(lt)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingSnapshot && leaveTypesList.length === 0 && (
-                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold">No leave types found.</td></tr>
+                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold">{t('no_leave_types_found', { defaultValue: 'No leave types found.' })}</td></tr>
                                         )}
                                         {isLoadingSnapshot && (
-                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1443,18 +1446,18 @@ const AttendancePage: React.FC = () => {
                     {settingsSubTab === 'holidays' && (
                         <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex items-center justify-between">
-                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Holidays</span>
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('holidays', { defaultValue: 'Holidays' })}</span>
                                 <button onClick={openAddHoliday} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                                    <PlusCircle className="w-3.5 h-3.5" /> Add Holiday
+                                    <PlusCircle className="w-3.5 h-3.5" /> {t('add_holiday', { defaultValue: 'Add Holiday' })}
                                 </button>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Period</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
+                                            <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1464,17 +1467,17 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4">{format(parseISO(h.startDate), 'dd MMM')} – {format(parseISO(h.endDate), 'dd MMM yyyy')}</td>
                                                 <td className="p-4 text-right">
                                                     <div className="inline-flex items-center gap-3">
-                                                        <button onClick={() => openEditHoliday(h)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                                                        <button onClick={() => deleteHoliday(h)} className="text-slate-400 hover:text-rose-600" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => openEditHoliday(h)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => deleteHoliday(h)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingHolidays && holidaysList.length === 0 && (
-                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold">No holidays found.</td></tr>
+                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold">{t('no_holidays_found', { defaultValue: 'No holidays found.' })}</td></tr>
                                         )}
                                         {isLoadingHolidays && (
-                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                            <tr><td colSpan={3} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1485,24 +1488,24 @@ const AttendancePage: React.FC = () => {
                     {settingsSubTab === 'multipliers' && (
                         <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex items-center justify-between">
-                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Multiplier Factors</span>
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('multiplier_factors', { defaultValue: 'Multiplier Factors' })}</span>
                                 <button onClick={openAddMultiplier} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                                    <PlusCircle className="w-3.5 h-3.5" /> Add Multiplier Factor
+                                    <PlusCircle className="w-3.5 h-3.5" /> {t('add_multiplier_factor', { defaultValue: 'Add Multiplier Factor' })}
                                 </button>
                             </div>
                             <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">
-                                Date-ranged overrides of the standard work-hour settings above (e.g. Ramadan hours). "Type" is a single-character code defined by the attendance system.
+                                {t('date_ranged_overrides_of_work_hour_settings', { defaultValue: 'Date-ranged overrides of the standard work-hour settings above (e.g. Ramadan hours). "Type" is a single-character code defined by the attendance system.' })}
                             </p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Factor</th>
-                                            <th className="p-4">Type</th>
-                                            <th className="p-4">Period</th>
-                                            <th className="p-4">Work Hours</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
+                                            <th className="p-4">{t('factor', { defaultValue: 'Factor' })}</th>
+                                            <th className="p-4">{t('type', { defaultValue: 'Type' })}</th>
+                                            <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
+                                            <th className="p-4">{t('work_hours', { defaultValue: 'Work Hours' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1515,17 +1518,17 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 font-mono text-[11px]">{m.workStart || '—'} – {m.workEnd || '—'}</td>
                                                 <td className="p-4 text-right">
                                                     <div className="inline-flex items-center gap-3">
-                                                        <button onClick={() => openEditMultiplier(m)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                                                        <button onClick={() => deleteMultiplier(m)} className="text-slate-400 hover:text-rose-600" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => openEditMultiplier(m)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => deleteMultiplier(m)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingMultipliers && multipliersList.length === 0 && (
-                                            <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">No multiplier factors found.</td></tr>
+                                            <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold">{t('no_multiplier_factors_found', { defaultValue: 'No multiplier factors found.' })}</td></tr>
                                         )}
                                         {isLoadingMultipliers && (
-                                            <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                            <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1536,23 +1539,23 @@ const AttendancePage: React.FC = () => {
                     {settingsSubTab === 'shifts' && (
                         <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                             <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex items-center justify-between">
-                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">Employee Shifts</span>
+                                <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('employee_shifts', { defaultValue: 'Employee Shifts' })}</span>
                                 <button onClick={openAddShift} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                                    <PlusCircle className="w-3.5 h-3.5" /> Add Employee Shift
+                                    <PlusCircle className="w-3.5 h-3.5" /> {t('add_employee_shift', { defaultValue: 'Add Employee Shift' })}
                                 </button>
                             </div>
                             <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">
-                                Per-employee date-range shift override — takes priority over Multiplier Factors and the standard Work Hours above for that employee on those days. Also created automatically when a "Change of Schedule" Work Authorization request is fully approved.
+                                {t('per_employee_date_range_shift_override', { defaultValue: 'Per-employee date-range shift override — takes priority over Multiplier Factors and the standard Work Hours above for that employee on those days. Also created automatically when a "Change of Schedule" Work Authorization request is fully approved.' })}
                             </p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                            <th className="p-4">Employee</th>
-                                            <th className="p-4">Period</th>
-                                            <th className="p-4">Work Hours</th>
-                                            <th className="p-4">Reason</th>
-                                            <th className="p-4 text-right">Actions</th>
+                                            <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
+                                            <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
+                                            <th className="p-4">{t('work_hours', { defaultValue: 'Work Hours' })}</th>
+                                            <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
+                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1567,17 +1570,17 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 text-slate-500">{s.reason || '—'}</td>
                                                 <td className="p-4 text-right">
                                                     <div className="inline-flex items-center gap-3">
-                                                        <button onClick={() => openEditShift(s)} className="text-slate-400 hover:text-[#511d29]" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                                                        <button onClick={() => deleteShift(s)} className="text-slate-400 hover:text-rose-600" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => openEditShift(s)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => deleteShift(s)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!isLoadingEmployeeShifts && employeeShiftsList.length === 0 && (
-                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold">No employee shifts found.</td></tr>
+                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold">{t('no_employee_shifts_found', { defaultValue: 'No employee shifts found.' })}</td></tr>
                                         )}
                                         {isLoadingEmployeeShifts && (
-                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold animate-pulse">Loading…</td></tr>
+                                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold animate-pulse">{t('loading', { defaultValue: 'Loading…' })}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -1604,7 +1607,7 @@ const AttendancePage: React.FC = () => {
                             onChange={e => setDetailStart(e.target.value)}
                             className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                         />
-                        <span className="text-xs font-bold text-slate-400">to</span>
+                        <span className="text-xs font-bold text-slate-400">{t('to', { defaultValue: 'to' })}</span>
                         <input
                             type="date"
                             value={detailEnd}
@@ -1616,12 +1619,12 @@ const AttendancePage: React.FC = () => {
                                 onClick={() => { setDetailStart(attendanceStart); setDetailEnd(attendanceEnd); }}
                                 className="text-[10px] font-black text-[#511d29] uppercase tracking-wider underline"
                             >
-                                Match Overview Range
+                                {t('match_overview_range', { defaultValue: 'Match Overview Range' })}
                             </button>
                         )}
                         {(getSettingValue('WorkStart') || getSettingValue('WorkEnd')) && (
                             <span className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-500">
-                                Scheduled Shift: {getSettingValue('WorkStart')?.slice(0, 5) || '—'} – {getSettingValue('WorkEnd')?.slice(0, 5) || '—'}
+                                {t('scheduled_shift', { defaultValue: 'Scheduled Shift:' })} {getSettingValue('WorkStart')?.slice(0, 5) || '—'} – {getSettingValue('WorkEnd')?.slice(0, 5) || '—'}
                             </span>
                         )}
                     </div>
@@ -1632,37 +1635,37 @@ const AttendancePage: React.FC = () => {
                             onChange={e => setDetailFilter(e.target.value as DetailFilter)}
                             className="pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold appearance-none cursor-pointer"
                         >
-                            <option value="all">All Days</option>
-                            <option value="late">Late Only</option>
-                            <option value="earlyOut">Early-Out Only</option>
-                            <option value="holiday">Holidays</option>
-                            <option value="outWork">Out-Work</option>
-                            <option value="excused">Excused (Late/Early-Out)</option>
-                            <option value="suspended">Suspended</option>
+                            <option value="all">{t('all_days', { defaultValue: 'All Days' })}</option>
+                            <option value="late">{t('late_only', { defaultValue: 'Late Only' })}</option>
+                            <option value="earlyOut">{t('early_out_only', { defaultValue: 'Early-Out Only' })}</option>
+                            <option value="holiday">{t('holidays', { defaultValue: 'Holidays' })}</option>
+                            <option value="outWork">{t('out_work_option', { defaultValue: 'Out-Work' })}</option>
+                            <option value="excused">{t('excused_late_early_out', { defaultValue: 'Excused (Late/Early-Out)' })}</option>
+                            <option value="suspended">{t('suspended', { defaultValue: 'Suspended' })}</option>
                         </select>
                     </div>
                 </div>
 
-                {isLoadingDetail && <p className="text-center text-slate-400 font-bold animate-pulse py-10">Loading daily breakdown…</p>}
+                {isLoadingDetail && <p className="text-center text-slate-400 font-bold animate-pulse py-10">{t('loading_daily_breakdown', { defaultValue: 'Loading daily breakdown…' })}</p>}
                 {monthlyReport && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-                            <StatCard icon={CalendarCheck} label="Worked" value={monthlyReport.grandTotalWork} color="bg-emerald-50 text-emerald-600" />
+                            <StatCard icon={CalendarCheck} label={t('worked', { defaultValue: 'Worked' })} value={monthlyReport.grandTotalWork} color="bg-emerald-50 text-emerald-600" />
                             <StatCard
                                 icon={AlertTriangle}
-                                label="Absent Days"
+                                label={t('absent_days', { defaultValue: 'Absent Days' })}
                                 value={filledDetailReportData.filter(d => resolveDayStatus(d, monthlyReport.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'absent').length}
                                 color="bg-red-50 text-red-600"
                             />
                             <StatCard
                                 icon={ShieldOff}
-                                label="Suspended Days"
+                                label={t('suspended_days', { defaultValue: 'Suspended Days' })}
                                 value={filledDetailReportData.filter(d => resolveDayStatus(d, monthlyReport.empLeaves, format(new Date(), 'yyyy-MM-dd')).kind === 'suspended').length}
                                 color="bg-purple-50 text-purple-600"
                             />
                             <StatCard
                                 icon={CalendarCheck}
-                                label="Leave Days"
+                                label={t('leave_days', { defaultValue: 'Leave Days' })}
                                 value={
                                     <span>
                                         <span className={monthlyReport.paidLeaveDays > 0 ? 'text-emerald-600' : 'text-slate-300'}>{monthlyReport.paidLeaveDays}</span>
@@ -1674,22 +1677,22 @@ const AttendancePage: React.FC = () => {
                                 }
                                 color="bg-slate-50 text-slate-500"
                             />
-                            <StatCard icon={CalendarCheck} label="Out-Work Days" value={monthlyReport.outWorkDays} color="bg-indigo-50 text-indigo-600" />
-                            <StatCard icon={Timer} label="Overtime (Approved)" value={monthlyReport.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
-                            <StatCard icon={Timer} label="Overtime (Worked)" value={monthlyReport.totalOT} color="bg-blue-50 text-blue-600" />
+                            <StatCard icon={CalendarCheck} label={t('out_work_days', { defaultValue: 'Out-Work Days' })} value={monthlyReport.outWorkDays} color="bg-indigo-50 text-indigo-600" />
+                            <StatCard icon={Timer} label={t('overtime_approved', { defaultValue: 'Overtime (Approved)' })} value={monthlyReport.formattedApprovedOT} color="bg-blue-50 text-blue-600" />
+                            <StatCard icon={Timer} label={t('overtime_worked', { defaultValue: 'Overtime (Worked)' })} value={monthlyReport.totalOT} color="bg-blue-50 text-blue-600" />
                         </div>
                         <p className="text-[11px] text-slate-400 font-medium -mt-4">
-                            "Worked" is calculated from actual punch times (first check-in to last check-out) — it is not shifted to the scheduled start, so a late arrival still shortens this total even when the lateness itself is later excused below.
+                            {t('worked_is_calculated_from_actual_punch_times', { defaultValue: '"Worked" is calculated from actual punch times (first check-in to last check-out) — it is not shifted to the scheduled start, so a late arrival still shortens this total even when the lateness itself is later excused below.' })}
                         </p>
 
                         {/* Punctuality Breakdown — makes the late/early-out → excused → chargeable
                             → deduction chain explicit, instead of showing 4 disconnected numbers. */}
                         <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
                             <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Punctuality Breakdown</span>
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('punctuality_breakdown', { defaultValue: 'Punctuality Breakdown' })}</span>
                                 {monthlyReport.totalDeduction > 0 && (
                                     <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider">
-                                        Deduction: {monthlyReport.totalDeduction} pts
+                                        {t('deduction', { defaultValue: 'Deduction:' })} {monthlyReport.totalDeduction} {t('pts', { defaultValue: 'pts' })}
                                     </span>
                                 )}
                             </div>
@@ -1699,7 +1702,7 @@ const AttendancePage: React.FC = () => {
                                     const latePct = lateRecorded > 0 ? (monthlyReport.totalLate / lateRecorded) * 100 : 0;
                                     return (
                                         <div className="p-4 space-y-2">
-                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Late Arrival</p>
+                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">{t('late_arrival', { defaultValue: 'Late Arrival' })}</p>
                                             {lateRecorded > 0 && (
                                                 <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
                                                     <div style={{ width: `${latePct}%` }} className="bg-red-500" />
@@ -1707,15 +1710,15 @@ const AttendancePage: React.FC = () => {
                                                 </div>
                                             )}
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-400">Recorded late</span>
+                                                <span className="text-slate-400">{t('recorded_late', { defaultValue: 'Recorded late' })}</span>
                                                 <span className="font-bold text-slate-700">{formatMinutesAsHM(lateRecorded)}</span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-400">− Excused</span>
+                                                <span className="text-slate-400">{t('minus_excused', { defaultValue: '− Excused' })}</span>
                                                 <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedMins)}</span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                                <span className="font-black text-slate-600">= Chargeable</span>
+                                                <span className="font-black text-slate-600">{t('equals_chargeable', { defaultValue: '= Chargeable' })}</span>
                                                 <span className={`font-black ${monthlyReport.totalLate > 0 ? 'text-red-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalLate)}</span>
                                             </div>
                                         </div>
@@ -1726,7 +1729,7 @@ const AttendancePage: React.FC = () => {
                                     const earlyPct = earlyRecorded > 0 ? (monthlyReport.totalEarly / earlyRecorded) * 100 : 0;
                                     return (
                                         <div className="p-4 space-y-2">
-                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">Early Departure</p>
+                                            <p className="text-xs font-black text-slate-600 uppercase tracking-wide">{t('early_departure', { defaultValue: 'Early Departure' })}</p>
                                             {earlyRecorded > 0 && (
                                                 <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
                                                     <div style={{ width: `${earlyPct}%` }} className="bg-amber-500" />
@@ -1734,15 +1737,15 @@ const AttendancePage: React.FC = () => {
                                                 </div>
                                             )}
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-400">Recorded early-out</span>
+                                                <span className="text-slate-400">{t('recorded_early_out', { defaultValue: 'Recorded early-out' })}</span>
                                                 <span className="font-bold text-slate-700">{formatMinutesAsHM(earlyRecorded)}</span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-400">− Excused</span>
+                                                <span className="text-slate-400">{t('minus_excused', { defaultValue: '− Excused' })}</span>
                                                 <span className="font-bold text-emerald-600">{formatMinutesAsHM(monthlyReport.totalExcusedEarlyOutMins)}</span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                                                <span className="font-black text-slate-600">= Chargeable</span>
+                                                <span className="font-black text-slate-600">{t('equals_chargeable', { defaultValue: '= Chargeable' })}</span>
                                                 <span className={`font-black ${monthlyReport.totalEarly > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{formatMinutesAsHM(monthlyReport.totalEarly)}</span>
                                             </div>
                                         </div>
@@ -1750,7 +1753,7 @@ const AttendancePage: React.FC = () => {
                                 })()}
                             </div>
                             <p className="px-4 pb-3 text-[10px] text-slate-400 font-medium">
-                                "Recorded" is derived (chargeable + excused) to show how much was logged before any excused allowance was applied — the attendance system doesn't return that raw figure directly.
+                                {t('recorded_is_derived_help', { defaultValue: '"Recorded" is derived (chargeable + excused) to show how much was logged before any excused allowance was applied — the attendance system doesn\'t return that raw figure directly.' })}
                             </p>
                         </div>
 
@@ -1759,13 +1762,13 @@ const AttendancePage: React.FC = () => {
                         {monthlyReport.empLeaves.length > 0 && (
                             <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
                                 <div className="p-3 bg-slate-50 border-b border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Leave Records in This Range</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('leave_records_in_this_range', { defaultValue: 'Leave Records in This Range' })}</span>
                                 </div>
                                 <div className="divide-y divide-slate-50">
                                     {monthlyReport.empLeaves.map(leave => (
                                         <div key={leave.id} className="p-3 flex items-center justify-between text-xs">
                                             <span className="font-bold text-slate-700">{leave.leaveType.name}</span>
-                                            <span className="text-slate-500">{format(parseISO(leave.startDate), 'dd MMM')} – {format(parseISO(leave.endDate), 'dd MMM yyyy')} ({leave.daysCount} days)</span>
+                                            <span className="text-slate-500">{format(parseISO(leave.startDate), 'dd MMM')} – {format(parseISO(leave.endDate), 'dd MMM yyyy')} ({leave.daysCount} {t('days_lc', { defaultValue: 'days' })})</span>
                                         </div>
                                     ))}
                                 </div>
@@ -1775,7 +1778,7 @@ const AttendancePage: React.FC = () => {
                         {monthlyReport.empOvertimes.length > 0 && (
                             <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
                                 <div className="p-3 bg-slate-50 border-b border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Overtime Records in This Range</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('overtime_records_in_this_range', { defaultValue: 'Overtime Records in This Range' })}</span>
                                 </div>
                                 <div className="divide-y divide-slate-50">
                                     {monthlyReport.empOvertimes.map(ot => (
@@ -1799,16 +1802,16 @@ const AttendancePage: React.FC = () => {
             <Modal
                 isOpen={missingPunchOpen}
                 onClose={closeMissingPunch}
-                title="Log Missing Punch"
+                title={t('log_missing_punch', { defaultValue: 'Log Missing Punch' })}
                 maxWidth="max-w-md"
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={mpEmpCode} onChange={setMpEmpCode} />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Punch Date & Time</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('punch_date_time', { defaultValue: 'Punch Date & Time' })}</label>
                         <input
                             type="datetime-local"
                             value={mpPunchTime}
@@ -1817,14 +1820,14 @@ const AttendancePage: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Type</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('type', { defaultValue: 'Type' })}</label>
                         <select
                             value={mpPunchState}
                             onChange={e => setMpPunchState(e.target.value as '0' | '1')}
                             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer"
                         >
-                            <option value="0">Check In</option>
-                            <option value="1">Check Out</option>
+                            <option value="0">{t('check_in', { defaultValue: 'Check In' })}</option>
+                            <option value="1">{t('check_out', { defaultValue: 'Check Out' })}</option>
                         </select>
                     </div>
                     <button
@@ -1833,158 +1836,158 @@ const AttendancePage: React.FC = () => {
                         disabled={submittingPunch}
                         className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50"
                     >
-                        {submittingPunch ? 'Logging…' : 'Log Punch'}
+                        {submittingPunch ? t('logging', { defaultValue: 'Logging…' }) : t('log_punch', { defaultValue: 'Log Punch' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Log Leave popup */}
-            <Modal isOpen={leaveOpen} onClose={() => setLeaveOpen(false)} title="Log Leave" maxWidth="max-w-md">
+            <Modal isOpen={leaveOpen} onClose={() => setLeaveOpen(false)} title={t('log_leave', { defaultValue: 'Log Leave' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={leaveForm.empCode} onChange={code => setLeaveForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Leave Type</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('leave_type', { defaultValue: 'Leave Type' })}</label>
                         <select value={leaveForm.leaveTypeId} onChange={e => setLeaveForm(f => ({ ...f, leaveTypeId: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
-                            <option value="">Select type…</option>
+                            <option value="">{t('select_type', { defaultValue: 'Select type…' })}</option>
                             {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('start_date', { defaultValue: 'Start Date' })}</label>
                             <input type="date" value={leaveForm.startDate} onChange={e => setLeaveForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('end_date', { defaultValue: 'End Date' })}</label>
                             <input type="date" value={leaveForm.endDate} onChange={e => setLeaveForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Notes (optional)</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('notes_optional', { defaultValue: 'Notes (optional)' })}</label>
                         <input type="text" value={leaveForm.notes} onChange={e => setLeaveForm(f => ({ ...f, notes: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitLeave} disabled={savingLeave} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingLeave ? 'Logging…' : 'Log Leave'}
+                        {savingLeave ? t('logging', { defaultValue: 'Logging…' }) : t('log_leave', { defaultValue: 'Log Leave' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Log Overtime popup */}
-            <Modal isOpen={otOpen} onClose={() => setOtOpen(false)} title="Log Overtime" maxWidth="max-w-md">
+            <Modal isOpen={otOpen} onClose={() => setOtOpen(false)} title={t('log_overtime', { defaultValue: 'Log Overtime' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={otForm.empCode} onChange={code => setOtForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date', { defaultValue: 'Date' })}</label>
                         <input type="date" value={otForm.date} onChange={e => setOtForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Hours</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('hours', { defaultValue: 'Hours' })}</label>
                             <input type="number" min="0" value={otForm.hours} onChange={e => setOtForm(f => ({ ...f, hours: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Minutes</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('minutes', { defaultValue: 'Minutes' })}</label>
                             <input type="number" min="0" max="59" value={otForm.minutes} onChange={e => setOtForm(f => ({ ...f, minutes: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason (optional)</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason_optional', { defaultValue: 'Reason (optional)' })}</label>
                         <input type="text" value={otForm.reason} onChange={e => setOtForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitOvertime} disabled={savingOt} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingOt ? 'Logging…' : 'Log Overtime'}
+                        {savingOt ? t('logging', { defaultValue: 'Logging…' }) : t('log_overtime', { defaultValue: 'Log Overtime' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Log Out-Work popup */}
-            <Modal isOpen={owOpen} onClose={() => setOwOpen(false)} title="Log Out-Work" maxWidth="max-w-md">
+            <Modal isOpen={owOpen} onClose={() => setOwOpen(false)} title={t('log_out_work', { defaultValue: 'Log Out-Work' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={owForm.empCode} onChange={code => setOwForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('start_date', { defaultValue: 'Start Date' })}</label>
                             <input type="date" value={owForm.startDate} onChange={e => setOwForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('end_date', { defaultValue: 'End Date' })}</label>
                             <input type="date" value={owForm.endDate} onChange={e => setOwForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason', { defaultValue: 'Reason' })}</label>
                         <input type="text" value={owForm.reason} onChange={e => setOwForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitOutWork} disabled={savingOw} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingOw ? 'Logging…' : 'Log Out-Work'}
+                        {savingOw ? t('logging', { defaultValue: 'Logging…' }) : t('log_out_work', { defaultValue: 'Log Out-Work' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Log Excused Late popup */}
-            <Modal isOpen={xlOpen} onClose={() => setXlOpen(false)} title="Log Excused Late" maxWidth="max-w-md">
+            <Modal isOpen={xlOpen} onClose={() => setXlOpen(false)} title={t('log_excused_late', { defaultValue: 'Log Excused Late' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={xlForm.empCode} onChange={code => setXlForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date', { defaultValue: 'Date' })}</label>
                         <input type="date" value={xlForm.date} onChange={e => setXlForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Excused Minutes</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('excused_minutes', { defaultValue: 'Excused Minutes' })}</label>
                         <input type="number" min="1" value={xlForm.excusedMinutes} onChange={e => setXlForm(f => ({ ...f, excusedMinutes: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason', { defaultValue: 'Reason' })}</label>
                         <input type="text" value={xlForm.reason} onChange={e => setXlForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitExcusedLate} disabled={savingXl} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingXl ? 'Logging…' : 'Log Excused Late'}
+                        {savingXl ? t('logging', { defaultValue: 'Logging…' }) : t('log_excused_late', { defaultValue: 'Log Excused Late' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Log Excused Early-Out popup */}
-            <Modal isOpen={eoOpen} onClose={() => setEoOpen(false)} title="Log Excused Early-Out" maxWidth="max-w-md">
+            <Modal isOpen={eoOpen} onClose={() => setEoOpen(false)} title={t('log_excused_early_out', { defaultValue: 'Log Excused Early-Out' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect options={attendanceEmployeeOptions} value={eoForm.empCode} onChange={code => setEoForm(f => ({ ...f, empCode: code }))} />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date', { defaultValue: 'Date' })}</label>
                         <input type="date" value={eoForm.date} onChange={e => setEoForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Excused Minutes</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('excused_minutes', { defaultValue: 'Excused Minutes' })}</label>
                         <input type="number" min="1" value={eoForm.excusedMinutes} onChange={e => setEoForm(f => ({ ...f, excusedMinutes: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason', { defaultValue: 'Reason' })}</label>
                         <input type="text" value={eoForm.reason} onChange={e => setEoForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitExcusedEarlyOut} disabled={savingEo} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingEo ? 'Logging…' : 'Log Excused Early-Out'}
+                        {savingEo ? t('logging', { defaultValue: 'Logging…' }) : t('log_excused_early_out', { defaultValue: 'Log Excused Early-Out' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Add/Edit BioTime Employee popup */}
-            <Modal isOpen={empModalOpen} onClose={closeEmployeeModal} title={empEditing ? 'Edit Employee' : 'Add Employee'} maxWidth="max-w-md">
+            <Modal isOpen={empModalOpen} onClose={closeEmployeeModal} title={empEditing ? t('edit_employee', { defaultValue: 'Edit Employee' }) : t('add_employee', { defaultValue: 'Add Employee' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee Code</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee_code', { defaultValue: 'Employee Code' })}</label>
                         <input
                             type="text"
                             value={empForm.empCode}
@@ -1992,10 +1995,10 @@ const AttendancePage: React.FC = () => {
                             onChange={e => setEmpForm(f => ({ ...f, empCode: e.target.value }))}
                             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold disabled:bg-slate-50 disabled:text-slate-400"
                         />
-                        {empEditing && <p className="text-[10px] text-slate-400 font-medium mt-1">The employee code can't be changed after creation.</p>}
+                        {empEditing && <p className="text-[10px] text-slate-400 font-medium mt-1">{t('employee_code_cannot_change', { defaultValue: "The employee code can't be changed after creation." })}</p>}
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Name</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('name', { defaultValue: 'Name' })}</label>
                         <input
                             type="text"
                             value={empForm.firstName}
@@ -2004,7 +2007,7 @@ const AttendancePage: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Position</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('position', { defaultValue: 'Position' })}</label>
                         <select
                             value={empForm.positionId}
                             onChange={e => setEmpForm(f => ({ ...f, positionId: e.target.value }))}
@@ -2014,128 +2017,128 @@ const AttendancePage: React.FC = () => {
                         </select>
                     </div>
                     <button type="button" onClick={submitEmployee} disabled={savingEmp} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingEmp ? 'Saving…' : empEditing ? 'Save Changes' : 'Add Employee'}
+                        {savingEmp ? t('saving', { defaultValue: 'Saving…' }) : empEditing ? t('save_changes', { defaultValue: 'Save Changes' }) : t('add_employee', { defaultValue: 'Add Employee' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Edit Setting popup — edit only, no add */}
-            <Modal isOpen={settingModalOpen} onClose={() => setSettingModalOpen(false)} title="Edit Setting" maxWidth="max-w-md">
+            <Modal isOpen={settingModalOpen} onClose={() => setSettingModalOpen(false)} title={t('edit_setting', { defaultValue: 'Edit Setting' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Key</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('key', { defaultValue: 'Key' })}</label>
                         <input type="text" value={settingForm.key} disabled className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-400" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Value</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('value', { defaultValue: 'Value' })}</label>
                         <input type="text" placeholder="e.g. 09:00:00" value={settingForm.valueString} onChange={e => setSettingForm(f => ({ ...f, valueString: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('description', { defaultValue: 'Description' })}</label>
                         <input type="text" value={settingForm.description} onChange={e => setSettingForm(f => ({ ...f, description: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitSetting} disabled={savingSetting} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingSetting ? 'Saving…' : 'Save Setting'}
+                        {savingSetting ? t('saving', { defaultValue: 'Saving…' }) : t('save_setting', { defaultValue: 'Save Setting' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Edit Leave Type popup — edit only, no add */}
-            <Modal isOpen={ltModalOpen} onClose={() => setLtModalOpen(false)} title="Edit Leave Type" maxWidth="max-w-md">
+            <Modal isOpen={ltModalOpen} onClose={() => setLtModalOpen(false)} title={t('edit_leave_type', { defaultValue: 'Edit Leave Type' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Name</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('name', { defaultValue: 'Name' })}</label>
                         <input type="text" value={ltForm.name} onChange={e => setLtForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
                         <input type="checkbox" checked={ltForm.isPaid} onChange={e => setLtForm(f => ({ ...f, isPaid: e.target.checked }))} />
-                        Paid leave
+                        {t('paid_leave', { defaultValue: 'Paid leave' })}
                     </label>
                     <button type="button" onClick={submitLeaveType} disabled={savingLt} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingLt ? 'Saving…' : 'Save Leave Type'}
+                        {savingLt ? t('saving', { defaultValue: 'Saving…' }) : t('save_leave_type', { defaultValue: 'Save Leave Type' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Add/Edit Holiday popup */}
-            <Modal isOpen={holModalOpen} onClose={() => setHolModalOpen(false)} title={holEditing ? 'Edit Holiday' : 'Add Holiday'} maxWidth="max-w-md">
+            <Modal isOpen={holModalOpen} onClose={() => setHolModalOpen(false)} title={holEditing ? t('edit_holiday', { defaultValue: 'Edit Holiday' }) : t('add_holiday', { defaultValue: 'Add Holiday' })} maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Name</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('name', { defaultValue: 'Name' })}</label>
                         <input type="text" value={holForm.name} onChange={e => setHolForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('start_date', { defaultValue: 'Start Date' })}</label>
                         <input type="date" value={holForm.startDate} onChange={e => setHolForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('end_date', { defaultValue: 'End Date' })}</label>
                         <input type="date" value={holForm.endDate} onChange={e => setHolForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitHoliday} disabled={savingHol} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingHol ? 'Saving…' : 'Save Holiday'}
+                        {savingHol ? t('saving', { defaultValue: 'Saving…' }) : t('save_holiday', { defaultValue: 'Save Holiday' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Add/Edit Multiplier Factor popup */}
-            <Modal isOpen={mfModalOpen} onClose={() => setMfModalOpen(false)} title={mfEditing ? 'Edit Multiplier Factor' : 'Add Multiplier Factor'} maxWidth="max-w-lg">
+            <Modal isOpen={mfModalOpen} onClose={() => setMfModalOpen(false)} title={mfEditing ? t('edit_multiplier_factor', { defaultValue: 'Edit Multiplier Factor' }) : t('add_multiplier_factor', { defaultValue: 'Add Multiplier Factor' })} maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Name</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('name', { defaultValue: 'Name' })}</label>
                             <input type="text" value={mfForm.name} onChange={e => setMfForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Factor Value</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('factor_value', { defaultValue: 'Factor Value' })}</label>
                             <input type="text" placeholder="e.g. 1.5" value={mfForm.factorValue} onChange={e => setMfForm(f => ({ ...f, factorValue: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Type (single character)</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('type_single_character', { defaultValue: 'Type (single character)' })}</label>
                         <input type="text" maxLength={1} value={mfForm.type} onChange={e => setMfForm(f => ({ ...f, type: e.target.value }))} className="w-24 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date Start</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date_start', { defaultValue: 'Date Start' })}</label>
                             <input type="date" value={mfForm.dateStart} onChange={e => setMfForm(f => ({ ...f, dateStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date End</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date_end', { defaultValue: 'Date End' })}</label>
                             <input type="date" value={mfForm.dateEnd} onChange={e => setMfForm(f => ({ ...f, dateEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work Start (HH:mm:ss)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('work_start_hh_mm_ss', { defaultValue: 'Work Start (HH:mm:ss)' })}</label>
                             <input type="text" placeholder="09:00:00" value={mfForm.workStart} onChange={e => setMfForm(f => ({ ...f, workStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work End (HH:mm:ss)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('work_end_hh_mm_ss', { defaultValue: 'Work End (HH:mm:ss)' })}</label>
                             <input type="text" placeholder="15:00:00" value={mfForm.workEnd} onChange={e => setMfForm(f => ({ ...f, workEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Grace Period (HH:mm:ss)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('grace_period_hh_mm_ss', { defaultValue: 'Grace Period (HH:mm:ss)' })}</label>
                             <input type="text" placeholder="00:15:00" value={mfForm.gracePeriod} onChange={e => setMfForm(f => ({ ...f, gracePeriod: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">OT Threshold (HH:mm:ss)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('ot_threshold_hh_mm_ss', { defaultValue: 'OT Threshold (HH:mm:ss)' })}</label>
                             <input type="text" placeholder="15:30:00" value={mfForm.otThreshold} onChange={e => setMfForm(f => ({ ...f, otThreshold: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <button type="button" onClick={submitMultiplier} disabled={savingMf} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingMf ? 'Saving…' : 'Save Multiplier Factor'}
+                        {savingMf ? t('saving', { defaultValue: 'Saving…' }) : t('save_multiplier_factor', { defaultValue: 'Save Multiplier Factor' })}
                     </button>
                 </div>
             </Modal>
 
             {/* Add/Edit Employee Shift popup */}
-            <Modal isOpen={esModalOpen} onClose={() => setEsModalOpen(false)} title={esEditing ? 'Edit Employee Shift' : 'Add Employee Shift'} maxWidth="max-w-lg">
+            <Modal isOpen={esModalOpen} onClose={() => setEsModalOpen(false)} title={esEditing ? t('edit_employee_shift', { defaultValue: 'Edit Employee Shift' }) : t('add_employee_shift', { defaultValue: 'Add Employee Shift' })} maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Employee</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
                         <EmployeeSearchSelect
                             options={bioTimeEmployeeOptions}
                             value={esForm.empCode}
@@ -2145,40 +2148,40 @@ const AttendancePage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('start_date', { defaultValue: 'Start Date' })}</label>
                             <input type="date" value={esForm.startDate} onChange={e => setEsForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('end_date', { defaultValue: 'End Date' })}</label>
                             <input type="date" value={esForm.endDate} onChange={e => setEsForm(f => ({ ...f, endDate: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work Start</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('work_start', { defaultValue: 'Work Start' })}</label>
                             <input type="time" value={esForm.workStart} onChange={e => setEsForm(f => ({ ...f, workStart: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Work End</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('work_end', { defaultValue: 'Work End' })}</label>
                             <input type="time" value={esForm.workEnd} onChange={e => setEsForm(f => ({ ...f, workEnd: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Grace Period (optional)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('grace_period_optional', { defaultValue: 'Grace Period (optional)' })}</label>
                             <input type="time" value={esForm.gracePeriod} onChange={e => setEsForm(f => ({ ...f, gracePeriod: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">OT Threshold (optional)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('ot_threshold_optional', { defaultValue: 'OT Threshold (optional)' })}</label>
                             <input type="time" value={esForm.otThreshold} onChange={e => setEsForm(f => ({ ...f, otThreshold: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason (optional)</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason_optional', { defaultValue: 'Reason (optional)' })}</label>
                         <input type="text" value={esForm.reason} onChange={e => setEsForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
                     </div>
                     <button type="button" onClick={submitShift} disabled={savingEs} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingEs ? 'Saving…' : 'Save Employee Shift'}
+                        {savingEs ? t('saving', { defaultValue: 'Saving…' }) : t('save_employee_shift', { defaultValue: 'Save Employee Shift' })}
                     </button>
                 </div>
             </Modal>

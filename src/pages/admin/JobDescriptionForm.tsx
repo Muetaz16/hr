@@ -220,7 +220,7 @@ const JobDescriptionForm: React.FC = () => {
                         <input
                             type="text" required value={formData.title}
                             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            placeholder="e.g. Accountant, Head of Finance"
+                            placeholder={t('position_title_placeholder', { defaultValue: 'e.g. Accountant, Head of Finance' })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                         />
                     </div>
@@ -241,7 +241,7 @@ const JobDescriptionForm: React.FC = () => {
                         <input
                             type="text" value={formData.details.reportsTo || ''}
                             onChange={(e) => setFormData({ ...formData, details: { ...formData.details, reportsTo: e.target.value } })}
-                            placeholder="e.g. Head of Finance"
+                            placeholder={t('reports_to_placeholder', { defaultValue: 'e.g. Head of Finance' })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                         />
                     </div>
@@ -281,7 +281,7 @@ const JobDescriptionForm: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">English</label>
+                                    <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">{t('english', { defaultValue: 'English' })}</label>
                                     <textarea
                                         value={formData.details[section.key]?.en || ''}
                                         onChange={(e) => setSectionField(section.key, 'en', e.target.value)}
@@ -317,10 +317,10 @@ const JobDescriptionForm: React.FC = () => {
                                 onChange={(e) => setFormData({ ...formData, scopeLevel: e.target.value as ScopeLevel, scopeId: '' })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                             >
-                                <option value="DIRECTORATE">Directorate</option>
-                                <option value="DIVISION">Division</option>
-                                <option value="DEPARTMENT">Department / Office</option>
-                                <option value="UNIT">Unit</option>
+                                <option value="DIRECTORATE">{t('directorate', { defaultValue: 'Directorate' })}</option>
+                                <option value="DIVISION">{t('division', { defaultValue: 'Division' })}</option>
+                                <option value="DEPARTMENT">{t('department_office', { defaultValue: 'Department / Office' })}</option>
+                                <option value="UNIT">{t('unit', { defaultValue: 'Unit' })}</option>
                             </select>
                         </div>
 

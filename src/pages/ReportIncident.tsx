@@ -173,11 +173,11 @@ const ReportIncident: React.FC = () => {
 
                     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                         <div className="px-5 py-3 border-b border-slate-100">
-                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">My Submitted Reports</span>
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">{t('my_submitted_reports', { defaultValue: 'My Submitted Reports' })}</span>
                         </div>
-                        {reportsLoading && <p className="text-sm text-slate-400 text-center py-6">Loading…</p>}
+                        {reportsLoading && <p className="text-sm text-slate-400 text-center py-6">{t('loading', { defaultValue: 'Loading…' })}</p>}
                         {!reportsLoading && (myReports?.length ?? 0) === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-6">You haven't submitted any reports yet.</p>
+                            <p className="text-sm text-slate-400 text-center py-6">{t('no_reports_submitted_yet', { defaultValue: "You haven't submitted any reports yet." })}</p>
                         )}
                         {!reportsLoading && !!myReports?.length && (
                             <table className="w-full text-left text-sm">
@@ -212,12 +212,12 @@ const ReportIncident: React.FC = () => {
                         onClick={() => setShowForm(false)}
                         className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
                     >
-                        <ArrowLeft size={14} /> Back to my reports
+                        <ArrowLeft size={14} /> {t('back_to_my_reports', { defaultValue: 'Back to my reports' })}
                     </button>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Date reported</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('date_reported', { defaultValue: 'Date reported' })}</label>
                             <input
                                 type="date"
                                 value={reportedDate}
@@ -227,7 +227,7 @@ const ReportIncident: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Date happened</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('date_happened', { defaultValue: 'Date happened' })}</label>
                             <input
                                 type="date"
                                 value={incidentDate}
@@ -239,14 +239,14 @@ const ReportIncident: React.FC = () => {
                     </div>
 
                     <div className="relative">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Subject employee/s</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('subject_employee_s', { defaultValue: 'Subject employee/s' })}</label>
                         <input
                             type="text"
                             value={subjectQuery}
                             onChange={e => handleSubjectChange(e.target.value)}
                             onFocus={() => setShowSuggestions(true)}
                             onBlur={() => { blurTimeout.current = window.setTimeout(() => setShowSuggestions(false), 150); }}
-                            placeholder="Start typing the employee's name…"
+                            placeholder={t('start_typing_employee_name', { defaultValue: "Start typing the employee's name…" })}
                             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                             autoComplete="off"
                             required
@@ -271,7 +271,7 @@ const ReportIncident: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Position title</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('position_title', { defaultValue: 'Position title' })}</label>
                             <input
                                 type="text"
                                 value={positionTitle}
@@ -281,7 +281,7 @@ const ReportIncident: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('department', { defaultValue: 'Department' })}</label>
                             <input
                                 type="text"
                                 value={department}
@@ -293,44 +293,44 @@ const ReportIncident: React.FC = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Place of incident</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('place_of_incident', { defaultValue: 'Place of incident' })}</label>
                         <input
                             type="text"
                             value={incidentPlace}
                             onChange={e => setIncidentPlace(e.target.value)}
-                            placeholder="e.g. Warehouse 2, Head Office"
+                            placeholder={t('place_of_incident_placeholder', { defaultValue: 'e.g. Warehouse 2, Head Office' })}
                             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Description of the incident</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('description_of_the_incident', { defaultValue: 'Description of the incident' })}</label>
                         <textarea
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             rows={5}
-                            placeholder="Describe what happened, when, and who was involved or witnessed it."
+                            placeholder={t('incident_description_placeholder', { defaultValue: 'Describe what happened, when, and who was involved or witnessed it.' })}
                             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">How should this report be filed?</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">{t('how_should_this_report_be_filed', { defaultValue: 'How should this report be filed?' })}</label>
                         <div className="grid grid-cols-2 gap-3">
                             <label className={`flex items-start gap-2 border rounded-lg px-3 py-2.5 cursor-pointer text-sm ${!isAnonymous ? 'border-slate-800 bg-slate-50' : 'border-slate-300'}`}>
                                 <input type="radio" name="isAnonymous" checked={!isAnonymous} onChange={() => setIsAnonymous(false)} className="mt-0.5" />
                                 <span>
-                                    <span className="block font-medium text-slate-700">Under my name</span>
+                                    <span className="block font-medium text-slate-700">{t('under_my_name', { defaultValue: 'Under my name' })}</span>
                                     <span className="block text-xs text-slate-500">{currentUser?.fullName}</span>
                                 </span>
                             </label>
                             <label className={`flex items-start gap-2 border rounded-lg px-3 py-2.5 cursor-pointer text-sm ${isAnonymous ? 'border-slate-800 bg-slate-50' : 'border-slate-300'}`}>
                                 <input type="radio" name="isAnonymous" checked={isAnonymous} onChange={() => setIsAnonymous(true)} className="mt-0.5" />
                                 <span>
-                                    <span className="block font-medium text-slate-700">Anonymously</span>
-                                    <span className="block text-xs text-slate-500">HR won't see your name</span>
+                                    <span className="block font-medium text-slate-700">{t('anonymously', { defaultValue: 'Anonymously' })}</span>
+                                    <span className="block text-xs text-slate-500">{t('hr_wont_see_your_name', { defaultValue: "HR won't see your name" })}</span>
                                 </span>
                             </label>
                         </div>
@@ -338,7 +338,7 @@ const ReportIncident: React.FC = () => {
 
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1">
-                            <Paperclip size={14} /> Supporting documents (optional, up to {MAX_FILES} files, 100 MB each)
+                            <Paperclip size={14} /> {t('supporting_documents_optional', { count: MAX_FILES, defaultValue: 'Supporting documents (optional, up to {{count}} files, 100 MB each)' })}
                         </label>
                         <input
                             type="file"
@@ -353,7 +353,7 @@ const ReportIncident: React.FC = () => {
                         disabled={submitting}
                         className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-slate-900 disabled:opacity-60"
                     >
-                        <Send size={16} /> {submitting ? 'Submitting…' : 'Submit report'}
+                        <Send size={16} /> {submitting ? t('submitting', { defaultValue: 'Submitting…' }) : t('submit_report', { defaultValue: 'Submit report' })}
                     </button>
                 </form>
             )}

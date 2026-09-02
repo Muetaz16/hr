@@ -92,17 +92,17 @@ const PromotionCaseDetailPage: React.FC = () => {
             a.download = `${stage}_${c.caseNumber}.docx`;
             a.click();
             window.URL.revokeObjectURL(url);
-            toast.success('Form generated. Collect the required signature(s), then upload the signed copy below.');
+            toast.success(t('form_generated_collect_signatures_upload', { defaultValue: 'Form generated. Collect the required signature(s), then upload the signed copy below.' }));
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to generate the form.');
+            toast.error(err?.response?.data?.error || t('failed_to_generate_the_form', { defaultValue: 'Failed to generate the form.' }));
         } finally {
             setBusy(false);
         }
     };
 
     const uploadFile = async (file: File | null): Promise<{ documentUrl: string; documentName: string } | null> => {
-        if (!file) { toast.error('Attach a document before continuing.'); return null; }
+        if (!file) { toast.error(t('attach_a_document_before_continuing', { defaultValue: 'Attach a document before continuing.' })); return null; }
         const { url, name } = await employeeService.uploadDocument(file);
         return { documentUrl: url, documentName: name };
     };
@@ -112,25 +112,25 @@ const PromotionCaseDetailPage: React.FC = () => {
         try {
             await fn();
             setSignedFile(null);
-            toast.success('Case updated.');
+            toast.success(t('case_updated', { defaultValue: 'Case updated.' }));
             refresh();
         } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Action failed.');
+            toast.error(err?.response?.data?.error || t('action_failed', { defaultValue: 'Action failed.' }));
         } finally {
             setBusy(false);
         }
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Loading case…</div>;
+        return <div className="p-8 text-center text-slate-400 text-sm">{t('loading_case', { defaultValue: 'Loading case…' })}</div>;
     }
     if (error || !c) {
         return (
             <div className="p-8 text-center space-y-4">
                 <AlertCircle size={40} className="mx-auto text-red-500" />
-                <h2 className="text-lg font-bold text-slate-800">Case not found.</h2>
+                <h2 className="text-lg font-bold text-slate-800">{t('case_not_found', { defaultValue: 'Case not found.' })}</h2>
                 <button onClick={() => navigate('/personnel-relations/promotions')} className="text-red-700 font-bold hover:underline text-sm">
-                    Back to Promotions
+                    {t('back_to_promotions', { defaultValue: 'Back to Promotions' })}
                 </button>
             </div>
         );
@@ -140,19 +140,19 @@ const PromotionCaseDetailPage: React.FC = () => {
         let body: React.ReactNode = null;
         if (stage === 'PROMOTION_REPORT') {
             body = <>
-                <Row label="Last 3 Months' Evaluation Scores" value={
+                <Row label={t('last_3_months_evaluation_scores', { defaultValue: "Last 3 Months' Evaluation Scores" })} value={
                     [c.performanceMarch, c.performanceApril, c.performanceMay].filter(Boolean).join(' → ') || '—'
                 } />
-                <Row label="Overall Performance Rating" value={c.overallPerformanceRating || '—'} />
-                <Row label="Signed document" value={c.promotionReportDocumentUrl ? (
-                    <a href={`${SERVER_URL}${c.promotionReportDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.promotionReportDocumentName || 'Signed document'}</a>
-                ) : <span className="text-slate-400">No document uploaded</span>} />
+                <Row label={t('overall_performance_rating', { defaultValue: 'Overall Performance Rating' })} value={c.overallPerformanceRating || '—'} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={c.promotionReportDocumentUrl ? (
+                    <a href={`${SERVER_URL}${c.promotionReportDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.promotionReportDocumentName || t('signed_document', { defaultValue: 'Signed document' })}</a>
+                ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>} />
             </>;
         } else if (stage === 'NOTICE_OF_PROMOTION') {
             body = <>
-                <Row label="Signed document" value={c.noticeOfPromotionDocumentUrl ? (
-                    <a href={`${SERVER_URL}${c.noticeOfPromotionDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.noticeOfPromotionDocumentName || 'Signed document'}</a>
-                ) : <span className="text-slate-400">No document uploaded</span>} />
+                <Row label={t('signed_document', { defaultValue: 'Signed document' })} value={c.noticeOfPromotionDocumentUrl ? (
+                    <a href={`${SERVER_URL}${c.noticeOfPromotionDocumentUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{c.noticeOfPromotionDocumentName || t('signed_document', { defaultValue: 'Signed document' })}</a>
+                ) : <span className="text-slate-400">{t('no_document_uploaded', { defaultValue: 'No document uploaded' })}</span>} />
             </>;
         }
         return (
@@ -177,24 +177,24 @@ const PromotionCaseDetailPage: React.FC = () => {
                 <div className="flex-1">
                     <h1 className="text-lg font-black text-[#511d29]">{c.caseNumber} — {c.employee?.fullName || ''}</h1>
                     <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">
-                        {c.stage === 'CLOSED' ? `Closed — Promoted to ${c.toGrade}` : STAGE_LABELS[c.stage]}
+                        {c.stage === 'CLOSED' ? t('closed_promoted_to_grade', { grade: c.toGrade, defaultValue: 'Closed — Promoted to {{grade}}' }) : STAGE_LABELS[c.stage]}
                     </p>
                 </div>
                 <button
                     onClick={() => navigate(`/personnel-relations/lifecycle?employeeId=${c.employeeId}`)}
                     className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50"
                 >
-                    <UserSquare2 size={14} /> View Employee File
+                    <UserSquare2 size={14} /> {t('view_employee_file', { defaultValue: 'View Employee File' })}
                 </button>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-slate-600">
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Basis</span><div>{BASIS_LABELS[c.basis || ''] || c.basis || '—'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Current Grade</span><div>{c.employee?.jobGrade || '—'}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Target Grade</span><div>{c.toGrade}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Reason for Promotion</span><div>{reasonLabel(c.reason)}</div></div>
-                    <div><span className="font-black uppercase text-[10px] text-red-700">Filed</span><div>{format(new Date(c.createdAt), 'dd MMM yyyy')}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('basis', { defaultValue: 'Basis' })}</span><div>{BASIS_LABELS[c.basis || ''] || c.basis || '—'}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('current_grade', { defaultValue: 'Current Grade' })}</span><div>{c.employee?.jobGrade || '—'}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('target_grade', { defaultValue: 'Target Grade' })}</span><div>{c.toGrade}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('reason_for_promotion', { defaultValue: 'Reason for Promotion' })}</span><div>{reasonLabel(c.reason)}</div></div>
+                    <div><span className="font-black uppercase text-[10px] text-red-700">{t('filed', { defaultValue: 'Filed' })}</span><div>{format(new Date(c.createdAt), 'dd MMM yyyy')}</div></div>
                 </div>
 
                 {c.stage === 'CLOSED' && (
@@ -208,7 +208,7 @@ const PromotionCaseDetailPage: React.FC = () => {
 
             {completedStages.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-2 text-xs">
-                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">Case History</span>
+                    <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{t('case_history', { defaultValue: 'Case History' })}</span>
                     {completedStages.map(renderStageSummary)}
                 </div>
             )}
@@ -217,27 +217,26 @@ const PromotionCaseDetailPage: React.FC = () => {
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 text-xs">
                     <span className="font-black uppercase text-[10px] text-red-700 tracking-wider">{STAGE_LABELS[c.stage]}</span>
                     <p className="text-slate-400 font-normal normal-case">
-                        Employee identity, org placement, new job title/category, reason for promotion, overall
-                        performance rating and every approver name are all filled in automatically from the system.
-                        {!c.effectiveDate && ' Only the effectivity date needs your input.'}
+                        {t('promotion_auto_filled_help', { defaultValue: 'Employee identity, org placement, new job title/category, reason for promotion, overall performance rating and every approver name are all filled in automatically from the system.' })}
+                        {!c.effectiveDate && ' ' + t('only_effectivity_date_needed', { defaultValue: 'Only the effectivity date needs your input.' })}
                     </p>
 
                     {c.effectiveDate ? (
-                        <Row label="Effectivity Date" value={format(new Date(c.effectiveDate), 'dd MMM yyyy')} />
+                        <Row label={t('effectivity_date', { defaultValue: 'Effectivity Date' })} value={format(new Date(c.effectiveDate), 'dd MMM yyyy')} />
                     ) : (
                         <>
-                            <label className="block font-black uppercase text-[10px] text-red-700">Effectivity Date</label>
+                            <label className="block font-black uppercase text-[10px] text-red-700">{t('effectivity_date', { defaultValue: 'Effectivity Date' })}</label>
                             <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} className="w-full p-2 border border-slate-200 rounded" />
                         </>
                     )}
 
                     <button disabled={busy} onClick={() => handleGenerateForm(c.stage)} className="w-full py-2 bg-slate-700 text-white font-black uppercase text-[10px] rounded">
-                        Generate {STAGE_LABELS[c.stage]} Form
+                        {t('generate_stage_form', { stage: STAGE_LABELS[c.stage], defaultValue: 'Generate {{stage}} Form' })}
                     </button>
 
                     <div>
                         <label className="flex items-center gap-2 text-[10px] font-black uppercase text-red-700 mb-1">
-                            <Paperclip size={12} /> Upload signed copy
+                            <Paperclip size={12} /> {t('upload_signed_copy', { defaultValue: 'Upload signed copy' })}
                         </label>
                         <input type="file" onChange={e => setSignedFile(e.target.files?.[0] || null)} className="w-full text-xs" />
                     </div>
@@ -252,7 +251,7 @@ const PromotionCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Move to Promotion Report
+                            {t('complete_move_to_promotion_report', { defaultValue: 'Complete & Move to Promotion Report' })}
                         </button>
                     )}
                     {c.stage === 'PROMOTION_REPORT' && (
@@ -265,7 +264,7 @@ const PromotionCaseDetailPage: React.FC = () => {
                             })}
                             className="w-full py-2 bg-red-700 text-white font-black uppercase text-[10px] rounded"
                         >
-                            Complete & Promote Employee to {c.toGrade}
+                            {t('complete_promote_employee_to_grade', { grade: c.toGrade, defaultValue: 'Complete & Promote Employee to {{grade}}' })}
                         </button>
                     )}
                 </div>

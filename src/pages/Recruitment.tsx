@@ -393,18 +393,18 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     </div>
 
                     <div className="space-y-3">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Justification</p>
-                        <div className="p-5 bg-white border border-slate-100 rounded-2xl text-slate-600 font-medium italic">"{selectedRequest.reason || 'No reason provided'}"</div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('justification', { defaultValue: 'Justification' })}</p>
+                        <div className="p-5 bg-white border border-slate-100 rounded-2xl text-slate-600 font-medium italic">"{selectedRequest.reason || t('no_reason_provided', { defaultValue: 'No reason provided' })}"</div>
                     </div>
 
                     {/* HIRE — the target job description being filled */}
                     {selectedRequest.type === 'HIRE' && selectedRequest.jobDescription && (
                         <div className="space-y-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Target Job Description</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('target_job_description', { defaultValue: 'Target Job Description' })}</p>
                             <div className="p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl space-y-2 text-sm">
-                                <p><span className="font-black text-slate-700">Title:</span> {selectedRequest.jobDescription.title}</p>
-                                <p><span className="font-black text-slate-700">Staffing:</span> {(selectedRequest.jobDescription._count?.employees ?? 0)} / {selectedRequest.jobDescription.plannedCount} filled</p>
-                                {(selectedRequest.jobDescription.workLocations || []).length > 0 && <p><span className="font-black text-slate-700">Work:</span> {(selectedRequest.jobDescription.workLocations || []).join(', ')}</p>}
+                                <p><span className="font-black text-slate-700">{t('title_label', { defaultValue: 'Title:' })}</span> {selectedRequest.jobDescription.title}</p>
+                                <p><span className="font-black text-slate-700">{t('staffing_label', { defaultValue: 'Staffing:' })}</span> {(selectedRequest.jobDescription._count?.employees ?? 0)} / {selectedRequest.jobDescription.plannedCount} {t('filled_lc', { defaultValue: 'filled' })}</p>
+                                {(selectedRequest.jobDescription.workLocations || []).length > 0 && <p><span className="font-black text-slate-700">{t('work_label', { defaultValue: 'Work:' })}</span> {(selectedRequest.jobDescription.workLocations || []).join(', ')}</p>}
                             </div>
                         </div>
                     )}
@@ -412,17 +412,17 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* JD_CHANGE — full proposed job description */}
                     {selectedRequest.type === 'JD_CHANGE' && selectedRequest.jdPayload && (
                         <div className="space-y-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Proposed Job Description ({selectedRequest.jdPayload.mode === 'edit' ? 'Edit existing' : 'New position'})</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('proposed_job_description', { defaultValue: 'Proposed Job Description' })} ({selectedRequest.jdPayload.mode === 'edit' ? t('edit_existing', { defaultValue: 'Edit existing' }) : t('new_position', { defaultValue: 'New position' })})</p>
                             <div className="p-5 bg-purple-50/40 border border-purple-100 rounded-2xl space-y-3 text-sm">
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                    <p><span className="font-black text-slate-700">Title:</span> {selectedRequest.jdPayload.title || '—'}</p>
-                                    <p><span className="font-black text-slate-700">Planned Headcount:</span> {selectedRequest.jdPayload.isHead ? '1 (Head)' : (selectedRequest.jdPayload.plannedCount ?? '—')}</p>
-                                    {(selectedRequest.jdPayload.jobCategories || []).length > 0 && <p><span className="font-black text-slate-700">Categories:</span> {(selectedRequest.jdPayload.jobCategories || []).join(', ')}</p>}
-                                    {(selectedRequest.jdPayload.workLocations || []).length > 0 && <p><span className="font-black text-slate-700">Work:</span> {(selectedRequest.jdPayload.workLocations || []).join(', ')}</p>}
+                                    <p><span className="font-black text-slate-700">{t('title_label', { defaultValue: 'Title:' })}</span> {selectedRequest.jdPayload.title || '—'}</p>
+                                    <p><span className="font-black text-slate-700">{t('planned_headcount_label', { defaultValue: 'Planned Headcount:' })}</span> {selectedRequest.jdPayload.isHead ? t('one_head', { defaultValue: '1 (Head)' }) : (selectedRequest.jdPayload.plannedCount ?? '—')}</p>
+                                    {(selectedRequest.jdPayload.jobCategories || []).length > 0 && <p><span className="font-black text-slate-700">{t('categories_label', { defaultValue: 'Categories:' })}</span> {(selectedRequest.jdPayload.jobCategories || []).join(', ')}</p>}
+                                    {(selectedRequest.jdPayload.workLocations || []).length > 0 && <p><span className="font-black text-slate-700">{t('work_label', { defaultValue: 'Work:' })}</span> {(selectedRequest.jdPayload.workLocations || []).join(', ')}</p>}
                                 </div>
                                 {selectedRequest.jdPayload.description && (
                                     <div className="pt-2 border-t border-purple-100/60">
-                                        <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Summary</p>
+                                        <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest">{t('summary', { defaultValue: 'Summary' })}</p>
                                         <p className="text-slate-600 whitespace-pre-wrap mt-1">{selectedRequest.jdPayload.description}</p>
                                     </div>
                                 )}
@@ -446,7 +446,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* Approval timeline */}
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                            {selectedRequest.type === 'JD_CHANGE' ? 'Approval Workflow — Division → HR → Directorate' : 'Approval Workflow — Dept → Division → HR → Recruitment → GM'}
+                            {selectedRequest.type === 'JD_CHANGE' ? t('approval_workflow_jd', { defaultValue: 'Approval Workflow — Division → HR → Directorate' }) : t('approval_workflow_hire', { defaultValue: 'Approval Workflow — Dept → Division → HR → Recruitment → GM' })}
                         </p>
                         <div className="p-5 bg-white border border-slate-100 rounded-3xl">
                             {(selectedRequest.type === 'HIRE'
@@ -454,17 +454,17 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                     const a: any = (selectedRequest as any).prfApprovals || {};
                                     const mk = (key: string, label: string, color: string) => ({ label, person: a[key]?.byName ? { fullName: a[key].byName } : null, note: a[key]?.note, date: a[key]?.at, done: !!a[key], color, document: a[key]?.document || null });
                                     return [
-                                        mk('deptHead', 'Head of Department', 'bg-amber-500'),
-                                        mk('divHead', 'Head of Division/Office', 'bg-amber-500'),
-                                        mk('hrManager', 'Head of HR', 'bg-blue-500'),
-                                        mk('hrRecruitment', 'Head of Hiring Unit', 'bg-blue-500'),
-                                        mk('gm', 'General Manager', 'bg-emerald-500'),
+                                        mk('deptHead', t('head_of_department', { defaultValue: 'Head of Department' }), 'bg-amber-500'),
+                                        mk('divHead', t('head_of_division_office', { defaultValue: 'Head of Division/Office' }), 'bg-amber-500'),
+                                        mk('hrManager', t('head_of_hr', { defaultValue: 'Head of HR' }), 'bg-blue-500'),
+                                        mk('hrRecruitment', t('head_of_hiring_unit', { defaultValue: 'Head of Hiring Unit' }), 'bg-blue-500'),
+                                        mk('gm', t('general_manager', { defaultValue: 'General Manager' }), 'bg-emerald-500'),
                                     ];
                                 })()
                                 : [
-                                    { label: 'Head of Division', person: selectedRequest.deptApprovedBy, note: selectedRequest.deptNote, date: selectedRequest.deptApprovedAt, done: !!selectedRequest.deptApprovedById, color: 'bg-amber-500' },
-                                    { label: 'HR Review', person: selectedRequest.hrApprovedBy, note: selectedRequest.hrNote, date: selectedRequest.hrApprovedAt, done: !!selectedRequest.hrApprovedById, color: 'bg-blue-500' },
-                                    { label: 'Head of Directorate', person: selectedRequest.gmApprovedBy, note: selectedRequest.gmNote, date: selectedRequest.gmApprovedAt, done: selectedRequest.status === 'FULLY_APPROVED', color: 'bg-emerald-500' },
+                                    { label: t('head_of_division', { defaultValue: 'Head of Division' }), person: selectedRequest.deptApprovedBy, note: selectedRequest.deptNote, date: selectedRequest.deptApprovedAt, done: !!selectedRequest.deptApprovedById, color: 'bg-amber-500' },
+                                    { label: t('hr_review', { defaultValue: 'HR Review' }), person: selectedRequest.hrApprovedBy, note: selectedRequest.hrNote, date: selectedRequest.hrApprovedAt, done: !!selectedRequest.hrApprovedById, color: 'bg-blue-500' },
+                                    { label: t('head_of_directorate', { defaultValue: 'Head of Directorate' }), person: selectedRequest.gmApprovedBy, note: selectedRequest.gmNote, date: selectedRequest.gmApprovedAt, done: selectedRequest.status === 'FULLY_APPROVED', color: 'bg-emerald-500' },
                                 ]
                             ).map((stage: any, i: number, arr: any[]) => (
                                 <div key={i} className={`relative pl-8 ${i < arr.length - 1 ? 'pb-8 border-l-2 border-dashed border-slate-100' : ''}`}>
@@ -484,7 +484,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                                 </a>
                                             )}
                                         </div>
-                                    ) : <p className="text-[10px] text-slate-400 italic mt-1">Awaiting</p>}
+                                    ) : <p className="text-[10px] text-slate-400 italic mt-1">{t('awaiting', { defaultValue: 'Awaiting' })}</p>}
                                 </div>
                             ))}
                         </div>
@@ -493,8 +493,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* Decision box */}
                     {canActOn(selectedRequest) && (
                         <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 space-y-4">
-                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Provide Decision</p>
-                            <textarea value={approvalNote} onChange={(e) => setApprovalNote(e.target.value)} placeholder="Add a comment (optional)"
+                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">{t('provide_decision', { defaultValue: 'Provide Decision' })}</p>
+                            <textarea value={approvalNote} onChange={(e) => setApprovalNote(e.target.value)} placeholder={t('add_a_comment_optional', { defaultValue: 'Add a comment (optional)' })}
                                 className="w-full px-4 py-3 bg-white border border-indigo-200 rounded-xl outline-none font-medium text-slate-600 text-sm" />
                             {selectedRequest.type === 'HIRE' ? (
                                 <>
@@ -506,21 +506,21 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                         </div>
                                     )}
                                     <div className="flex gap-3">
-                                        <button onClick={() => handlePrfDecision('reject')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">Reject</button>
+                                        <button onClick={() => handlePrfDecision('reject')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">{t('reject', { defaultValue: 'Reject' })}</button>
                                         <button onClick={() => handlePrfDecision('approve')} className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700">
-                                            {(() => { const s = prfNextStage(selectedRequest); return s ? `Approve (${PRF_STAGE_LABEL[s]})` : 'Approve'; })()}
+                                            {(() => { const s = prfNextStage(selectedRequest); return s ? t('approve_stage', { stage: PRF_STAGE_LABEL[s], defaultValue: 'Approve ({{stage}})' }) : t('approve', { defaultValue: 'Approve' }); })()}
                                         </button>
                                     </div>
                                 </>
                             ) : (
                                 <div className="flex gap-3">
-                                    <button onClick={() => handleUpdateStatus('REJECTED')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">Reject</button>
+                                    <button onClick={() => handleUpdateStatus('REJECTED')} className="flex-1 py-3.5 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 border border-rose-100">{t('reject', { defaultValue: 'Reject' })}</button>
                                     <button onClick={() => {
                                         if (selectedRequest.status === 'PENDING') handleUpdateStatus('DEPT_APPROVED');
                                         else if (selectedRequest.status === 'DEPT_APPROVED') handleUpdateStatus('HR_APPROVED');
                                         else handleUpdateStatus('FULLY_APPROVED');
                                     }} className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700">
-                                        {selectedRequest.status === 'PENDING' ? 'Approve (Head of Division)' : selectedRequest.status === 'DEPT_APPROVED' ? 'Approve (HR)' : 'Grant Final Approval (Directorate)'}
+                                        {selectedRequest.status === 'PENDING' ? t('approve_head_of_division', { defaultValue: 'Approve (Head of Division)' }) : selectedRequest.status === 'DEPT_APPROVED' ? t('approve_hr', { defaultValue: 'Approve (HR)' }) : t('grant_final_approval_directorate', { defaultValue: 'Grant Final Approval (Directorate)' })}
                                     </button>
                                 </div>
                             )}
@@ -559,10 +559,10 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
             {mode === 'requests' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                     {[
-                        { icon: Clock, iconWrap: 'bg-amber-50', iconColor: 'text-amber-500', label: 'Pending', val: requests.filter(r => r.status === 'PENDING').length },
-                        { icon: UserPlus, iconWrap: 'bg-blue-50', iconColor: 'text-blue-500', label: 'In Review', val: requests.filter(r => r.status === 'DEPT_APPROVED' || r.status === 'HR_APPROVED').length },
-                        { icon: CheckCircle2, iconWrap: 'bg-emerald-50', iconColor: 'text-emerald-500', label: 'Approved', val: requests.filter(r => r.status === 'FULLY_APPROVED').length },
-                        { icon: XCircle, iconWrap: 'bg-rose-50', iconColor: 'text-rose-500', label: 'Rejected', val: requests.filter(r => r.status === 'REJECTED').length },
+                        { icon: Clock, iconWrap: 'bg-amber-50', iconColor: 'text-amber-500', label: t('pending', { defaultValue: 'Pending' }), val: requests.filter(r => r.status === 'PENDING').length },
+                        { icon: UserPlus, iconWrap: 'bg-blue-50', iconColor: 'text-blue-500', label: t('in_review', { defaultValue: 'In Review' }), val: requests.filter(r => r.status === 'DEPT_APPROVED' || r.status === 'HR_APPROVED').length },
+                        { icon: CheckCircle2, iconWrap: 'bg-emerald-50', iconColor: 'text-emerald-500', label: t('approved', { defaultValue: 'Approved' }), val: requests.filter(r => r.status === 'FULLY_APPROVED').length },
+                        { icon: XCircle, iconWrap: 'bg-rose-50', iconColor: 'text-rose-500', label: t('rejected', { defaultValue: 'Rejected' }), val: requests.filter(r => r.status === 'REJECTED').length },
                     ].map((s, i) => (
                         <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
                             <div className={`w-12 h-12 rounded-xl ${s.iconWrap} flex items-center justify-center`}>
@@ -597,7 +597,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                             {statusLabel(request.status)}
                                         </div>
                                         <div className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${request.type === 'JD_CHANGE' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
-                                            {request.type === 'JD_CHANGE' ? 'JD Change' : 'Hire'}
+                                            {request.type === 'JD_CHANGE' ? t('jd_change', { defaultValue: 'JD Change' }) : t('hire', { defaultValue: 'Hire' })}
                                         </div>
                                     </div>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">{t('job_position', { defaultValue: 'Position' })}</p>
@@ -605,7 +605,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {(currentUser?.role === 'SUPER_ADMIN' || request.requesterId === currentUser?.id) && (
-                                        <button onClick={() => handleDelete(request.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete">
+                                        <button onClick={() => handleDelete(request.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title={t('delete', { defaultValue: 'Delete' })}>
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     )}
@@ -627,8 +627,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                     <div className="flex items-center gap-3">
                                         <LayoutList className="w-4 h-4 text-slate-400" />
                                         <div className="min-w-0">
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">Staffing Plan</p>
-                                            <p className="text-xs font-bold text-slate-700">{(request.jobDescription._count?.employees ?? 0)} / {request.jobDescription.plannedCount} filled</p>
+                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">{t('staffing_plan', { defaultValue: 'Staffing Plan' })}</p>
+                                            <p className="text-xs font-bold text-slate-700">{(request.jobDescription._count?.employees ?? 0)} / {request.jobDescription.plannedCount} {t('filled_lc', { defaultValue: 'filled' })}</p>
                                         </div>
                                     </div>
                                 )}
@@ -646,24 +646,24 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                         {request.filled ? (
                                             <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
                                                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Filled</span>
+                                                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{t('filled', { defaultValue: 'Filled' })}</span>
                                             </div>
                                         ) : isHR ? (
                                             <button onClick={() => handleMarkFilled(request.id)} className="w-full py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-100 transition-all">
-                                                Mark as Filled
+                                                {t('mark_as_filled', { defaultValue: 'Mark as Filled' })}
                                             </button>
                                         ) : (
                                             <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-xl">
                                                 <Clock className="w-4 h-4 text-amber-600" />
-                                                <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Open — awaiting hire</span>
+                                                <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">{t('open_awaiting_hire', { defaultValue: 'Open — awaiting hire' })}</span>
                                             </div>
                                         )}
-                                        <button onClick={() => setSelectedRequest(request)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600">View Details</button>
+                                        <button onClick={() => setSelectedRequest(request)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600">{t('view_details', { defaultValue: 'View Details' })}</button>
                                     </div>
                                 ) : (
                                     <div className="pt-2 flex items-center justify-between gap-2">
                                         <div className="min-w-0">
-                                            <p className="text-[9px] font-bold text-slate-400 truncate">By <span className="text-slate-600">{request.requester?.fullName}</span></p>
+                                            <p className="text-[9px] font-bold text-slate-400 truncate">{t('by', { defaultValue: 'By' })} <span className="text-slate-600">{request.requester?.fullName}</span></p>
                                             {(() => {
                                                 const approver = request.gmApprovedBy || request.hrApprovedBy || request.deptApprovedBy;
                                                 if (!approver) return null;
@@ -673,7 +673,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                             })()}
                                         </div>
                                         <button onClick={() => setSelectedRequest(request)} className="shrink-0 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
-                                            {mode === 'approvals' ? 'Review & Decide' : 'Details'}
+                                            {mode === 'approvals' ? t('review_and_decide', { defaultValue: 'Review & Decide' }) : t('details', { defaultValue: 'Details' })}
                                         </button>
                                     </div>
                                 )}
@@ -701,35 +701,35 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* Request type toggle */}
                     <div className="grid grid-cols-2 gap-3">
                         <button type="button" onClick={() => setReqType('HIRE')} className={`p-4 rounded-2xl border-2 text-left transition-all ${reqType === 'HIRE' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                            <div className="flex items-center gap-2 mb-1"><Briefcase className="w-4 h-4 text-indigo-600" /><span className="font-black text-sm text-slate-800">Hire</span></div>
-                            <p className="text-[11px] text-slate-500 font-medium">Fill an open slot in an existing position.</p>
+                            <div className="flex items-center gap-2 mb-1"><Briefcase className="w-4 h-4 text-indigo-600" /><span className="font-black text-sm text-slate-800">{t('hire', { defaultValue: 'Hire' })}</span></div>
+                            <p className="text-[11px] text-slate-500 font-medium">{t('hire_option_help', { defaultValue: 'Fill an open slot in an existing position.' })}</p>
                         </button>
                         <button type="button" onClick={() => setReqType('JD_CHANGE')} className={`p-4 rounded-2xl border-2 text-left transition-all ${reqType === 'JD_CHANGE' ? 'border-purple-500 bg-purple-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                            <div className="flex items-center gap-2 mb-1"><FileText className="w-4 h-4 text-purple-600" /><span className="font-black text-sm text-slate-800">JD Change</span></div>
-                            <p className="text-[11px] text-slate-500 font-medium">Expand a full position or add a new one (needs GM approval).</p>
+                            <div className="flex items-center gap-2 mb-1"><FileText className="w-4 h-4 text-purple-600" /><span className="font-black text-sm text-slate-800">{t('jd_change', { defaultValue: 'JD Change' })}</span></div>
+                            <p className="text-[11px] text-slate-500 font-medium">{t('jd_change_option_help', { defaultValue: 'Expand a full position or add a new one (needs GM approval).' })}</p>
                         </button>
                     </div>
 
                     {/* Scope — limited to the requester's own department(s) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Department</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('department', { defaultValue: 'Department' })}</label>
                             <select value={formDeptId} onChange={(e) => { setFormDeptId(e.target.value); setFormUnitId(''); setSelectedJdId(''); setJdForm(emptyJDForm()); }} required
                                 disabled={allowedDepartments.length <= 1 && !!formDeptId}
                                 className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-bold text-slate-700 disabled:bg-slate-100">
-                                <option value="">-- Select Department --</option>
+                                <option value="">{t('select_department', { defaultValue: '-- Select Department --' })}</option>
                                 {allowedDepartments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                             </select>
                             {allowedDepartments.length === 0 && (
-                                <p className="text-[11px] font-bold text-amber-600 mt-1">No departments found in your scope.</p>
+                                <p className="text-[11px] font-bold text-amber-600 mt-1">{t('no_departments_in_scope', { defaultValue: 'No departments found in your scope.' })}</p>
                             )}
                         </div>
                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Unit (optional)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('unit_optional', { defaultValue: 'Unit (optional)' })}</label>
                             <select value={formUnitId} onChange={(e) => { setFormUnitId(e.target.value); setSelectedJdId(''); setJdForm(emptyJDForm()); }}
                                 disabled={!formDeptId}
                                 className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white font-bold text-slate-700 disabled:bg-slate-100">
-                                <option value="">Whole department</option>
+                                <option value="">{t('whole_department', { defaultValue: 'Whole department' })}</option>
                                 {unitsForDept.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                             </select>
                         </div>
@@ -737,10 +737,10 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
                     {/* Reason */}
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Justification / Reason</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('justification_reason', { defaultValue: 'Justification / Reason' })}</label>
                         <textarea required value={reason} onChange={(e) => setReason(e.target.value)}
                             className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-medium text-slate-600 min-h-[80px]"
-                            placeholder="Why is this needed?" />
+                            placeholder={t('why_is_this_needed', { defaultValue: 'Why is this needed?' })} />
                     </div>
 
                     {reqType === 'HIRE' ? (
@@ -750,17 +750,17 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             return (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Position (open slots only)</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('position_open_slots_only', { defaultValue: 'Position (open slots only)' })}</label>
                                 <select value={selectedJdId} onChange={(e) => { setSelectedJdId(e.target.value); setHireQuantity(1); }}
                                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
-                                    <option value="">-- Select Position --</option>
+                                    <option value="">{t('select_position', { defaultValue: '-- Select Position --' })}</option>
                                     {openScopeJDs.map(jd => (
                                         <option key={jd.id} value={jd.id}>{jd.title} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>
                                     ))}
                                 </select>
                                 {formDeptId && openScopeJDs.length === 0 && (
                                     <p className="text-[11px] font-bold text-amber-600 mt-2">
-                                        No positions with open slots here. Switch to <b>JD Change</b> to expand a full position or add a new one.
+                                        {t('no_open_slots_switch_to', { defaultValue: 'No positions with open slots here. Switch to' })} <b>{t('jd_change', { defaultValue: 'JD Change' })}</b> {t('to_expand_or_add_position', { defaultValue: 'to expand a full position or add a new one.' })}
                                     </p>
                                 )}
                             </div>
@@ -786,7 +786,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                                 <div className="sm:col-span-2">
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-slate-400" dir="rtl">/ يقدم تقاريره إلى</span></label>
-                                    <input type="text" value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} placeholder="e.g. Head of Finance"
+                                    <input type="text" value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} placeholder={t('e_g_head_of_finance', { defaultValue: 'e.g. Head of Finance' })}
                                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
                                 </div>
                                 <div>
@@ -809,12 +809,12 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('english_language', { defaultValue: 'English Language' })}</label>
-                                    <input type="text" value={languageEn} onChange={(e) => setLanguageEn(e.target.value)} placeholder="e.g. Fluent / Good / Basic"
+                                    <input type="text" value={languageEn} onChange={(e) => setLanguageEn(e.target.value)} placeholder={t('e_g_fluent_good_basic', { defaultValue: 'e.g. Fluent / Good / Basic' })}
                                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('arabic_language', { defaultValue: 'Arabic Language' })}</label>
-                                    <input type="text" value={languageAr} onChange={(e) => setLanguageAr(e.target.value)} placeholder="e.g. Native / Fluent"
+                                    <input type="text" value={languageAr} onChange={(e) => setLanguageAr(e.target.value)} placeholder={t('e_g_native_fluent', { defaultValue: 'e.g. Native / Fluent' })}
                                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
                                 </div>
                             </div>
@@ -827,20 +827,20 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             <div className="flex gap-3">
                                 <button type="button" onClick={() => { setJdMode('new'); setSelectedJdId(''); setJdForm(emptyJDForm()); }}
                                     className={`flex-1 p-3 rounded-xl border-2 text-sm font-bold transition-all ${jdMode === 'new' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-500'}`}>
-                                    Add New Position
+                                    {t('add_new_position', { defaultValue: 'Add New Position' })}
                                 </button>
                                 <button type="button" onClick={() => setJdMode('edit')}
                                     className={`flex-1 p-3 rounded-xl border-2 text-sm font-bold transition-all ${jdMode === 'edit' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-500'}`}>
-                                    Edit Existing Position
+                                    {t('edit_existing_position', { defaultValue: 'Edit Existing Position' })}
                                 </button>
                             </div>
 
                             {jdMode === 'edit' && (
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Position to Edit</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('position_to_edit', { defaultValue: 'Position to Edit' })}</label>
                                     <select value={selectedJdId} onChange={(e) => loadJdForEdit(e.target.value)}
                                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
-                                        <option value="">-- Select Position --</option>
+                                        <option value="">{t('select_position', { defaultValue: '-- Select Position --' })}</option>
                                         {scopeJDs.map(jd => <option key={jd.id} value={jd.id}>{jd.title} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>)}
                                     </select>
                                 </div>
@@ -856,8 +856,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={() => { resetForm(); navigate('/recruitment/requests'); }}
-                            className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-100 transition-all">Cancel</button>
-                        <button type="submit" className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Submit Requisition</button>
+                            className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-100 transition-all">{t('cancel', { defaultValue: 'Cancel' })}</button>
+                        <button type="submit" className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">{t('submit_requisition', { defaultValue: 'Submit Requisition' })}</button>
                     </div>
                 </form>
             </div>

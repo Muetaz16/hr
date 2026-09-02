@@ -890,7 +890,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('candidate_name', { defaultValue: 'Candidate Name' })}</label>
-                            <input value={addForm.fullName} onChange={e => setAdd({ fullName: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder="Jane Doe" />
+                            <input value={addForm.fullName} onChange={e => setAdd({ fullName: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('ph_jane_doe', { defaultValue: 'Jane Doe' })} />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('source', { defaultValue: 'Source' })}</label>
@@ -898,7 +898,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('email', { defaultValue: 'Email address' })}</label>
-                            <input type="email" value={addForm.email} onChange={e => setAdd({ email: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder="jane@example.com" />
+                            <input type="email" value={addForm.email} onChange={e => setAdd({ email: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('ph_email_example', { defaultValue: 'jane@example.com' })} />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('phone_prefix', { defaultValue: 'Telephone (with prefix)' })}</label>
@@ -918,7 +918,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('nationality', { defaultValue: 'Nationality' })}</label>
-                            <input value={addForm.nationality} onChange={e => setAdd({ nationality: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder="Libyan" />
+                            <input value={addForm.nationality} onChange={e => setAdd({ nationality: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('ph_libyan', { defaultValue: 'Libyan' })} />
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('date_of_birth', { defaultValue: 'Date of birth' })}</label>
@@ -926,7 +926,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('place_of_living', { defaultValue: 'Place of living' })}</label>
-                            <input value={addForm.placeOfLiving} onChange={e => setAdd({ placeOfLiving: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder="Tripoli" />
+                            <input value={addForm.placeOfLiving} onChange={e => setAdd({ placeOfLiving: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('ph_tripoli', { defaultValue: 'Tripoli' })} />
                         </div>
                     </div>
 
@@ -1138,7 +1138,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                                                     <span className="text-xs font-black whitespace-nowrap text-slate-500">{fmtDateTime(evt.timestamp)}</span>
                                                                 </div>
                                                                 <div className="text-[11px] font-medium text-slate-400">
-                                                                    {t('by', { defaultValue: 'By' })} {evt.performedBy || 'Unknown User'}
+                                                                    {t('by', { defaultValue: 'By' })} {evt.performedBy || t('unknown_user', { defaultValue: 'Unknown User' })}
                                                                     {evt.note && <span className="italic ml-2">- {evt.note}</span>}
                                                                 </div>
                                                             </div>
@@ -1319,7 +1319,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     toast.success(t('onboarding_link_copied', { defaultValue: 'Onboarding link copied — send it to the new hire.' }));
                                     setLinkModalOpen(false);
                                 } catch (err) {
-                                    toast.error('Failed to copy. Please select the link and copy manually.');
+                                    toast.error(t('failed_to_copy_select_manually', { defaultValue: 'Failed to copy. Please select the link and copy manually.' }));
                                 }
                                 document.body.removeChild(textArea);
                             };
@@ -1420,30 +1420,36 @@ const EmptyState: React.FC<{ icon: React.ElementType; text: string }> = ({ icon:
 );
 
 const EvalTile: React.FC<{ label: string; done: boolean; score?: number; recommend?: boolean; by?: string; canDo: boolean; onDo: () => void }> =
-    ({ label, done, score, recommend, by, canDo, onDo }) => (
+    ({ label, done, score, recommend, by, canDo, onDo }) => {
+        const { t } = useTranslation();
+        return (
         <div className={`p-3 rounded-2xl border ${done ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100 bg-slate-50/40'}`}>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
             {done ? (
                 <div className="space-y-1">
                     <Stars value={score} />
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${recommend ? 'text-emerald-600' : 'text-rose-600'}`}>{recommend ? '✓ Recommend' : '✕ Not recommended'}</p>
+                    <p className={`text-[10px] font-black uppercase tracking-widest ${recommend ? 'text-emerald-600' : 'text-rose-600'}`}>{recommend ? t('recommend_check', { defaultValue: '✓ Recommend' }) : t('not_recommended_cross', { defaultValue: '✕ Not recommended' })}</p>
                     {by && <p className="text-[10px] text-slate-400 font-bold truncate">{by}</p>}
                 </div>
             ) : canDo ? (
-                <button onClick={onDo} className="mt-1 w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:border-indigo-300">+ Add</button>
+                <button onClick={onDo} className="mt-1 w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:border-indigo-300">{t('add_plus', { defaultValue: '+ Add' })}</button>
             ) : (
-                <p className="text-[10px] text-slate-400 font-bold italic mt-1">Pending</p>
+                <p className="text-[10px] text-slate-400 font-bold italic mt-1">{t('pending', { defaultValue: 'Pending' })}</p>
             )}
         </div>
-    );
+        );
+    };
 
-const SummaryTile: React.FC<{ label: string; score?: number; recommend?: boolean; note?: string }> = ({ label, score, recommend, note }) => (
+const SummaryTile: React.FC<{ label: string; score?: number; recommend?: boolean; note?: string }> = ({ label, score, recommend, note }) => {
+    const { t } = useTranslation();
+    return (
     <div className="p-3 rounded-2xl border border-slate-100 bg-slate-50/50">
         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
         <Stars value={score} />
-        <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${recommend ? 'text-emerald-600' : 'text-rose-600'}`}>{recommend ? '✓ Recommend' : '✕ Not recommended'}</p>
+        <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${recommend ? 'text-emerald-600' : 'text-rose-600'}`}>{recommend ? t('recommend_check', { defaultValue: '✓ Recommend' }) : t('not_recommended_cross', { defaultValue: '✕ Not recommended' })}</p>
         {note && <p className="text-[11px] text-slate-500 italic mt-1 line-clamp-3">"{note}"</p>}
     </div>
-);
+    );
+};
 
 export default CandidatePipeline;

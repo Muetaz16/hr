@@ -152,7 +152,7 @@ const StaffHub: React.FC = () => {
             }
         } catch (error) {
             console.error("Staff Hub critical failure:", error);
-            toast.error('Failed to load dashboard data');
+            toast.error(t('failed_to_load_dashboard_data', { defaultValue: 'Failed to load dashboard data' }));
         } finally {
             setLoading(false);
         }
