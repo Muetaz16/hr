@@ -43,6 +43,7 @@ const RewardCaseDetailPage = lazy(() => import('./pages/personnel-relations/Rewa
 const RewardCandidateDetailPage = lazy(() => import('./pages/personnel-relations/RewardCandidateDetailPage'));
 const TransferDetailPage = lazy(() => import('./pages/personnel-relations/TransferDetailPage'));
 const AttendancePage = lazy(() => import('./pages/Attendance'));
+const PayrollPage = lazy(() => import('./pages/Payroll'));
 const ApprovalsPage = lazy(() => import('./pages/Approvals'));
 const ApprovedLeavesPage = lazy(() => import('./pages/ApprovedLeaves'));
 const LifecycleControlPage = lazy(() => import('./pages/hr/LifecycleControl'));
@@ -129,6 +130,9 @@ function App() {
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
                     <Route path="/attendance/:tab" element={<AttendancePage />} />
                     <Route path="/approved-leaves" element={<ApprovedLeavesPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
+                    <Route path="/payroll" element={<PayrollPage />} />
                   </Route>
                   <Route path="/recruitment" element={<Navigate to="/recruitment/requests" replace />} />
                   {/* Head-facing stages: request a hire, get it approved. */}

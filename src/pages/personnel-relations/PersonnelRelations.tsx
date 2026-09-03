@@ -1111,20 +1111,19 @@ const PersonnelRelations: React.FC = () => {
                             <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
-                                        <th className="p-4">{t('staff_id', { defaultValue: 'Staff ID' })}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('staff_id', { defaultValue: 'Staff ID' })}</th>
                                         <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
                                         <th className="p-4">{t('position', { defaultValue: 'Position' })}</th>
                                         <th className="p-4">{t('department_division', { defaultValue: 'Department / Division' })}</th>
                                         <th className="p-4">{t('contract_type', { defaultValue: 'Contract Type' })}</th>
                                         <th className="p-4">{t('status', { defaultValue: 'Status' })}</th>
-                                        <th className="p-4">{t('joined_date', { defaultValue: 'Joined Date' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
                                     {filteredLifecycleEmployees.map((emp) => (
                                         <tr key={emp.id} className="hover:bg-slate-50/50">
-                                            <td className="p-4 font-bold">{emp.staffId || 'N/A'}</td>
+                                            <td className="p-4 font-bold whitespace-nowrap">{emp.staffId || 'N/A'}</td>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-full bg-[#511d29] text-white flex items-center justify-center font-bold text-xs shrink-0">
@@ -1159,8 +1158,7 @@ const PersonnelRelations: React.FC = () => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="p-4">{emp.joinDate ? format(parseISO(emp.joinDate), 'yyyy-MM-dd') : 'N/A'}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <button
                                                     onClick={() => { setDetailEmp(emp); navigate(`/personnel-relations/lifecycle?employeeId=${emp.id}`); }}
                                                     className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5"
@@ -1209,7 +1207,7 @@ const PersonnelRelations: React.FC = () => {
                                         <th className="p-4">{t('end_date', { defaultValue: 'End Date' })}</th>
                                         <th className="p-4">{t('days_left', { defaultValue: 'Days Left' })}</th>
                                         <th className="p-4">{t('renewal_status', { defaultValue: 'Renewal Status' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1235,7 +1233,7 @@ const PersonnelRelations: React.FC = () => {
                                                         {isOverdue ? t('overdue', { defaultValue: 'Overdue' }) : isUrgent ? t('urgent', { defaultValue: 'Urgent' }) : t('action_required', { defaultValue: 'Action Required' })}
                                                     </span>
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => handleGenerateRenewalForm(emp)}
@@ -1311,7 +1309,7 @@ const PersonnelRelations: React.FC = () => {
                                         <th className="p-4">{t('move', { defaultValue: 'Move' })}</th>
                                         <th className="p-4">{t('effective', { defaultValue: 'Effective' })}</th>
                                         <th className="p-4">{t('status', { defaultValue: 'Status' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1348,7 +1346,7 @@ const PersonnelRelations: React.FC = () => {
                                                     <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded ${badge}`}>{paf.status}</span>
                                                     {paf.decidedByName && <p className="text-[9px] text-slate-400 mt-1">{t('by', { defaultValue: 'by' })} {paf.decidedByName}</p>}
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => downloadPafForm(paf)}
@@ -1452,7 +1450,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 </span>
                                                             </td>
                                                             <td className="p-3">{c.source === 'SYSTEM_ATTENDANCE' ? t('attendance', { defaultValue: 'Attendance' }) : t('report', { defaultValue: 'Report' })}</td>
-                                                            <td className="p-3 text-right">
+                                                            <td className="p-3 text-end">
                                                                 <button
                                                                     onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
                                                                     className="px-3 py-1.5 bg-red-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-800"
@@ -1490,7 +1488,7 @@ const PersonnelRelations: React.FC = () => {
                                                             </span>
                                                         </td>
                                                         <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
-                                                        <td className="p-3 px-4 text-right">
+                                                        <td className="p-3 px-4 text-end">
                                                             <button
                                                                 onClick={() => navigate(`/personnel-relations/disciplinary/${c.id}`)}
                                                                 className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
@@ -1621,7 +1619,7 @@ const PersonnelRelations: React.FC = () => {
                                                     <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
                                                     <td className="p-3">{c.type === 'VOLUNTARY' ? t('voluntary', { defaultValue: 'Voluntary' }) : t('involuntary', { defaultValue: 'Involuntary' })}</td>
                                                     <td className="p-3">{c.source.replace(/_/g, ' ')}</td>
-                                                    <td className="p-3 text-right">
+                                                    <td className="p-3 text-end">
                                                         <button
                                                             onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
@@ -1654,7 +1652,7 @@ const PersonnelRelations: React.FC = () => {
                                                 <td className="p-3 px-4 text-slate-400">{c.caseNumber}</td>
                                                 <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
                                                 <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
-                                                <td className="p-3 px-4 text-right">
+                                                <td className="p-3 px-4 text-end">
                                                     <button
                                                         onClick={() => navigate(`/personnel-relations/offboarding/${c.id}`)}
                                                         className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"
@@ -1755,7 +1753,7 @@ const PersonnelRelations: React.FC = () => {
                                                     <td className="p-3 font-bold">{c.employee?.fullName || '—'}</td>
                                                     <td className="p-3">{c.employee?.jobGrade || '—'} → {c.toGrade}</td>
                                                     <td className="p-3">{BASIS_LABELS[c.basis || ''] || c.basis || '—'}</td>
-                                                    <td className="p-3 text-right">
+                                                    <td className="p-3 text-end">
                                                         <button
                                                             onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
                                                             className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#3a151d]"
@@ -1779,7 +1777,7 @@ const PersonnelRelations: React.FC = () => {
                                                                 {isTenure ? `${progress.months} / ${progress.required} months` : `${progress.points.toFixed(2)} / ${progress.required}`}
                                                             </span>
                                                         </td>
-                                                        <td className="p-3 text-right">
+                                                        <td className="p-3 text-end">
                                                             <button
                                                                 onClick={() => openCaseFromCandidate(cand.employeeId)}
                                                                 className="px-3 py-1.5 bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-700"
@@ -1814,7 +1812,7 @@ const PersonnelRelations: React.FC = () => {
                                                 <td className="p-3 px-4 font-bold text-slate-700">{c.employee?.fullName}</td>
                                                 <td className="p-3 px-4 text-slate-500">{t('promoted_to', { defaultValue: 'Promoted to' })} {c.toGrade}</td>
                                                 <td className="p-3 px-4 text-slate-400">{c.closedAt ? format(new Date(c.closedAt), 'dd MMM yyyy') : ''}</td>
-                                                <td className="p-3 px-4 text-right">
+                                                <td className="p-3 px-4 text-end">
                                                     <button
                                                         onClick={() => navigate(`/personnel-relations/promotions/${c.id}`)}
                                                         className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-800"

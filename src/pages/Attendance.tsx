@@ -731,7 +731,7 @@ const AttendancePage: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-[#511d29]/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-outfit font-black text-[#511d29] tracking-tight">
-                        {t('attendance_leave_requests', { defaultValue: 'Attendance & Leave Requests' })}
+                        {t('attendance_leave_requests', { defaultValue: 'Attendance' })}
                     </h1>
                     <p className="text-slate-500 mt-1 font-medium">
                         {t('live_punch_lateness_and_leave_data', { defaultValue: 'Live punch, lateness, and leave data from the attendance system, matched to employee records by Staff ID.' })}
@@ -853,7 +853,7 @@ const AttendancePage: React.FC = () => {
 
                         {!isAttendanceError && (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -861,7 +861,7 @@ const AttendancePage: React.FC = () => {
                                             <th className="p-4">{t('punctuality', { defaultValue: 'Punctuality' })}</th>
                                             <th className="p-4">{t('overtime', { defaultValue: 'Overtime' })}</th>
                                             <th className="p-4">{t('leave_other', { defaultValue: 'Leave / Other' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -913,7 +913,7 @@ const AttendancePage: React.FC = () => {
                                                         </p>
                                                     )}
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <button
                                                         onClick={() => openDetail(row)}
                                                         className="px-3 py-1.5 bg-[#511d29] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#3a151d] transition-colors inline-flex items-center gap-1.5"
@@ -1040,7 +1040,7 @@ const AttendancePage: React.FC = () => {
 
                         {!isManualTxError && (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -1123,7 +1123,7 @@ const AttendancePage: React.FC = () => {
                             <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('leave_records', { defaultValue: 'Leave Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                         <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -1131,7 +1131,7 @@ const AttendancePage: React.FC = () => {
                                         <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
                                         <th className="p-4">{t('days', { defaultValue: 'Days' })}</th>
                                         <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1142,7 +1142,7 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4">{format(parseISO(row.startDate), 'dd MMM')} – {format(parseISO(row.endDate), 'dd MMM yyyy')}</td>
                                             <td className="p-4 font-bold">{row.daysCount}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <button onClick={() => deleteEmployeeLeave(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
@@ -1164,7 +1164,7 @@ const AttendancePage: React.FC = () => {
                             <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('out_work_records', { defaultValue: 'Out-Work Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                         <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -1172,7 +1172,7 @@ const AttendancePage: React.FC = () => {
                                         <th className="p-4">{t('days', { defaultValue: 'Days' })}</th>
                                         <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
                                         <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1183,7 +1183,7 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 font-bold">{row.daysCount}</td>
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <button onClick={() => deleteOutWorkRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
@@ -1205,7 +1205,7 @@ const AttendancePage: React.FC = () => {
                             <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('excused_late_records', { defaultValue: 'Excused-Late Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                         <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -1213,7 +1213,7 @@ const AttendancePage: React.FC = () => {
                                         <th className="p-4">{t('excused_mins', { defaultValue: 'Excused Mins' })}</th>
                                         <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
                                         <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1224,7 +1224,7 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 font-bold">{row.excusedMinutes}</td>
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <button onClick={() => deleteExcusedLateRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
@@ -1246,7 +1246,7 @@ const AttendancePage: React.FC = () => {
                             <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('excused_early_out_records', { defaultValue: 'Excused Early-Out Records' })}</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                         <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
@@ -1254,7 +1254,7 @@ const AttendancePage: React.FC = () => {
                                         <th className="p-4">{t('excused_mins', { defaultValue: 'Excused Mins' })}</th>
                                         <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
                                         <th className="p-4">{t('approved_by', { defaultValue: 'Approved By' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1265,7 +1265,7 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 font-bold">{row.excusedMinutes}</td>
                                             <td className="p-4 text-slate-500">{row.reason}</td>
                                             <td className="p-4 text-slate-500">{row.approvedBy}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <button onClick={() => deleteExcusedEarlyOutRow(row.id)} className="text-[10px] font-black text-rose-600 uppercase tracking-wider hover:underline">{t('remove', { defaultValue: 'Remove' })}</button>
                                             </td>
                                         </tr>
@@ -1308,13 +1308,13 @@ const AttendancePage: React.FC = () => {
                             {t('this_manages_the_employee_record_in_attendance', { defaultValue: 'This manages the employee record inside the attendance system itself (code, name, position) — not our HR employee record.' })}
                         </p>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs md:text-sm">
+                            <table className="w-full text-start border-collapse text-xs md:text-sm">
                                 <thead>
                                     <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                         <th className="p-4">{t('code', { defaultValue: 'Code' })}</th>
                                         <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
                                         <th className="p-4">{t('position', { defaultValue: 'Position' })}</th>
-                                        <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                        <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1323,7 +1323,7 @@ const AttendancePage: React.FC = () => {
                                             <td className="p-4 font-mono text-[10px] text-slate-500">{emp.emp_code}</td>
                                             <td className="p-4 font-bold text-slate-800">{emp.first_name}</td>
                                             <td className="p-4">{emp.position?.position_name || '—'}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-end">
                                                 <div className="inline-flex items-center gap-3">
                                                     <button onClick={() => openEditEmployee(emp)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}>
                                                         <Pencil className="w-3.5 h-3.5" />
@@ -1372,13 +1372,13 @@ const AttendancePage: React.FC = () => {
                             </div>
                             <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">{t('values_editable_but_entries_fixed_config', { defaultValue: "Values can be edited here, but entries can't be added or removed — this is fixed config the attendance system's own calculations reference by key." })}</p>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('key', { defaultValue: 'Key' })}</th>
                                             <th className="p-4">{t('value', { defaultValue: 'Value' })}</th>
                                             <th className="p-4">{t('description', { defaultValue: 'Description' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1387,7 +1387,7 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 font-bold text-slate-800">{s.key}</td>
                                                 <td className="p-4 font-mono">{s.value}</td>
                                                 <td className="p-4 text-slate-500">{s.description}</td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <button onClick={() => openEditSetting(s)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                 </td>
                                             </tr>
@@ -1411,12 +1411,12 @@ const AttendancePage: React.FC = () => {
                             </div>
                             <p className="px-4 py-2 text-[11px] text-slate-400 font-medium">{t('values_editable_but_entries_cannot_be_added_removed', { defaultValue: "Values can be edited here, but entries can't be added or removed." })}</p>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
                                             <th className="p-4">{t('paid', { defaultValue: 'Paid' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1426,7 +1426,7 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${lt.isPaid ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{lt.isPaid ? t('paid', { defaultValue: 'Paid' }) : t('unpaid', { defaultValue: 'Unpaid' })}</span>
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <button onClick={() => openEditLeaveType(lt)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                 </td>
                                             </tr>
@@ -1452,12 +1452,12 @@ const AttendancePage: React.FC = () => {
                                 </button>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
                                             <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1465,7 +1465,7 @@ const AttendancePage: React.FC = () => {
                                             <tr key={h.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4 font-bold text-slate-800">{h.name}</td>
                                                 <td className="p-4">{format(parseISO(h.startDate), 'dd MMM')} – {format(parseISO(h.endDate), 'dd MMM yyyy')}</td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <div className="inline-flex items-center gap-3">
                                                         <button onClick={() => openEditHoliday(h)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                         <button onClick={() => deleteHoliday(h)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>
@@ -1497,7 +1497,7 @@ const AttendancePage: React.FC = () => {
                                 {t('date_ranged_overrides_of_work_hour_settings', { defaultValue: 'Date-ranged overrides of the standard work-hour settings above (e.g. Ramadan hours). "Type" is a single-character code defined by the attendance system.' })}
                             </p>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('name', { defaultValue: 'Name' })}</th>
@@ -1505,7 +1505,7 @@ const AttendancePage: React.FC = () => {
                                             <th className="p-4">{t('type', { defaultValue: 'Type' })}</th>
                                             <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
                                             <th className="p-4">{t('work_hours', { defaultValue: 'Work Hours' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1516,7 +1516,7 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4 font-mono">{m.type}</td>
                                                 <td className="p-4">{format(parseISO(m.dateStart), 'dd MMM')} – {format(parseISO(m.dateEnd), 'dd MMM yyyy')}</td>
                                                 <td className="p-4 font-mono text-[11px]">{m.workStart || '—'} – {m.workEnd || '—'}</td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <div className="inline-flex items-center gap-3">
                                                         <button onClick={() => openEditMultiplier(m)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                         <button onClick={() => deleteMultiplier(m)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>
@@ -1548,14 +1548,14 @@ const AttendancePage: React.FC = () => {
                                 {t('per_employee_date_range_shift_override', { defaultValue: 'Per-employee date-range shift override — takes priority over Multiplier Factors and the standard Work Hours above for that employee on those days. Also created automatically when a "Change of Schedule" Work Authorization request is fully approved.' })}
                             </p>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-xs md:text-sm">
+                                <table className="w-full text-start border-collapse text-xs md:text-sm">
                                     <thead>
                                         <tr className="bg-[#511d29]/5 text-[#511d29] uppercase font-black tracking-wider text-[10px] border-b border-[#511d29]/10">
                                             <th className="p-4">{t('employee', { defaultValue: 'Employee' })}</th>
                                             <th className="p-4">{t('period', { defaultValue: 'Period' })}</th>
                                             <th className="p-4">{t('work_hours', { defaultValue: 'Work Hours' })}</th>
                                             <th className="p-4">{t('reason', { defaultValue: 'Reason' })}</th>
-                                            <th className="p-4 text-right">{t('actions', { defaultValue: 'Actions' })}</th>
+                                            <th className="p-4 text-end">{t('actions', { defaultValue: 'Actions' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
@@ -1568,7 +1568,7 @@ const AttendancePage: React.FC = () => {
                                                 <td className="p-4">{format(parseISO(s.startDate), 'dd MMM')} – {format(parseISO(s.endDate), 'dd MMM yyyy')}</td>
                                                 <td className="p-4 font-mono text-[11px]">{s.workStart} – {s.workEnd}</td>
                                                 <td className="p-4 text-slate-500">{s.reason || '—'}</td>
-                                                <td className="p-4 text-right">
+                                                <td className="p-4 text-end">
                                                     <div className="inline-flex items-center gap-3">
                                                         <button onClick={() => openEditShift(s)} className="text-slate-400 hover:text-[#511d29]" title={t('edit', { defaultValue: 'Edit' })}><Pencil className="w-3.5 h-3.5" /></button>
                                                         <button onClick={() => deleteShift(s)} className="text-slate-400 hover:text-rose-600" title={t('remove', { defaultValue: 'Remove' })}><Trash2 className="w-3.5 h-3.5" /></button>

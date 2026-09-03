@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { format, parseISO } from 'date-fns';
 import type { DailyAttendanceResult, EmployeeLeaveRecord } from '../services/attendanceService';
 import { formatMinutesAsHM, cleanReason } from '../utils/attendanceFormat';
@@ -12,6 +13,7 @@ interface DailyBreakdownTableProps {
 }
 
 const DailyBreakdownTable: React.FC<DailyBreakdownTableProps> = ({ rows, empLeaves, pageSize = 10 }) => {
+    const { t } = useTranslation();
     const [page, setPage] = useState(1);
     const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
     // Clamped fresh every render — if the caller's filter/date-range shrinks `rows` while on a
@@ -26,16 +28,16 @@ const DailyBreakdownTable: React.FC<DailyBreakdownTableProps> = ({ rows, empLeav
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Daily Breakdown</span>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-start border-collapse text-xs">
                     <thead>
                         <tr className="text-slate-400 uppercase font-black tracking-wider text-[10px] border-b border-slate-100">
-                            <th className="p-3">Date</th>
-                            <th className="p-3">Sessions</th>
-                            <th className="p-3">Mid-Day Gap</th>
-                            <th className="p-3">Late</th>
-                            <th className="p-3">Early Out</th>
-                            <th className="p-3">OT</th>
-                            <th className="p-3">Worked</th>
+                            <th className="p-3">{t('date', { defaultValue: 'Date' })}</th>
+                            <th className="p-3">{t('sessions', { defaultValue: 'Sessions' })}</th>
+                            <th className="p-3">{t('mid_day_gap', { defaultValue: 'Mid-Day Gap' })}</th>
+                            <th className="p-3">{t('late_time', { defaultValue: 'Late' })}</th>
+                            <th className="p-3">{t('early_out_time', { defaultValue: 'Early Out' })}</th>
+                            <th className="p-3">{t('ot_abbr', { defaultValue: 'OT' })}</th>
+                            <th className="p-3">{t('worked', { defaultValue: 'Worked' })}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">

@@ -52,7 +52,12 @@ const injectRun = (cell: string, run: string): string => {
 
 export const generateExceptionalContributionRewardDocx = (data: ExceptionalContributionRewardData): Buffer => {
     const fields: FieldFill[] = [
-        { label: 'Employee ID:', value: data.employeeId, mergeSpan: 1 },
+        // Unlike every other row here, "Employee ID:"'s value cell is ALREADY a single merged
+        // cell in the template (w:gridSpan="2") — no separate un-merged sub-cell follows it, so
+        // mergeSpan must stay 0 here. Applying mergeSpan:1 (as the other fields correctly do)
+        // would additionally absorb and delete the NEXT cell, which for this row is the Arabic
+        // label "الرقم الوظيفي:" itself, not a second value sub-cell.
+        { label: 'Employee ID:', value: data.employeeId },
         { label: 'Employee Name:', value: data.employeeName, mergeSpan: 1 },
         { label: 'Position Title:', value: data.positionTitle, mergeSpan: 1 },
         { label: 'Department:', value: data.department, mergeSpan: 1 },

@@ -30,7 +30,8 @@ import {
     PenTool,
     AlertTriangle,
     UserMinus,
-    Award
+    Award,
+    Wallet
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -275,10 +276,14 @@ const MainLayout: React.FC = () => {
             title: t('nav_group_hr', { defaultValue: 'HR & Personnel' }),
             items: [
                 {
-                    label: t('nav_attendance_payroll', { defaultValue: 'Attendance & Payroll' }),
+                    // Renamed from "Attendance & Payroll" — this group only ever held attendance/
+                    // time-tracking screens (none of its children are payroll-related), so the old
+                    // name/permissions promised a Payroll section that doesn't exist here. Payroll is
+                    // getting its own dedicated section under HR & Personnel later.
+                    label: t('nav_attendance_payroll', { defaultValue: 'Attendance' }),
                     icon: Clock,
                     roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
-                    permissions: ['view_time_tracking', 'manage_time_tracking', 'view_payroll', 'manage_payroll'],
+                    permissions: ['view_time_tracking', 'manage_time_tracking'],
                     children: [
                         { label: t('nav_overview', { defaultValue: 'Overview' }), path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
@@ -287,6 +292,16 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_employees', { defaultValue: 'Employees' }), path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_settings', { defaultValue: 'Settings' }), path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
                     ]
+                },
+                {
+                    // New, empty scaffold — real Payroll screens land here later (see
+                    // project_payroll_section memory). Deliberately its own nav item, not folded
+                    // back into the Attendance group above.
+                    label: t('nav_payroll_section', { defaultValue: 'Payroll' }),
+                    path: '/payroll',
+                    icon: Wallet,
+                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    permissions: ['view_payroll', 'manage_payroll'],
                 },
                 {
                     // Heads have no actionable role anywhere in this department anymore — the one
