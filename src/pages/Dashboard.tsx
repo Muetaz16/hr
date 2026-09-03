@@ -14,7 +14,8 @@ import {
     BarChart3,
     Plane,
     ShieldCheck,
-    PenTool
+    PenTool,
+    Inbox
 } from 'lucide-react';
 import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
@@ -32,6 +33,7 @@ import EvaluationAnalytics from '../components/EvaluationAnalytics';
 import DashboardInsights from '../components/DashboardInsights';
 import EmployeeDashboardPanels from '../components/EmployeeDashboardPanels';
 import { dashboardService } from '../services/dashboardService';
+import { fetchMyApprovalCounts } from '../utils/myApprovals';
 import Skeleton from '../components/Skeleton';
 import JobDescriptionView from '../components/JobDescriptionView';
 import Modal from '../components/Modal';
@@ -321,6 +323,32 @@ const Dashboard: React.FC = () => {
     const systemAlerts = data?.systemAlerts || { total: 0, evaluations: 0, expiringContracts: 0 };
     const [showAlerts, setShowAlerts] = useState(false);
 
+    // Unified approvals counter — every request awaiting this user's decision (leaves, exceptional
+    // performance, recruitment, cover, personnel actions). Clicking the card opens /my-approvals.
+    const canSeeApprovals = canAccess(
+        currentUser,
+        ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'],
+        ['manage_leaves', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']
+    );
+    const { data: approvalCounts } = useQuery({
+        queryKey: ['my-approval-counts', currentUser?.id],
+        queryFn: () => fetchMyApprovalCounts(currentUser),
+        enabled: !!currentUser && canSeeApprovals,
+        staleTime: 60 * 1000,
+    });
+    const approvalsCard = {
+        id: 'my_approvals',
+        to: '/my-approvals',
+        label: t('nav_my_approvals', { defaultValue: 'My Approvals' }),
+        value: (approvalCounts?.total ?? 0).toString(),
+        icon: Inbox,
+        change: t('awaiting_you', { defaultValue: 'Awaiting You' }),
+        color: 'text-[#541c2c]',
+        bg: 'bg-[#f8f0e8]',
+    };
+    // Show the approvals card first so it's the primary action item for approvers.
+    const allStats = canSeeApprovals ? [approvalsCard, ...stats] : stats;
+
     if (isLoading) {
         return (
             <div className="space-y-8 max-w-7xl mx-auto animate-pulse">
@@ -485,12 +513,12 @@ const Dashboard: React.FC = () => {
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                {stats.map((stat: any, idx: number) => (
+                {allStats.map((stat: any, idx: number) => (
                     <div
                         key={idx}
-                        onClick={stat.id === 'system_alerts' ? () => setShowAlerts(true) : undefined}
-                        role={stat.id === 'system_alerts' ? 'button' : undefined}
-                        className={`glass-card p-8 rounded-[32px] hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative overflow-hidden ${stat.id === 'system_alerts' ? 'cursor-pointer' : ''}`}
+                        onClick={stat.id === 'system_alerts' ? () => setShowAlerts(true) : stat.to ? () => navigate(stat.to) : undefined}
+                        role={stat.id === 'system_alerts' || stat.to ? 'button' : undefined}
+                        className={`glass-card p-8 rounded-[32px] hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative overflow-hidden ${stat.id === 'system_alerts' || stat.to ? 'cursor-pointer' : ''}`}
                     >
                         {/* Subtle background icon watermark */}
                         <stat.icon className="absolute -bottom-6 -right-6 w-32 h-32 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-500" />
@@ -510,6 +538,11 @@ const Dashboard: React.FC = () => {
                         {stat.id === 'system_alerts' && (
                             <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
                                 {t('view_details', { defaultValue: 'View details' })} <ArrowRight className="w-3 h-3 rtl:rotate-180" />
+                            </span>
+                        )}
+                        {stat.id === 'my_approvals' && (
+                            <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-[#541c2c]">
+                                {t('review_approvals', { defaultValue: 'Review approvals' })} <ArrowRight className="w-3 h-3 rtl:rotate-180" />
                             </span>
                         )}
                     </div>

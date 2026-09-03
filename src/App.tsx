@@ -44,7 +44,7 @@ const RewardCandidateDetailPage = lazy(() => import('./pages/personnel-relations
 const TransferDetailPage = lazy(() => import('./pages/personnel-relations/TransferDetailPage'));
 const AttendancePage = lazy(() => import('./pages/Attendance'));
 const PayrollPage = lazy(() => import('./pages/Payroll'));
-const ApprovalsPage = lazy(() => import('./pages/Approvals'));
+const MyApprovalsPage = lazy(() => import('./pages/MyApprovals'));
 const ApprovedLeavesPage = lazy(() => import('./pages/ApprovedLeaves'));
 const LifecycleControlPage = lazy(() => import('./pages/hr/LifecycleControl'));
 const PositionsToFillPage = lazy(() => import('./pages/Recruitment').then(m => ({ default: () => <m.default mode="positions" /> })));
@@ -123,8 +123,11 @@ function App() {
                     <Route path="/personnel-relations/rewards/candidates/:type/:employeeId" element={<RewardCandidateDetailPage />} />
                     <Route path="/personnel-relations/transfer/:id" element={<TransferDetailPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm']} />}>
-                    <Route path="/approvals" element={<ApprovalsPage />} />
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']} />}>
+                    {/* Manager Control Room was merged into My Approvals — keep the old path working
+                        for existing notification deep-links and bookmarks. */}
+                    <Route path="/approvals" element={<Navigate to="/my-approvals" replace />} />
+                    <Route path="/my-approvals" element={<MyApprovalsPage />} />
                   </Route>
                   <Route path="/attendance" element={<Navigate to="/attendance/overview" replace />} />
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
