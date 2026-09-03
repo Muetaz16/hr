@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { JOB_CATEGORIES } from '../types';
+import { JOB_CATEGORIES, jobCategoryKey } from '../types';
 import type { JobDescriptionDetails } from '../types';
 import { Building2, MapPin } from 'lucide-react';
 
@@ -124,22 +124,12 @@ const JobDescriptionFields: React.FC<Props> = ({ value, onChange, hideTitle }) =
             </div>
 
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-gray-400 font-normal">/ يقدم تقاريره إلى</span></label>
-                <input
-                    type="text" value={value.details.reportsTo || ''}
-                    onChange={(e) => set({ details: { ...value.details, reportsTo: e.target.value } })}
-                    placeholder={t('e_g_head_of_finance', { defaultValue: 'e.g. Head of Finance' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                />
-            </div>
-
-            <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">{t('applicable_job_categories', { defaultValue: 'Applicable Job Categories' })}</label>
                 <div className="grid grid-cols-2 gap-2 p-3 bg-white rounded-lg border border-gray-200">
                     {JOB_CATEGORIES.map(cat => (
                         <label key={cat} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
                             <input type="checkbox" checked={value.jobCategories.includes(cat)} onChange={() => toggleCategory(cat)} className="text-indigo-600 focus:ring-indigo-500 rounded" />
-                            {cat}
+                            {t(jobCategoryKey(cat), { defaultValue: cat })}
                         </label>
                     ))}
                 </div>

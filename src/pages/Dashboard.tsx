@@ -41,7 +41,12 @@ import { toast } from 'sonner';
 
 const Dashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const isArabic = i18n.language?.startsWith('ar');
+    // Prefer the Arabic name when available — same convention as Organization.tsx (name/nameArabic
+    // already exist on every Department/Division/Unit/Directorate row).
+    const nameOf = (entity?: { name?: string; nameArabic?: string | null } | null): string | undefined =>
+        entity ? ((isArabic && entity.nameArabic?.trim()) ? entity.nameArabic! : entity.name) : undefined;
     const navigate = useNavigate();
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
 
@@ -225,34 +230,34 @@ const Dashboard: React.FC = () => {
             let myGroup = groups.find(g => g.id === currentUser.groupId)?.name || 'N/A';
 
             // Position Logic
-            let positionName = 'Staff Member';
+            let positionName = t('staff_member', { defaultValue: 'Staff Member' });
             let managedEntity = '';
 
             if (currentUser.role === 'SUPER_ADMIN') {
-                positionName = 'Global Administrator';
+                positionName = t('global_administrator', { defaultValue: 'Global Administrator' });
                 managedEntity = 'IPH SYSTEM';
                 myGroup = 'Executive Board';
                 myDept = 'System Administration';
             } else if (currentUser.role === 'HR_MANAGER') {
-                positionName = 'HR Manager';
-                managedEntity = 'Corporate Administration';
+                positionName = t('hr_manager', { defaultValue: 'HR Manager' });
+                managedEntity = t('corporate_administration', { defaultValue: 'Corporate Administration' });
                 myGroup = 'Human Resources IPH SYSTEM';
                 myDept = 'Corporate Administration';
             } else if (currentUser.role === 'HEAD_DIRECTOR') {
-                positionName = 'Head of Directorate';
-                managedEntity = myEmployeeData?.directorateId ? 'Directorate' : (groups.find(g => g.id === currentUser.groupId)?.name || 'Directorate');
+                positionName = t('head_of_directorate', { defaultValue: 'Head of Directorate' });
+                managedEntity = myEmployeeData?.directorateId ? t('directorate', { defaultValue: 'Directorate' }) : (nameOf(groups.find(g => g.id === currentUser.groupId)) || t('directorate', { defaultValue: 'Directorate' }));
             } else if (currentUser.role === 'HEAD_DIVISION') {
-                positionName = 'Head of Division';
-                managedEntity = 'Division';
+                positionName = t('head_of_division', { defaultValue: 'Head of Division' });
+                managedEntity = t('division', { defaultValue: 'Division' });
             } else if (currentUser.role === 'HEAD_DEPARTMENT') {
-                positionName = 'Head of Department';
-                managedEntity = depts.find(d => d.id === currentUser.departmentId)?.name || 'Department';
+                positionName = t('head_of_department', { defaultValue: 'Head of Department' });
+                managedEntity = nameOf(depts.find(d => d.id === currentUser.departmentId)) || t('department', { defaultValue: 'Department' });
             } else if (currentUser.role === 'HEAD_UNIT') {
-                positionName = 'Head of Unit';
-                managedEntity = units.find(u => u.id === (currentUser as any).unitId)?.name || 'Unit';
+                positionName = t('head_of_unit', { defaultValue: 'Head of Unit' });
+                managedEntity = nameOf(units.find(u => u.id === (currentUser as any).unitId)) || t('unit', { defaultValue: 'Unit' });
             } else if (currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('manage_personnel_actions')) {
-                positionName = 'Personnel Officer';
-                managedEntity = 'Human Resources';
+                positionName = t('personnel_officer', { defaultValue: 'Personnel Officer' });
+                managedEntity = t('human_resources', { defaultValue: 'Human Resources' });
                 myGroup = 'Human Resources IPH SYSTEM';
                 myDept = 'Corporate Administration';
             }
@@ -266,9 +271,9 @@ const Dashboard: React.FC = () => {
 
             const stats = [
                 { label: t('active_employees'), value: scopedEmps.length.toString(), icon: Users, change: t('current'), color: 'text-primary-600', bg: 'bg-primary-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_employees' },
-                { label: 'Evaluation Ratio', value: `${evalPercent}%`, icon: CheckCircle2, change: `${finishedEvals}/${scopedEmps.length}`, color: 'text-green-600', bg: 'bg-green-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_evaluations' },
-                { label: 'Evaluations Awaiting', value: evaluationPendingCount.toString(), icon: FileText, change: 'Action Required', color: 'text-orange-600', bg: 'bg-orange-50', visible: ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permission: 'view_hr_evaluations' },
-                { id: 'system_alerts', label: 'System Alerts', value: totalPendingAction.toString(), icon: Activity, change: 'Critical', color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN', 'HR_MANAGER'], permission: 'manage_users' },
+                { label: t('evaluation_ratio', { defaultValue: 'Evaluation Ratio' }), value: `${evalPercent}%`, icon: CheckCircle2, change: `${finishedEvals}/${scopedEmps.length}`, color: 'text-green-600', bg: 'bg-green-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_evaluations' },
+                { label: t('evaluations_awaiting', { defaultValue: 'Evaluations Awaiting' }), value: evaluationPendingCount.toString(), icon: FileText, change: t('action_required', { defaultValue: 'Action Required' }), color: 'text-orange-600', bg: 'bg-orange-50', visible: ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permission: 'view_hr_evaluations' },
+                { id: 'system_alerts', label: t('system_alerts', { defaultValue: 'System Alerts' }), value: totalPendingAction.toString(), icon: Activity, change: t('critical', { defaultValue: 'Critical' }), color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN', 'HR_MANAGER'], permission: 'manage_users' },
             ].filter(s =>
                 (!s.visible || s.visible.includes(currentUser.role)) ||
                 (s.permission && currentUser.permissions?.includes(s.permission))
@@ -412,7 +417,7 @@ const Dashboard: React.FC = () => {
                     <div className="max-w-2xl">
                         <div className="inline-flex items-center px-4 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8 border border-white/20 shadow-xl overflow-hidden relative group/badge">
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/badge:translate-x-full transition-transform duration-1000"></div>
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 mr-2.5 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 me-2.5 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></span>
                             {t('welcome_back')}
                         </div>
                         
@@ -438,13 +443,13 @@ const Dashboard: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setShowAlerts(true)}
-                            className="inline-flex items-center gap-3 mb-10 pl-2 pr-5 py-2 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all hover:scale-[1.02] group/msg"
+                            className="inline-flex items-center gap-3 mb-10 ps-2 pe-5 py-2 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all hover:scale-[1.02] group/msg"
                         >
                             <span className="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 rounded-full bg-white text-slate-900 text-sm font-black">
                                 {pendingReviewCount !== '...' ? pendingReviewCount : '0'}
                             </span>
                             <span className="text-white font-bold text-sm">{t('pending_notifications')}</span>
-                            <ArrowRight className="w-4 h-4 text-white/80 group-hover/msg:translate-x-1 transition-transform" />
+                            <ArrowRight className="w-4 h-4 text-white/80 group-hover/msg:translate-x-1 transition-transform rtl:rotate-180" />
                         </button>
 
                         <div className="flex flex-wrap gap-5">
@@ -452,8 +457,8 @@ const Dashboard: React.FC = () => {
                                 onClick={() => navigate('/tasks')}
                                 className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-sm uppercase tracking-wider flex items-center shadow-2xl hover:bg-slate-50 transition-all hover:scale-[1.05] active:scale-95 group/btn"
                             >
-                                {t('view_tasks')} 
-                                <ArrowRight className="ml-2.5 w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
+                                {t('view_tasks')}
+                                <ArrowRight className="ms-2.5 w-5 h-5 group-hover/btn:translate-x-1 transition-transform rtl:rotate-180" />
                             </button>
                         </div>
                     </div>
@@ -504,7 +509,7 @@ const Dashboard: React.FC = () => {
                         </p>
                         {stat.id === 'system_alerts' && (
                             <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
-                                {t('view_details', { defaultValue: 'View details' })} <ArrowRight className="w-3 h-3" />
+                                {t('view_details', { defaultValue: 'View details' })} <ArrowRight className="w-3 h-3 rtl:rotate-180" />
                             </span>
                         )}
                     </div>
@@ -523,13 +528,13 @@ const Dashboard: React.FC = () => {
                     </p>
                     {([
                         { key: 'evaluations', label: t('evaluations_awaiting', { defaultValue: 'Evaluations awaiting action' }), value: systemAlerts.evaluations, icon: FileText, to: '/evaluations' },
-                        { key: 'contracts', label: t('expiring_contracts', { defaultValue: 'Contracts expiring soon' }), value: systemAlerts.expiringContracts, icon: Calendar, to: '/contract-management' },
+                        { key: 'contracts', label: t('expiring_contracts', { defaultValue: 'Contracts expiring soon' }), value: systemAlerts.expiringContracts, icon: Calendar, to: '/personnel-relations/renewals' },
                     ] as const).map(row => (
                         <button
                             key={row.key}
                             type="button"
                             onClick={() => { setShowAlerts(false); navigate(row.to); }}
-                            className="w-full flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors text-left"
+                            className="w-full flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors text-start"
                         >
                             <div className={`p-3 rounded-xl shrink-0 ${row.value > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
                                 <row.icon className="w-5 h-5" />
@@ -539,7 +544,7 @@ const Dashboard: React.FC = () => {
                                 <p className="text-xs text-slate-400">{row.value > 0 ? t('needs_attention', { defaultValue: 'Needs attention' }) : t('all_clear', { defaultValue: 'All clear' })}</p>
                             </div>
                             <span className={`text-2xl font-outfit font-black ${row.value > 0 ? 'text-red-600' : 'text-slate-300'}`}>{row.value}</span>
-                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0 rtl:rotate-180" />
                         </button>
                     ))}
                     <div className="flex items-center justify-between pt-2 px-1">
@@ -627,26 +632,26 @@ const Dashboard: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-slate-800 tracking-tight">{t('contract_status', { defaultValue: 'Contract Status' })}</h3>
-                                    <span className="text-sm font-bold text-primary-600 uppercase tracking-wider">{myEmployeeData.contractType || 'N/A'}</span>
+                                    <span className="text-sm font-bold text-primary-600 uppercase tracking-wider">{myEmployeeData.contractType || t('na', { defaultValue: 'N/A' })}</span>
                                 </div>
                             </div>
 
                             <div className="space-y-4 relative z-10">
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-500 font-medium">Start Date</span>
+                                    <span className="text-slate-500 font-medium">{t('start_date', { defaultValue: 'Start Date' })}</span>
                                     <span className="font-bold text-slate-800">{renderDate(myEmployeeData.contractStartDate)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-500 font-medium">End Date</span>
+                                    <span className="text-slate-500 font-medium">{t('end_date', { defaultValue: 'End Date' })}</span>
                                     <span className="font-bold text-slate-800">{renderDate(myEmployeeData.contractEndDate)}</span>
                                 </div>
-                                
+
                                 {contractProgress && (
                                     <div className="mt-6 pt-6 border-t border-slate-100">
                                         <div className="flex justify-between items-end mb-2">
-                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Time Remaining</span>
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('time_remaining', { defaultValue: 'Time Remaining' })}</span>
                                             <span className={`text-lg font-black ${contractProgress.remaining < 30 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                {contractProgress.remaining} Days
+                                                {contractProgress.remaining} {t('days', { defaultValue: 'Days' })}
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -665,45 +670,45 @@ const Dashboard: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-slate-800 tracking-tight text-xl">{t('leave_balances', { defaultValue: 'Leave Balances' })}</h3>
-                                    <p className="text-sm text-slate-500 font-medium tracking-wide">Track your annual holidays and emergency leaves</p>
+                                    <p className="text-sm text-slate-500 font-medium tracking-wide">{t('leave_balances_subtitle', { defaultValue: 'Track your annual holidays and emergency leaves' })}</p>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 {/* Paid Holidays */}
                                 <div className="p-6 rounded-3xl bg-emerald-50/50 border border-emerald-100 relative group/balance hover:bg-emerald-50 transition-colors">
-                                    <span className="block text-[10px] font-black tracking-[0.2em] text-emerald-600/70 uppercase mb-4">Paid Holidays</span>
+                                    <span className="block text-[10px] font-black tracking-[0.2em] text-emerald-600/70 uppercase mb-4">{t('paid_holidays', { defaultValue: 'Paid Holidays' })}</span>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-4xl font-outfit font-black text-emerald-600 tracking-tighter">{myEmployeeData.holidaysUsed || 0}</span>
-                                        <span className="text-sm font-bold text-emerald-600/50">used</span>
+                                        <span className="text-sm font-bold text-emerald-600/50">{t('used', { defaultValue: 'used' })}</span>
                                     </div>
                                     <div className="mt-4 text-[10px] font-black text-emerald-700/60 uppercase tracking-widest flex justify-between items-center bg-emerald-100/30 px-3 py-1.5 rounded-lg border border-emerald-100/50">
-                                        <span>Collected:</span>
-                                        <span className="text-emerald-700">{(myEmployeeData.accruedHolidays || 0) + (myEmployeeData.bonusHolidays || 0)} Days</span>
+                                        <span>{t('collected', { defaultValue: 'Collected:' })}</span>
+                                        <span className="text-emerald-700">{(myEmployeeData.accruedHolidays || 0) + (myEmployeeData.bonusHolidays || 0)} {t('days', { defaultValue: 'Days' })}</span>
                                     </div>
                                 </div>
 
                                 {/* Emergency Leaves */}
                                 <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-100 relative group/balance hover:bg-amber-50 transition-colors">
-                                    <span className="block text-[10px] font-black tracking-[0.2em] text-amber-600/70 uppercase mb-4">Emergency Leaves</span>
+                                    <span className="block text-[10px] font-black tracking-[0.2em] text-amber-600/70 uppercase mb-4">{t('emergency_leaves', { defaultValue: 'Emergency Leaves' })}</span>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-4xl font-outfit font-black text-amber-600 tracking-tighter">{myEmployeeData.emergencyHolidaysUsed || 0}</span>
-                                        <span className="text-sm font-bold text-amber-600/50">used</span>
+                                        <span className="text-sm font-bold text-amber-600/50">{t('used', { defaultValue: 'used' })}</span>
                                     </div>
                                     <div className="mt-4 text-[10px] font-black text-amber-700/60 uppercase tracking-widest flex justify-between items-center bg-amber-100/30 px-3 py-1.5 rounded-lg border border-amber-100/50">
-                                        <span>Remaining:</span>
-                                        <span className="text-amber-700">{Math.max(0, myEmployeeData.remainingEmergencyHolidays ?? (3 - (myEmployeeData.emergencyHolidaysUsed || 0)))} Days</span>
+                                        <span>{t('remaining_colon', { defaultValue: 'Remaining:' })}</span>
+                                        <span className="text-amber-700">{Math.max(0, myEmployeeData.remainingEmergencyHolidays ?? (3 - (myEmployeeData.emergencyHolidaysUsed || 0)))} {t('days', { defaultValue: 'Days' })}</span>
                                     </div>
                                 </div>
 
                                 {/* Unpaid Leaves */}
                                 <div className="p-6 rounded-3xl bg-slate-50/50 border border-slate-200 relative group/balance hover:bg-slate-50 transition-colors">
-                                    <span className="block text-[10px] font-black tracking-[0.2em] text-slate-600/70 uppercase mb-4">Unpaid Leaves</span>
+                                    <span className="block text-[10px] font-black tracking-[0.2em] text-slate-600/70 uppercase mb-4">{t('unpaid_leaves', { defaultValue: 'Unpaid Leaves' })}</span>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-4xl font-outfit font-black text-slate-600 tracking-tighter">{myEmployeeData.unpaidHolidaysUsed || 0}</span>
-                                        <span className="text-sm font-bold text-slate-500/50">taken</span>
+                                        <span className="text-sm font-bold text-slate-500/50">{t('taken', { defaultValue: 'taken' })}</span>
                                     </div>
-                                    <div className="mt-4 text-xs font-bold text-slate-500">Requires management approval</div>
+                                    <div className="mt-4 text-xs font-bold text-slate-500">{t('requires_management_approval', { defaultValue: 'Requires management approval' })}</div>
                                 </div>
                             </div>
                         </div>

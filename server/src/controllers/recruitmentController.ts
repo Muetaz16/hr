@@ -23,6 +23,22 @@ async function notifyHrManagers(title: string, content: string, link?: string) {
     await Promise.all(ids.map(id => notify(id, title, content, link)));
 }
 
+// Notify whoever needs to act on a given PRF stage (used when a hire requisition is created,
+// after any leading stages the requester's own role/scope already auto-satisfied are skipped).
+async function notifyPrfStage(stage: PrfStage | undefined, request: { requester?: { fullName: string | null } | null; jobTitle: string }) {
+    if (!stage) return; // every stage was auto-approved (shouldn't happen in practice — GM can't self-raise a HIRE)
+    const content = `${request.requester?.fullName || 'A head'} raised a hire requisition (${request.jobTitle}) needing your approval.`;
+    const link = '/recruitment/approvals';
+    if (stage === 'deptHead') return notifyRoles(['HEAD_DEPARTMENT', 'HEAD_OFFICE'], 'New requisition to review', content, link);
+    if (stage === 'divHead') return notifyRoles(['HEAD_DIVISION', 'HEAD_OFFICE'], 'New requisition to review', content, link);
+    if (stage === 'hrRecruitment') {
+        const ids = await resolveUsersWithPermission(prisma, 'approve_hr_recruitment');
+        return Promise.all(ids.map(id => notify(id, 'New requisition to review', content, link)));
+    }
+    if (stage === 'hrManager') return notifyHrManagers('New requisition to review', content, link);
+    return notifyRoles(['GENERAL_MANAGER'], 'New requisition to review', content, link);
+}
+
 // Resolve the directorate that a requisition scope belongs to (for routing the "direct head" approval).
 const resolveDirectorateId = async (scope: { departmentId?: string | null; divisionId?: string | null; unitId?: string | null }): Promise<string | null> => {
     if (scope.divisionId) {
@@ -55,6 +71,45 @@ const getActorScope = async (userId: string, user: any): Promise<{ divisionId: s
     return { divisionId, departmentId };
 };
 
+// Live "Reports To" resolution for the printed PRF — mirrors src/utils/reportsTo.ts's algorithm
+// (position-based: the Head Job Description of the position's own scope, or one level up if the
+// position IS that scope's Head). Re-resolved fresh at print time (rather than trusting the text
+// snapshotted on the request at creation time) so a Head JD's Arabic title added *after* the
+// request was raised still shows up correctly on the document.
+const resolveReportsToLive = async (
+    request: { unitId: string | null; departmentId: string | null },
+    jd: { id: string; isHead: boolean } | null | undefined,
+): Promise<{ en: string; ar?: string } | null> => {
+    const level: 'UNIT' | 'DEPARTMENT' = request.unitId ? 'UNIT' : 'DEPARTMENT';
+    const scopeId = request.unitId || request.departmentId;
+    if (!scopeId) return null;
+
+    type Scope = { level: 'DIRECTORATE' | 'DIVISION' | 'DEPARTMENT' | 'UNIT'; id: string } | { level: 'TOP' };
+    const parentScopeOf = async (lvl: 'UNIT' | 'DEPARTMENT' | 'DIVISION', id: string): Promise<Scope> => {
+        if (lvl === 'UNIT') {
+            const unit = await prisma.unit.findUnique({ where: { id }, select: { departmentId: true } });
+            return unit?.departmentId ? { level: 'DEPARTMENT', id: unit.departmentId } : { level: 'TOP' };
+        }
+        if (lvl === 'DEPARTMENT') {
+            const dept = await prisma.department.findUnique({ where: { id }, select: { isOffice: true, divisionId: true } });
+            if (dept?.isOffice) return { level: 'TOP' };
+            return dept?.divisionId ? { level: 'DIVISION', id: dept.divisionId } : { level: 'TOP' };
+        }
+        const div = await prisma.division.findUnique({ where: { id }, select: { directorateId: true } });
+        return div?.directorateId ? { level: 'DIRECTORATE', id: div.directorateId } : { level: 'TOP' };
+    };
+
+    const target: Scope = jd?.isHead ? await parentScopeOf(level, scopeId) : { level, id: scopeId };
+    if (target.level === 'TOP') return { en: 'General Manager', ar: 'المدير العام' };
+
+    const fieldMap = { DIRECTORATE: 'directorateId', DIVISION: 'divisionId', DEPARTMENT: 'departmentId', UNIT: 'unitId' } as const;
+    const headJd = await prisma.jobDescription.findFirst({
+        where: { isHead: true, [fieldMap[target.level]]: target.id, ...(jd?.id ? { NOT: { id: jd.id } } : {}) },
+        select: { title: true, titleArabic: true },
+    });
+    return headJd ? { en: headJd.title, ar: headJd.titleArabic || undefined } : null;
+};
+
 // The division a requisition belongs to (its own division, or the division of its department).
 const getRequisitionDivisionId = async (r: { divisionId: string | null; departmentId: string | null }): Promise<string | null> => {
     if (r.divisionId) return r.divisionId;
@@ -78,10 +133,16 @@ export const getAllRecruitmentRequests = async (req: Request, res: Response) => 
         if (departmentId) where.departmentId = String(departmentId);
 
         // Company-wide visibility for HR/GM/Admin/Director — also anyone holding the HR Manager hat
-        // (approve_hr_manager), not just a literal role==='HR_MANAGER' account. Deliberately NOT
-        // falling back to manage_recruitment/recruitment_approvals here — regular Heads already hold
-        // those by default and must stay scoped to their own branch, not see every requisition.
-        if (!['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole) && !userPerms.includes('approve_hr_manager')) {
+        // (approve_hr_manager), the GM hat (approve_gm), or the Head of Recruitment/Hiring Unit hat
+        // (approve_hr_recruitment), not just a literal role==='HR_MANAGER'/'GENERAL_MANAGER' account.
+        // The Hiring Unit stage is cross-department by nature (it approves EVERY hire requisition
+        // once it clears Dept/Division, regardless of which department raised it) — scoping it to the
+        // holder's own department/division would hide every other department's requisitions once
+        // they reach that stage. Deliberately NOT falling back to plain manage_recruitment/
+        // recruitment_approvals here — regular Heads already hold those by default and must stay
+        // scoped to their own branch, not see every requisition.
+        if (!['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole)
+            && !userPerms.includes('approve_hr_manager') && !userPerms.includes('approve_gm') && !userPerms.includes('approve_hr_recruitment')) {
             const scope = await getActorScope(userId, (req as any).user);
             const or: any[] = [{ requesterId: userId }];
             if (userRole === 'HEAD_DIVISION' && scope.divisionId) {
@@ -127,9 +188,13 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
         let { jobTitle } = req.body;
         const requesterId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
+        const userPerms: string[] = (req as any).user?.permissions || [];
 
+        // Role OR the equivalent permission — same union pattern as everywhere else in this file
+        // (and as the route's own canRaiseRecruitment gate), so a Functional Hat/individual grant
+        // can stand in for the literal Position instead of being silently blocked here.
         const allowedRoles = ['HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'SUPER_ADMIN'];
-        if (!allowedRoles.includes(userRole)) {
+        if (!allowedRoles.includes(userRole) && !userPerms.includes('manage_recruitment')) {
             return res.status(403).json({ error: 'Only a Head of Department, Office, or Division can raise a personnel requisition.' });
         }
 
@@ -174,13 +239,56 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
         }
 
         // Approval routing:
-        //  - HIRE requisitions run the staged PRF flow (Dept head → Division head → HR Manager →
-        //    Head of Hiring Unit → GM), driven by prfApprovals; they always start PENDING.
+        //  - HIRE requisitions run the staged PRF flow (Dept head → Division head → Hiring Unit →
+        //    HR Manager → GM), driven by prfApprovals. A submitter's own authority cascades DOWN
+        //    the org ladder onto the leading stage(s) beneath it — a Head of Department raising
+        //    their own requisition auto-approves just the dept-head stage; a Head of Division (or
+        //    Head of Office, which sits directly under the GM with no division layer) raising one
+        //    auto-approves BOTH the dept-head and division-head stages beneath them, since their
+        //    seniority already covers that sign-off. This is deliberately separate from
+        //    isEligibleForStage (used for real approve-action gating elsewhere), which must stay
+        //    strict about role — a Division Head must never be allowed to approve someone ELSE's
+        //    dept-head stage, only to have their own submission skip it. SUPER_ADMIN is excluded
+        //    entirely (an admin filling the form isn't "the org" self-approving).
         //  - JD_CHANGE keeps the original flow (Division → HR → Directorate); a division head who
         //    raises it self-approves the division step (starts DEPT_APPROVED).
         const isDivisionHead = userRole === 'HEAD_DIVISION';
-        const initialStatus = (reqType === 'JD_CHANGE' && isDivisionHead) ? 'DEPT_APPROVED' : 'PENDING';
         const selfDeptApprove = reqType === 'JD_CHANGE' && isDivisionHead;
+
+        let initialPrfApprovals: any = Prisma.JsonNull;
+        let hireAutoApprovedThrough: PrfStage | undefined;
+        if (reqType === 'HIRE' && userRole !== 'SUPER_ADMIN') {
+            const reqDivisionIdForScope = await getRequisitionDivisionId({ departmentId: cleanDeptId, divisionId: cleanDivId });
+            const actorScope = await getActorScope(requesterId, (req as any).user);
+            const actor = await prisma.user.findUnique({ where: { id: requesterId }, select: { fullName: true, signature: true } });
+            // Role OR the equivalent permission (a Functional Hat/individual grant stands in for the
+            // Position, same union pattern isEligibleForStage uses for real approve-actions) —
+            // manage_recruitment is what a Head of Department/Office holds by default,
+            // recruitment_approvals is what a Head of Division holds by default.
+            const hasDeptAuthority = userRole === 'HEAD_DEPARTMENT' || userRole === 'HEAD_OFFICE' || userPerms.includes('manage_recruitment');
+            const hasDivAuthority = userRole === 'HEAD_OFFICE' || userRole === 'HEAD_DIVISION' || userPerms.includes('recruitment_approvals');
+            const ownsStage = (stage: PrfStage): boolean => {
+                if (stage === 'deptHead') {
+                    return (hasDeptAuthority && (!cleanDeptId || actorScope.departmentId === cleanDeptId))
+                        || (hasDivAuthority && (!reqDivisionIdForScope || actorScope.divisionId === reqDivisionIdForScope));
+                }
+                if (stage === 'divHead') {
+                    return hasDivAuthority && (!reqDivisionIdForScope || actorScope.divisionId === reqDivisionIdForScope);
+                }
+                return false; // HR/GM stages are functional approvals, never inherited by org-chart seniority.
+            };
+            const approvals: any = {};
+            for (const stage of PRF_STAGES) {
+                if (!ownsStage(stage)) break;
+                approvals[stage] = { byId: requesterId, byName: actor?.fullName || '', signature: actor?.signature || null, at: new Date().toISOString(), note: null, document: null };
+                hireAutoApprovedThrough = stage;
+            }
+            if (Object.keys(approvals).length > 0) initialPrfApprovals = approvals;
+        }
+
+        const initialStatus = reqType === 'JD_CHANGE'
+            ? (isDivisionHead ? 'DEPT_APPROVED' : 'PENDING')
+            : (hireAutoApprovedThrough ? PRF_STATUS[hireAutoApprovedThrough] : 'PENDING');
 
         const request = await prisma.recruitmentRequest.create({
             data: {
@@ -203,6 +311,7 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
                 typeOfRequest: reqType === 'HIRE' ? (typeOfRequest || null) : null,
                 languageEn: reqType === 'HIRE' ? (languageEn || null) : null,
                 languageAr: reqType === 'HIRE' ? (languageAr || null) : null,
+                prfApprovals: initialPrfApprovals,
             },
             include: { requester: true, unit: true, department: true, division: true, jobDescription: true }
         });
@@ -211,10 +320,8 @@ export const createRecruitmentRequest = async (req: Request, res: Response) => {
         // or HR directly (if raised by a division head, whose division step is already done).
         const label = reqType === 'JD_CHANGE' ? 'JD change' : 'hire';
         if (reqType === 'HIRE') {
-            // New staged PRF flow starts with the Head of Department.
-            await notifyRoles(['HEAD_DEPARTMENT', 'HEAD_OFFICE'], 'New requisition to review',
-                `${request.requester?.fullName || 'A head'} raised a hire requisition (${request.jobTitle}) needing your approval.`,
-                '/recruitment/approvals');
+            const startIdx = hireAutoApprovedThrough ? PRF_STAGES.indexOf(hireAutoApprovedThrough) + 1 : 0;
+            await notifyPrfStage(PRF_STAGES[startIdx], request);
         } else if (initialStatus === 'PENDING') {
             const reqDivisionId = await getRequisitionDivisionId(request);
             await notifyRoles(['HEAD_DIVISION'], 'New requisition to review',
@@ -296,9 +403,35 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
                 updateData.gmApprovedAt = new Date();
             }
         } else if (status === 'REJECTED') {
-            if (userRole === 'HEAD_DIVISION') { updateData.deptNote = note; updateData.deptApprovedById = userId; updateData.deptApprovedAt = new Date(); }
-            else if (userRole === 'HR_MANAGER' || perms.includes('approve_hr_manager')) { updateData.hrNote = note; updateData.hrApprovedById = userId; updateData.hrApprovedAt = new Date(); }
-            else if (userRole === 'HEAD_DIRECTOR' || isAdmin) { updateData.gmNote = note; updateData.gmApprovedById = userId; updateData.gmApprovedAt = new Date(); }
+            // This branch only ever fires for JD_CHANGE (HIRE rejects through prfApprove instead —
+            // see Recruitment.tsx's handlePrfDecision vs handleUpdateStatus split). Reject at
+            // whichever stage the requisition is CURRENTLY awaiting (existing.status), not guessed
+            // from the actor's role/permissions — recruitment_approvals alone can't tell apart the
+            // division-head stage from the director stage since both hold it, and unlike the approve
+            // transitions above this branch previously had no per-stage authorization check at all.
+            if (existing.status === 'PENDING') {
+                if (!isAdmin && userRole !== 'HEAD_DIVISION' && !perms.includes('recruitment_approvals')) {
+                    return res.status(403).json({ error: 'Only the Head of Division can reject at this stage.' });
+                }
+                if (!isAdmin) {
+                    const reqDivisionId = await getRequisitionDivisionId(existing);
+                    const scope = await getActorScope(userId, (req as any).user);
+                    if (!reqDivisionId || scope.divisionId !== reqDivisionId) {
+                        return res.status(403).json({ error: 'You can only reject requisitions within your own division.' });
+                    }
+                }
+                updateData.deptNote = note; updateData.deptApprovedById = userId; updateData.deptApprovedAt = new Date();
+            } else if (existing.status === 'DEPT_APPROVED') {
+                if (!isAdmin && userRole !== 'HR_MANAGER' && !perms.includes('manage_recruitment') && !perms.includes('approve_hr_manager')) {
+                    return res.status(403).json({ error: 'Only HR can reject at this stage.' });
+                }
+                updateData.hrNote = note; updateData.hrApprovedById = userId; updateData.hrApprovedAt = new Date();
+            } else if (existing.status === 'HR_APPROVED') {
+                if (!isAdmin && userRole !== 'HEAD_DIRECTOR' && !perms.includes('recruitment_approvals')) {
+                    return res.status(403).json({ error: 'Only the Head of Directorate can reject at this stage.' });
+                }
+                updateData.gmNote = note; updateData.gmApprovedById = userId; updateData.gmApprovedAt = new Date();
+            }
         } else if (status === 'FILLED') {
             // Mark an approved hire as filled once the employee has been enrolled.
             if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
@@ -441,7 +574,8 @@ export const deleteRecruitmentRequest = async (req: Request, res: Response) => {
         const existing = await prisma.recruitmentRequest.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ error: 'Request not found' });
 
-        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HR_MANAGER' && userRole !== 'HEAD_DIVISION' && !userPerms.includes('approve_hr_manager')) {
+        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HR_MANAGER' && userRole !== 'HEAD_DIVISION'
+            && !userPerms.includes('approve_hr_manager') && !userPerms.includes('recruitment_approvals')) {
             return res.status(403).json({ error: 'Unauthorized to delete this request' });
         }
 
@@ -455,7 +589,7 @@ export const deleteRecruitmentRequest = async (req: Request, res: Response) => {
 
 // ---- Personnel Requisition Form (PRF) staged approval flow (HIRE requisitions) ----------------
 // Ordered stages, each signed by the relevant approver. The two HR stages are permission-gated.
-const PRF_STAGES = ['deptHead', 'divHead', 'hrManager', 'hrRecruitment', 'gm'] as const;
+const PRF_STAGES = ['deptHead', 'divHead', 'hrRecruitment', 'hrManager', 'gm'] as const;
 type PrfStage = typeof PRF_STAGES[number];
 const PRF_STATUS: Record<PrfStage, string> = {
     deptHead: 'DEPT_APPROVED', divHead: 'DIV_APPROVED', hrManager: 'HRMGR_APPROVED',
@@ -474,9 +608,14 @@ const isEligibleForStage = (
     if (isAdmin) return true;
     switch (stage) {
         case 'deptHead':
-            return (role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE') && (!reqDepartmentId || actorScope.departmentId === reqDepartmentId);
+            // Role OR the equivalent permission (a Functional Hat/individual grant can stand in for
+            // the literal Position, same union-with-permission pattern used everywhere else in this
+            // file) — manage_recruitment is exactly what a Head of Department/Office holds by
+            // default (accessCatalog.ts POSITION_DEFAULTS).
+            return (role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE' || perms.includes('manage_recruitment')) && (!reqDepartmentId || actorScope.departmentId === reqDepartmentId);
         case 'divHead':
-            return (role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE') && (!reqDivisionId || actorScope.divisionId === reqDivisionId);
+            // recruitment_approvals is what a Head of Division holds by default.
+            return (role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals')) && (!reqDivisionId || actorScope.divisionId === reqDivisionId);
         case 'hrManager':
             return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
         case 'hrRecruitment':
@@ -570,8 +709,8 @@ export const generatePrf = async (req: Request, res: Response) => {
         const request = await prisma.recruitmentRequest.findUnique({
             where: { id },
             include: {
-                department: { select: { name: true, division: { select: { name: true } } } },
-                division: { select: { name: true } },
+                department: { select: { name: true, nameArabic: true, division: { select: { name: true, nameArabic: true } } } },
+                division: { select: { name: true, nameArabic: true } },
                 jobDescription: true,
                 requester: { select: { fullName: true } },
             },
@@ -580,9 +719,22 @@ export const generatePrf = async (req: Request, res: Response) => {
 
         const jd = request.jobDescription;
         const d = (jd?.details as any) || {};
-        const sec = (k: string) => String(d[k]?.en || '').trim() || String(d[k]?.ar || '').trim();
+        const sec = (k: string) => String(d[k]?.en || '').trim();
+        const secAr = (k: string) => String(d[k]?.ar || '').trim();
         const locMap: Record<string, string> = { OFFICE: 'Office', SITE: 'Site' };
-        const placeOfWork = (jd?.workLocations || []).map(l => locMap[l] || l).join(' / ');
+        const locMapAr: Record<string, string> = { OFFICE: 'عمل مكتبي', SITE: 'عمل ميداني' };
+        const locs = jd?.workLocations || [];
+        const placeOfWork = locs.map(l => locMap[l] || l).join(' / ');
+        const placeOfWorkAr = locs.map(l => locMapAr[l] || l).join(' / ');
+        const employmentTypeArMap: Record<string, string> = { 'Full-time': 'دوام كامل', 'Part-time': 'دوام جزئي' };
+        // Re-resolve "Reports To" live rather than trusting the text snapshotted on the request at
+        // creation time — a Head JD's Arabic title added after the request was raised (or any org
+        // change since) should still show up correctly on the printed document.
+        const liveReportsTo = await resolveReportsToLive(request, jd);
+        const [snapshotEn, snapshotAr] = (request.reportsTo || String(d.reportsTo || '')).trim().split(' / ');
+        const reportsToEn = liveReportsTo?.en || snapshotEn || '';
+        const reportsToAr = liveReportsTo?.ar || snapshotAr || '';
+        const division = request.division || request.department?.division;
         const a: any = (request.prfApprovals as any) || {};
         const pad = (n: number) => String(n).padStart(2, '0');
         const dt = request.createdAt;
@@ -591,18 +743,28 @@ export const generatePrf = async (req: Request, res: Response) => {
         const buffer = generatePersonnelRequisitionDocx({
             dateRequested,
             positionTitle: jd?.title || request.jobTitle || '',
+            positionTitleAr: jd?.titleArabic || '',
             positions: String(request.quantity || 1),
-            division: request.division?.name || request.department?.division?.name || '',
+            division: division?.name || '',
+            divisionAr: division?.nameArabic || '',
             department: request.department?.name || '',
-            reportsTo: (request.reportsTo || String(d.reportsTo || '')).trim(),
+            departmentAr: request.department?.nameArabic || '',
+            reportsTo: reportsToEn || '',
+            reportsToAr: reportsToAr || '',
             placeOfWork,
+            placeOfWorkAr,
             employmentType: request.employmentType || '',
+            employmentTypeAr: request.employmentType ? (employmentTypeArMap[request.employmentType] || '') : '',
             typeOfRequest: request.typeOfRequest || '',
+            typeOfRequestAr: request.typeOfRequest === 'New Position' ? 'وظيفة جديدة' : (request.typeOfRequest === 'Replacement' ? 'إحلال' : ''),
             education: sec('education'),
+            educationAr: secAr('education'),
             experience: sec('experience'),
+            experienceAr: secAr('experience'),
             languageEn: request.languageEn || '',
             languageAr: request.languageAr || '',
             skills: sec('skills'),
+            skillsAr: secAr('skills'),
             preparedBy: request.requester?.fullName || '',
             signatures: {
                 deptHead: a.deptHead?.signature || null,

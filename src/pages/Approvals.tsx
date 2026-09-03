@@ -20,6 +20,20 @@ const STAGE_LABELS: Record<string, string> = {
     DIRECTORATE: 'Directorate',
     GENERAL_MANAGER: 'General Manager',
 };
+// i18n key per approval stage — reuses an existing generic role key where the wording matches
+// exactly (hr_manager, directorate, general_manager), otherwise a stage-specific key since the
+// phrasing here ("Unit Head" vs "Head of Unit", etc.) doesn't always match a generic role label.
+const STAGE_LABEL_KEYS: Record<string, string> = {
+    HEAD_ATTENDANCE: 'role_head_attendance',
+    DIRECT_SUPERVISOR: 'stage_direct_supervisor',
+    HEAD_DEPT_DIVISION: 'stage_head_dept_division',
+    UNIT_HEAD: 'head_of_unit',
+    DEPT_HEAD: 'stage_dept_head',
+    DIVISION_HEAD: 'head_of_division',
+    HR_MANAGER: 'hr_manager',
+    DIRECTORATE: 'directorate',
+    GENERAL_MANAGER: 'general_manager',
+};
 import { employeeService } from '../services/employeeService';
 import { departmentService } from '../services/departmentService';
 import { 
@@ -267,7 +281,14 @@ const Approvals: React.FC = () => {
         <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="bg-gradient-to-br from-[#300a15] to-[#541c2c] text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden border border-[#e3c4a2]/20">
-                <div className="absolute top-0 right-0 p-12 opacity-10 rotate-12">
+                {/* Purely decorative watermark — pointer-events-none is essential here: without it,
+                    this element's own box (288x288px incl. padding) sits ABOVE static siblings like
+                    the tab row below (a positioned element always paints over a non-positioned one,
+                    regardless of DOM order or opacity) and silently swallows clicks on whatever
+                    button falls under it. It used a physical `right-0` too, which in RTL flips the
+                    tab row so the FIRST tab ("Leave Requests") lands exactly under this corner —
+                    that's why only that one tab was ever affected. */}
+                <div className="absolute top-0 end-0 p-12 opacity-10 rotate-12 pointer-events-none">
                     <LayoutDashboard className="w-48 h-48" />
                 </div>
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
@@ -367,10 +388,11 @@ const Approvals: React.FC = () => {
                                                 {(() => {
                                                     // Smart signature: a single approval can fill several printed rows
                                                     // (e.g. you are both the direct manager and the division head).
+                                                    const stageLabel = (s: string) => t(STAGE_LABEL_KEYS[s] || s, { defaultValue: STAGE_LABELS[s] || s });
                                                     const roles = (step.coversStages && step.coversStages.length > 0)
-                                                        ? step.coversStages.map(s => STAGE_LABELS[s] || s)
-                                                        : [STAGE_LABELS[step.stage] || step.stage];
-                                                    return `Awaiting your approval as ${roles.join(' + ')}`;
+                                                        ? step.coversStages.map(stageLabel)
+                                                        : [stageLabel(step.stage)];
+                                                    return t('awaiting_your_approval_as', { defaultValue: 'Awaiting your approval as {{roles}}', roles: roles.join(' + ') });
                                                 })()}
                                             </div>
                                         </div>
@@ -394,7 +416,7 @@ const Approvals: React.FC = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => setGmDocs(prev => { const n = { ...prev }; delete n[step.id]; return n; })}
-                                                            className="ml-auto shrink-0 text-red-300 hover:text-red-200"
+                                                            className="ms-auto shrink-0 text-red-300 hover:text-red-200"
                                                             title={t('remove_file', { defaultValue: 'Remove' })}
                                                         >
                                                             <XCircle className="w-4 h-4" />
@@ -481,22 +503,22 @@ const Approvals: React.FC = () => {
                                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider overflow-x-auto pb-1">
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${req.status !== 'PENDING' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${req.status !== 'PENDING' ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Unit: {(req as any).unitApprovedBy?.fullName || t('pending')}
+                                             {t('unit_colon', { defaultValue: 'Unit:' })} {(req as any).unitApprovedBy?.fullName || t('pending')}
                                          </div>
                                          <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Dept: {(req as any).deptApprovedBy?.fullName || t('pending')}
+                                             {t('dept_colon', { defaultValue: 'Dept:' })} {(req as any).deptApprovedBy?.fullName || t('pending')}
                                          </div>
                                          <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIVISION', 'APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Division: {(req as any).divisionApprovedBy?.fullName || t('pending')}
+                                             {t('division_colon', { defaultValue: 'Division:' })} {(req as any).divisionApprovedBy?.fullName || t('pending')}
                                          </div>
                                          <div className="w-4 h-[1px] bg-[#e3c4a2]/20"></div>
                                          <div className={`flex items-center gap-1 p-1.5 rounded-lg border ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' : 'bg-[#541c2c]/40 text-[#e3c4a2]/50 border-[#e3c4a2]/10'}`}>
                                              <div className={`w-2 h-2 rounded-full ${['APPROVED_BY_DIRECTOR', 'COMPLETED'].includes(req.status) ? 'bg-emerald-500' : 'bg-[#aa7a51]/50'}`}></div>
-                                             Director: {(req as any).directorApprovedBy?.fullName || t('pending')}
+                                             {t('director_colon', { defaultValue: 'Director:' })} {(req as any).directorApprovedBy?.fullName || t('pending')}
                                          </div>
                                      </div>
                                  </div>
@@ -507,7 +529,7 @@ const Approvals: React.FC = () => {
                                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-900/30 hover:bg-emerald-700 hover:scale-105 active:scale-95 transition-all"
                                      >
                                          <Check className="w-5 h-5" />
-                                         Approve
+                                         {t('approve', { defaultValue: 'Approve' })}
                                      </button>
                                      <button
                                          onClick={async () => {
@@ -524,7 +546,7 @@ const Approvals: React.FC = () => {
                                          className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#300a15] text-red-400 border border-red-900/30 px-6 py-3 rounded-2xl font-bold hover:bg-red-950/20 hover:text-red-300 transition-all"
                                      >
                                          <XCircle className="w-5 h-5" />
-                                         Reject
+                                         {t('reject', { defaultValue: 'Reject' })}
                                      </button>
                                  </div>
                              </div>
@@ -614,7 +636,7 @@ const Approvals: React.FC = () => {
                             ))}
 
                             {historyRequests.length === 0 && (
-                                <div className="py-20 text-center glass-card rounded-3xl text-slate-400 italic">No {t('historical_records')} found.</div>
+                                <div className="py-20 text-center glass-card rounded-3xl text-slate-400 italic">{t('no_historical_records_found', { defaultValue: 'No historical records found.' })}</div>
                             )}
                         </div>
                     </div>
@@ -626,7 +648,7 @@ const Approvals: React.FC = () => {
                         <div className="glass-card p-10 rounded-[2.5rem] shadow-xl">
                             <form onSubmit={handleCreateAnnouncement} className="space-y-8">
                                 <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('broadcast_title')}</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('broadcast_title')}</label>
                                     <input 
                                         type="text" 
                                         placeholder={t('important_office_policy')}
@@ -639,7 +661,7 @@ const Approvals: React.FC = () => {
 
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-3">
-                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('target_audience')}</label>
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('target_audience')}</label>
                                         <select 
                                             className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
                                             value={newAnnounce.targetType}
@@ -652,7 +674,7 @@ const Approvals: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-3">
-                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('select_target')}</label>
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('select_target')}</label>
                                         <select 
                                             className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold"
                                             value={newAnnounce.targetId}
@@ -670,7 +692,7 @@ const Approvals: React.FC = () => {
 
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-3">
-                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('expiry_date_optional')}</label>
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('expiry_date_optional')}</label>
                                         <input 
                                             type="date"
                                             className="w-full bg-slate-50 border-none rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-600"
@@ -680,20 +702,20 @@ const Approvals: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-3">
-                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('attach_document')}</label>
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('attach_document')}</label>
                                         <input 
                                             type="file"
-                                            className="w-full bg-slate-50 border-none rounded-2xl p-3 font-bold file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 text-sm text-slate-500"
+                                            className="w-full bg-slate-50 border-none rounded-2xl p-3 font-bold file:me-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 text-sm text-slate-500"
                                             onChange={e => setAttachmentFile(e.target.files?.[0] || null)}
                                         />
                                         {editingAnnouncement && editingAnnouncement.attachmentName && !attachmentFile && (
-                                            <div className="text-xs font-medium text-slate-500 ml-2">Current: {editingAnnouncement.attachmentName}</div>
+                                            <div className="text-xs font-medium text-slate-500 ms-2">{t('current_colon', { defaultValue: 'Current:' })} {editingAnnouncement.attachmentName}</div>
                                         )}
                                     </div>
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">{t('broadcast_message')}</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ms-1">{t('broadcast_message')}</label>
                                     <textarea 
                                         placeholder={t('type_announcement_here')}
                                         className="w-full bg-slate-50 border-none rounded-2xl p-6 min-h-[200px] font-medium leading-relaxed"
@@ -734,7 +756,7 @@ const Approvals: React.FC = () => {
                                                     {ann.expiryDate && (
                                                         <span className="bg-red-50 text-red-600 px-2 py-1 rounded-md flex items-center gap-1">
                                                             <Clock className="w-3 h-3" />
-                                                            Exp: {new Date(ann.expiryDate).toLocaleDateString()}
+                                                            {t('exp_colon', { defaultValue: 'Exp:' })} {new Date(ann.expiryDate).toLocaleDateString()}
                                                         </span>
                                                     )}
                                                 </div>
@@ -755,7 +777,7 @@ const Approvals: React.FC = () => {
                                                 <a href={`${SERVER_URL}${ann.attachmentUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-all">
                                                     <Paperclip className="w-4 h-4" />
                                                     <span className="truncate max-w-[200px]">{ann.attachmentName || t('download_attachment')}</span>
-                                                    <Download className="w-4 h-4 ml-1 opacity-50" />
+                                                    <Download className="w-4 h-4 ms-1 opacity-50" />
                                                 </a>
                                             </div>
                                         )}

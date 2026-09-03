@@ -27,7 +27,6 @@ const SystemLogsPage = lazy(() => import('./pages/admin/SystemLogs'));
 const EvaluationsPage = lazy(() => import('./pages/Evaluations'));
 const EvaluationControlPage = lazy(() => import('./pages/hr/EvaluationControl'));
 const ContractDetailPage = lazy(() => import('./pages/ContractDetail'));
-const ContractManagementPage = lazy(() => import('./pages/ContractManagement'));
 const StaffHubPage = lazy(() => import('./pages/StaffHub'));
 const ExceptionalPerformanceAwardPage = lazy(() => import('./pages/ExceptionalPerformanceAward'));
 const ReportIncidentPage = lazy(() => import('./pages/ReportIncident'));
@@ -103,7 +102,6 @@ function App() {
                   </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_contracts', 'manage_contract_management']} />}>
                     <Route path="/contracts/:id" element={<ContractDetailPage />} />
-                    <Route path="/contract-management" element={<ContractManagementPage />} />
                   </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER']} allowedPermissions={['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards']} />}>
@@ -115,7 +113,7 @@ function App() {
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_personnel_relations']} />}>
                     <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
                     <Route path="/personnel-relations/disciplinary/:caseId" element={<DisciplinaryCaseDetailPage />} />
                     <Route path="/personnel-relations/offboarding/:caseId" element={<OffboardingCaseDetailPage />} />
@@ -133,15 +131,20 @@ function App() {
                     <Route path="/approved-leaves" element={<ApprovedLeavesPage />} />
                   </Route>
                   <Route path="/recruitment" element={<Navigate to="/recruitment/requests" replace />} />
+                  {/* Head-facing stages: request a hire, get it approved. */}
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
                     <Route path="/recruitment/requests" element={<RecruitmentRequestsPage />} />
                     <Route path="/recruitment/new" element={<RecruitmentCreatePage />} />
+                    <Route path="/recruitment/approvals" element={<RecruitmentApprovalsPage />} />
+                  </Route>
+                  {/* HR's own execution pipeline once a request is approved — no head-facing role
+                      here anymore, mirrors the "Recruitment Pipeline" nav group under HR & Personnel. */}
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_recruitment', 'manage_recruitment']} />}>
                     <Route path="/recruitment/positions" element={<PositionsToFillPage />} />
                     <Route path="/recruitment/hiring" element={<HiringListPage />} />
                     <Route path="/recruitment/interviews" element={<InterviewsPage />} />
                     <Route path="/recruitment/offers" element={<JobOffersPage />} />
                     <Route path="/recruitment/onboarding" element={<OnboardingPage />} />
-                    <Route path="/recruitment/approvals" element={<RecruitmentApprovalsPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['manage_evaluation_control']} />}>

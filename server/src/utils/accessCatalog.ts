@@ -125,13 +125,17 @@ export const POSITION_DEFAULTS: Record<string, string[]> = {
         'view_payroll', 'view_time_tracking', 'manage_time_tracking',
         'view_evaluations', 'submit_evaluations', 'view_hr_evaluations', 'manage_evaluation_control',
     ],
-    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'nominate_exceptional_award'],
-    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
-    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
-    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
-    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
-    GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
-    CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'view_personnel_relations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
+    // view_personnel_relations deliberately excluded from every Head/GM/Chairman default below —
+    // no screen honors it alone anymore (each Personnel Relations tab requires its own specific
+    // manage_* permission, which these roles never hold), so it only ever produced a dead-end nav
+    // entry into a section with nothing they could actually do.
+    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'nominate_exceptional_award'],
+    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
+    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
+    GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
+    CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     SUPER_ADMIN: ALL_PERMISSION_IDS,
 };
 

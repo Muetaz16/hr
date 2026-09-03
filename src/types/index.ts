@@ -23,6 +23,13 @@ export const JOB_CATEGORIES = [
 
 export type JobCategory = typeof JOB_CATEGORIES[number];
 
+// i18n key for a job category value — e.g. jobCategoryKey('Administrative Officer') ===
+// 'job_category_administrative_officer'. Used everywhere JOB_CATEGORIES is rendered
+// (JobDescriptionForm, JobDescriptionFields, EmployeeForm) so the label translates instead of
+// always showing the raw English constant, with the constant itself as the t() defaultValue.
+export const jobCategoryKey = (cat: JobCategory): string =>
+    'job_category_' + cat.toLowerCase().replace(/\s+/g, '_');
+
 export const JOB_GRADES = [
     'Trainee',
     'Intern',
@@ -75,6 +82,7 @@ export interface AccessCatalog {
 export interface Unit {
     id: string;
     name: string;
+    nameArabic?: string | null;
     departmentId: string;
     headcount: number;
     _count?: {
@@ -90,11 +98,13 @@ export interface Group {
 export interface Directorate {
     id: string;
     name: string;
+    nameArabic?: string | null;
 }
 
 export interface Division {
     id: string;
     name: string;
+    nameArabic?: string | null;
     directorateId?: string;
     _count?: {
         departments: number;
@@ -105,6 +115,7 @@ export interface Division {
 export interface Department {
     id: string;
     name: string;
+    nameArabic?: string | null;
     groupId: string;
     divisionId?: string;
     isOffice?: boolean;
@@ -130,7 +141,9 @@ export interface JobDescriptionDetails {
 export interface JobDescription {
     id: string;
     title: string;
+    titleArabic?: string | null;
     description?: string;
+    descriptionArabic?: string | null;
     isHead: boolean;
     plannedCount: number;
     jobCategories?: JobCategory[];

@@ -80,6 +80,7 @@ model FunctionalHat {
 model Department {
   id                  String               @id @default(uuid())
   name                String
+  nameArabic          String?
   groupId             String?
   employees           Employee[]
   evaluationPeriods   EvaluationPeriod[]
@@ -95,6 +96,7 @@ model Department {
 model Directorate {
   id          String       @id @default(uuid())
   name        String
+  nameArabic  String?
   divisions   Division[]
   employees   Employee[]
   createdAt   DateTime     @default(now())
@@ -106,6 +108,7 @@ model Directorate {
 model Division {
   id                  String               @id @default(uuid())
   name                String
+  nameArabic          String?
   directorateId       String?
   directorate         Directorate?         @relation(fields: [directorateId], references: [id])
   departments         Department[]
@@ -118,6 +121,7 @@ model Division {
 model Unit {
   id                  String               @id @default(uuid())
   name                String
+  nameArabic          String?
   departmentId        String
   headcount           Int                  @default(0)
   employees           Employee[]
@@ -129,7 +133,9 @@ model Unit {
 model JobDescription {
   id             String       @id @default(uuid())
   title          String
+  titleArabic    String?
   description    String?
+  descriptionArabic String?
   isHead         Boolean      @default(false)
   plannedCount   Int          @default(1)
   jobCategories  String[]     @default([])

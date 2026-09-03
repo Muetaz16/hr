@@ -61,9 +61,11 @@ const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
 const PermissionCheckbox: React.FC<{
     id: string; label: string; checked: boolean; locked?: boolean; sources?: string[];
     onChange: (id: string, checked: boolean) => void;
-}> = ({ id, label, checked, locked = false, sources = [], onChange }) => (
+}> = ({ id, label, checked, locked = false, sources = [], onChange }) => {
+    const { t } = useTranslation();
+    return (
     <label
-        title={locked ? `Granted by: ${sources.join(', ')}` : undefined}
+        title={locked ? t('granted_by', { defaultValue: 'Granted by: {{sources}}', sources: sources.join(', ') }) : undefined}
         className={`flex items-center gap-3 p-2 rounded-xl transition-all border ${locked
             ? 'bg-emerald-50/60 border-emerald-100 cursor-default'
             : checked ? 'bg-white border-indigo-200 shadow-sm cursor-pointer' : 'border-transparent hover:bg-white hover:border-slate-100 cursor-pointer'}`}
@@ -78,9 +80,10 @@ const PermissionCheckbox: React.FC<{
         <span className={`flex-1 text-[11px] font-bold transition-colors uppercase tracking-tight ${locked ? 'text-emerald-700' : checked ? 'text-indigo-700' : 'text-slate-600'}`}>{label}</span>
         {locked && <Lock className="w-3 h-3 text-emerald-500 shrink-0" />}
     </label>
-);
+    );
+};
 
-const inputClass = 'w-full pl-10 pr-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 focus:bg-white focus:border-indigo-200 transition-all font-bold text-slate-800';
+const inputClass = 'w-full ps-10 pe-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 focus:bg-white focus:border-indigo-200 transition-all font-bold text-slate-800';
 const selectClass = 'w-full px-4 py-3 bg-slate-50 border border-transparent rounded-xl focus:ring-2 focus:ring-indigo-100 focus:bg-white focus:border-indigo-200 transition-all font-bold text-slate-800 appearance-none';
 
 const UserForm: React.FC = () => {
@@ -182,9 +185,9 @@ const UserForm: React.FC = () => {
         inheritedSources.set(perm, cur);
     };
     if (formData.role === 'SUPER_ADMIN') {
-        allPermIds.forEach(p => addSource(p, 'Super Admin'));
+        allPermIds.forEach(p => addSource(p, t('role_super_admin', { defaultValue: 'Super Admin' })));
     } else {
-        (catalog?.positionDefaults[formData.role] || []).forEach(p => addSource(p, 'Position'));
+        (catalog?.positionDefaults[formData.role] || []).forEach(p => addSource(p, t('position', { defaultValue: 'Position' })));
         hats.filter(h => formData.functionalHatIds.includes(h.id))
             .forEach(h => h.permissions.forEach(p => addSource(p, h.name)));
     }
@@ -303,14 +306,14 @@ const UserForm: React.FC = () => {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('full_name')}</label>
                             <div className="relative">
-                                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <UserIcon className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input type="text" required value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} className={inputClass} placeholder={t('enter_full_name')} />
                             </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('corporate_email', { defaultValue: 'Login Email' })}</label>
                             <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Mail className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={inputClass} placeholder={t('email_placeholder')} />
                             </div>
                         </div>
@@ -319,7 +322,7 @@ const UserForm: React.FC = () => {
                                 {isEditMode ? t('new_password_optional', { defaultValue: 'New Password (Optional)' }) : t('password')}
                             </label>
                             <div className="relative">
-                                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Key className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input
                                     type="password"
                                     required={!isEditMode}
@@ -347,11 +350,11 @@ const UserForm: React.FC = () => {
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('position_in_hierarchy', { defaultValue: 'Position in the hierarchy' })}</label>
                         <div className="relative">
-                            <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Shield className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <select
                                 value={formData.role}
                                 onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
-                                className={`${selectClass} pl-10`}
+                                className={`${selectClass} ps-10`}
                             >
                                 {POSITION_OPTIONS.map(r => (
                                     <option key={r.value} value={r.value}>{t(`role_${r.value.toLowerCase()}`, { defaultValue: r.labelDefault })}</option>
@@ -471,7 +474,7 @@ const UserForm: React.FC = () => {
                                         type="button"
                                         key={hat.id}
                                         onClick={() => toggleHat(hat.id)}
-                                        className={`text-left p-4 rounded-2xl border transition-all ${on ? 'bg-amber-50/70 border-amber-300 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:border-slate-200'}`}
+                                        className={`text-start p-4 rounded-2xl border transition-all ${on ? 'bg-amber-50/70 border-amber-300 shadow-sm' : 'bg-slate-50/50 border-slate-100 hover:border-slate-200'}`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <span className={`text-sm font-black ${on ? 'text-amber-800' : 'text-slate-700'}`}>{hat.name}</span>
@@ -500,7 +503,7 @@ const UserForm: React.FC = () => {
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('select_employee', { defaultValue: 'Select Employee (Optional)' })}</label>
                         <div className="relative">
-                            <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Briefcase className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <select
                                 value={formData.employeeId}
                                 onChange={(e) => {
@@ -515,7 +518,7 @@ const UserForm: React.FC = () => {
                                         unitId: emp?.unitId || formData.unitId,
                                     });
                                 }}
-                                className={`${selectClass} pl-10`}
+                                className={`${selectClass} ps-10`}
                             >
                                 <option value="">{t('not_associated', { defaultValue: 'Standalone user — not linked to any employee' })}</option>
                                 {linkableEmployees.map(emp => (
@@ -566,7 +569,7 @@ const UserForm: React.FC = () => {
                                     <div className="flex items-center justify-between gap-2">
                                         <h5 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">
                                             {group.title}
-                                            {effActive > 0 && <span className="ml-1.5 text-slate-400">({effActive}/{group.perms.length})</span>}
+                                            {effActive > 0 && <span className="ms-1.5 text-slate-400">({effActive}/{group.perms.length})</span>}
                                         </h5>
                                         {grantable.length > 0 && (
                                             <button type="button" onClick={() => setGroupPermissions(group, !allGranted)} className="text-[9px] font-bold text-indigo-500 hover:text-indigo-700 uppercase tracking-wider">
@@ -594,7 +597,7 @@ const UserForm: React.FC = () => {
                 </section>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 mr-3 mt-0.5 flex-shrink-0" />
+                    <AlertTriangle className="w-5 h-5 text-amber-500 me-3 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                         <p className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">{t('active_environment_warning')}</p>
                         <p className="text-xs text-amber-700 leading-relaxed">
@@ -608,7 +611,7 @@ const UserForm: React.FC = () => {
             {/* Fixed action bar — pinned to the bottom of the content column (right of the
                 sidebar) so Cancel / Save stay visible while scrolling the long form. */}
             <div
-                className="fixed bottom-0 right-0 z-30 px-6 lg:px-10 pb-6 pt-2 pointer-events-none transition-[left] duration-500"
+                className="fixed bottom-0 end-0 z-30 px-6 lg:px-10 pb-6 pt-2 pointer-events-none transition-[left] duration-500"
                 style={{ left: 'var(--sidebar-width, 0px)' }}
             >
                 <div className="max-w-6xl mx-auto flex gap-4 p-4 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl shadow-slate-300/40 pointer-events-auto">

@@ -17,7 +17,7 @@ import EvaluationOverview from './EvaluationOverview';
 // Personnel Relations "evaluations" tab) — drop this component's own outer
 // page padding so the two don't stack.
 const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { currentUser } = useAuth();
     const confirm = useConfirm();
 
@@ -59,7 +59,7 @@ const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             setPeriods(allPeriods);
         } catch (error) {
             console.error('Error enabling period:', error);
-            alert('Failed to enable evaluation period.');
+            alert(t('failed_to_enable_evaluation_period', { defaultValue: 'Failed to enable evaluation period.' }));
         }
     };
 
@@ -91,11 +91,11 @@ const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     };
 
     const getDepartmentName = (id?: string) => {
-        if (!id) return 'All Departments';
+        if (!id) return t('all_departments', { defaultValue: 'All Departments' });
         return departments.find(d => d.id === id)?.name || id;
     };
 
-    if (loading) return <div className="p-6">Loading...</div>;
+    if (loading) return <div className="p-6">{t('loading', { defaultValue: 'Loading...' })}</div>;
 
     return (
         <div className={`${embedded ? '' : 'p-6 '}space-y-8 animate-[fadeIn_0.5s_ease-out]`}>
@@ -119,6 +119,7 @@ const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                             </label>
                             <input
                                 type="month"
+                                lang={i18n.language}
                                 value={selectedMonth}
                                 onChange={(e) => setSelectedMonth(e.target.value)}
                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 focus:bg-white outline-none transition-all"
@@ -147,13 +148,13 @@ const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                         <h2 className="text-base font-bold text-slate-800">{t('active_evaluation_periods')}</h2>
                     </div>
                     <div className="overflow-x-auto flex-1">
-                        <table className="w-full text-left">
+                        <table className="w-full text-start">
                             <thead className="bg-slate-50 text-slate-400">
                                 <tr>
-                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('month')}</th>
-                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('department')}</th>
-                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('status')}</th>
-                                    <th className="px-6 py-3 text-right text-[10px] uppercase tracking-widest font-bold">{t('actions')}</th>
+                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('month')}</th>
+                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('department')}</th>
+                                    <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('status')}</th>
+                                    <th className="px-6 py-3 text-end text-[10px] uppercase tracking-widest font-bold">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -171,24 +172,24 @@ const EvaluationControl: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                                             <td className="px-6 py-4">
                                                 {period.enabled ? (
                                                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-50 text-green-700 border border-green-100">
-                                                        <CheckCircle className="w-3 h-3 mr-1" />
-                                                        Enabled
+                                                        <CheckCircle className="w-3 h-3 me-1" />
+                                                        {t('enabled', { defaultValue: 'Enabled' })}
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                                                        <XCircle className="w-3 h-3 mr-1" />
-                                                        Disabled
+                                                        <XCircle className="w-3 h-3 me-1" />
+                                                        {t('disabled', { defaultValue: 'Disabled' })}
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-end">
                                                 {period.enabled ? (
                                                     <button
                                                         onClick={() => handleDisable(period.id)}
                                                         className="inline-flex items-center text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors text-xs font-bold"
                                                     >
-                                                        <XCircle className="w-4 h-4 mr-1" />
-                                                        Disable
+                                                        <XCircle className="w-4 h-4 me-1" />
+                                                        {t('disable', { defaultValue: 'Disable' })}
                                                     </button>
                                                 ) : (
                                                     <span className="text-xs text-slate-300">—</span>

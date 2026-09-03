@@ -17,14 +17,15 @@ const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
 // Coarse status only — the employee never sees clearance/approval detail, just where their case
-// stands in the process.
-const caseStatus = (c: MyOffboardingCase): { label: string; cls: string } => {
+// stands in the process. Returns an i18n key (translated at the render site, where `t` is in
+// scope) rather than a hardcoded label.
+const caseStatus = (c: MyOffboardingCase): { labelKey: string; defaultLabel: string; cls: string } => {
     switch (c.stage) {
-        case 'RESIGNATION_REQUEST': return { label: 'Pending HR Review', cls: 'bg-slate-100 text-slate-600' };
-        case 'CLEARANCE': return { label: 'Clearance In Progress', cls: 'bg-blue-100 text-blue-800' };
-        case 'SEPARATION_LETTER': return { label: 'Finalizing', cls: 'bg-amber-100 text-amber-800' };
-        case 'CLOSED': return { label: 'Completed', cls: 'bg-emerald-100 text-emerald-800' };
-        default: return { label: c.stage, cls: 'bg-slate-100 text-slate-600' };
+        case 'RESIGNATION_REQUEST': return { labelKey: 'pending_hr_review', defaultLabel: 'Pending HR Review', cls: 'bg-slate-100 text-slate-600' };
+        case 'CLEARANCE': return { labelKey: 'clearance_in_progress', defaultLabel: 'Clearance In Progress', cls: 'bg-blue-100 text-blue-800' };
+        case 'SEPARATION_LETTER': return { labelKey: 'finalizing', defaultLabel: 'Finalizing', cls: 'bg-amber-100 text-amber-800' };
+        case 'CLOSED': return { labelKey: 'completed', defaultLabel: 'Completed', cls: 'bg-emerald-100 text-emerald-800' };
+        default: return { labelKey: c.stage, defaultLabel: c.stage, cls: 'bg-slate-100 text-slate-600' };
     }
 };
 
@@ -231,7 +232,14 @@ const ResignationRequest: React.FC = () => {
                             <p className="text-sm text-slate-400 text-center py-6">{t('you_haven_t_filed_any_cases_yet', { defaultValue: "You haven't filed any cases yet." })}</p>
                         )}
                         {!casesLoading && !!myCases?.length && (
-                            <table className="w-full text-left text-sm">
+                            <table className="w-full text-start text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-100">
+                                        <th className="px-5 py-2 text-start text-[10px] font-black uppercase tracking-wider text-slate-400">{t('reference_number', { defaultValue: 'Reference' })}</th>
+                                        <th className="px-5 py-2 text-start text-[10px] font-black uppercase tracking-wider text-slate-400">{t('date', { defaultValue: 'Date' })}</th>
+                                        <th className="px-5 py-2 text-end text-[10px] font-black uppercase tracking-wider text-slate-400">{t('status', { defaultValue: 'Status' })}</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {myCases.map(c => {
                                         const status = caseStatus(c);
@@ -241,9 +249,9 @@ const ResignationRequest: React.FC = () => {
                                                 <td className="px-5 py-3 text-slate-500 text-xs">
                                                     {(c.resignationFiledAt || c.createdAt).slice(0, 10)}
                                                 </td>
-                                                <td className="px-5 py-3 text-right">
+                                                <td className="px-5 py-3 text-end">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${status.cls}`}>
-                                                        {status.label}
+                                                        {t(status.labelKey, { defaultValue: status.defaultLabel })}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -382,7 +390,7 @@ const ResignationRequest: React.FC = () => {
                             <table className="w-full text-xs border-collapse">
                                 <thead>
                                     <tr>
-                                        <th className="text-left p-1"></th>
+                                        <th className="text-start p-1"></th>
                                         {RATING_OPTIONS.map(r => <th key={r} className="p-1 font-medium text-slate-500">{r.charAt(0) + r.slice(1).toLowerCase()}</th>)}
                                     </tr>
                                 </thead>

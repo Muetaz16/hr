@@ -80,7 +80,7 @@ const GroupsPage: React.FC = () => {
                     onClick={openNewModal}
                     className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                 >
-                    <Plus size={18} className="mr-2" />
+                    <Plus size={18} className="me-2" />
                     {t('add_group')}
                 </button>
             </div>
@@ -89,16 +89,16 @@ const GroupsPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('group_name')}</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                            <th className="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">{t('group_name')}</th>
+                            <th className="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {groups.map((group) => (
                             <tr key={group.id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{group.name}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onClick={() => handleEdit(group)} className="text-indigo-600 hover:text-indigo-900 mr-4">
+                                <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
+                                    <button onClick={() => handleEdit(group)} className="text-indigo-600 hover:text-indigo-900 me-4">
                                         <Edit size={18} />
                                     </button>
                                     <button onClick={() => handleDelete(group.id)} className="text-red-600 hover:text-red-900">

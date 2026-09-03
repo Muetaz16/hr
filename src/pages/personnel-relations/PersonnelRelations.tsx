@@ -64,8 +64,8 @@ import { getRequiredLevels, type EvalLevel } from '../../utils/evaluationHierarc
 import { buildEvaluationBreakdown } from '../../utils/evaluationScoring';
 import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
 import JobDescriptionView from '../../components/JobDescriptionView';
+import SearchSelect, { type SearchOption } from '../../components/SearchSelect';
 import EvaluationControl from '../hr/EvaluationControl';
-import EvaluationsPage from '../Evaluations';
 import EmployeesPage from '../admin/Employees';
 import RewardsTab, { REWARD_TYPE_LABELS } from './RewardsTab';
 
@@ -103,70 +103,6 @@ const TreeBranch = ({ icon: Icon, title, color = 'bg-slate-100 text-slate-600', 
                 {action && <div className="shrink-0">{action}</div>}
             </div>
             {isOpen && <div className="px-4 pb-4 pt-1 border-t border-slate-50">{children}</div>}
-        </div>
-    );
-};
-
-interface SearchOption { value: string; label: string; sub?: string; group?: string }
-
-// A compact searchable dropdown (combobox): shows the selected label, opens a filterable list on
-// click, groups options by `group`, and closes on outside-click. Used for the Employee and Target
-// Position pickers in the Create Internal Transfer modal.
-const SearchSelect: React.FC<{
-    value: string;
-    onChange: (v: string) => void;
-    options: SearchOption[];
-    placeholder?: string;
-    emptyText?: string;
-}> = ({ value, onChange, options, placeholder, emptyText }) => {
-    const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
-    const [query, setQuery] = useState('');
-    const ref = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (!open) return;
-        const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-        document.addEventListener('mousedown', h);
-        return () => document.removeEventListener('mousedown', h);
-    }, [open]);
-    const selected = options.find(o => o.value === value);
-    const q = query.trim().toLowerCase();
-    const filtered = q
-        ? options.filter(o => `${o.label} ${o.sub || ''} ${o.group || ''}`.toLowerCase().includes(q))
-        : options;
-    const groups: Record<string, SearchOption[]> = {};
-    filtered.forEach(o => { const g = o.group || ''; (groups[g] = groups[g] || []).push(o); });
-    const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
-    return (
-        <div className="relative" ref={ref}>
-            <button type="button" onClick={() => setOpen(o => !o)}
-                className="w-full p-2 border border-[#511d29]/20 bg-white text-start flex items-center justify-between gap-2">
-                <span className={`truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>{selected ? selected.label : (placeholder || t('select_ellipsis', { defaultValue: 'Select…' }))}</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-            </button>
-            {open && (
-                <div className="absolute z-50 mt-1 w-full bg-white border border-[#511d29]/20 shadow-xl rounded-lg max-h-64 overflow-auto">
-                    <div className="sticky top-0 bg-white p-2 border-b border-slate-100">
-                        <div className="relative">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                            <input autoFocus type="text" value={query} onChange={e => setQuery(e.target.value)}
-                                placeholder={t('search_ellipsis', { defaultValue: 'Search…' })} className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded text-xs" />
-                        </div>
-                    </div>
-                    {filtered.length === 0 && <div className="px-3 py-4 text-center text-slate-400 text-xs">{emptyText || t('no_matches', { defaultValue: 'No matches' })}</div>}
-                    {groupKeys.map(g => (
-                        <div key={g}>
-                            {g && <div className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 sticky top-[49px]">{g}</div>}
-                            {groups[g].map(o => (
-                                <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
-                                    className={`w-full text-start px-3 py-2 text-xs hover:bg-[#511d29]/5 ${o.value === value ? 'bg-[#511d29]/10 font-black text-[#511d29]' : 'text-slate-600'}`}>
-                                    {o.label}{o.sub ? <span className="text-slate-400 font-normal"> · {o.sub}</span> : null}
-                                </button>
-                            ))}
-                        </div>
-                    ))}
-                </div>
-            )}
         </div>
     );
 };
@@ -263,10 +199,12 @@ const PersonnelRelations: React.FC = () => {
         'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
         'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
         'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER'], perms: ['manage_promotions'] },
-        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], perms: ['manage_rewards', 'nominate_exceptional_award', 'approve_gm'] },
+        // Head/GM roles removed — RewardsTab.tsx gates every real action on manage_rewards, which
+        // only SUPER_ADMIN/HR_MANAGER/PERSONNEL ever hold; Heads had no actionable use for this tab.
+        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
         'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
         'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
-        'evaluations': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], perms: ['manage_evaluation_control', 'view_evaluations'] },
+        'evaluations': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_evaluation_control'] },
         'employee-control': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_employees', 'manage_employees'] },
     };
     const tabAccess = TAB_ACCESS[activeTab];
@@ -1740,10 +1678,9 @@ const PersonnelRelations: React.FC = () => {
             {activeTab === 'evaluations' && (
                 canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['manage_evaluation_control']) ? (
                     // HR/Admin: open/close the evaluation window, monitor & delete submitted evaluations.
+                    // Managers who fill in evaluations for their own team use the standalone /evaluations
+                    // screen (see the "Evaluations" nav item) instead of this HR-only control panel.
                     <EvaluationControl embedded />
-                ) : canAccess(currentUser, ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], ['view_evaluations']) ? (
-                    // Managers: fill in evaluations for the employees under them.
-                    <EvaluationsPage />
                 ) : (
                     <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
                         {t('no_permission_to_view_evaluation_controls', { defaultValue: "You don't have permission to view evaluation controls." })}
@@ -1913,6 +1850,7 @@ const PersonnelRelations: React.FC = () => {
                             <User className="w-3.5 h-3.5" /> {t('employee', { defaultValue: 'Employee' })} <span className="text-red-500">*</span>
                         </label>
                         <SearchSelect
+                            variant="maroon"
                             value={pafForm.employeeId}
                             onChange={(v) => setPafForm(prev => ({ ...prev, employeeId: v }))}
                             placeholder={t('select_employee_dash', { defaultValue: '— Select employee —' })}
@@ -1954,6 +1892,7 @@ const PersonnelRelations: React.FC = () => {
                         <div>
                             <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">{t('position_to_move_into', { defaultValue: 'Position to move into' })}</span>
                             <SearchSelect
+                                variant="maroon"
                                 value={pafForm.newJobDescriptionId}
                                 onChange={selectJd}
                                 placeholder={t('select_the_position_to_move_into_dash', { defaultValue: '— Select the position to move into —' })}
@@ -2057,6 +1996,7 @@ const PersonnelRelations: React.FC = () => {
                             <User className="w-3.5 h-3.5" /> {t('employee', { defaultValue: 'Employee' })} <span className="text-red-500">*</span>
                         </label>
                         <SearchSelect
+                            variant="maroon"
                             value={icForm.employeeId}
                             onChange={(v) => setIcForm(prev => ({ ...prev, employeeId: v }))}
                             placeholder={t('select_employee_dash', { defaultValue: '— Select employee —' })}

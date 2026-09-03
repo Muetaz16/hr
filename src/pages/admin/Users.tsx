@@ -82,7 +82,7 @@ const UsersPage: React.FC = () => {
                 {isOpen && (
                     <>
                         <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-                        <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-20 max-h-64 overflow-y-auto animate-in zoom-in-95 duration-200">
+                        <div className="absolute top-full start-0 end-0 mt-2 p-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-20 max-h-64 overflow-y-auto animate-in zoom-in-95 duration-200">
                             <div className="flex items-center justify-between p-2 mb-1 border-b border-slate-50">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
                                 <button
@@ -105,7 +105,7 @@ const UsersPage: React.FC = () => {
                                 </div>
                             ))}
                             {options.length === 0 && (
-                                <div className="p-4 text-center text-xs text-slate-400 italic">No options available</div>
+                                <div className="p-4 text-center text-xs text-slate-400 italic">{t('no_options_available', { defaultValue: 'No options available' })}</div>
                             )}
                         </div>
                     </>
@@ -191,7 +191,7 @@ const UsersPage: React.FC = () => {
                         onClick={() => navigate('/users/new')}
                         className="flex items-center px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all text-sm group"
                     >
-                        <ShieldAlert size={18} className="mr-2 group-hover:rotate-12 transition-transform" />
+                        <ShieldAlert size={18} className="me-2 group-hover:rotate-12 transition-transform" />
                         {t('register_system_user')}
                     </button>
                 </div>
@@ -204,13 +204,13 @@ const UsersPage: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <input
                                     type="text"
                                     placeholder={t('query_identity_email')}
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10 pr-4 py-2 bg-white border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-100 transition-all w-full sm:w-80"
+                                    className="ps-10 pe-4 py-2 bg-white border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-slate-100 transition-all w-full sm:w-80"
                                 />
                             </div>
                         </div>
@@ -261,12 +261,12 @@ const UsersPage: React.FC = () => {
                                 { id: 'EMPLOYEE', name: t('role_employee') },
                                 { id: 'HEAD_UNIT', name: t('role_head_unit') },
                                 { id: 'HEAD_DEPARTMENT', name: t('role_head_department') },
-                                { id: 'HEAD_OFFICE', name: 'Head of Office' },
-                                { id: 'HEAD_DIVISION', name: 'Head of Division' },
+                                { id: 'HEAD_OFFICE', name: t('role_head_office', { defaultValue: 'Head of Office' }) },
+                                { id: 'HEAD_DIVISION', name: t('role_head_division', { defaultValue: 'Head of Division' }) },
                                 { id: 'HEAD_DIRECTOR', name: t('role_head_director') },
                                 { id: 'HR_MANAGER', name: t('role_hr_manager') },
-                                { id: 'GENERAL_MANAGER', name: 'General Manager' },
-                                { id: 'CHAIRMAN', name: 'Chairman' },
+                                { id: 'GENERAL_MANAGER', name: t('role_general_manager', { defaultValue: 'General Manager' }) },
+                                { id: 'CHAIRMAN', name: t('role_chairman', { defaultValue: 'Chairman' }) },
                                 { id: 'PERSONNEL', name: t('role_personnel', { defaultValue: 'Personnel' }) }
                             ]}
                             selected={selectedRoles}
@@ -284,7 +284,7 @@ const UsersPage: React.FC = () => {
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-start">
                         <thead>
                             <tr className="bg-slate-50/50 border-b border-slate-100">
                                 <th className="px-6 py-4 w-10">
@@ -301,9 +301,9 @@ const UsersPage: React.FC = () => {
                                         }}
                                     />
                                 </th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('identity_authority')}</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-start">{t('identity_authority')}</th>
                                 <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">{t('privileges')}</th>
-                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">{t('settings')}</th>
+                                <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-end">{t('settings')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -328,16 +328,16 @@ const UsersPage: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-5 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${userTheme.gradient} flex items-center justify-center text-white font-black text-sm mr-4 shadow-md group-hover:scale-110 transition-transform`}>
+                                                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${userTheme.gradient} flex items-center justify-center text-white font-black text-sm me-4 shadow-md group-hover:scale-110 transition-transform`}>
                                                     {(user.fullName || 'U').charAt(0)}
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-slate-800 group-hover:text-slate-900">{user.fullName || t('unknown_user')}</p>
                                                     <div className="flex items-center text-[10px] text-slate-400 font-bold tracking-tight mt-0.5">
-                                                        <span className="mr-2 text-indigo-500 uppercase">{user.email}</span>
+                                                        <span className="me-2 text-indigo-500 uppercase">{user.email}</span>
                                                         {user.employeeId && (
                                                             <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded flex items-center">
-                                                                <Briefcase size={10} className="mr-1" /> Linked
+                                                                <Briefcase size={10} className="me-1" /> {t('linked', { defaultValue: 'Linked' })}
                                                             </span>
                                                         )}
                                                     </div>
@@ -347,7 +347,7 @@ const UsersPage: React.FC = () => {
                                         <td className="px-8 py-5">
                                             <div className="flex flex-col items-center gap-1.5">
                                                 <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${userTheme.badge} ring-1 ring-current ring-opacity-10`}>
-                                                    <Shield className="w-3 h-3 mr-1" /> {(user.role || 'NA').replace(/_/g, ' ')}
+                                                    <Shield className="w-3 h-3 me-1" /> {(user.role || 'NA').replace(/_/g, ' ')}
                                                 </div>
                                                 {(user.functionalHatIds || []).length > 0 && (
                                                     <div className="flex flex-wrap justify-center gap-1">
@@ -360,7 +360,7 @@ const UsersPage: React.FC = () => {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-8 py-5 text-right">
+                                        <td className="px-8 py-5 text-end">
                                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                 <button onClick={() => navigate(`/users/${user.id}/edit`)} className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm">
                                                     <Edit size={16} />
@@ -370,7 +370,7 @@ const UsersPage: React.FC = () => {
                                                 </button>
                                             </div>
                                             <div className="group-hover:hidden text-slate-300">
-                                                <MoreVertical size={16} className="ml-auto" />
+                                                <MoreVertical size={16} className="ms-auto" />
                                             </div>
                                         </td>
                                     </tr>

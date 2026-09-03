@@ -24,9 +24,9 @@ export const getDepartments = async (req: Request, res: Response) => {
 
 export const createDepartment = async (req: Request, res: Response) => {
     try {
-        const { id, name, groupId, divisionId, isOffice, positionFactor } = req.body;
+        const { id, name, nameArabic, groupId, divisionId, isOffice, positionFactor } = req.body;
 
-        const data: any = { name, groupId, divisionId, isOffice: !!isOffice, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 };
+        const data: any = { name, nameArabic: nameArabic || null, groupId, divisionId, isOffice: !!isOffice, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 };
         if (id) data.id = id;
 
         const department = await prisma.department.create({
@@ -51,10 +51,10 @@ export const deleteDepartment = async (req: Request, res: Response) => {
 export const updateDepartment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, groupId, divisionId, isOffice, positionFactor } = req.body;
+        const { name, nameArabic, groupId, divisionId, isOffice, positionFactor } = req.body;
         const department = await prisma.department.update({
             where: { id },
-            data: { name, groupId, divisionId, isOffice: !!isOffice, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
+            data: { name, nameArabic: nameArabic || null, groupId, divisionId, isOffice: !!isOffice, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
         });
         res.json(department);
     } catch (error) {
@@ -133,9 +133,9 @@ export const getDivisions = async (req: Request, res: Response) => {
 
 export const createDivision = async (req: Request, res: Response) => {
     try {
-        const { id, name, directorateId, positionFactor } = req.body;
+        const { id, name, nameArabic, directorateId, positionFactor } = req.body;
 
-        const data: any = { name, directorateId: directorateId || undefined, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 };
+        const data: any = { name, nameArabic: nameArabic || null, directorateId: directorateId || undefined, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 };
         if (id) data.id = id;
 
         const division = await prisma.division.create({
@@ -150,10 +150,10 @@ export const createDivision = async (req: Request, res: Response) => {
 export const updateDivision = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, directorateId, positionFactor } = req.body;
+        const { name, nameArabic, directorateId, positionFactor } = req.body;
         const division = await prisma.division.update({
             where: { id },
-            data: { name, directorateId: directorateId || undefined, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
+            data: { name, nameArabic: nameArabic || null, directorateId: directorateId || undefined, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
         });
         res.json(division);
     } catch (error) {

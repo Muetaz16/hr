@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PizZip from 'pizzip';
 import { EMU_PER_INCH, pngSize, fitEmu, dataUrlToPng, drawingRun } from './docxImage';
+import { textRuns, cellText, setCell } from './docxFormHelpers';
 
 // The blank bilingual "Personnel Requisition Form" (PRF) lives in the app's public folder.
 // We fill the requisition's details into the correct table cells (located by label) and embed
@@ -18,49 +19,39 @@ const resolveTemplate = (): string => {
     throw new Error(`Personnel requisition template (public/${TEMPLATE_NAME}) was not found.`);
 };
 
-const escapeXml = (v: string): string =>
-    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const RPR = `<w:rPr><w:rFonts w:cs="Montserrat"/><w:color w:val="000000"/></w:rPr>`;
-const textRuns = (value: string): string =>
-    value.split(/\r?\n/).map((line, i) =>
-        `<w:r>${RPR}${i > 0 ? '<w:br/>' : ''}<w:t xml:space="preserve">${escapeXml(line)}</w:t></w:r>`
-    ).join('');
-
 const SIG_MAX_W_EMU = Math.round(1.2 * EMU_PER_INCH);
 const SIG_MAX_H_EMU = Math.round(0.4 * EMU_PER_INCH);
 
-const cellText = (cell: string): string =>
-    [...cell.matchAll(/<w:t(?: [^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m => m[1]).join('').replace(/\s+/g, ' ').trim();
-
-// Rebuild a cell with a single centered paragraph holding the given runs.
-const setCell = (cell: string, runs: string): string => {
-    const open = (cell.match(/^<w:tc\b[^>]*>/) || ['<w:tc>'])[0];
-    const tcPr = (cell.match(/<w:tcPr>[\s\S]*?<\/w:tcPr>/) || [''])[0];
-    let pPr = (cell.match(/<w:pPr>[\s\S]*?<\/w:pPr>/) || [''])[0];
-    if (pPr) {
-        pPr = pPr.replace(/<w:jc\b[^>]*\/>/, '').replace('</w:pPr>', '<w:jc w:val="center"/></w:pPr>');
-    } else {
-        pPr = '<w:pPr><w:jc w:val="center"/></w:pPr>';
-    }
-    return `${open}${tcPr}<w:p>${pPr}${runs}</w:p></w:tc>`;
-};
+// Only used for the Date Requested placeholder's narrow in-place regex substitution below (which
+// preserves that run's own existing formatting rather than rebuilding the cell via textRuns/setCell).
+const escapeXml = (v: string): string =>
+    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export interface PrfData {
     dateRequested: string;
     positionTitle: string;
+    positionTitleAr?: string;
     positions: string;
     division: string;
+    divisionAr?: string;
     department: string;
+    departmentAr?: string;
     reportsTo: string;
+    reportsToAr?: string;
     placeOfWork: string;
+    placeOfWorkAr?: string;
     employmentType: string;
+    employmentTypeAr?: string;
     typeOfRequest: string;
+    typeOfRequestAr?: string;
     education: string;
+    educationAr?: string;
     experience: string;
+    experienceAr?: string;
     languageEn: string;
     languageAr: string;
     skills: string;
+    skillsAr?: string;
     preparedBy: string;
     signatures?: {
         deptHead?: string | null;
@@ -85,28 +76,38 @@ export const generatePersonnelRequisitionDocx = (data: PrfData): Buffer => {
         for (let i = 0; i < texts.length; i++) if (texts[i].includes(label)) return i;
         return -1;
     };
+    // 7pt (14 half-points) — matches the template's own row-label font size.
+    const VALUE_SIZE_HALF_POINTS = 14;
     const fillAt = (index: number, value: string) => {
         if (!value || index < 0 || index >= cells.length) return;
-        replacements[index] = setCell(replacements[index] ?? cells[index], textRuns(value));
+        replacements[index] = setCell(replacements[index] ?? cells[index], textRuns(value, VALUE_SIZE_HALF_POINTS));
     };
     const fillAfter = (label: string, value: string, offset = 1) => {
         const li = findLabel(label);
         if (li >= 0) fillAt(li + offset, value);
     };
+    // Each field row now carries two value cells between its English and Arabic labels
+    // (the template was updated to hold both languages side by side) — fill both.
+    const fillPair = (label: string, en: string, ar?: string) => {
+        const li = findLabel(label);
+        if (li < 0) return;
+        fillAt(li + 1, en);
+        fillAt(li + 2, ar || '');
+    };
 
-    fillAfter('Position Title:', data.positionTitle);
+    fillPair('Position Title:', data.positionTitle, data.positionTitleAr);
     fillAfter('No. of Positions Required:', data.positions);
-    fillAfter('Division', data.division);
-    fillAfter('Department', data.department);
-    fillAfter('Reports To:', data.reportsTo);
-    fillAfter('Place of Work:', data.placeOfWork);
-    fillAfter('Employment Type:', data.employmentType);
-    fillAfter('Type of Request:', data.typeOfRequest);
-    fillAfter('Educational Background', data.education);
-    fillAfter('Experience Required', data.experience);
+    fillPair('Division', data.division, data.divisionAr);
+    fillPair('Department', data.department, data.departmentAr);
+    fillPair('Reports To:', data.reportsTo, data.reportsToAr);
+    fillPair('Place of Work:', data.placeOfWork, data.placeOfWorkAr);
+    fillPair('Employment Type:', data.employmentType, data.employmentTypeAr);
+    fillPair('Type of Request:', data.typeOfRequest, data.typeOfRequestAr);
+    fillPair('Educational Background', data.education, data.educationAr);
+    fillPair('Experience Required', data.experience, data.experienceAr);
     fillAfter('English Language', data.languageEn, 4); // value sits one row below the label
     fillAfter('Arabic Language', data.languageAr, 4);
-    fillAfter('Skills and Competencies Required', data.skills);
+    fillPair('Skills and Competencies Required', data.skills, data.skillsAr);
     fillAfter('Prepared by:', data.preparedBy);
 
     // Date Requested — replace the pre-printed 20__/__/__ placeholder.
@@ -116,7 +117,7 @@ export const generatePersonnelRequisitionDocx = (data: PrfData): Buffer => {
             const ti = li + 1;
             const cell = replacements[ti] ?? cells[ti];
             const replaced = cell.replace(/(<w:t(?: [^>]*)?>)\s*20[_\s]*\/[_\s]*\/[_\s]*(<\/w:t>)/, `$1${escapeXml(data.dateRequested)}$2`);
-            replacements[ti] = replaced !== cell ? replaced : setCell(cell, textRuns(data.dateRequested));
+            replacements[ti] = replaced !== cell ? replaced : setCell(cell, textRuns(data.dateRequested, VALUE_SIZE_HALF_POINTS));
         }
     }
 

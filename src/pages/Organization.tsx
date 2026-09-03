@@ -13,8 +13,21 @@ import { toast } from 'sonner';
 import Modal from '../components/Modal';
 import JobDescriptionView from '../components/JobDescriptionView';
 
+// Prefer the Arabic name when the UI is in Arabic and one has been entered, falling back to the
+// English name otherwise — same convention as PersonnelRelations.tsx's own displayName helper for
+// employees (fullName/fullNameArabic). Works for any org entity (Department/Division/Unit/Directorate)
+// since they all share the same name/nameArabic shape.
+const orgDisplayName = (isArabic: boolean) => (entity?: { name?: string; nameArabic?: string | null } | null): string =>
+    (isArabic && entity?.nameArabic?.trim()) ? entity.nameArabic! : (entity?.name || '');
+
+const empDisplayName = (isArabic: boolean) => (emp?: { fullName?: string; fullNameArabic?: string | null } | null): string =>
+    (isArabic && emp?.fullNameArabic?.trim()) ? emp.fullNameArabic! : (emp?.fullName || '');
+
 const Organization: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const isArabic = i18n.language?.startsWith('ar');
+    const nameOf = orgDisplayName(isArabic);
+    const empNameOf = empDisplayName(isArabic);
     const { currentUser } = useAuth();
     const [myRecord, setMyRecord] = useState<any>(null);
     const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -133,8 +146,12 @@ const Organization: React.FC = () => {
                 </div>
             </div>
 
-            {/* Tree Section */}
-            <section className="relative overflow-x-auto custom-scrollbar bg-white py-12 px-4 rounded-xl border-2 border-[#511d29]/10 shadow-sm">
+            {/* Tree Section — pinned to dir="ltr" regardless of the app's active language. This is a
+                structural diagram, not a text-flow layout: every column/connector below is built with
+                physical left/right offsets (pl-/pr-/left-0/right-0), so it only renders correctly in a
+                fixed left-to-right box model. Individual Arabic name spans still get their own dir="rtl"
+                so the script itself reads correctly within that fixed structure. */}
+            <section dir="ltr" className="relative overflow-x-auto custom-scrollbar bg-white py-12 px-4 rounded-xl border-2 border-[#511d29]/10 shadow-sm">
 
                 <div className="relative flex flex-col items-center max-w-[1200px] mx-auto">
 
@@ -151,7 +168,7 @@ const Organization: React.FC = () => {
                             <div className="flex-1 p-3 text-start">
                                 <p className="text-[8px] sm:text-[9px] md:text-[10px] font-black text-[#511d29]/70 uppercase tracking-widest mb-1">{t('top_leadership', { defaultValue: 'Top Leadership' })}</p>
                                 <h4 className="text-xs sm:text-sm font-black text-[#511d29] tracking-tight leading-tight">
-                                    {topLeader ? topLeader.fullName : t('chairman_general_manager', { defaultValue: 'Chairman & General Manager' })}
+                                    {topLeader ? empNameOf(topLeader) : t('chairman_general_manager', { defaultValue: 'Chairman & General Manager' })}
                                 </h4>
                                 {topLeader && (
                                     <p className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-[#511d29]/60 uppercase tracking-widest mt-0.5">
@@ -176,7 +193,7 @@ const Organization: React.FC = () => {
                                         {leftOffice && (
                                             <>
                                                 <TreeNode
-                                                    title={leftOffice.name}
+                                                    title={nameOf(leftOffice)}
                                                     subtitle={t('direct_office', { defaultValue: 'Direct Office' })}
                                                     badge={leftOffice.name.substring(0, 2).toUpperCase()}
                                                     isSelected={selectedEntity?.id === leftOffice.id && selectedEntity?.type === 'OFFICE'}
@@ -192,7 +209,7 @@ const Organization: React.FC = () => {
                                             <>
                                                 <div className="absolute left-0 top-1/2 w-3 sm:w-8 h-[2px] bg-[#511d29] -translate-y-1/2"></div>
                                                 <TreeNode
-                                                    title={rightOffice.name}
+                                                    title={nameOf(rightOffice)}
                                                     subtitle={t('direct_office', { defaultValue: 'Direct Office' })}
                                                     badge={rightOffice.name.substring(0, 2).toUpperCase()}
                                                     isSelected={selectedEntity?.id === rightOffice.id && selectedEntity?.type === 'OFFICE'}
@@ -227,7 +244,7 @@ const Organization: React.FC = () => {
                                         <div key={`dir-${dir.id}`} className="flex flex-col items-center relative min-w-[12rem] sm:min-w-[14rem] md:min-w-[16rem]">
                                             <div className="absolute top-[-16px] w-[2px] h-[16px] bg-[#511d29]"></div>
                                             <TreeNode
-                                                title={dir.name}
+                                                title={nameOf(dir)}
                                                 subtitle={t('directorate', { defaultValue: 'Directorate' })}
                                                 badge={dir.name.substring(0, 2).toUpperCase()}
                                                 isSelected={isSelected}
@@ -246,7 +263,7 @@ const Organization: React.FC = () => {
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-[8px] sm:text-[9px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_directorate', { defaultValue: 'Head of Directorate' })}</p>
-                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headDir.fullName}</p>
+                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{empNameOf(headDir)}</p>
                                                         </div>
                                                     </button>
                                                 );
@@ -270,7 +287,7 @@ const Organization: React.FC = () => {
                                                                     <div className="absolute top-[-16px] w-[2px] h-[16px] bg-[#511d29]"></div>
                                                                     <div className="w-48 sm:w-56 flex flex-col gap-2">
                                                                         <TreeNode
-                                                                            title={div.name}
+                                                                            title={nameOf(div)}
                                                                             subtitle={t('division', { defaultValue: 'Division' })}
                                                                             badge={div.name.substring(0, 2).toUpperCase()}
                                                                             isSelected={isDivSelected}
@@ -286,7 +303,7 @@ const Organization: React.FC = () => {
                                                                                         </div>
                                                                                         <div className="flex-1 min-w-0">
                                                                                             <p className="text-[8px] sm:text-[10px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_division', { defaultValue: 'Head of Division' })}</p>
-                                                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{headOfDivision.fullName}</p>
+                                                                                            <p className="text-[10px] sm:text-xs font-bold text-[#511d29] truncate">{empNameOf(headOfDivision)}</p>
                                                                                         </div>
                                                                                     </button>
                                                                                 );
@@ -316,7 +333,7 @@ const Organization: React.FC = () => {
                                 {allDivisions.filter(d => !d.directorateId).map(div => (
                                     <TreeNode
                                         key={`udiv-${div.id}`}
-                                        title={div.name}
+                                        title={nameOf(div)}
                                         subtitle={t('division', { defaultValue: 'Division' })}
                                         badge={div.name.substring(0, 2).toUpperCase()}
                                         isSelected={selectedEntity?.id === div.id && selectedEntity?.type === 'DIVISION'}
@@ -339,7 +356,7 @@ const Organization: React.FC = () => {
                                             <div className="text-center border-b-2 border-[#511d29]/10 pb-4">
                                                 <h3 className="text-2xl font-black text-[#511d29] tracking-tight uppercase">{t('units_in_office', { defaultValue: 'Units in Office' })}</h3>
                                             </div>
-                                            <UnitGrid units={officeUnits} allEmployees={allEmployees} setSelectedEmployee={setSelectedEmployee} directEmployees={directEmps} staffPlanFor={staffPlanFor} />
+                                            <UnitGrid units={officeUnits} allEmployees={allEmployees} setSelectedEmployee={setSelectedEmployee} directEmployees={directEmps} staffPlanFor={staffPlanFor} nameOf={nameOf} empNameOf={empNameOf} />
                                         </div>
                                     );
                                 }
@@ -365,7 +382,7 @@ const Organization: React.FC = () => {
                                                                 </div>
                                                                 <div className="flex-1">
                                                                     <p className="text-[10px] font-black uppercase text-[#511d29]/60 tracking-widest">{t('department', { defaultValue: 'Department' })}</p>
-                                                                    <h4 className="text-lg font-bold text-[#511d29]">{dept.name}</h4>
+                                                                    <h4 className="text-lg font-bold text-[#511d29]">{nameOf(dept)}</h4>
                                                                     {(() => {
                                                                         const plan = staffPlanFor('departmentId', dept.id);
                                                                         if (plan.planned === 0) return null;
@@ -386,7 +403,7 @@ const Organization: React.FC = () => {
                                                                                 </div>
                                                                                 <div className="min-w-0">
                                                                                     <p className="text-[8px] font-black text-[#511d29]/60 uppercase tracking-widest leading-none mb-0.5">{t('head_of_department', { defaultValue: 'Head of Department' })}</p>
-                                                                                    <p className="text-[10px] font-bold text-[#511d29] truncate max-w-[120px]">{headOfDept.fullName}</p>
+                                                                                    <p className="text-[10px] font-bold text-[#511d29] truncate max-w-[120px]">{empNameOf(headOfDept)}</p>
                                                                                 </div>
                                                                             </button>
                                                                         );
@@ -394,7 +411,7 @@ const Organization: React.FC = () => {
                                                                     return null;
                                                                 })()}
                                                             </div>
-                                                            <UnitGrid units={deptUnits} allEmployees={allEmployees} setSelectedEmployee={setSelectedEmployee} directEmployees={directEmps} staffPlanFor={staffPlanFor} />
+                                                            <UnitGrid units={deptUnits} allEmployees={allEmployees} setSelectedEmployee={setSelectedEmployee} directEmployees={directEmps} staffPlanFor={staffPlanFor} nameOf={nameOf} empNameOf={empNameOf} />
                                                         </div>
                                                     )
                                                 })}
@@ -420,7 +437,7 @@ const Organization: React.FC = () => {
 
                         <div className="w-full space-y-6">
                             <div className="text-center space-y-1">
-                                <h4 className="text-2xl font-black text-[#511d29] tracking-tight">{selectedEmployee.fullName}</h4>
+                                <h4 className="text-2xl font-black text-[#511d29] tracking-tight">{empNameOf(selectedEmployee)}</h4>
                             </div>
 
                             <div className="p-5 bg-[#f5ebd9]/50 border border-[#511d29]/20 flex items-center gap-4">
@@ -472,7 +489,7 @@ const TreeNode = ({ title, subtitle, badge, isSelected, onClick }: any) => (
     </button>
 );
 
-const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = [], staffPlanFor }: any) => {
+const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = [], staffPlanFor, nameOf, empNameOf }: any) => {
     const { t } = useTranslation();
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -483,7 +500,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                     <div key={unit.id} className="bg-[#f5ebd9] p-4 border border-[#511d29]/20 relative">
                         <div className="absolute top-0 start-0 w-1 h-full bg-[#511d29]"></div>
                         <div className="flex items-center justify-between mb-3 ps-2">
-                            <h5 className="font-bold text-[#511d29] text-sm uppercase tracking-widest">{unit.name}</h5>
+                            <h5 className="font-bold text-[#511d29] text-sm uppercase tracking-widest">{nameOf(unit)}</h5>
                             {plan && plan.planned > 0 && (
                                 <span className="text-[10px] font-black uppercase tracking-widest">
                                     <span className={plan.current >= plan.planned ? 'text-red-600' : 'text-emerald-700'}>{plan.current}</span>
@@ -498,7 +515,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                                         {c.fullName[0].toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[11px] font-bold text-[#511d29] truncate">{c.fullName}</p>
+                                        <p className="text-[11px] font-bold text-[#511d29] truncate">{empNameOf(c)}</p>
                                     </div>
                                 </button>
                             ))}
@@ -510,8 +527,8 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
 
             {directEmployees && directEmployees.length > 0 && (
                 <div className="bg-white p-4 border border-[#511d29]/20 relative shadow-sm md:col-span-2">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                    <h5 className="font-bold text-[#511d29] text-sm mb-3 uppercase tracking-widest pl-2">{t('direct_employees', { defaultValue: 'Direct Employees' })}</h5>
+                    <div className="absolute top-0 start-0 w-1 h-full bg-amber-500"></div>
+                    <h5 className="font-bold text-[#511d29] text-sm mb-3 uppercase tracking-widest ps-2">{t('direct_employees', { defaultValue: 'Direct Employees' })}</h5>
                     <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
                         {directEmployees.map((c: any) => (
                             <button key={c.id} onClick={() => setSelectedEmployee(c)} className="w-full flex items-center gap-2 p-1.5 border border-transparent hover:border-[#511d29]/30 bg-[#f5ebd9]/50 transition-all text-start">
@@ -519,7 +536,7 @@ const UnitGrid = ({ units, allEmployees, setSelectedEmployee, directEmployees = 
                                     {c.fullName[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-bold text-[#511d29] truncate">{c.fullName}</p>
+                                    <p className="text-[11px] font-bold text-[#511d29] truncate">{empNameOf(c)}</p>
                                 </div>
                             </button>
                         ))}

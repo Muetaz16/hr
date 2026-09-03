@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { recruitmentService } from '../services/recruitmentService';
 import { SERVER_URL } from '../services/apiClient';
-import { departmentService } from '../services/departmentService';
+import { departmentService, divisionService } from '../services/departmentService';
 import { unitService } from '../services/unitService';
 import { jobDescriptionService } from '../services/jobDescriptionService';
 import { employeeService } from '../services/employeeService';
-import type { RecruitmentRequest, Department, Unit, JobDescription } from '../types';
+import type { RecruitmentRequest, Department, Division, Unit, JobDescription } from '../types';
 import {
     UserPlus, Clock, CheckCircle2, XCircle, Plus, Building2, Briefcase,
     Trash2, Search, User as UserIcon, FileText, LayoutList, ArrowLeft
@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useConfirm } from '../components/ConfirmDialog';
 import JobDescriptionFields, { emptyJDDetails, JD_SECTIONS, type JDFormValue } from '../components/JobDescriptionFields';
 import { canAccess } from '../utils/access';
+import { resolveReportsTo } from '../utils/reportsTo';
 
 const emptyJDForm = (): JDFormValue => ({
     title: '', description: '', isHead: false, plannedCount: 1,
@@ -44,11 +45,17 @@ const STATUS_LABELS: Record<string, string> = {
 
 const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'create' }> = ({ mode = 'requests' }) => {
     const { currentUser } = useAuth();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const isArabic = i18n.language?.startsWith('ar');
+    // Prefer the Arabic title when available — same convention as JobDescriptionForm.tsx
+    // (title/titleArabic already exist on every Job Description).
+    const titleOf = (jd?: { title?: string; titleArabic?: string | null } | null): string =>
+        (isArabic && jd?.titleArabic?.trim()) ? jd.titleArabic! : (jd?.title || '');
     const confirm = useConfirm();
     const navigate = useNavigate();
     const [requests, setRequests] = useState<RecruitmentRequest[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
+    const [divisions, setDivisions] = useState<Division[]>([]);
     const [units, setUnits] = useState<Unit[]>([]);
     const [jobDescriptions, setJobDescriptions] = useState<JobDescription[]>([]);
     const [myRecord, setMyRecord] = useState<any>(null);
@@ -66,10 +73,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const [hireQuantity, setHireQuantity] = useState(1);        // HIRE: how many people to request
     // HIRE / PRF extra fields
     const [employmentType, setEmploymentType] = useState('');
-    const [typeOfRequest, setTypeOfRequest] = useState('');
     const [languageEn, setLanguageEn] = useState('');
     const [languageAr, setLanguageAr] = useState('');
-    const [reportsTo, setReportsTo] = useState('');
     const [gmDoc, setGmDoc] = useState<File | null>(null); // GM's signed document at final approval
     const [jdMode, setJdMode] = useState<'edit' | 'new'>('new'); // JD_CHANGE mode
     const [jdForm, setJdForm] = useState<JDFormValue>(emptyJDForm());
@@ -92,15 +97,17 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [reqs, depts, unts, jds, me] = await Promise.all([
+            const [reqs, depts, divs, unts, jds, me] = await Promise.all([
                 recruitmentService.getAllRequests(),
                 departmentService.getAllDepartments(),
+                divisionService.getAllDivisions().catch(() => []),
                 unitService.getAllUnits(),
                 jobDescriptionService.getAllJobDescriptions().catch(() => []),
                 employeeService.getMyEmployeeRecord().catch(() => null)
             ]);
             setRequests(reqs);
             setDepartments(depts);
+            setDivisions(divs);
             setUnits(unts);
             setJobDescriptions(jds);
             setMyRecord(me);
@@ -132,6 +139,28 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     // Effective scope = unit (if chosen) else department
     const scopeJDs = jobDescriptions.filter(jd => formUnitId ? jd.unitId === formUnitId : jd.departmentId === formDeptId);
     const openScopeJDs = scopeJDs.filter(jd => (jd._count?.employees || 0) < jd.plannedCount);
+    const selectedOpenJd = openScopeJDs.find(jd => jd.id === selectedJdId);
+    // "Reports To" is derived from the org chart — never typed by hand. See utils/reportsTo.ts
+    // (shared with the admin Job Description form). This request's scope is always Department,
+    // optionally narrowed to a Unit within it.
+    const reportsTo = resolveReportsTo({
+        level: formUnitId ? 'UNIT' : 'DEPARTMENT',
+        id: formUnitId || formDeptId,
+        isHead: selectedOpenJd?.isHead || false,
+        departments, divisions, units,
+        allJobDescriptions: jobDescriptions,
+        excludeJdId: selectedOpenJd?.id,
+    });
+    // Same derivation for the JD_CHANGE (new/edit Job Description) flow below — uses the JD
+    // form's own isHead toggle instead of an existing selected JD's.
+    const jdChangeReportsTo = resolveReportsTo({
+        level: formUnitId ? 'UNIT' : 'DEPARTMENT',
+        id: formUnitId || formDeptId,
+        isHead: jdForm.isHead,
+        departments, divisions, units,
+        allJobDescriptions: jobDescriptions,
+        excludeJdId: jdMode === 'edit' ? selectedJdId : null,
+    });
 
     const resetForm = () => {
         setReqType('HIRE');
@@ -142,7 +171,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
         setFormDeptId(defaultDept);
         setFormUnitId('');
         setReason(''); setSelectedJdId(''); setHireQuantity(1); setJdMode('new'); setJdForm(emptyJDForm());
-        setEmploymentType(''); setTypeOfRequest(''); setLanguageEn(''); setLanguageAr(''); setReportsTo('');
+        setEmploymentType(''); setLanguageEn(''); setLanguageAr('');
     };
 
     // When choosing an existing JD to edit in JD_CHANGE mode, prefill the JD form
@@ -171,11 +200,16 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
             if (reqType === 'HIRE') {
                 if (!selectedJdId) { toast.error(t('select_jd_required', { defaultValue: 'Select a position (Job Description) with an open slot.' })); return; }
-                await recruitmentService.createRequest({ type: 'HIRE', jobDescriptionId: selectedJdId, quantity: hireQuantity, reason, reportsTo, employmentType, typeOfRequest, languageEn, languageAr, ...scopeIds } as any);
+                const reportsToText = reportsTo ? (reportsTo.ar ? `${reportsTo.en} / ${reportsTo.ar}` : reportsTo.en) : '';
+                await recruitmentService.createRequest({ type: 'HIRE', jobDescriptionId: selectedJdId, quantity: hireQuantity, reason, reportsTo: reportsToText, employmentType, typeOfRequest: 'New Position', languageEn, languageAr, ...scopeIds } as any);
             } else {
                 if (!jdForm.title) { toast.error(t('jd_title_required', { defaultValue: 'A position title is required.' })); return; }
+                const jdChangeReportsToText = jdChangeReportsTo
+                    ? (jdChangeReportsTo.ar ? `${jdChangeReportsTo.en} / ${jdChangeReportsTo.ar}` : jdChangeReportsTo.en)
+                    : '';
                 const payload = {
                     ...jdForm,
+                    details: { ...jdForm.details, reportsTo: jdChangeReportsToText },
                     mode: jdMode,
                     ...scopeIds,
                 };
@@ -250,7 +284,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const reqDivisionId = (r: RecruitmentRequest) => r.divisionId || departments.find(d => d.id === r.departmentId)?.divisionId || null;
 
     // ---- HIRE requisition: staged Personnel Requisition Form (PRF) approval flow ----
-    const PRF_STAGES = ['deptHead', 'divHead', 'hrManager', 'hrRecruitment', 'gm'] as const;
+    const PRF_STAGES = ['deptHead', 'divHead', 'hrRecruitment', 'hrManager', 'gm'] as const;
     const PRF_STAGE_LABEL: Record<string, string> = {
         deptHead: t('head_of_department', { defaultValue: 'Head of Department' }), divHead: t('head_of_division_office', { defaultValue: 'Head of Division/Office' }), hrManager: t('head_of_hr', { defaultValue: 'Head of HR' }),
         hrRecruitment: t('head_of_hiring_unit', { defaultValue: 'Head of Hiring Unit' }), gm: t('general_manager', { defaultValue: 'General Manager' }),
@@ -263,12 +297,15 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
         const role = currentUser?.role;
         const perms = currentUser?.permissions || [];
         if (role === 'SUPER_ADMIN') return true;
+        // Mirrors the server's isEligibleForStage exactly (recruitmentController.ts) — role OR the
+        // equivalent permission, so a Functional Hat/individual grant holder actually sees the
+        // approve/reject buttons the server would let them use, not just literal Position holders.
         switch (stage) {
-            case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE';
-            case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE';
+            case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE' || perms.includes('manage_recruitment');
+            case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals');
             case 'hrManager': return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
             case 'hrRecruitment': return perms.includes('approve_hr_recruitment');
-            case 'gm': return role === 'GENERAL_MANAGER';
+            case 'gm': return role === 'GENERAL_MANAGER' || perms.includes('approve_gm');
             default: return false;
         }
     };
@@ -446,7 +483,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                     {/* Approval timeline */}
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                            {selectedRequest.type === 'JD_CHANGE' ? t('approval_workflow_jd', { defaultValue: 'Approval Workflow — Division → HR → Directorate' }) : t('approval_workflow_hire', { defaultValue: 'Approval Workflow — Dept → Division → HR → Recruitment → GM' })}
+                            {selectedRequest.type === 'JD_CHANGE' ? t('approval_workflow_jd', { defaultValue: 'Approval Workflow — Division → HR → Directorate' }) : t('approval_workflow_hire', { defaultValue: 'Approval Workflow — Dept → Division → Recruitment → HR → GM' })}
                         </p>
                         <div className="p-5 bg-white border border-slate-100 rounded-3xl">
                             {(selectedRequest.type === 'HIRE'
@@ -456,8 +493,8 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                     return [
                                         mk('deptHead', t('head_of_department', { defaultValue: 'Head of Department' }), 'bg-amber-500'),
                                         mk('divHead', t('head_of_division_office', { defaultValue: 'Head of Division/Office' }), 'bg-amber-500'),
-                                        mk('hrManager', t('head_of_hr', { defaultValue: 'Head of HR' }), 'bg-blue-500'),
                                         mk('hrRecruitment', t('head_of_hiring_unit', { defaultValue: 'Head of Hiring Unit' }), 'bg-blue-500'),
+                                        mk('hrManager', t('head_of_hr', { defaultValue: 'Head of HR' }), 'bg-blue-500'),
                                         mk('gm', t('general_manager', { defaultValue: 'General Manager' }), 'bg-emerald-500'),
                                     ];
                                 })()
@@ -745,7 +782,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
                     {reqType === 'HIRE' ? (
                         (() => {
-                            const selJd = openScopeJDs.find(jd => jd.id === selectedJdId);
+                            const selJd = selectedOpenJd;
                             const openSlots = selJd ? selJd.plannedCount - (selJd._count?.employees || 0) : 0;
                             return (
                         <div className="space-y-4">
@@ -755,7 +792,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
                                     <option value="">{t('select_position', { defaultValue: '-- Select Position --' })}</option>
                                     {openScopeJDs.map(jd => (
-                                        <option key={jd.id} value={jd.id}>{jd.title} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>
+                                        <option key={jd.id} value={jd.id}>{titleOf(jd)} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>
                                     ))}
                                 </select>
                                 {formDeptId && openScopeJDs.length === 0 && (
@@ -786,36 +823,48 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                                 <div className="sm:col-span-2">
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-slate-400" dir="rtl">/ يقدم تقاريره إلى</span></label>
-                                    <input type="text" value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} placeholder={t('e_g_head_of_finance', { defaultValue: 'e.g. Head of Finance' })}
-                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                    <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                                        {reportsTo ? (
+                                            <span className="font-bold text-slate-700">
+                                                {reportsTo.en}{reportsTo.ar && <span className="text-slate-400"> / </span>}{reportsTo.ar && <span dir="rtl">{reportsTo.ar}</span>}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400 italic">
+                                                {formDeptId
+                                                    ? t('reports_to_no_head_defined', { defaultValue: 'No Head position defined yet at the reporting level — set one first, then this will fill in automatically.' })
+                                                    : t('reports_to_select_scope_hint', { defaultValue: 'Select the organizational placement below to fill this in automatically.' })}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">{t('reports_to_hint', { defaultValue: 'Derived automatically from the org chart — depends on the position, not on whoever currently holds it.' })}</p>
                                 </div>
-                                <div>
+                                <div className="sm:col-span-2">
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('employment_type', { defaultValue: 'Employment Type' })}</label>
                                     <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
                                         <option value="">{t('select', { defaultValue: 'Select...' })}</option>
                                         <option value="Full-time">Full-time / دوام كامل</option>
                                         <option value="Part-time">Part-time / دوام جزئي</option>
-                                        <option value="Contract">Contract / عقد</option>
-                                        <option value="Temporary">Temporary / مؤقت</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('type_of_request', { defaultValue: 'Type of Request' })}</label>
-                                    <select value={typeOfRequest} onChange={(e) => setTypeOfRequest(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
-                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
-                                        <option value="New Position">New Position / وظيفة جديدة</option>
-                                        <option value="Replacement">Replacement / إحلال</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('english_language', { defaultValue: 'English Language' })}</label>
-                                    <input type="text" value={languageEn} onChange={(e) => setLanguageEn(e.target.value)} placeholder={t('e_g_fluent_good_basic', { defaultValue: 'e.g. Fluent / Good / Basic' })}
-                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                    <select value={languageEn} onChange={(e) => setLanguageEn(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        <option value="Native">Native / اللغة الأم</option>
+                                        <option value="Fluent">Fluent / طليق</option>
+                                        <option value="Good">Good / جيد</option>
+                                        <option value="Basic">Basic / أساسي</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('arabic_language', { defaultValue: 'Arabic Language' })}</label>
-                                    <input type="text" value={languageAr} onChange={(e) => setLanguageAr(e.target.value)} placeholder={t('e_g_native_fluent', { defaultValue: 'e.g. Native / Fluent' })}
-                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700" />
+                                    <select value={languageAr} onChange={(e) => setLanguageAr(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
+                                        <option value="">{t('select', { defaultValue: 'Select...' })}</option>
+                                        <option value="Native">Native / اللغة الأم</option>
+                                        <option value="Fluent">Fluent / طليق</option>
+                                        <option value="Good">Good / جيد</option>
+                                        <option value="Basic">Basic / أساسي</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -837,17 +886,34 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
 
                             {jdMode === 'edit' && (
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">{t('position_to_edit', { defaultValue: 'Position to Edit' })}</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ms-1">{t('position_to_edit', { defaultValue: 'Position to Edit' })}</label>
                                     <select value={selectedJdId} onChange={(e) => loadJdForEdit(e.target.value)}
                                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700">
                                         <option value="">{t('select_position', { defaultValue: '-- Select Position --' })}</option>
-                                        {scopeJDs.map(jd => <option key={jd.id} value={jd.id}>{jd.title} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>)}
+                                        {scopeJDs.map(jd => <option key={jd.id} value={jd.id}>{titleOf(jd)} — {(jd._count?.employees || 0)}/{jd.plannedCount}</option>)}
                                     </select>
                                 </div>
                             )}
 
                             {(jdMode === 'new' || (jdMode === 'edit' && selectedJdId)) && (
-                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-gray-400 font-normal" dir="rtl">/ يقدم تقاريره إلى</span></label>
+                                        <div className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm">
+                                            {jdChangeReportsTo ? (
+                                                <span className="font-bold text-gray-700">
+                                                    {jdChangeReportsTo.en}{jdChangeReportsTo.ar && <span className="text-gray-400"> / </span>}{jdChangeReportsTo.ar && <span dir="rtl">{jdChangeReportsTo.ar}</span>}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 italic">
+                                                    {formDeptId
+                                                        ? t('reports_to_no_head_defined', { defaultValue: 'No Head position defined yet at the reporting level — set one first, then this will fill in automatically.' })
+                                                        : t('reports_to_select_scope_hint', { defaultValue: 'Select the organizational placement below to fill this in automatically.' })}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 mt-1">{t('reports_to_hint', { defaultValue: 'Derived automatically from the org chart — depends on the position, not on whoever currently holds it.' })}</p>
+                                    </div>
                                     <JobDescriptionFields value={jdForm} onChange={setJdForm} />
                                 </div>
                             )}

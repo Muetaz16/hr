@@ -6,9 +6,9 @@ import { prisma } from '../lib/prisma';
 
 export const createDirectorate = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, positionFactor } = req.body;
+        const { name, nameArabic, positionFactor } = req.body;
         const directorate = await prisma.directorate.create({
-            data: { name, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
+            data: { name, nameArabic: nameArabic || null, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
         });
         res.status(201).json(directorate);
     } catch (error) {
@@ -30,10 +30,10 @@ export const getAllDirectorates = async (req: AuthRequest, res: Response) => {
 export const updateDirectorate = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, positionFactor } = req.body;
+        const { name, nameArabic, positionFactor } = req.body;
         const directorate = await prisma.directorate.update({
             where: { id },
-            data: { name, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
+            data: { name, nameArabic: nameArabic || null, positionFactor: positionFactor ? parseFloat(positionFactor) : 1.0 }
         });
         res.json(directorate);
     } catch (error) {

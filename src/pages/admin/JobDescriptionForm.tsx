@@ -7,10 +7,11 @@ import { departmentService, divisionService } from '../../services/departmentSer
 import { directorateService } from '../../services/directorateService';
 import { unitService } from '../../services/unitService';
 import type { JobDescription, Department, Division, Directorate, Unit, JobDescriptionDetails } from '../../types';
-import { JOB_CATEGORIES } from '../../types';
-import { ArrowLeft, Save, Building2, MapPin } from 'lucide-react';
+import { JOB_CATEGORIES, jobCategoryKey } from '../../types';
+import SearchSelect from '../../components/SearchSelect';
+import { type ScopeLevel, resolveReportsTo } from '../../utils/reportsTo';
+import { ArrowLeft, Save, Building2, MapPin, ChevronDown } from 'lucide-react';
 
-type ScopeLevel = 'DIRECTORATE' | 'DIVISION' | 'DEPARTMENT' | 'UNIT';
 type SectionKey = Exclude<keyof JobDescriptionDetails, 'reportsTo'>;
 
 const JD_SECTIONS: { key: SectionKey; labelEn: string; labelAr: string }[] = [
@@ -43,7 +44,9 @@ const emptyDetails = (): JobDescriptionDetails => ({
 
 const emptyForm = {
     title: '',
+    titleArabic: '',
     description: '',
+    descriptionArabic: '',
     isHead: false,
     plannedCount: 1,
     scopeLevel: 'DEPARTMENT' as ScopeLevel,
@@ -54,7 +57,13 @@ const emptyForm = {
 };
 
 const JobDescriptionForm: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    // Prefer each org entity's Arabic name when the UI is in Arabic — same convention as
+    // Organization.tsx's own nameOf helper (name/nameArabic already exist on every
+    // Directorate/Division/Department/Unit row).
+    const isArabic = i18n.language?.startsWith('ar');
+    const nameOf = (entity?: { name?: string; nameArabic?: string | null } | null): string =>
+        (isArabic && entity?.nameArabic?.trim()) ? entity.nameArabic! : (entity?.name || '');
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditMode = Boolean(id);
@@ -63,6 +72,9 @@ const JobDescriptionForm: React.FC = () => {
     const [divisions, setDivisions] = useState<Division[]>([]);
     const [directorates, setDirectorates] = useState<Directorate[]>([]);
     const [units, setUnits] = useState<Unit[]>([]);
+    // Loaded regardless of create/edit mode — needed to look up the Head Job Description at
+    // any scope so "Reports To" can be derived for a brand-new JD, not just when editing one.
+    const [allJobDescriptions, setAllJobDescriptions] = useState<JobDescription[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -77,12 +89,13 @@ const JobDescriptionForm: React.FC = () => {
                     divisionService.getAllDivisions().catch(() => []),
                     directorateService.getAllDirectorates().catch(() => []),
                     unitService.getAllUnits().catch(() => []),
-                    isEditMode ? jobDescriptionService.getAllJobDescriptions() : Promise.resolve([] as JobDescription[]),
+                    jobDescriptionService.getAllJobDescriptions().catch(() => [] as JobDescription[]),
                 ]);
                 setDepartments(depts);
                 setDivisions(divs);
                 setDirectorates(dirs);
                 setUnits(uns);
+                setAllJobDescriptions(jds);
 
                 if (isEditMode && id) {
                     const jd = jds.find(j => j.id === id);
@@ -100,7 +113,9 @@ const JobDescriptionForm: React.FC = () => {
                     else if (jd.directorateId) { scopeLevel = 'DIRECTORATE'; scopeId = jd.directorateId; }
                     setFormData({
                         title: jd.title,
+                        titleArabic: jd.titleArabic || '',
                         description: jd.description || '',
+                        descriptionArabic: jd.descriptionArabic || '',
                         isHead: jd.isHead,
                         plannedCount: jd.plannedCount,
                         scopeLevel,
@@ -138,6 +153,18 @@ const JobDescriptionForm: React.FC = () => {
         return payload;
     };
 
+    // The position this JD reports to, resolved live from the org chart + the Head Job
+    // Description already defined at the relevant scope — never typed by hand. See
+    // utils/reportsTo.ts for the shared logic (also used by Recruitment.tsx).
+    const reportsTo = resolveReportsTo({
+        level: formData.scopeLevel,
+        id: formData.scopeId,
+        isHead: formData.isHead,
+        departments, divisions, units,
+        allJobDescriptions,
+        excludeJdId: editingId,
+    });
+
     const toggleJobCategory = (category: string) => {
         setFormData(prev => ({
             ...prev,
@@ -171,14 +198,17 @@ const JobDescriptionForm: React.FC = () => {
         }
         setSaving(true);
         try {
+            const reportsToText = reportsTo ? (reportsTo.ar ? `${reportsTo.en} / ${reportsTo.ar}` : reportsTo.en) : '';
             const payload = {
                 title: formData.title,
+                titleArabic: formData.titleArabic,
                 description: formData.description,
+                descriptionArabic: formData.descriptionArabic,
                 isHead: formData.isHead,
                 plannedCount: formData.plannedCount,
                 jobCategories: formData.jobCategories,
                 workLocations: formData.workLocations,
-                details: formData.details,
+                details: { ...formData.details, reportsTo: reportsToText },
                 ...buildScopePayload(),
             };
             if (isEditMode && editingId) {
@@ -215,35 +245,67 @@ const JobDescriptionForm: React.FC = () => {
                 {/* Basics */}
                 <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">{t('basics', { defaultValue: 'Basics' })}</h4>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_title', { defaultValue: 'Position Title' })}</label>
-                        <input
-                            type="text" required value={formData.title}
-                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            placeholder={t('position_title_placeholder', { defaultValue: 'e.g. Accountant, Head of Finance' })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_title', { defaultValue: 'Position Title' })} <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{t('english', { defaultValue: 'English' })}</span></label>
+                            <input
+                                type="text" required value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                placeholder={t('position_title_placeholder', { defaultValue: 'e.g. Accountant, Head of Finance' })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 text-right">{t('position_title', { defaultValue: 'Position Title' })} <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">العربية</span></label>
+                            <input
+                                type="text" dir="rtl" value={formData.titleArabic}
+                                onChange={(e) => setFormData({ ...formData, titleArabic: e.target.value })}
+                                placeholder="مثال: محاسب، رئيس قسم المالية"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-right"
+                            />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('job_description_summary', { defaultValue: 'Summary / Overview' })}</label>
-                        <textarea
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            rows={3}
-                            placeholder={t('job_description_text_placeholder', { defaultValue: 'Short overview of this position. Assigned employees will be able to read this.' })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y bg-white"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">{t('job_description_summary', { defaultValue: 'Summary / Overview' })} <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{t('english', { defaultValue: 'English' })}</span></label>
+                            <textarea
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                rows={3}
+                                placeholder={t('job_description_text_placeholder', { defaultValue: 'Short overview of this position. Assigned employees will be able to read this.' })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y bg-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 text-right">{t('job_description_summary', { defaultValue: 'Summary / Overview' })} <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">العربية</span></label>
+                            <textarea
+                                value={formData.descriptionArabic}
+                                onChange={(e) => setFormData({ ...formData, descriptionArabic: e.target.value })}
+                                rows={3}
+                                dir="rtl"
+                                placeholder="نظرة موجزة عن هذا المنصب. سيتمكن الموظفون المُسندون من قراءتها."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y bg-white text-right"
+                            />
+                        </div>
                     </div>
 
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">{t('reports_to', { defaultValue: 'Reports To' })} <span className="text-gray-400 font-normal" dir="rtl">/ يقدم تقاريره إلى</span></label>
-                        <input
-                            type="text" value={formData.details.reportsTo || ''}
-                            onChange={(e) => setFormData({ ...formData, details: { ...formData.details, reportsTo: e.target.value } })}
-                            placeholder={t('reports_to_placeholder', { defaultValue: 'e.g. Head of Finance' })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                        />
+                        <div className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm">
+                            {reportsTo ? (
+                                <span className="text-gray-800 font-medium">
+                                    {reportsTo.en}{reportsTo.ar && <span className="text-gray-400"> / </span>}{reportsTo.ar && <span dir="rtl">{reportsTo.ar}</span>}
+                                </span>
+                            ) : (
+                                <span className="text-gray-400 italic">
+                                    {formData.scopeId
+                                        ? t('reports_to_no_head_defined', { defaultValue: 'No Head position defined yet at the reporting level — set one first, then this will fill in automatically.' })
+                                        : t('reports_to_select_scope_hint', { defaultValue: 'Select the organizational placement below to fill this in automatically.' })}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">{t('reports_to_hint', { defaultValue: 'Derived automatically from the org chart — depends on the position, not on whoever currently holds it.' })}</p>
                     </div>
 
                     {/* Work Location */}
@@ -312,30 +374,34 @@ const JobDescriptionForm: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">{t('organizational_level', { defaultValue: 'Organizational Level' })}</label>
-                            <select
-                                value={formData.scopeLevel}
-                                onChange={(e) => setFormData({ ...formData, scopeLevel: e.target.value as ScopeLevel, scopeId: '' })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                            >
-                                <option value="DIRECTORATE">{t('directorate', { defaultValue: 'Directorate' })}</option>
-                                <option value="DIVISION">{t('division', { defaultValue: 'Division' })}</option>
-                                <option value="DEPARTMENT">{t('department_office', { defaultValue: 'Department / Office' })}</option>
-                                <option value="UNIT">{t('unit', { defaultValue: 'Unit' })}</option>
-                            </select>
+                            {/* appearance-none + a manual chevron (instead of the browser's native
+                                one) so this select renders with the exact same box model as the
+                                SearchSelect button beside it — a native <select>'s built-in chrome
+                                doesn't reliably match a custom control's height/border-radius even
+                                with identical padding classes. */}
+                            <div className="relative">
+                                <select
+                                    value={formData.scopeLevel}
+                                    onChange={(e) => setFormData({ ...formData, scopeLevel: e.target.value as ScopeLevel, scopeId: '' })}
+                                    className="w-full appearance-none px-3 py-2 pe-9 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                >
+                                    <option value="DIRECTORATE">{t('directorate', { defaultValue: 'Directorate' })}</option>
+                                    <option value="DIVISION">{t('division', { defaultValue: 'Division' })}</option>
+                                    <option value="DEPARTMENT">{t('department_office', { defaultValue: 'Department / Office' })}</option>
+                                    <option value="UNIT">{t('unit', { defaultValue: 'Unit' })}</option>
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-400 absolute end-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
                         </div>
 
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">{t('select_entity', { defaultValue: 'Select' })}</label>
-                            <select
-                                required value={formData.scopeId}
-                                onChange={(e) => setFormData({ ...formData, scopeId: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                            >
-                                <option value="">-- {t('select', { defaultValue: 'Select' })} --</option>
-                                {entitiesForLevel(formData.scopeLevel).map((entity: any) => (
-                                    <option key={entity.id} value={entity.id}>{entity.name}</option>
-                                ))}
-                            </select>
+                            <SearchSelect
+                                value={formData.scopeId}
+                                onChange={(v) => setFormData({ ...formData, scopeId: v })}
+                                options={entitiesForLevel(formData.scopeLevel).map((entity: any) => ({ value: entity.id, label: nameOf(entity) }))}
+                                placeholder={t('select', { defaultValue: 'Select' })}
+                            />
                         </div>
                     </div>
 
@@ -366,7 +432,7 @@ const JobDescriptionForm: React.FC = () => {
                                         onChange={() => toggleJobCategory(cat)}
                                         className="app-check"
                                     />
-                                    {cat}
+                                    {t(jobCategoryKey(cat), { defaultValue: cat })}
                                 </label>
                             ))}
                         </div>

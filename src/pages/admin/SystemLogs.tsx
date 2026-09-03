@@ -55,13 +55,13 @@ const SystemLogs: React.FC = () => {
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Search className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                         type="text"
                         value={searchInput}
                         onChange={e => setSearchInput(e.target.value)}
                         placeholder={t('search_by_user_action_role_or_path', { defaultValue: 'Search by user, action, role or path… (e.g. “admin deleted”)' })}
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-[#511d29]/15 focus:border-[#511d29] transition-all"
+                        className="w-full ps-10 pe-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-[#511d29]/15 focus:border-[#511d29] transition-all"
                     />
                 </div>
                 <select
@@ -69,33 +69,33 @@ const SystemLogs: React.FC = () => {
                     onChange={e => { setMethod(e.target.value); setPage(1); }}
                     className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-[#511d29]/15"
                 >
-                    <option value="">All actions</option>
-                    <option value="POST">Created</option>
-                    <option value="PUT">Updated (PUT)</option>
-                    <option value="PATCH">Updated (PATCH)</option>
-                    <option value="DELETE">Deleted</option>
+                    <option value="">{t('all_actions', { defaultValue: 'All actions' })}</option>
+                    <option value="POST">{t('action_created', { defaultValue: 'Created' })}</option>
+                    <option value="PUT">{t('action_updated_put', { defaultValue: 'Updated (PUT)' })}</option>
+                    <option value="PATCH">{t('action_updated_patch', { defaultValue: 'Updated (PATCH)' })}</option>
+                    <option value="DELETE">{t('action_deleted', { defaultValue: 'Deleted' })}</option>
                 </select>
             </div>
 
             {/* Table */}
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs md:text-sm">
+                    <table className="w-full text-start border-collapse text-xs md:text-sm">
                         <thead>
                             <tr className="bg-slate-50 text-slate-500 uppercase font-black tracking-wider text-[10px] border-b border-slate-200">
-                                <th className="p-4">When</th>
-                                <th className="p-4">User</th>
-                                <th className="p-4">Action</th>
-                                <th className="p-4">Details</th>
+                                <th className="p-4 text-start">{t('when', { defaultValue: 'When' })}</th>
+                                <th className="p-4 text-start">{t('user', { defaultValue: 'User' })}</th>
+                                <th className="p-4 text-start">{t('action', { defaultValue: 'Action' })}</th>
+                                <th className="p-4 text-start">{t('details', { defaultValue: 'Details' })}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                             {isLoading ? (
-                                <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-bold animate-pulse">Loading activity…</td></tr>
+                                <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-bold animate-pulse">{t('loading_activity', { defaultValue: 'Loading activity…' })}</td></tr>
                             ) : isError ? (
-                                <tr><td colSpan={4} className="p-10 text-center text-rose-600 font-bold">Failed to load the activity log.</td></tr>
+                                <tr><td colSpan={4} className="p-10 text-center text-rose-600 font-bold">{t('failed_to_load_activity_log', { defaultValue: 'Failed to load the activity log.' })}</td></tr>
                             ) : logs.length === 0 ? (
-                                <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-bold">No matching activity.</td></tr>
+                                <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-bold">{t('no_matching_activity', { defaultValue: 'No matching activity.' })}</td></tr>
                             ) : logs.map(log => (
                                 <tr key={log.id} className="hover:bg-slate-50/60">
                                     <td className="p-4 whitespace-nowrap">
@@ -114,7 +114,7 @@ const SystemLogs: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="p-4">
-                                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider mr-2 ${METHOD_STYLE[log.method] || 'bg-slate-100 text-slate-600'}`}>{log.method}</span>
+                                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider me-2 ${METHOD_STYLE[log.method] || 'bg-slate-100 text-slate-600'}`}>{log.method}</span>
                                         <span className="font-bold text-slate-700">{log.action}</span>
                                         {log.details && <span className="block text-[11px] text-[#8f6544] font-semibold mt-0.5">{log.details}</span>}
                                     </td>
@@ -130,21 +130,21 @@ const SystemLogs: React.FC = () => {
                 {/* Pagination */}
                 {pages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50">
-                        <span className="text-[11px] font-bold text-slate-400">Page {page} of {pages}</span>
+                        <span className="text-[11px] font-bold text-slate-400">{t('page_of', { defaultValue: 'Page {{page}} of {{pages}}', page, pages })}</span>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={page <= 1}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 disabled:opacity-40"
                             >
-                                <ChevronLeft className="w-4 h-4" /> Prev
+                                <ChevronLeft className="w-4 h-4 rtl:rotate-180" /> {t('prev', { defaultValue: 'Prev' })}
                             </button>
                             <button
                                 onClick={() => setPage(p => Math.min(pages, p + 1))}
                                 disabled={page >= pages}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 disabled:opacity-40"
                             >
-                                Next <ChevronRight className="w-4 h-4" />
+                                {t('next', { defaultValue: 'Next' })} <ChevronRight className="w-4 h-4 rtl:rotate-180" />
                             </button>
                         </div>
                     </div>

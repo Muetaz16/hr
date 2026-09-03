@@ -30,13 +30,13 @@ const CriteriaTable: React.FC<{
 }> = ({ criteria, metricA, metricB, labelA, labelB }) => {
     const { t } = useTranslation();
     return (
-        <table className="w-full text-left">
+        <table className="w-full text-start">
             <thead>
                 <tr className="text-[10px] uppercase tracking-widest text-slate-400 font-bold border-b border-slate-100">
-                    <th className="py-2 pr-2">{t('criterion', { defaultValue: 'Criterion' })}</th>
+                    <th className="py-2 pe-2 text-start">{t('criterion', { defaultValue: 'Criterion' })}</th>
                     <th className="py-2 px-2 text-center">{labelA}</th>
                     <th className="py-2 px-2 text-center">{labelB}</th>
-                    <th className="py-2 pl-2 text-right">{t('average', { defaultValue: 'Average' })}</th>
+                    <th className="py-2 ps-2 text-end">{t('average', { defaultValue: 'Average' })}</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -46,10 +46,10 @@ const CriteriaTable: React.FC<{
                     const avg = aVal != null && bVal != null ? (aVal + bVal) / 2 : (aVal ?? bVal ?? 0);
                     return (
                         <tr key={c.key}>
-                            <td className="py-2 pr-2 text-sm text-slate-600">{t(c.labelKey)} <span className="text-[10px] text-slate-400">/{c.weight}</span></td>
+                            <td className="py-2 pe-2 text-sm text-slate-600">{t(c.labelKey)} <span className="text-[10px] text-slate-400">/{c.weight}</span></td>
                             <td className="py-2 px-2 text-center text-sm font-bold text-slate-700">{aVal != null ? aVal.toFixed(1) : '—'}</td>
                             <td className="py-2 px-2 text-center text-sm font-bold text-slate-700">{bVal != null ? bVal.toFixed(1) : '—'}</td>
-                            <td className="py-2 pl-2 text-right text-sm font-black text-indigo-600">{avg.toFixed(1)}</td>
+                            <td className="py-2 ps-2 text-end text-sm font-black text-indigo-600">{avg.toFixed(1)}</td>
                         </tr>
                     );
                 })}

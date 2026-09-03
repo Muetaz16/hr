@@ -517,7 +517,7 @@ const StaffHub: React.FC = () => {
                                                     key={opt.value}
                                                     onClick={() => setNewRequest({ ...newRequest, type: opt.value, startTime: '', endTime: '' })}
                                                     aria-pressed={active}
-                                                    className={`group relative flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition-all ${active
+                                                    className={`group relative flex flex-col items-start gap-2 rounded-2xl border p-3 text-start transition-all ${active
                                                         ? 'border-[#aa7a51] bg-[#aa7a51]/10 shadow-sm ring-1 ring-[#aa7a51]/30'
                                                         : 'border-slate-200 bg-slate-50 hover:border-[#aa7a51]/40 hover:bg-white'}`}
                                                 >
@@ -530,7 +530,7 @@ const StaffHub: React.FC = () => {
                                                     <span className="text-[10px] font-medium leading-tight text-slate-400">
                                                         {t(opt.descKey, { defaultValue: opt.defaultDesc })}
                                                     </span>
-                                                    {active && <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[#aa7a51]" />}
+                                                    {active && <CheckCircle2 className="absolute end-2 top-2 h-4 w-4 text-[#aa7a51]" />}
                                                 </button>
                                             );
                                         })}

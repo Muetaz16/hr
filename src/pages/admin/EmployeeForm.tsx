@@ -9,7 +9,7 @@ import { directorateService } from '../../services/directorateService';
 import { jobDescriptionService } from '../../services/jobDescriptionService';
 import { candidateService } from '../../services/candidateService';
 import { toast } from 'sonner';
-import { JOB_CATEGORIES, JOB_GRADES } from '../../types';
+import { JOB_CATEGORIES, JOB_GRADES, jobCategoryKey } from '../../types';
 import type { Employee } from '../../types';
 import { makeFieldVisibility, KNOWN_CONTRACT_TYPES, type ResidentContractType } from '../../utils/employeeFieldVisibility';
 import {
@@ -1334,7 +1334,7 @@ const EmployeeForm: React.FC = () => {
                                     >
                                         <option value="">{t('select_category', { defaultValue: 'Select Category' })}</option>
                                         {(categoryChoice ? jdCategories : JOB_CATEGORIES).map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
+                                            <option key={cat} value={cat}>{t(jobCategoryKey(cat), { defaultValue: cat })}</option>
                                         ))}
                                     </select>
                                 )}

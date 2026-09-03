@@ -379,7 +379,11 @@ table thead th {
   font-size: 0.75rem !important;
   padding: 1rem 1.5rem !important;
   border-bottom: none !important;
-  text-align: left !important;
+  /* No forced text-align here (was hardcoded to "left" !important) — that overrode every
+     per-column text-start/text-end Tailwind class app-wide with a physical "left", which is
+     the wrong side once the page switches to RTL (Arabic), regardless of what each table's own
+     column classes said. Each table now controls its own header alignment per column via
+     text-start/text-end, which correctly flips with direction. */
 }
 
 /* Table body and divisions */

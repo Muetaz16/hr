@@ -35,11 +35,11 @@ const JobDescriptionsPage: React.FC = () => {
     };
 
     const getScopeLabel = (jd: JobDescription): { level: string; name: string } => {
-        if (jd.unit) return { level: 'Unit', name: jd.unit.name };
-        if (jd.department) return { level: 'Department', name: jd.department.name };
-        if (jd.division) return { level: 'Division', name: jd.division.name };
-        if (jd.directorate) return { level: 'Directorate', name: jd.directorate.name };
-        return { level: '-', name: 'Unassigned' };
+        if (jd.unit) return { level: t('unit', { defaultValue: 'Unit' }), name: jd.unit.name };
+        if (jd.department) return { level: t('department', { defaultValue: 'Department' }), name: jd.department.name };
+        if (jd.division) return { level: t('division', { defaultValue: 'Division' }), name: jd.division.name };
+        if (jd.directorate) return { level: t('directorate', { defaultValue: 'Directorate' }), name: jd.directorate.name };
+        return { level: '-', name: t('unassigned', { defaultValue: 'Unassigned' }) };
     };
 
     const [docBusy, setDocBusy] = useState<string | null>(null);
@@ -101,7 +101,7 @@ const JobDescriptionsPage: React.FC = () => {
                     <p className="text-sm text-gray-500">{t('job_descriptions_subtitle', { defaultValue: 'Define staffing plan positions per Directorate, Division, Department, or Unit' })}</p>
                 </div>
                 <button onClick={() => navigate('/job-descriptions/new')} className="flex items-center bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm">
-                    <Plus size={18} className="mr-2" />
+                    <Plus size={18} className="me-2" />
                     {t('add_job_description', { defaultValue: 'Add Job Description' })}
                 </button>
             </div>
@@ -141,8 +141,8 @@ const JobDescriptionsPage: React.FC = () => {
                                 <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                                 <Tooltip />
                                 <Legend />
-                                <Bar dataKey="Planned" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="Filled" fill="#10b981" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="Planned" name={t('planned', { defaultValue: 'Planned' })} fill="#6366f1" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="Filled" name={t('filled', { defaultValue: 'Filled' })} fill="#10b981" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -154,12 +154,12 @@ const JobDescriptionsPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('title', { defaultValue: 'Title' })}</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('scope', { defaultValue: 'Scope' })}</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('type', { defaultValue: 'Type' })}</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('job_categories', { defaultValue: 'Job Categories' })}</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('headcount', { defaultValue: 'Filled / Planned' })}</th>
-                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                            <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('title', { defaultValue: 'Title' })}</th>
+                            <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('scope', { defaultValue: 'Scope' })}</th>
+                            <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('type', { defaultValue: 'Type' })}</th>
+                            <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('job_categories', { defaultValue: 'Job Categories' })}</th>
+                            <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('headcount', { defaultValue: 'Filled / Planned' })}</th>
+                            <th className="px-6 py-3 text-end text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
@@ -195,20 +195,20 @@ const JobDescriptionsPage: React.FC = () => {
                                         <span className={`font-bold ${isFull ? 'text-red-600' : 'text-slate-700'}`}>{filled}</span>
                                         <span className="text-slate-400 mx-1">/</span>
                                         <span className="text-slate-500">{jd.plannedCount}</span>
-                                        {isFull && <span className="ml-2 text-[10px] font-black text-red-500 uppercase">{t('full', { defaultValue: 'Full' })}</span>}
+                                        {isFull && <span className="ms-2 text-[10px] font-black text-red-500 uppercase">{t('full', { defaultValue: 'Full' })}</span>}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
                                         <button onClick={() => downloadDocument(jd, 'general')} disabled={docBusy === `${jd.id}:general`}
                                             title={t('jd_doc_general', { defaultValue: 'Download Job Description (General)' })}
-                                            className="text-slate-600 hover:text-slate-900 mr-2 p-1 rounded hover:bg-slate-100 disabled:opacity-50">
+                                            className="text-slate-600 hover:text-slate-900 me-2 p-1 rounded hover:bg-slate-100 disabled:opacity-50">
                                             <FileText size={16} />
                                         </button>
                                         <button onClick={() => downloadDocument(jd, 'emp')} disabled={docBusy === `${jd.id}:emp`}
                                             title={t('jd_doc_emp', { defaultValue: 'Download Job Description (Employee copy)' })}
-                                            className="text-emerald-600 hover:text-emerald-800 mr-4 p-1 rounded hover:bg-emerald-50 disabled:opacity-50">
+                                            className="text-emerald-600 hover:text-emerald-800 me-4 p-1 rounded hover:bg-emerald-50 disabled:opacity-50">
                                             <FileUser size={16} />
                                         </button>
-                                        <button onClick={() => navigate(`/job-descriptions/${jd.id}/edit`)} className="text-indigo-600 hover:text-indigo-900 mr-4 p-1 rounded hover:bg-indigo-50">
+                                        <button onClick={() => navigate(`/job-descriptions/${jd.id}/edit`)} className="text-indigo-600 hover:text-indigo-900 me-4 p-1 rounded hover:bg-indigo-50">
                                             <Edit size={16} />
                                         </button>
                                         <button onClick={() => handleDelete(jd.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50">

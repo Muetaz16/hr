@@ -15,15 +15,16 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // Coarse status only — the reporting employee never sees investigation details, just whether HR
-// has started looking at it yet and how it ended up, if it's over.
-const reportStatus = (r: MyDisciplinaryReport): { label: string; cls: string } => {
+// has started looking at it yet and how it ended up, if it's over. Returns an i18n key (translated
+// at the render site, where `t` is in scope) rather than a hardcoded label.
+const reportStatus = (r: MyDisciplinaryReport): { labelKey: string; defaultLabel: string; cls: string } => {
     if (r.stage === 'CLOSED') {
         return r.closureReason
-            ? { label: 'Dismissed', cls: 'bg-amber-100 text-amber-800' }
-            : { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-800' };
+            ? { labelKey: 'dismissed', defaultLabel: 'Dismissed', cls: 'bg-amber-100 text-amber-800' }
+            : { labelKey: 'resolved', defaultLabel: 'Resolved', cls: 'bg-emerald-100 text-emerald-800' };
     }
-    if (r.stage === 'INCIDENT_REPORT') return { label: 'Pending', cls: 'bg-slate-100 text-slate-600' };
-    return { label: 'Under Investigation', cls: 'bg-blue-100 text-blue-800' };
+    if (r.stage === 'INCIDENT_REPORT') return { labelKey: 'pending', defaultLabel: 'Pending', cls: 'bg-slate-100 text-slate-600' };
+    return { labelKey: 'under_investigation', defaultLabel: 'Under Investigation', cls: 'bg-blue-100 text-blue-800' };
 };
 
 const ReportIncident: React.FC = () => {
@@ -180,7 +181,14 @@ const ReportIncident: React.FC = () => {
                             <p className="text-sm text-slate-400 text-center py-6">{t('no_reports_submitted_yet', { defaultValue: "You haven't submitted any reports yet." })}</p>
                         )}
                         {!reportsLoading && !!myReports?.length && (
-                            <table className="w-full text-left text-sm">
+                            <table className="w-full text-start text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-100">
+                                        <th className="px-5 py-2 text-start text-[10px] font-black uppercase tracking-wider text-slate-400">{t('reference_number', { defaultValue: 'Reference' })}</th>
+                                        <th className="px-5 py-2 text-start text-[10px] font-black uppercase tracking-wider text-slate-400">{t('date', { defaultValue: 'Date' })}</th>
+                                        <th className="px-5 py-2 text-end text-[10px] font-black uppercase tracking-wider text-slate-400">{t('status', { defaultValue: 'Status' })}</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {myReports.map(r => {
                                         const status = reportStatus(r);
@@ -190,9 +198,9 @@ const ReportIncident: React.FC = () => {
                                                 <td className="px-5 py-3 text-slate-500 text-xs">
                                                     {(r.reportedDate || r.createdAt).slice(0, 10)}
                                                 </td>
-                                                <td className="px-5 py-3 text-right">
+                                                <td className="px-5 py-3 text-end">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${status.cls}`}>
-                                                        {status.label}
+                                                        {t(status.labelKey, { defaultValue: status.defaultLabel })}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -259,7 +267,7 @@ const ReportIncident: React.FC = () => {
                                             type="button"
                                             onMouseDown={e => e.preventDefault()}
                                             onClick={() => selectSubject(emp)}
-                                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                                            className="w-full text-start px-3 py-2 text-sm hover:bg-slate-50"
                                         >
                                             {emp.fullName}{emp.staffId ? ` (${emp.staffId})` : ''}
                                         </button>

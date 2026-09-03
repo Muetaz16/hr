@@ -15,6 +15,7 @@ import {
     Search,
     ChevronDown,
     ClipboardCheck,
+    ClipboardList,
     ShieldCheck,
     Zap,
     UserPlus,
@@ -230,8 +231,21 @@ const MainLayout: React.FC = () => {
                 { label: t('nav_resignation_request', { defaultValue: 'Resignation Request' }), path: '/resignation-request', icon: UserMinus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
+                // Standalone — fill in evaluations for the employees under you. Previously only
+                // reachable through Personnel Relations Department > Performance Reviews, which
+                // meant any Head role (even without the personnel-relations permission) got a
+                // sidebar entry into that whole department section just to reach this one tab,
+                // with every other tab in it showing as locked. Moved out here so Heads no longer
+                // need personnel-relations access at all; Personnel Relations now only keeps the
+                // HR-only Evaluation Control screen (open/close windows, monitor submissions).
+                { label: t('nav_evaluations', { defaultValue: 'Evaluations' }), path: '/evaluations', icon: ClipboardList, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['view_evaluations'] },
                 { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
                 {
+                    // Only the stages department heads actually take part in — request a hire,
+                    // get it approved up the chain, browse the resulting Job Description. Once a
+                    // request is approved, everything downstream (sourcing/interviewing/offering/
+                    // onboarding) is HR's own execution pipeline — see "Recruitment Pipeline"
+                    // under HR & Personnel below.
                     label: t('nav_recruitment', { defaultValue: 'Recruitment' }),
                     icon: UserPlus,
                     roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER'],
@@ -239,11 +253,6 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), path: '/recruitment/requests', roles: ['SUPER_ADMIN', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
                         { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions-browse', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
                         { label: t('nav_recruitment_approvals', { defaultValue: 'Approvals' }), path: '/recruitment/approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['recruitment_approvals'] },
-                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
                     ]
                 },
                 { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
@@ -280,20 +289,43 @@ const MainLayout: React.FC = () => {
                     ]
                 },
                 {
+                    // Heads have no actionable role anywhere in this department anymore — the one
+                    // tab they could actually use (evaluations) now lives in its own standalone
+                    // "Evaluations" nav item above; every other tab here is HR-only (Rewards &
+                    // Recognition's Head-role entries were dead too — RewardsTab.tsx gates every
+                    // real action on manage_rewards, which only SUPER_ADMIN/HR_MANAGER/PERSONNEL
+                    // ever hold). Restricted to actual personnel-relations permission holders.
                     label: t('nav_personnel_relations_dept', { defaultValue: 'Personnel Relations Department' }),
                     icon: HeartHandshake,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'],
+                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
                     permissions: ['view_personnel_relations'],
                     children: [
                         { label: t('nav_employee_lifecycle', { defaultValue: 'Employee Lifecycle' }), path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
                         { label: t('nav_contract_renewals', { defaultValue: 'Contract Renewals' }), path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
-                        { label: t('nav_personnel_action_forms', { defaultValue: 'Personnel Action Forms' }), path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
-                        { label: t('nav_promotion_management', { defaultValue: 'Promotion Management' }), path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_promotions'] },
-                        { label: t('nav_rewards_recognition', { defaultValue: 'Rewards & Recognition' }), path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
-                        { label: t('nav_disciplinary_actions', { defaultValue: 'Disciplinary Actions' }), path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
-                        { label: t('nav_offboarding', { defaultValue: 'Offboarding' }), path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
-                        { label: t('nav_my_evaluations', { defaultValue: 'Performance Reviews' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['manage_evaluation_control', 'view_evaluations'] },
+                        { label: t('nav_personnel_action_forms', { defaultValue: 'Personnel Action Forms' }), path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: t('nav_promotion_management', { defaultValue: 'Promotion Management' }), path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_promotions'] },
+                        { label: t('nav_rewards_recognition', { defaultValue: 'Rewards & Recognition' }), path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
+                        { label: t('nav_disciplinary_actions', { defaultValue: 'Disciplinary Actions' }), path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
+                        { label: t('nav_offboarding', { defaultValue: 'Offboarding' }), path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
+                        { label: t('nav_evaluation_control', { defaultValue: 'Evaluation Control' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_evaluation_control'] },
                         { label: t('nav_employee_control', { defaultValue: 'Employee Control' }), path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
+                    ]
+                },
+                {
+                    // HR's own execution pipeline once a hiring request is approved — heads have
+                    // no actionable role here (they request/approve/browse-JD from the standalone
+                    // "Recruitment" section above instead), so this is restricted the same way the
+                    // rest of this department is.
+                    label: t('nav_recruitment_pipeline', { defaultValue: 'Recruitment Pipeline' }),
+                    icon: UserPlus,
+                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    permissions: ['view_recruitment', 'manage_recruitment'],
+                    children: [
+                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
                     ]
                 }
             ]
@@ -373,19 +405,6 @@ const MainLayout: React.FC = () => {
     };
 
     const theme = roleThemes[currentUser?.role as UserRole] || roleThemes.EMPLOYEE;
-
-    const { data: expiringCount } = useQuery({
-        queryKey: ['expiring-contracts-count', currentUser?.id],
-        queryFn: async () => {
-            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
-                const data = await employeeService.getExpiringContracts(30);
-                return data.length;
-            }
-            return 0;
-        },
-        enabled: !!currentUser && canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts']),
-        refetchInterval: 300000
-    });
 
     useEffect(() => {
         const checkUrgentContracts = async () => {
@@ -493,11 +512,6 @@ const MainLayout: React.FC = () => {
                                                         {isSidebarOpen && (
                                                             <div className="flex-1 flex items-center justify-between ml-3 overflow-hidden">
                                                                 <span className="font-semibold text-sm whitespace-nowrap">{item.label}</span>
-                                                                {item.path === '/contract-management' && (expiringCount || 0) > 0 && (
-                                                                    <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-lg shadow-sm animate-pulse ml-2">
-                                                                        {expiringCount}
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                         )}
                                                         {isActive && (

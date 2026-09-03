@@ -32,7 +32,7 @@ export const getAllJobDescriptions = async (req: Request, res: Response) => {
 
 export const createJobDescription = async (req: Request, res: Response) => {
     try {
-        const { title, description, isHead, plannedCount, directorateId, divisionId, departmentId, unitId, jobCategories, workLocations, details } = req.body;
+        const { title, titleArabic, description, descriptionArabic, isHead, plannedCount, directorateId, divisionId, departmentId, unitId, jobCategories, workLocations, details } = req.body;
 
         const cleanDirectorateId = cleanId(directorateId);
         const cleanDivisionId = cleanId(divisionId);
@@ -53,7 +53,9 @@ export const createJobDescription = async (req: Request, res: Response) => {
         const jobDescription = await prisma.jobDescription.create({
             data: {
                 title,
+                titleArabic: titleArabic || null,
                 description: description || null,
+                descriptionArabic: descriptionArabic || null,
                 isHead: Boolean(isHead),
                 plannedCount: resolvedPlannedCount,
                 jobCategories: Array.isArray(jobCategories) ? jobCategories : [],
@@ -75,7 +77,7 @@ export const createJobDescription = async (req: Request, res: Response) => {
 export const updateJobDescription = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { title, description, isHead, plannedCount, directorateId, divisionId, departmentId, unitId, jobCategories, workLocations, details } = req.body;
+        const { title, titleArabic, description, descriptionArabic, isHead, plannedCount, directorateId, divisionId, departmentId, unitId, jobCategories, workLocations, details } = req.body;
 
         const cleanDirectorateId = cleanId(directorateId);
         const cleanDivisionId = cleanId(divisionId);
@@ -93,7 +95,9 @@ export const updateJobDescription = async (req: Request, res: Response) => {
             where: { id },
             data: {
                 title,
+                titleArabic: titleArabic || null,
                 description: description || null,
+                descriptionArabic: descriptionArabic || null,
                 isHead: Boolean(isHead),
                 plannedCount: resolvedPlannedCount,
                 jobCategories: Array.isArray(jobCategories) ? jobCategories : [],

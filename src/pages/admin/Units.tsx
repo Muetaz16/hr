@@ -16,7 +16,7 @@ const UnitsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
-    const [formData, setFormData] = useState({ name: '', departmentId: '', headcount: 0 });
+    const [formData, setFormData] = useState({ name: '', nameArabic: '', departmentId: '', headcount: 0 });
 
     useEffect(() => {
         fetchData();
@@ -51,7 +51,7 @@ const UnitsPage: React.FC = () => {
             }
             setIsModalOpen(false);
             setEditingUnit(null);
-            setFormData({ name: '', departmentId: '', headcount: 0 });
+            setFormData({ name: '', nameArabic: '', departmentId: '', headcount: 0 });
             fetchData(); // Refresh list
         } catch (error) {
             console.error("Error saving unit:", error);
@@ -60,7 +60,7 @@ const UnitsPage: React.FC = () => {
 
     const handleEdit = (unit: Unit) => {
         setEditingUnit(unit);
-        setFormData({ name: unit.name, departmentId: unit.departmentId, headcount: unit.headcount || 0 });
+        setFormData({ name: unit.name, nameArabic: unit.nameArabic || '', departmentId: unit.departmentId, headcount: unit.headcount || 0 });
         setIsModalOpen(true);
     };
 
@@ -77,8 +77,9 @@ const UnitsPage: React.FC = () => {
 
     const openNewModal = () => {
         setEditingUnit(null);
-        setFormData({ 
-            name: '', 
+        setFormData({
+            name: '',
+            nameArabic: '',
             departmentId: departments.length > 0 ? departments[0].id : '',
             headcount: 0
         });
@@ -95,7 +96,7 @@ const UnitsPage: React.FC = () => {
                     onClick={openNewModal}
                     className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                 >
-                    <Plus size={18} className="mr-2" />
+                    <Plus size={18} className="me-2" />
                     {t('add_unit', 'Add Unit')}
                 </button>
             </div>
@@ -104,10 +105,10 @@ const UnitsPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('unit_name', 'Unit Name')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('department', 'Department')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('headcount', 'Headcount')}</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions', 'Actions')}</th>
+                            <th className="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">{t('unit_name', 'Unit Name')}</th>
+                            <th className="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">{t('department', 'Department')}</th>
+                            <th className="px-6 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">{t('headcount', 'Headcount')}</th>
+                            <th className="px-6 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">{t('actions', 'Actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -120,6 +121,7 @@ const UnitsPage: React.FC = () => {
                                     >
                                         {unit.name}
                                     </Link>
+                                    {unit.nameArabic && <span className="block text-xs font-normal text-gray-400" dir="rtl">{unit.nameArabic}</span>}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getDepartmentName(unit.departmentId)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -127,8 +129,8 @@ const UnitsPage: React.FC = () => {
                                     <span className="text-slate-400 mx-1">/</span>
                                     <span className="text-slate-500">{unit.headcount || '∞'}</span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onClick={() => handleEdit(unit)} className="text-indigo-600 hover:text-indigo-900 mr-4">
+                                <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
+                                    <button onClick={() => handleEdit(unit)} className="text-indigo-600 hover:text-indigo-900 me-4">
                                         <Edit size={18} />
                                     </button>
                                     <button onClick={() => handleDelete(unit.id)} className="text-red-600 hover:text-red-900">
@@ -139,7 +141,7 @@ const UnitsPage: React.FC = () => {
                         ))}
                         {units.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">{t('no_units', 'No units found')}</td>
+                                <td colSpan={4} className="px-6 py-4 text-center text-gray-500">{t('no_units', 'No units found')}</td>
                             </tr>
                         )}
                     </tbody>
@@ -153,12 +155,22 @@ const UnitsPage: React.FC = () => {
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">{t('unit_name', 'Unit Name')}</label>
+                        <label className="block text-sm font-medium text-gray-700">{t('unit_name_english', { defaultValue: 'Unit Name (English)' })}</label>
                         <input
                             type="text"
                             required
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">اسم الوحدة (عربي)</label>
+                        <input
+                            type="text"
+                            dir="rtl"
+                            value={formData.nameArabic}
+                            onChange={(e) => setFormData({ ...formData, nameArabic: e.target.value })}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
@@ -183,7 +195,7 @@ const UnitsPage: React.FC = () => {
                             min="0"
                             value={formData.headcount}
                             onChange={(e) => setFormData({ ...formData, headcount: parseInt(e.target.value) || 0 })}
-                            placeholder="0 = Unlimited"
+                            placeholder={t('headcount_unlimited_placeholder', { defaultValue: '0 = Unlimited' })}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                         />
                         <p className="text-[10px] text-gray-400 mt-1">{t('unit_headcount_hint', 'Set the maximum number of employees for this unit.')}</p>

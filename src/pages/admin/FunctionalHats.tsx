@@ -116,7 +116,7 @@ const FunctionalHatsPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">{t('functional_hats_page_sub', { defaultValue: 'Reusable permission bundles a user can hold alongside their position.' })}</p>
                 </div>
                 <button onClick={openCreate} className="flex items-center px-6 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-200 hover:scale-[1.02] active:scale-95 transition-all text-sm group">
-                    <Plus size={18} className="mr-2 group-hover:rotate-90 transition-transform" />
+                    <Plus size={18} className="me-2 group-hover:rotate-90 transition-transform" />
                     {t('new_hat', { defaultValue: 'New Hat' })}
                 </button>
             </div>
@@ -190,7 +190,7 @@ const FunctionalHatsPage: React.FC = () => {
                             </label>
                             <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black">{form.permissions.length}</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[45vh] overflow-y-auto pr-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[45vh] overflow-y-auto pe-1">
                             {groups.map(g => {
                                 const ids = g.perms.map(p => p.id);
                                 const allOn = ids.every(i => form.permissions.includes(i));

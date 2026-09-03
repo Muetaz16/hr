@@ -236,15 +236,15 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                         {t('evaluation_status_by_department', { defaultValue: 'Evaluation Status by Department' })}
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">
-                        All employees for <strong>{month}</strong> — {fullyEvaluated}/{totalEmployees} fully evaluated.
+                        {t('all_employees_for_month_fully_evaluated', { defaultValue: 'All employees for {{month}} — {{done}}/{{total}} fully evaluated.', month, done: fullyEvaluated, total: totalEmployees })}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="relative group">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                         <input
                             type="text" placeholder={t('search_employee', { defaultValue: 'Search employee...' })} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
+                            className="ps-9 pe-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-64 outline-none"
                         />
                     </div>
                     <button
@@ -269,7 +269,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                     return (
                         <div key={groupName}>
                             <div className="w-full px-6 py-4 flex items-center justify-between gap-4 bg-slate-50/60 hover:bg-slate-50 transition-colors">
-                                <button onClick={() => toggleGroup(groupName)} className="flex items-center gap-2 text-left flex-1">
+                                <button onClick={() => toggleGroup(groupName)} className="flex items-center gap-2 text-start flex-1">
                                     {isCollapsed ? <ChevronRight className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                                     <span className="font-bold text-slate-700">{groupName}</span>
                                     <span className="text-xs text-slate-400">({groupEmployees.length})</span>
@@ -292,17 +292,17 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
 
                             {!isCollapsed && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
+                                    <table className="w-full text-start">
                                         <thead className="bg-white text-slate-400 border-b border-slate-100">
                                             <tr>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('employee', { defaultValue: 'Employee' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('direct_manager_40', { defaultValue: 'Direct Manager /40' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('skip_level_manager_40', { defaultValue: 'Skip-Level Manager /40' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('presence_20', { defaultValue: 'Presence /20' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('exceptional_20', { defaultValue: 'Exceptional ±20' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('training_10', { defaultValue: 'Training +10' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold">{t('final_score', { defaultValue: 'Final Score' })}</th>
-                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-right">{t('details', { defaultValue: 'Details' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('employee', { defaultValue: 'Employee' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('direct_manager_40', { defaultValue: 'Direct Manager /40' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('skip_level_manager_40', { defaultValue: 'Skip-Level Manager /40' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('presence_20', { defaultValue: 'Presence /20' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('exceptional_20', { defaultValue: 'Exceptional ±20' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('training_10', { defaultValue: 'Training +10' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-start">{t('final_score', { defaultValue: 'Final Score' })}</th>
+                                                <th className="px-6 py-3 text-[10px] uppercase tracking-widest font-bold text-end">{t('details', { defaultValue: 'Details' })}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
@@ -321,7 +321,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                             <p className="font-bold text-slate-700 text-sm">{emp.fullName}</p>
                                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{emp.staffId || emp.id.slice(0, 8)}</p>
                                                             {finalized && (
-                                                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-900 text-white" title={`Finalized ${new Date(finalized.finalizedAt).toLocaleDateString()}${finalized.isAuto ? ' (auto)' : ''}`}>
+                                                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-900 text-white" title={t('finalized_on_date', { defaultValue: 'Finalized {{date}}{{auto}}', date: new Date(finalized.finalizedAt).toLocaleDateString(), auto: finalized.isAuto ? ' (auto)' : '' })}>
                                                                     <Lock className="w-2.5 h-2.5" /> {t('finalized', { defaultValue: 'Finalized' })}
                                                                 </span>
                                                             )}
@@ -356,7 +356,7 @@ const EvaluationOverview: React.FC<Props> = ({ month }) => {
                                                         <td className="px-6 py-4">
                                                             <div className="font-bold text-slate-700 bg-slate-100/50 inline-block px-2 py-1 rounded-lg">{b.finalScore.toFixed(1)}%</div>
                                                         </td>
-                                                        <td className="px-6 py-4 text-right">
+                                                        <td className="px-6 py-4 text-end">
                                                             <div className="flex justify-end gap-2">
                                                                 {!finalized && (
                                                                     <button

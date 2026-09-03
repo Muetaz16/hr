@@ -21,17 +21,17 @@ const DepartmentsPage: React.FC = () => {
     // Department Modal
     const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState<Department | null>(null);
-    const [deptFormData, setDeptFormData] = useState({ name: '', groupId: '', divisionId: '', isOffice: false, positionFactor: 1.0 });
+    const [deptFormData, setDeptFormData] = useState({ name: '', nameArabic: '', groupId: '', divisionId: '', isOffice: false, positionFactor: 1.0 });
 
     // Division Modal
     const [isDivModalOpen, setIsDivModalOpen] = useState(false);
     const [editingDiv, setEditingDiv] = useState<Division | null>(null);
-    const [divFormData, setDivFormData] = useState({ name: '', directorateId: '', positionFactor: 1.0 });
+    const [divFormData, setDivFormData] = useState({ name: '', nameArabic: '', directorateId: '', positionFactor: 1.0 });
 
     // Directorate Modal
     const [isDirModalOpen, setIsDirModalOpen] = useState(false);
     const [editingDir, setEditingDir] = useState<any | null>(null);
-    const [dirFormData, setDirFormData] = useState({ name: '', positionFactor: 1.0 });
+    const [dirFormData, setDirFormData] = useState({ name: '', nameArabic: '', positionFactor: 1.0 });
 
     useEffect(() => {
         fetchData();
@@ -56,8 +56,8 @@ const DepartmentsPage: React.FC = () => {
         }
     };
 
-    const getGroupName = (groupId: string) => groups.find(g => g.id === groupId)?.name || 'Unknown Group';
-    const getDivisionName = (divId?: string) => divisions.find(d => d.id === divId)?.name || 'None';
+    const getGroupName = (groupId: string) => groups.find(g => g.id === groupId)?.name || t('unknown_group', { defaultValue: 'Unknown Group' });
+    const getDivisionName = (divId?: string) => divisions.find(d => d.id === divId)?.name || t('none', { defaultValue: 'None' });
 
     // --- Department Actions ---
     const handleDeptSubmit = async (e: React.FormEvent) => {
@@ -81,10 +81,11 @@ const DepartmentsPage: React.FC = () => {
 
     const handleEditDept = (dept: Department) => {
         setEditingDept(dept);
-        setDeptFormData({ 
-            name: dept.name, 
-            groupId: dept.groupId, 
-            divisionId: dept.divisionId || '', 
+        setDeptFormData({
+            name: dept.name,
+            nameArabic: dept.nameArabic || '',
+            groupId: dept.groupId,
+            divisionId: dept.divisionId || '',
             isOffice: dept.isOffice || false,
             positionFactor: (dept as any).positionFactor || 1.0
         });
@@ -104,7 +105,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDeptModal = () => {
         setEditingDept(null);
-        setDeptFormData({ name: '', groupId: groups.length > 0 ? groups[0].id : '', divisionId: '', isOffice: false, positionFactor: 1.0 });
+        setDeptFormData({ name: '', nameArabic: '', groupId: groups.length > 0 ? groups[0].id : '', divisionId: '', isOffice: false, positionFactor: 1.0 });
         setIsDeptModalOpen(true);
     };
 
@@ -126,12 +127,12 @@ const DepartmentsPage: React.FC = () => {
 
     const handleEditDiv = (div: Division) => {
         setEditingDiv(div);
-        setDivFormData({ name: div.name, directorateId: div.directorateId || '', positionFactor: (div as any).positionFactor || 1.0 });
+        setDivFormData({ name: div.name, nameArabic: div.nameArabic || '', directorateId: div.directorateId || '', positionFactor: (div as any).positionFactor || 1.0 });
         setIsDivModalOpen(true);
     };
 
     const handleDeleteDiv = async (id: string) => {
-        if (await confirm({ message: "Are you sure you want to delete this division?", danger: true })) {
+        if (await confirm({ message: t('confirm_delete_division', { defaultValue: 'Are you sure you want to delete this division?' }), danger: true })) {
             try {
                 await divisionService.deleteDivision(id);
                 fetchData();
@@ -143,7 +144,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDivModal = () => {
         setEditingDiv(null);
-        setDivFormData({ name: '', directorateId: '', positionFactor: 1.0 });
+        setDivFormData({ name: '', nameArabic: '', directorateId: '', positionFactor: 1.0 });
         setIsDivModalOpen(true);
     };
 
@@ -165,12 +166,12 @@ const DepartmentsPage: React.FC = () => {
 
     const handleEditDir = (dir: any) => {
         setEditingDir(dir);
-        setDirFormData({ name: dir.name, positionFactor: (dir as any).positionFactor || 1.0 });
+        setDirFormData({ name: dir.name, nameArabic: dir.nameArabic || '', positionFactor: (dir as any).positionFactor || 1.0 });
         setIsDirModalOpen(true);
     };
 
     const handleDeleteDir = async (id: string) => {
-        if (await confirm({ message: "Are you sure you want to delete this directorate?", danger: true })) {
+        if (await confirm({ message: t('confirm_delete_directorate', { defaultValue: 'Are you sure you want to delete this directorate?' }), danger: true })) {
             try {
                 await directorateService.deleteDirectorate(id);
                 fetchData();
@@ -182,7 +183,7 @@ const DepartmentsPage: React.FC = () => {
 
     const openNewDirModal = () => {
         setEditingDir(null);
-        setDirFormData({ name: '', positionFactor: 1.0 });
+        setDirFormData({ name: '', nameArabic: '', positionFactor: 1.0 });
         setIsDirModalOpen(true);
     };
 
@@ -192,28 +193,28 @@ const DepartmentsPage: React.FC = () => {
         <div className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Organization Structure</h1>
-                    <p className="text-sm text-gray-500">Manage Divisions, Departments, and Offices</p>
+                    <h1 className="text-2xl font-bold text-gray-800">{t('org_structure')}</h1>
+                    <p className="text-sm text-gray-500">{t('org_structure_subtitle', { defaultValue: 'Manage Divisions, Departments, and Offices' })}</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3 bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('DIRECTORATES')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'DIRECTORATES' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        Directorates
+                        {t('directorates', { defaultValue: 'Directorates' })}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('DIVISIONS')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'DIVISIONS' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        Divisions
+                        {t('divisions', { defaultValue: 'Divisions' })}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('DEPARTMENTS')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'DEPARTMENTS' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        Departments & Offices
+                        {t('departments_offices', { defaultValue: 'Departments & Offices' })}
                     </button>
                 </div>
             </div>
@@ -224,28 +225,31 @@ const DepartmentsPage: React.FC = () => {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-indigo-500" />
-                            Directorates
+                            {t('directorates', { defaultValue: 'Directorates' })}
                         </h2>
                         <button onClick={openNewDirModal} className="flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
-                            <Plus size={16} className="mr-1" />
-                            Add Directorate
+                            <Plus size={16} className="me-1" />
+                            {t('add_directorate', { defaultValue: 'Add Directorate' })}
                         </button>
                     </div>
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Directorate Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Divisions Count</th>
-                                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('directorate_name', { defaultValue: 'Directorate Name' })}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('divisions_count', { defaultValue: 'Divisions Count' })}</th>
+                                <th className="px-6 py-3 text-end text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
                             {directorates.map((dir) => (
                                 <tr key={dir.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{dir.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                                        {dir.name}
+                                        {dir.nameArabic && <span className="block text-xs font-normal text-gray-400" dir="rtl">{dir.nameArabic}</span>}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{dir.divisions?.length || 0}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button onClick={() => handleEditDir(dir)} className="text-indigo-600 hover:text-indigo-900 mr-4 p-1 rounded hover:bg-indigo-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
+                                        <button onClick={() => handleEditDir(dir)} className="text-indigo-600 hover:text-indigo-900 me-4 p-1 rounded hover:bg-indigo-50">
                                             <Edit size={16} />
                                         </button>
                                         <button onClick={() => handleDeleteDir(dir.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50">
@@ -255,7 +259,7 @@ const DepartmentsPage: React.FC = () => {
                                 </tr>
                             ))}
                             {directorates.length === 0 && (
-                                <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 text-sm">No directorates defined.</td></tr>
+                                <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 text-sm">{t('no_directorates_defined', { defaultValue: 'No directorates defined.' })}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -268,28 +272,31 @@ const DepartmentsPage: React.FC = () => {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <LayoutGrid className="w-5 h-5 text-indigo-500" />
-                            Divisions
+                            {t('divisions', { defaultValue: 'Divisions' })}
                         </h2>
                         <button onClick={openNewDivModal} className="flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
-                            <Plus size={16} className="mr-1" />
-                            Add Division
+                            <Plus size={16} className="me-1" />
+                            {t('add_division', { defaultValue: 'Add Division' })}
                         </button>
                     </div>
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Division Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Departments Count</th>
-                                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('division_name', { defaultValue: 'Division Name' })}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('departments_count', { defaultValue: 'Departments Count' })}</th>
+                                <th className="px-6 py-3 text-end text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
                             {divisions.map((div) => (
                                 <tr key={div.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{div.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                                        {div.name}
+                                        {div.nameArabic && <span className="block text-xs font-normal text-gray-400" dir="rtl">{div.nameArabic}</span>}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{div._count?.departments || 0}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button onClick={() => handleEditDiv(div)} className="text-indigo-600 hover:text-indigo-900 mr-4 p-1 rounded hover:bg-indigo-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
+                                        <button onClick={() => handleEditDiv(div)} className="text-indigo-600 hover:text-indigo-900 me-4 p-1 rounded hover:bg-indigo-50">
                                             <Edit size={16} />
                                         </button>
                                         <button onClick={() => handleDeleteDiv(div.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50">
@@ -299,7 +306,7 @@ const DepartmentsPage: React.FC = () => {
                                 </tr>
                             ))}
                             {divisions.length === 0 && (
-                                <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 text-sm">No divisions defined.</td></tr>
+                                <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 text-sm">{t('no_divisions_defined', { defaultValue: 'No divisions defined.' })}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -312,21 +319,21 @@ const DepartmentsPage: React.FC = () => {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-indigo-500" />
-                            Departments & Offices
+                            {t('departments_offices', { defaultValue: 'Departments & Offices' })}
                         </h2>
                         <button onClick={openNewDeptModal} className="flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
-                            <Plus size={16} className="mr-1" />
-                            Add Department / Office
+                            <Plus size={16} className="me-1" />
+                            {t('add_department_office', { defaultValue: 'Add Department / Office' })}
                         </button>
                     </div>
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Division</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('group')}</th>
-                                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('type', { defaultValue: 'Type' })}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('name', { defaultValue: 'Name' })}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('division')}</th>
+                                <th className="px-6 py-3 text-start text-xs font-bold text-gray-500 uppercase tracking-wider">{t('group')}</th>
+                                <th className="px-6 py-3 text-end text-xs font-bold text-gray-500 uppercase tracking-wider">{t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
@@ -335,11 +342,11 @@ const DepartmentsPage: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {dept.isOffice ? (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                                <Building className="w-3 h-3" /> Office
+                                                <Building className="w-3 h-3" /> {t('office', { defaultValue: 'Office' })}
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100">
-                                                <Building2 className="w-3 h-3" /> Dept
+                                                <Building2 className="w-3 h-3" /> {t('dept_abbr', { defaultValue: 'Dept' })}
                                             </span>
                                         )}
                                     </td>
@@ -347,13 +354,14 @@ const DepartmentsPage: React.FC = () => {
                                         <Link to={`/employees?deptId=${dept.id}`} className="hover:text-indigo-600 hover:underline">
                                             {dept.name}
                                         </Link>
+                                        {dept.nameArabic && <span className="block text-xs font-normal text-gray-400" dir="rtl">{dept.nameArabic}</span>}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {dept.isOffice ? <span className="text-gray-300 italic">Direct to GM</span> : getDivisionName(dept.divisionId)}
+                                        {dept.isOffice ? <span className="text-gray-300 italic">{t('direct_to_gm', { defaultValue: 'Direct to GM' })}</span> : getDivisionName(dept.divisionId)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getGroupName(dept.groupId)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button onClick={() => handleEditDept(dept)} className="text-indigo-600 hover:text-indigo-900 mr-4 p-1 rounded hover:bg-indigo-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-end text-sm font-medium">
+                                        <button onClick={() => handleEditDept(dept)} className="text-indigo-600 hover:text-indigo-900 me-4 p-1 rounded hover:bg-indigo-50">
                                             <Edit size={16} />
                                         </button>
                                         <button onClick={() => handleDeleteDept(dept.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50">
@@ -363,7 +371,7 @@ const DepartmentsPage: React.FC = () => {
                                 </tr>
                             ))}
                             {departments.length === 0 && (
-                                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">No departments or offices defined.</td></tr>
+                                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">{t('no_departments_offices_defined', { defaultValue: 'No departments or offices defined.' })}</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -371,10 +379,10 @@ const DepartmentsPage: React.FC = () => {
             )}
 
             {/* Directorate Modal */}
-            <Modal isOpen={isDirModalOpen} onClose={() => setIsDirModalOpen(false)} title={editingDir ? "Edit Directorate" : "Add New Directorate"}>
+            <Modal isOpen={isDirModalOpen} onClose={() => setIsDirModalOpen(false)} title={editingDir ? t('edit_directorate', { defaultValue: 'Edit Directorate' }) : t('add_new_directorate', { defaultValue: 'Add New Directorate' })}>
                 <form onSubmit={handleDirSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Directorate Name</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('directorate_name_english', { defaultValue: 'Directorate Name (English)' })}</label>
                         <input
                             type="text" required value={dirFormData.name}
                             onChange={(e) => setDirFormData({ ...dirFormData, name: e.target.value })}
@@ -382,7 +390,15 @@ const DepartmentsPage: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">اسم المديرية (عربي)</label>
+                        <input
+                            type="text" dir="rtl" value={dirFormData.nameArabic}
+                            onChange={(e) => setDirFormData({ ...dirFormData, nameArabic: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_factor_multiplier', { defaultValue: 'Position Factor (Multiplier)' })}</label>
                         <input
                             type="number" step="0.05" min="1.0" required value={dirFormData.positionFactor}
                             onChange={(e) => setDirFormData({ ...dirFormData, positionFactor: parseFloat(e.target.value) })}
@@ -390,17 +406,17 @@ const DepartmentsPage: React.FC = () => {
                         />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={() => setIsDirModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">{editingDir ? 'Update' : 'Create'}</button>
+                        <button type="button" onClick={() => setIsDirModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">{t('cancel')}</button>
+                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">{editingDir ? t('update') : t('create')}</button>
                     </div>
                 </form>
             </Modal>
 
             {/* Division Modal */}
-            <Modal isOpen={isDivModalOpen} onClose={() => setIsDivModalOpen(false)} title={editingDiv ? "Edit Division" : "Add New Division"}>
+            <Modal isOpen={isDivModalOpen} onClose={() => setIsDivModalOpen(false)} title={editingDiv ? t('edit_division', { defaultValue: 'Edit Division' }) : t('add_new_division', { defaultValue: 'Add New Division' })}>
                 <form onSubmit={handleDivSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Division Name</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('division_name_english', { defaultValue: 'Division Name (English)' })}</label>
                         <input
                             type="text" required value={divFormData.name}
                             onChange={(e) => setDivFormData({ ...divFormData, name: e.target.value })}
@@ -408,20 +424,28 @@ const DepartmentsPage: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Parent Directorate (Optional)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">اسم القطاع (عربي)</label>
+                        <input
+                            type="text" dir="rtl" value={divFormData.nameArabic}
+                            onChange={(e) => setDivFormData({ ...divFormData, nameArabic: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('parent_directorate_optional', { defaultValue: 'Parent Directorate (Optional)' })}</label>
                         <select
                             value={divFormData.directorateId}
                             onChange={(e) => setDivFormData({ ...divFormData, directorateId: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         >
-                            <option value="">None (Reports direct to GM)</option>
+                            <option value="">{t('none_reports_direct_gm', { defaultValue: 'None (Reports direct to GM)' })}</option>
                             {directorates.map(dir => (
                                 <option key={dir.id} value={dir.id}>{dir.name}</option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_factor_multiplier', { defaultValue: 'Position Factor (Multiplier)' })}</label>
                         <input
                             type="number" step="0.05" min="1.0" required value={divFormData.positionFactor}
                             onChange={(e) => setDivFormData({ ...divFormData, positionFactor: parseFloat(e.target.value) })}
@@ -429,55 +453,63 @@ const DepartmentsPage: React.FC = () => {
                         />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={() => setIsDivModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">{editingDiv ? 'Update' : 'Create'}</button>
+                        <button type="button" onClick={() => setIsDivModalOpen(false)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">{t('cancel')}</button>
+                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">{editingDiv ? t('update') : t('create')}</button>
                     </div>
                 </form>
             </Modal>
 
             {/* Department / Office Modal */}
-            <Modal isOpen={isDeptModalOpen} onClose={() => setIsDeptModalOpen(false)} title={editingDept ? "Edit Department / Office" : "Add New Department / Office"}>
+            <Modal isOpen={isDeptModalOpen} onClose={() => setIsDeptModalOpen(false)} title={editingDept ? t('edit_department_office', { defaultValue: 'Edit Department / Office' }) : t('add_new_department_office', { defaultValue: 'Add New Department / Office' })}>
                 <form onSubmit={handleDeptSubmit} className="space-y-4">
-                    
+
                     <div className="flex gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                         <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                checked={!deptFormData.isOffice} 
+                            <input
+                                type="radio"
+                                checked={!deptFormData.isOffice}
                                 onChange={() => setDeptFormData({ ...deptFormData, isOffice: false })}
                                 className="text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span className="text-sm font-bold text-gray-800">Standard Department</span>
+                            <span className="text-sm font-bold text-gray-800">{t('standard_department', { defaultValue: 'Standard Department' })}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                checked={deptFormData.isOffice} 
+                            <input
+                                type="radio"
+                                checked={deptFormData.isOffice}
                                 onChange={() => setDeptFormData({ ...deptFormData, isOffice: true })}
                                 className="text-emerald-600 focus:ring-emerald-500"
                             />
-                            <span className="text-sm font-bold text-gray-800">Office (Direct to GM)</span>
+                            <span className="text-sm font-bold text-gray-800">{t('office_direct_gm', { defaultValue: 'Office (Direct to GM)' })}</span>
                         </label>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">{deptFormData.isOffice ? 'Office Name' : 'Department Name'}</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{deptFormData.isOffice ? t('office_name_english', { defaultValue: 'Office Name (English)' }) : t('department_name_english', { defaultValue: 'Department Name (English)' })}</label>
                         <input
                             type="text" required value={deptFormData.name}
                             onChange={(e) => setDeptFormData({ ...deptFormData, name: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                     </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{deptFormData.isOffice ? 'اسم المكتب (عربي)' : 'اسم القسم (عربي)'}</label>
+                        <input
+                            type="text" dir="rtl" value={deptFormData.nameArabic}
+                            onChange={(e) => setDeptFormData({ ...deptFormData, nameArabic: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                    </div>
 
                     {!deptFormData.isOffice && (
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Parent Division</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">{t('parent_division', { defaultValue: 'Parent Division' })}</label>
                             <select
                                 value={deptFormData.divisionId}
                                 onChange={(e) => setDeptFormData({ ...deptFormData, divisionId: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                             >
-                                <option value="">No Division (Top Level)</option>
+                                <option value="">{t('no_division_top_level', { defaultValue: 'No Division (Top Level)' })}</option>
                                 {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                             </select>
                         </div>
@@ -496,7 +528,7 @@ const DepartmentsPage: React.FC = () => {
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Position Factor (Multiplier)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">{t('position_factor_multiplier', { defaultValue: 'Position Factor (Multiplier)' })}</label>
                         <input
                             type="number" step="0.05" min="1.0" required value={deptFormData.positionFactor}
                             onChange={(e) => setDeptFormData({ ...deptFormData, positionFactor: parseFloat(e.target.value) })}

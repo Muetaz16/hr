@@ -21,6 +21,18 @@ import * as XLSX from 'xlsx-js-style';
 import { roleThemes } from '../config/roleThemes';
 import type { UserRole } from '../types';
 
+// i18n key per evaluator level — reuses the same generic role keys already established
+// elsewhere (Dashboard, Approvals) rather than leaving LEVEL_LABEL's raw English strings
+// on screen untranslated.
+const LEVEL_LABEL_KEYS: Record<EvalLevel, string> = {
+    UNIT: 'head_of_unit',
+    DEPARTMENT: 'head_of_department',
+    DIVISION: 'head_of_division',
+    DIRECTOR: 'head_of_directorate',
+    GM: 'general_manager',
+    CHAIRMAN: 'chairman',
+};
+
 // Metric-based levels store the 16 competency scores (max total = 80).
 const METRIC_LEVELS: EvalLevel[] = ['UNIT', 'DEPARTMENT', 'DIVISION', 'DIRECTOR'];
 const MAX_METRIC_TOTAL = 80;
@@ -31,7 +43,8 @@ const emptyMaps = (): LevelMaps => ({ UNIT: {}, DEPARTMENT: {}, DIVISION: {}, DI
 
 const EvaluationsPage: React.FC = () => {
     const { currentUser } = useAuth();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const levelLabel = (level: EvalLevel) => t(LEVEL_LABEL_KEYS[level], { defaultValue: LEVEL_LABEL[level] });
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -212,9 +225,9 @@ const EvaluationsPage: React.FC = () => {
                     <input
                         type="number" min="0" max="100" step="1" required value={displayValue}
                         onChange={(e) => handleChange(Number(e.target.value))}
-                        className="w-full pl-4 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-300 transition-all font-bold text-slate-800 text-base text-center"
+                        className="w-full ps-4 pe-9 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-300 transition-all font-bold text-slate-800 text-base text-center"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">%</span>
+                    <span className="absolute end-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">%</span>
                 </div>
             </div>
         );
@@ -311,8 +324,8 @@ const EvaluationsPage: React.FC = () => {
                         {t('export_excel', { defaultValue: 'EXPORT EVALUATIONS' })}
                     </button>
                     <div className="glass-card flex items-center px-4 py-2 rounded-2xl shadow-sm border border-white/40 bg-white/40 sticky top-0 backdrop-blur-md">
-                        <Calendar className="w-4 h-4 text-slate-500 mr-2" />
-                        <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-transparent border-none text-slate-800 font-bold focus:ring-0 text-sm p-0 cursor-pointer" />
+                        <Calendar className="w-4 h-4 text-slate-500 me-2" />
+                        <input type="month" lang={i18n.language} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-transparent border-none text-slate-800 font-bold focus:ring-0 text-sm p-0 cursor-pointer" />
                     </div>
                 </div>
             </div>
@@ -321,8 +334,8 @@ const EvaluationsPage: React.FC = () => {
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
                     <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
                     <div>
-                        <p className="text-sm font-black text-amber-800 uppercase tracking-wide">Evaluation Period Closed</p>
-                        <p className="text-xs text-amber-600 font-medium mt-0.5">Submissions are disabled for {selectedMonth}. Contact HR to open the window.</p>
+                        <p className="text-sm font-black text-amber-800 uppercase tracking-wide">{t('evaluation_period_closed', { defaultValue: 'Evaluation Period Closed' })}</p>
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">{t('submissions_disabled_for_month_contact_hr', { defaultValue: 'Submissions are disabled for {{month}}. Contact HR to open the window.', month: selectedMonth })}</p>
                     </div>
                 </div>
             )}
@@ -348,7 +361,7 @@ const EvaluationsPage: React.FC = () => {
                 <div className="glass-card p-6 rounded-3xl border-l-4 border-emerald-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
                     <div className="flex items-center justify-between mb-4 relative z-10">
                         <div className="p-3 bg-emerald-50/50 rounded-2xl text-emerald-600"><TrendingUp className="w-5 h-5" /></div>
-                        <div className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md"><ArrowUpRight className="w-3 h-3 mr-1" /> {t('finish')}</div>
+                        <div className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md"><ArrowUpRight className="w-3 h-3 me-1" /> {t('finish')}</div>
                     </div>
                     <p className="text-3xl font-outfit font-bold text-slate-800 relative z-10">{completionRate}%</p>
                     <p className="text-sm text-slate-500 mt-1 relative z-10">{t('completion_progress')}</p>
@@ -359,21 +372,21 @@ const EvaluationsPage: React.FC = () => {
             <div className="glass-card rounded-[32px] overflow-hidden shadow-2xl shadow-slate-200/50 border border-white/40">
                 <div className="p-6 border-b border-white/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/30 backdrop-blur-md">
                     <div className="relative group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                        <input type="text" placeholder={t('filter_by_name')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-11 pr-4 py-2.5 bg-white/50 border-white/40 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-80 shadow-sm" />
+                        <Search className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                        <input type="text" placeholder={t('filter_by_name')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="ps-11 pe-4 py-2.5 bg-white/50 border-white/40 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all w-full sm:w-80 shadow-sm" />
                     </div>
-                    <button className="flex items-center text-xs font-bold text-slate-500 uppercase tracking-widest bg-white/40 px-3 py-2 rounded-xl border border-white/40"><Filter className="w-4 h-4 mr-2" /> {t('show_all')}</button>
+                    <button className="flex items-center text-xs font-bold text-slate-500 uppercase tracking-widest bg-white/40 px-3 py-2 rounded-xl border border-white/40"><Filter className="w-4 h-4 me-2" /> {t('show_all')}</button>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-start border-collapse">
                         <thead>
-                            <tr className="bg-slate-50/80 border-b border-slate-200 text-left">
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('employee')}</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Required Evaluators</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Progress</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Final (avg)</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">{t('action')}</th>
+                            <tr className="bg-slate-50/80 border-b border-slate-200 text-start">
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-start">{t('employee')}</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-start">{t('required_evaluators', { defaultValue: 'Required Evaluators' })}</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-start">{t('progress', { defaultValue: 'Progress' })}</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-start">{t('final_avg', { defaultValue: 'Final (avg)' })}</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-end">{t('action')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -384,7 +397,7 @@ const EvaluationsPage: React.FC = () => {
                                     <tr key={emp.id} className="group hover:bg-slate-50/50 transition-colors">
                                         <td className="px-8 py-4">
                                             <div className="flex items-center">
-                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#541c2c] to-[#aa7a51] flex items-center justify-center text-[#e3c4a2] font-black text-sm mr-4 shadow-md shadow-[#300a15]/50">{(emp.fullName || 'U').charAt(0)}</div>
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#541c2c] to-[#aa7a51] flex items-center justify-center text-[#e3c4a2] font-black text-sm me-4 shadow-md shadow-[#300a15]/50">{(emp.fullName || 'U').charAt(0)}</div>
                                                 <div>
                                                     <p className="font-bold text-slate-800">{emp.fullName}</p>
                                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{t('id')}: {emp.staffId || emp.id.slice(0, 8)}</p>
@@ -393,13 +406,13 @@ const EvaluationsPage: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-4">
                                             {s.levels.length === 0 ? (
-                                                <span className="text-slate-400 text-xs italic">Top of hierarchy</span>
+                                                <span className="text-slate-400 text-xs italic">{t('top_of_hierarchy', { defaultValue: 'Top of hierarchy' })}</span>
                                             ) : (
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {s.levels.map((lvl, i) => (
                                                         <span key={lvl} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ${s.scores[i] != null ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
                                                             {s.scores[i] != null && <CheckCircle2 className="w-3 h-3" />}
-                                                            {LEVEL_LABEL[lvl]}{s.scores[i] != null ? ` · ${s.scores[i]!.toFixed(0)}%` : ''}
+                                                            {levelLabel(lvl)}{s.scores[i] != null ? ` · ${s.scores[i]!.toFixed(0)}%` : ''}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -414,17 +427,17 @@ const EvaluationsPage: React.FC = () => {
                                             {s.final != null ? (
                                                 <div className="font-bold text-slate-700 bg-slate-100/50 inline-block px-2 py-1 rounded-lg">{s.final.toFixed(1)}%</div>
                                             ) : (
-                                                <span className="text-slate-400 text-xs italic px-2">Pending</span>
+                                                <span className="text-slate-400 text-xs italic px-2">{t('pending', { defaultValue: 'Pending' })}</span>
                                             )}
                                         </td>
-                                        <td className="px-8 py-4 text-right">
+                                        <td className="px-8 py-4 text-end">
                                             <div className="flex justify-end gap-2">
                                                 {actions.length === 0 && <span className="text-[10px] text-slate-300 italic">—</span>}
                                                 {actions.map(a => {
                                                     const done = a !== 'PERSONNEL' && maps[a]?.[emp.id];
                                                     const persDone = a === 'PERSONNEL' && persEvals[emp.id];
                                                     const disabled = a !== 'PERSONNEL' && !isPeriodEnabled && currentUser?.role !== 'SUPER_ADMIN';
-                                                    const label = a === 'PERSONNEL' ? t('personnel_evaluation') : `${LEVEL_LABEL[a]} evaluation`;
+                                                    const label = a === 'PERSONNEL' ? t('personnel_evaluation') : t('level_evaluation', { defaultValue: '{{level}} evaluation', level: levelLabel(a) });
                                                     return (
                                                         <button
                                                             key={a}
@@ -462,13 +475,13 @@ const EvaluationsPage: React.FC = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={`${LEVEL_LABEL[modalLevel]} — ${selectedEmp?.fullName || ''}`}
+                title={`${levelLabel(modalLevel)} — ${selectedEmp?.fullName || ''}`}
                 fullScreen
                 fullScreenWidth="max-w-5xl"
             >
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="flex items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-4 sticky top-0 z-10">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#541c2c] to-[#aa7a51] flex items-center justify-center mr-4 text-[#e3c4a2] font-black shadow-md shadow-[#300a15]/50">{(selectedEmp?.fullName || 'U').charAt(0)}</div>
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#541c2c] to-[#aa7a51] flex items-center justify-center me-4 text-[#e3c4a2] font-black shadow-md shadow-[#300a15]/50">{(selectedEmp?.fullName || 'U').charAt(0)}</div>
                         <div>
                             <p className="font-bold text-slate-800 leading-none mb-1">{selectedEmp?.fullName}</p>
                             <p className="text-xs text-slate-500">{selectedMonth} • {t('assessment_period')}</p>
@@ -517,7 +530,7 @@ const EvaluationsPage: React.FC = () => {
                                 <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b pb-3 mb-1">{t('overall_performance')}</h4>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 py-5">
                                     <div className="flex-1">
-                                        <label className="text-sm font-bold text-slate-700">Final Score (0–100)</label>
+                                        <label className="text-sm font-bold text-slate-700">{t('final_score_0_100', { defaultValue: 'Final Score (0–100)' })}</label>
                                         <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xl">{t('final_score_desc')}</p>
                                     </div>
                                     <div className="w-full sm:w-40 shrink-0">
