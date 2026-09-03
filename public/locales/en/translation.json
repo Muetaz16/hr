@@ -1,5 +1,6 @@
 {
-    "nav_recruitment_pipeline": "Recruitment Pipeline",
+    "nav_recruitment_pipeline": "Recruitment Department",
+    "nav_applicant_list": "Applicant List",
     "failed_to_enable_evaluation_period": "Failed to enable evaluation period.",
     "enabled": "Enabled",
     "disabled": "Disabled",

@@ -144,12 +144,20 @@ function App() {
                     <Route path="/recruitment/new" element={<RecruitmentCreatePage />} />
                     <Route path="/recruitment/approvals" element={<RecruitmentApprovalsPage />} />
                   </Route>
-                  {/* HR's own execution pipeline once a request is approved — no head-facing role
-                      here anymore, mirrors the "Recruitment Pipeline" nav group under HR & Personnel. */}
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_recruitment', 'manage_recruitment']} />}>
-                    <Route path="/recruitment/positions" element={<PositionsToFillPage />} />
+                  {/* Head-facing recruitment steps: the requesting head reviews (accepts/rejects)
+                      candidates on the Applicant List and submits the technical evaluation in
+                      Interviews — for their own requisitions only. Both pages scope to their
+                      requisitions and hide every HR-only action (Add, schedule, HR eval, etc.). */}
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
                     <Route path="/recruitment/hiring" element={<HiringListPage />} />
                     <Route path="/recruitment/interviews" element={<InterviewsPage />} />
+                  </Route>
+                  {/* HR's own execution pipeline once a request is approved — the recruitment team
+                      only (HR roles or the "Approve as Head of Recruitment" permission). NOT gated on
+                      view/manage_recruitment, which heads inherit. Mirrors the "Recruitment
+                      Department" nav group under HR & Personnel. */}
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['approve_hr_recruitment']} />}>
+                    <Route path="/recruitment/positions" element={<PositionsToFillPage />} />
                     <Route path="/recruitment/offers" element={<JobOffersPage />} />
                     <Route path="/recruitment/onboarding" element={<OnboardingPage />} />
                   </Route>

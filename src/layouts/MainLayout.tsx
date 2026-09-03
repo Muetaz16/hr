@@ -256,6 +256,15 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), path: '/recruitment/requests', roles: ['SUPER_ADMIN', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
                         { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions-browse', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
                         { label: t('nav_recruitment_approvals', { defaultValue: 'Approvals' }), path: '/recruitment/approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['recruitment_approvals'] },
+                        // Heads review (accept/reject) candidates sourced against their own approved
+                        // requisitions — they can't add candidates (that's HR, on the Recruitment
+                        // Department pipeline). The page itself scopes to the head's requisitions and
+                        // hides the Add action for non-HR.
+                        { label: t('nav_applicant_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['recruitment_approvals'] },
+                        // Heads take part in interviews only to submit the technical evaluation for
+                        // their own candidates — HR still schedules and does the HR evaluation. The
+                        // page hides every HR-only action for non-HR users.
+                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['recruitment_approvals'] },
                     ]
                 },
                 { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
@@ -329,20 +338,24 @@ const MainLayout: React.FC = () => {
                     ]
                 },
                 {
-                    // HR's own execution pipeline once a hiring request is approved — heads have
-                    // no actionable role here (they request/approve/browse-JD from the standalone
-                    // "Recruitment" section above instead), so this is restricted the same way the
-                    // rest of this department is.
-                    label: t('nav_recruitment_pipeline', { defaultValue: 'Recruitment Pipeline' }),
+                    // HR's own execution pipeline once a hiring request is approved. Heads inherit
+                    // view_recruitment / manage_recruitment from their position (they need them to
+                    // request hiring & review their own candidates), so gating on those would leak
+                    // this whole department to every head. It's gated instead on the recruitment-team
+                    // permission a head does NOT inherit — "Approve as Head of Recruitment"
+                    // (approve_hr_recruitment) — plus the HR roles. Grant that to a head and they
+                    // become a full recruiter and see this section; without it they only get the
+                    // limited head steps under the standalone "Recruitment" section above.
+                    label: t('nav_recruitment_pipeline', { defaultValue: 'Recruitment Department' }),
                     icon: UserPlus,
                     roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
-                    permissions: ['view_recruitment', 'manage_recruitment'],
+                    permissions: ['approve_hr_recruitment'],
                     children: [
-                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
                     ]
                 }
             ]

@@ -67,7 +67,14 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     const [requisitions, setRequisitions] = useState<RecruitmentRequest[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
+    // "Full recruiter" = the recruitment team: HR roles, or anyone granted "Approve as Head of
+    // Recruitment" (approve_hr_recruitment). They add / schedule / HR-eval and see every requisition.
+    // NOT keyed on view/manage_recruitment — heads inherit those from their position, so keying on
+    // them would make every head a full recruiter. A head WITHOUT approve_hr_recruitment takes part
+    // only as the requesting head: review + technical evaluation of their own department's candidates,
+    // no Add, scoped to their department.
+    const isHeadRole = ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'].includes(currentUser?.role || '');
+    const isHR = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['approve_hr_recruitment']);
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
     // Higher management can accept/reject candidates as an override (in addition to the owning head).
     const isMgmt = canAccess(currentUser, ['GENERAL_MANAGER', 'CHAIRMAN'], ['recruitment_approvals']);
@@ -127,7 +134,10 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
         }
     };
 
-    const isRequester = (c: Candidate) => isAdmin || isMgmt || c.requisition?.requester?.id === currentUser?.id;
+    // The head responsible for a candidate = the person who raised the requisition OR the head whose
+    // department/division the requisition belongs to. The requisition list is already org-scoped for
+    // heads server-side, so membership in it means the candidate is in this head's scope.
+    const isRequester = (c: Candidate) => isAdmin || isMgmt || c.requisition?.requester?.id === currentUser?.id || (isHeadRole && requisitions.some(r => r.id === c.requisitionId));
 
     // Approved hire requisitions this user can source candidates against.
     // Also include filled (closed) requisitions if they already have candidates submitted to them.
@@ -574,7 +584,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
             {/* ===================== SCREENING (Applicant List) ===================== */}
             {view === 'screening' && (
                 <div className="space-y-6">
-                    {((isHR || isMgmt) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id))
+                    {((isHR || isMgmt || isHeadRole) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id))
                         .filter(r => {
                             const q = searchTerm.toLowerCase();
                             const rMatch = (r.jobTitle || '').toLowerCase().includes(q) || (r.department?.name || '').toLowerCase().includes(q) || (r.division?.name || '').toLowerCase().includes(q);
@@ -659,7 +669,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                 </div>
                             );
                         })}
-                    {((isHR || isMgmt) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id)).filter(r => isHR || isMgmt || hiringListCands.some(c => c.requisitionId === r.id)).length === 0 && (
+                    {((isHR || isMgmt || isHeadRole) ? openReqs : openReqs.filter(r => r.requesterId === currentUser?.id || r.requester?.id === currentUser?.id)).filter(r => isHR || isMgmt || hiringListCands.some(c => c.requisitionId === r.id)).length === 0 && (
                         <EmptyState icon={UserPlus} text={isHR ? t('no_open_reqs_add', { defaultValue: 'No approved requisitions to source candidates for.' }) : t('no_cands_for_you', { defaultValue: 'No candidates awaiting your review.' })} />
                     )}
                 </div>

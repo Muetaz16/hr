@@ -31,8 +31,46 @@ const candidateInclude = {
 // recognized too — these used to check role only, silently excluding anyone whose HR/recruitment
 // authority came from a Functional Hat or individual grant rather than a literal role match.
 type ReqUserLike = { role?: string; permissions?: string[] } | undefined;
-const isHRRole = (user: ReqUserLike) => user?.role === 'HR_MANAGER' || user?.role === 'SUPER_ADMIN' || (user?.permissions || []).includes('manage_recruitment');
-const isPrivileged = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(user?.role || '') || (user?.permissions || []).includes('recruitment_approvals') || (user?.permissions || []).includes('manage_recruitment');
+// A head who holds a recruitment permission (manage_recruitment) is a full recruiter — add,
+// schedule, HR-eval, and see every requisition. A head WITHOUT it takes part only as the requesting
+// head: they review/technically-evaluate candidates in their own department's requisitions and can't
+// add candidates. `isHeadRole` is used only to org-scope that limited (non-privileged) head.
+const HEAD_ONLY_ROLES = ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'];
+const isHeadRole = (user: ReqUserLike) => HEAD_ONLY_ROLES.includes(user?.role || '');
+// "Full recruiter" = HR roles, or anyone granted "Approve as Head of Recruitment"
+// (approve_hr_recruitment). NOT keyed on view/manage_recruitment — heads inherit those from their
+// position, so keying on them would let every head add candidates and see the whole pipeline.
+const isHRRole = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'PERSONNEL'].includes(user?.role || '') || (user?.permissions || []).includes('approve_hr_recruitment');
+const isPrivileged = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(user?.role || '') || (user?.permissions || []).includes('recruitment_approvals') || (user?.permissions || []).includes('approve_hr_recruitment');
+
+// Resolve a head's org scope from their employee record (falls back to the user's own department).
+const resolveHeadScope = async (userId?: string, user?: any) => {
+    const emp = userId
+        ? await prisma.employee.findUnique({ where: { userId }, select: { divisionId: true, departmentId: true } }).catch(() => null)
+        : null;
+    let divisionId = emp?.divisionId || null;
+    const departmentId = emp?.departmentId || user?.departmentId || null;
+    if (!divisionId && departmentId) {
+        const dept = await prisma.department.findUnique({ where: { id: departmentId }, select: { divisionId: true } });
+        divisionId = dept?.divisionId || null;
+    }
+    return { divisionId, departmentId };
+};
+
+// Prisma `requisition` OR-filter for the requisitions a head may see/act on — their own requests
+// PLUS everything in their org scope (a Division head: their division; a Department/Office head:
+// their department). Mirrors getAllRecruitmentRequests so the candidate list, the requisition list
+// and the accept authorization all agree on exactly which requisitions a head owns — a head can act
+// on any candidate for a requisition in their department, not only ones they personally raised.
+const buildHeadReqOr = async (userId: string, user: any): Promise<any[]> => {
+    const or: any[] = [{ requesterId: userId }];
+    if (!isHeadRole(user)) return or;
+    const role = user?.role;
+    const scope = await resolveHeadScope(userId, user);
+    if (role === 'HEAD_DIVISION' && scope.divisionId) or.push({ divisionId: scope.divisionId }, { department: { divisionId: scope.divisionId } });
+    else if (['HEAD_DEPARTMENT', 'HEAD_OFFICE'].includes(role || '') && scope.departmentId) or.push({ departmentId: scope.departmentId });
+    return or;
+};
 
 // Helper to append an event to the events array
 const appendEvent = (existingEvents: any, action: string, performedBy: string, note?: string) => {
@@ -51,8 +89,9 @@ export const getCandidates = async (req: Request, res: Response) => {
         if (requisitionId) where.requisitionId = String(requisitionId);
         if (stage) where.stage = String(stage);
         if (!isPrivileged((req as any).user)) {
-            // A head only sees candidates for the requisitions they own.
-            where.requisition = { requesterId: userId };
+            // A head sees candidates for every requisition in their org scope (their department /
+            // division), not only requisitions they personally raised.
+            where.requisition = { OR: await buildHeadReqOr(userId, (req as any).user) };
         }
 
         const candidates = await prisma.candidate.findMany({
@@ -152,12 +191,16 @@ export const createCandidate = async (req: Request, res: Response) => {
 // Helper: load a candidate with its requisition and enforce that the actor is the requesting head
 // (or Super Admin). `extraAllowedRoles` lets specific actions (e.g. accepting a candidate) also
 // permit higher management — HR is never granted access through this helper.
-const loadForHead = async (id: string, userId: string, userRole?: string, extraAllowedRoles: string[] = []) => {
+const loadForHead = async (id: string, user: any, extraAllowedRoles: string[] = []) => {
     const candidate = await prisma.candidate.findUnique({ where: { id }, include: { requisition: true } });
     if (!candidate) return { error: 'notfound' as const };
-    const isRequester = candidate.requisition.requesterId === userId;
-    const isAllowedRole = userRole === 'SUPER_ADMIN' || extraAllowedRoles.includes(userRole || '');
-    if (!isRequester && !isAllowedRole) return { error: 'forbidden' as const, candidate };
+    const role = user?.role;
+    if (role === 'SUPER_ADMIN' || extraAllowedRoles.includes(role || '')) return { candidate };
+    // Authorized if the candidate's requisition falls within the head's org scope (their own request
+    // or anything in their department/division) — same scope the list uses.
+    const or = await buildHeadReqOr(user?.id, user);
+    const inScope = await prisma.candidate.findFirst({ where: { id, requisition: { OR: or } }, select: { id: true } });
+    if (!inScope) return { error: 'forbidden' as const, candidate };
     return { candidate };
 };
 
@@ -171,7 +214,7 @@ export const screenCandidate = async (req: Request, res: Response) => {
 
         // Accepting/rejecting a candidate is a hiring-manager decision: the head who raised the
         // requisition, or higher management (GM / Chairman). HR cannot accept candidates.
-        const loaded = await loadForHead(id, userId, userRole, ['GENERAL_MANAGER', 'CHAIRMAN']);
+        const loaded = await loadForHead(id, (req as any).user, ['GENERAL_MANAGER', 'CHAIRMAN']);
         if (loaded.error === 'notfound') return res.status(404).json({ error: 'Candidate not found.' });
         if (loaded.error === 'forbidden') return res.status(403).json({ error: 'Only the requesting head or the General Manager can accept or reject this candidate.' });
         const candidate = loaded.candidate!;
@@ -299,7 +342,7 @@ export const submitTechEvaluation = async (req: Request, res: Response) => {
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
 
-        const loaded = await loadForHead(id, userId, userRole);
+        const loaded = await loadForHead(id, (req as any).user);
         if (loaded.error === 'notfound') return res.status(404).json({ error: 'Candidate not found.' });
         if (loaded.error === 'forbidden') return res.status(403).json({ error: 'Only the head who raised this requisition can submit the technical evaluation.' });
         const candidate = loaded.candidate!;
