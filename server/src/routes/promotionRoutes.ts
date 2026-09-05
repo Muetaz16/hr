@@ -6,7 +6,7 @@ const router = Router();
 router.use(authenticateToken);
 
 // Entirely HR-initiated — no employee self-service side, unlike Offboarding/Disciplinary.
-const canManage = authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_promotions']);
+const canManage = authorizeAccess([], ['manage_promotions']);
 router.use(canManage);
 
 router.get('/candidates', promotionController.getCandidates);

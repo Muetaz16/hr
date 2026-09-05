@@ -40,14 +40,14 @@ const ExceptionalPerformanceAward: React.FC = () => {
     const { t } = useTranslation();
 
     const canNominate = canAccess(currentUser, NOMINATOR_ROLES, ['nominate_exceptional_award']);
-    const canDecideHR = canAccess(currentUser, ['HR_MANAGER'], ['approve_hr_manager']);
+    const canDecideHR = canAccess(currentUser, [], ['approve_hr_manager']);
     const canDecideGM = canAccess(currentUser, ['GENERAL_MANAGER'], ['approve_gm']);
     // The chain now also escalates through the submitting Head's own Department/Division Head
     // before HR — any of the 5 head roles can be an intermediate approver, not just HR/GM. Real
     // authorization is still server-side (decideApprovalStep checks approverUserId); this only
     // controls whether the tab is visible.
     const canDecide = canDecideHR || canDecideGM || canAccess(currentUser, NOMINATOR_ROLES, []);
-    const canViewHistory = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'], ['manage_rewards', 'approve_gm']);
+    const canViewHistory = canAccess(currentUser, ['GENERAL_MANAGER'], ['manage_rewards', 'approve_gm']);
 
     const [tab, setTab] = useState<TabKey>(canNominate ? 'nominate' : canDecide ? 'decide' : 'history');
 

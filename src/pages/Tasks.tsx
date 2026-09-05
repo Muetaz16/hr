@@ -57,7 +57,7 @@ const TasksPage: React.FC = () => {
                 }
             } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
                 emps = await employeeService.getEmployeesByDepartment(currentUser.departmentId);
-            } else if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
+            } else if (canAccess(currentUser, [], ['view_hr_evaluations'])) {
                 emps = await employeeService.getAllEmployees();
             }
 
@@ -86,7 +86,7 @@ const TasksPage: React.FC = () => {
                         isPending = true;
                         status = t('department_assessment_needed');
                     }
-                } else if (currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('view_hr_evaluations')) {
+                } else if (currentUser.permissions?.includes('view_hr_evaluations')) {
                     const persEval = await evaluationService.getPersonnelEvaluation(emp.id, currentMonth);
                     if (!persEval) {
                         isPending = true;
@@ -102,7 +102,7 @@ const TasksPage: React.FC = () => {
 
             // 3. Fetch Urgent Contracts (only for HR/Admin/Personnel)
             let contractTasks: any[] = [];
-            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
+            if (canAccess(currentUser, [], ['view_hr_evaluations'])) {
                 try {
                     const urgentContracts = await employeeService.getExpiringContracts(7);
                     contractTasks = urgentContracts.map(emp => ({

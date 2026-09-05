@@ -161,7 +161,7 @@ export const generateJobDescriptionDoc = async (req: Request, res: Response) => 
                 });
                 return e?.user?.signature || null;
             };
-            // HR signature: role==='HR_MANAGER' OR anyone holding the HR Manager Functional Hat
+            // HR signature: whoever holds the approve_hr_manager permission (HR Manager hat or grant).
             // (approve_hr_manager) — same union as everywhere else this session, so a Head-role
             // account wearing the hat is recognized here too. SUPER_ADMIN is excluded even though
             // resolveUsersWithPermission includes it as an auth fallback — a printed HR signature
@@ -172,7 +172,7 @@ export const generateJobDescriptionDoc = async (req: Request, res: Response) => 
                 resolvedDivisionId ? empSig({ role: { in: ['HEAD_DIVISION', 'HEAD_OFFICE'] }, divisionId: resolvedDivisionId }) : Promise.resolve(null),
                 resolvedDirectorateId ? empSig({ role: 'HEAD_DIRECTOR', directorateId: resolvedDirectorateId }) : Promise.resolve(null),
                 prisma.user.findFirst({
-                    where: { OR: [{ role: 'HR_MANAGER' }, { id: { in: hrHatHolderIds } }], role: { not: 'SUPER_ADMIN' }, signature: { not: null } },
+                    where: { id: { in: hrHatHolderIds }, role: { not: 'SUPER_ADMIN' }, signature: { not: null } },
                     select: { signature: true },
                 }),
             ]);

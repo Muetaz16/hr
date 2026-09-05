@@ -9,15 +9,6 @@ export const roleThemes = {
         text: 'Super Admin',
         badge: 'bg-[#541c2c]/10 text-[#541c2c]'
     },
-    HR_MANAGER: {
-        primary: '#541c2c',
-        secondary: '#d4aa80',
-        light: '#fdfcf7',
-        dark: '#300a15',
-        gradient: 'from-[#541c2c] to-[#d4aa80]',
-        text: 'HR Manager',
-        badge: 'bg-[#d4aa80]/15 text-[#aa7a51]'
-    },
     HEAD_DIRECTOR: {
         primary: '#421220',
         secondary: '#aa7a51',
@@ -53,15 +44,6 @@ export const roleThemes = {
         gradient: 'from-[#541c2c] to-[#aa7a51]',
         text: 'Employee',
         badge: 'bg-[#541c2c]/10 text-[#541c2c]'
-    },
-    PERSONNEL: {
-        primary: '#300a15',
-        secondary: '#aa7a51',
-        light: '#fdfcf7',
-        dark: '#300a15',
-        gradient: 'from-[#300a15] to-[#aa7a51]',
-        text: 'Personnel',
-        badge: 'bg-[#aa7a51]/15 text-[#aa7a51]'
     },
     CHAIRMAN: {
         primary: '#300a15',

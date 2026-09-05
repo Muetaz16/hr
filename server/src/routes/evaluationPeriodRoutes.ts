@@ -11,7 +11,7 @@ const router = express.Router();
 router.use(authenticateToken); // Protect all routes
 
 router.get('/', getEvaluationPeriods);
-router.post('/', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER'], ['manage_evaluation_control']), enableEvaluationPeriod);
+router.post('/', authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']), enableEvaluationPeriod);
 router.delete('/:id', authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']), disableEvaluationPeriod);
 
 export default router;

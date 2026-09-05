@@ -8,7 +8,7 @@ router.use(authenticateToken);
 
 // Company-wide analytics rollup — HR + executive audience (SUPER_ADMIN always allowed).
 const canViewAnalytics = authorizeAccess(
-    ['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'],
+    ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'],
     ['view_employees']
 );
 

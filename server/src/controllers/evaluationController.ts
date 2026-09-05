@@ -143,7 +143,7 @@ export const resolveManagerPlacement = async (userId: string) => {
 // Returns an error message to send (403), or null when allowed.
 //
 // `existingSubmitterId` is the submittedById of any record already saved for this
-// employee+month+level (or undefined/null if none) — lets HR_MANAGER/PERSONNEL stand
+// employee+month+level (or undefined/null if none) — lets view_hr_evaluations holders stand
 // in for a manager who never submitted, without ever overwriting a real manager's
 // work: they may create a fresh record, or fix their own prior stand-in, but not touch
 // a record some other (non-HR) submitter created.
@@ -164,12 +164,12 @@ const checkCanEvaluate = async (
 
     // submitter.user is the resolved req.user — .permissions is already the effective (hat-
     // inclusive) set, so this check recognizes a hat/grant holder too, not just the literal role.
-    const submitterIsHRLike = ['HR_MANAGER', 'PERSONNEL'].includes(submitter.user.role) || (submitter.user.permissions || []).includes('view_hr_evaluations');
+    const submitterIsHRLike = (submitter.user.permissions || []).includes('view_hr_evaluations');
     if (submitterIsHRLike) {
         if (!existingSubmitterId) return null;
         const existingSubmitter = await prisma.user.findUnique({ where: { id: existingSubmitterId }, select: { role: true, permissions: true, functionalHatIds: true } });
         if (!existingSubmitter) return null;
-        const existingSubmitterIsHRLike = ['HR_MANAGER', 'PERSONNEL'].includes(existingSubmitter.role)
+        const existingSubmitterIsHRLike = false
             || (await resolveEffectivePermissions(prisma, existingSubmitter)).includes('view_hr_evaluations');
         if (existingSubmitterIsHRLike) return null;
     }
@@ -182,7 +182,7 @@ const checkCanEvaluate = async (
 
 // Roles that may read any employee's evaluation data (they already see the
 // full roster in the frontend evaluation screens).
-const ADMIN_LIKE_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'];
+const ADMIN_LIKE_ROLES = ['SUPER_ADMIN'];
 
 // This employee's own id, if `userId` is linked to one — mirrors the same
 // User.userId -> Employee lookup `/employees/me` uses, so "viewing my own

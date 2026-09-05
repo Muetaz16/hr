@@ -36,3 +36,20 @@ export function canAccess(
     // No restrictions — any authenticated user may access.
     return true;
 }
+
+/**
+ * The access catalog (server/src/utils/accessCatalog.ts) stores permission group names and labels
+ * as English strings, since it is also the server's own source of truth. The admin screens that
+ * render them (Individual Grants in UserForm.tsx, and the Functional Hats editor) resolve them
+ * through locale keys so the Arabic UI isn't left showing raw English:
+ *
+ *   group "Operations & Approvals" -> t('perm_group_operations_approvals', { defaultValue: group })
+ *   permission id "manage_payroll" -> t('perm_manage_payroll',            { defaultValue: label })
+ *
+ * Any key that is missing simply falls through to the catalog's own English string, so adding a
+ * permission to the catalog never breaks the UI — it just shows in English until translated.
+ */
+export const permGroupKey = (group: string): string =>
+    `perm_group_${group.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+
+export const permLabelKey = (permissionId: string): string => `perm_${permissionId}`;

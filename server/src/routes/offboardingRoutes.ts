@@ -19,7 +19,7 @@ const letterStorage = multer.diskStorage({
 // "Additional Attachments" — optional, up to 10 files, max 10 MB each (per the real form's spec).
 const attachmentsUpload = multer({ storage: letterStorage, limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 
-const canManage = authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_offboarding']);
+const canManage = authorizeAccess([], ['manage_offboarding']);
 
 // Employee self-service — no permission gate, always scoped to the caller's own Employee record.
 router.get('/my-identity', offboardingController.getMyIdentity);

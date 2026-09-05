@@ -7,9 +7,7 @@ export type UserRole =
     | 'HEAD_DIRECTOR'
     | 'HEAD_DEPARTMENT'
     | 'HEAD_UNIT'
-    | 'HR_MANAGER'
-    | 'EMPLOYEE'
-    | 'PERSONNEL';
+    | 'EMPLOYEE';
     
 export const JOB_CATEGORIES = [
     'Administrative Officer',

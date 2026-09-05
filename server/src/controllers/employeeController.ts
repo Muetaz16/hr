@@ -59,7 +59,7 @@ export const calculateHolidayMetrics = (
 // Roles / permission that grant company-wide visibility of FULL employee data. Everyone else only
 // sees full data for employees inside their own org branch (a head) or their own record; other
 // records are returned at directory level (name/position/org unit) so the org chart still works.
-const GLOBAL_FULL_EMP_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN'];
+const GLOBAL_FULL_EMP_ROLES = ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'];
 
 // Sensitive fields stripped from records the caller isn't allowed to see in full.
 const SENSITIVE_EMP_FIELDS = [

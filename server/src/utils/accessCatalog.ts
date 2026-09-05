@@ -15,61 +15,75 @@
 
 export type PermissionDef = { id: string; group: string; label: string };
 
-// Full permission catalog (reconciled — includes keys that were previously only
-// referenced in routes: approve_attendance, approve_hr_recruitment,
-// manage_divisions, manage_directorates).
+// Full permission catalog, grouped by the SIX sections the system actually has:
+//   • the four functional departments — Attendance, Payroll, Recruitment, Personnel Relations
+//   • two operational groups — Operations & Approvals (cross-cutting approver/manager duties that
+//     belong to no single department) and Administration (system configuration).
+//
+// Group order AND within-group order are meaningful: both the Individual Grants panel
+// (src/pages/admin/UserForm.tsx buildGroups) and the Functional Hats editor
+// (src/pages/admin/FunctionalHats.tsx) build their section cards by scanning this array in order,
+// so this array is the only place the layout of those two screens is defined.
 export const PERMISSIONS: PermissionDef[] = [
-    // Employees & Directory
-    { id: 'view_directory', group: 'Employees & Directory', label: 'View Directory' },
-    { id: 'view_employees', group: 'Employees & Directory', label: 'View Full Emp Data' },
-    { id: 'manage_employees', group: 'Employees & Directory', label: 'Manage Emp Records' },
-    { id: 'register_employees', group: 'Employees & Directory', label: 'Register New Emp' },
-    { id: 'edit_employees', group: 'Employees & Directory', label: 'Edit Emp Data' },
-    { id: 'delete_employees', group: 'Employees & Directory', label: 'Delete Emp' },
-    // Recruitment
+    // --- Attendance (الحضور والانصراف) ---
+    { id: 'view_time_tracking', group: 'Attendance', label: 'View Attendance & Time Logs' },
+    { id: 'manage_time_tracking', group: 'Attendance', label: 'Manage Attendance & Time Logs' },
+    // Work hours, leave types, holidays, multiplier factors and employee shifts. Previously
+    // unreachable by anyone but a literal SUPER_ADMIN, which meant the Head of Attendance hat
+    // couldn't open the settings it owns.
+    { id: 'manage_attendance_settings', group: 'Attendance', label: 'Manage Attendance Settings' },
+    // The Head-of-Attendance stage of the leave-approval chain (leaveApprovalChain.ts).
+    { id: 'approve_attendance', group: 'Attendance', label: 'Approve as Head of Attendance' },
+    // --- Payroll (الرواتب) ---
+    { id: 'view_payroll', group: 'Payroll', label: 'View Payroll' },
+    { id: 'manage_payroll', group: 'Payroll', label: 'Manage Payroll' },
+    // --- Recruitment (التوظيف) ---
     { id: 'view_recruitment', group: 'Recruitment', label: 'View Recruitment' },
-    { id: 'manage_recruitment', group: 'Recruitment', label: 'Manage Requests & Hiring' },
-    { id: 'recruitment_approvals', group: 'Recruitment', label: 'Approve Recruitment' },
-    { id: 'approve_hr_manager', group: 'Recruitment', label: 'Approve as Head of HR' },
-    { id: 'approve_hr_recruitment', group: 'Recruitment', label: 'Approve as Head of Recruitment' },
-    // Contracts & Lifecycle
-    { id: 'view_contracts', group: 'Contracts & Lifecycle', label: 'View Contracts' },
-    { id: 'manage_contract_management', group: 'Contracts & Lifecycle', label: 'Manage Contracts' },
-    { id: 'view_lifecycle', group: 'Contracts & Lifecycle', label: 'View Lifecycle' },
-    { id: 'manage_lifecycle_control', group: 'Contracts & Lifecycle', label: 'Manage Lifecycle' },
-    // Personnel Relations
+    { id: 'manage_recruitment', group: 'Recruitment', label: 'Raise & Manage Hiring Requests' },
+    { id: 'recruitment_approvals', group: 'Recruitment', label: 'Approve Hiring Requests' },
+    // NOT just the hrRecruitment PRF stage anymore — this is the recruitment-team permission that
+    // opens the whole "Recruitment Department" section (positions, applicants, interviews, offers,
+    // onboarding). Deliberately NOT view/manage_recruitment, which every head inherits by position.
+    { id: 'approve_hr_recruitment', group: 'Recruitment', label: 'Head of Recruitment (full pipeline)' },
+    // --- Personnel Relations (شؤون الموظفين) ---
     { id: 'view_personnel_relations', group: 'Personnel Relations', label: 'View Personnel Relations' },
+    { id: 'view_employees', group: 'Personnel Relations', label: 'View Full Employee Data' },
+    { id: 'manage_employees', group: 'Personnel Relations', label: 'Manage Employee Records' },
+    { id: 'register_employees', group: 'Personnel Relations', label: 'Register New Employees' },
+    { id: 'edit_employees', group: 'Personnel Relations', label: 'Edit Employee Data' },
+    { id: 'delete_employees', group: 'Personnel Relations', label: 'Delete Employees' },
+    { id: 'view_lifecycle', group: 'Personnel Relations', label: 'View Employee Lifecycle' },
+    { id: 'manage_lifecycle_control', group: 'Personnel Relations', label: 'Manage Employee Lifecycle' },
+    { id: 'view_contracts', group: 'Personnel Relations', label: 'View Contracts' },
+    { id: 'manage_contract_management', group: 'Personnel Relations', label: 'Manage Contracts & Renewals' },
     { id: 'manage_personnel_actions', group: 'Personnel Relations', label: 'Manage Personnel Action Forms' },
+    { id: 'manage_promotions', group: 'Personnel Relations', label: 'Manage Promotions' },
     { id: 'manage_rewards', group: 'Personnel Relations', label: 'Manage Rewards & Recognition' },
-    { id: 'nominate_exceptional_award', group: 'Personnel Relations', label: 'Nominate Exceptional Performance Award' },
     { id: 'manage_disciplinary', group: 'Personnel Relations', label: 'Manage Disciplinary Actions' },
     { id: 'edit_disciplinary_report', group: 'Personnel Relations', label: 'Edit Disciplinary Report After Stage 1' },
     { id: 'manage_offboarding', group: 'Personnel Relations', label: 'Manage Offboarding' },
-    { id: 'manage_promotions', group: 'Personnel Relations', label: 'Manage Promotions' },
-    // Payroll & Time
-    { id: 'view_payroll', group: 'Payroll & Time', label: 'View Payroll' },
-    { id: 'manage_payroll', group: 'Payroll & Time', label: 'Manage Payroll' },
-    { id: 'view_time_tracking', group: 'Payroll & Time', label: 'View Time Logs' },
-    { id: 'manage_time_tracking', group: 'Payroll & Time', label: 'Manage Time Logs' },
-    // Operations & Approvals
-    { id: 'manage_leaves', group: 'Operations & Approvals', label: 'Approve Leaves' },
-    { id: 'approve_attendance', group: 'Operations & Approvals', label: 'Head of Attendance Approval' },
+    { id: 'view_hr_evaluations', group: 'Personnel Relations', label: 'View & Manage HR Evaluations' },
+    { id: 'manage_evaluation_control', group: 'Personnel Relations', label: 'Evaluation Control' },
+    // --- Operations & Approvals ---
+    // Duties that come with managing people rather than with belonging to one HR department. Most
+    // are position defaults for every head; approve_hr_manager/approve_gm are designated-approver
+    // permissions granted only by hat or individual grant.
+    { id: 'manager_approvals', group: 'Operations & Approvals', label: 'Full Manager Approvals' },
+    { id: 'manage_leaves', group: 'Operations & Approvals', label: 'Approve Leave Requests' },
+    { id: 'approve_hr_manager', group: 'Operations & Approvals', label: 'Approve as Head of HR' },
     { id: 'approve_gm', group: 'Operations & Approvals', label: 'Approve as General Manager' },
+    { id: 'view_evaluations', group: 'Operations & Approvals', label: 'View All Evaluations' },
+    { id: 'submit_evaluations', group: 'Operations & Approvals', label: 'Submit Evaluations' },
+    { id: 'nominate_exceptional_award', group: 'Operations & Approvals', label: 'Nominate for Exceptional Performance Award' },
     { id: 'manage_announcements', group: 'Operations & Approvals', label: 'Post Announcements' },
-    { id: 'manager_approvals', group: 'Operations & Approvals', label: 'Full Mgr Approvals' },
-    // Evaluations
-    { id: 'view_evaluations', group: 'Evaluations', label: 'View All Evaluations' },
-    { id: 'submit_evaluations', group: 'Evaluations', label: 'Submit Evaluations' },
-    { id: 'view_hr_evaluations', group: 'Evaluations', label: 'Manage HR Evals' },
-    { id: 'manage_evaluation_control', group: 'Evaluations', label: 'Evaluation Control' },
-    // Administration
+    // --- Administration ---
+    { id: 'manage_users', group: 'Administration', label: 'Manage System Users & Hats' },
     { id: 'manage_groups', group: 'Administration', label: 'Manage Groups' },
-    { id: 'manage_departments', group: 'Administration', label: 'Manage Depts' },
-    { id: 'manage_divisions', group: 'Administration', label: 'Manage Divisions' },
     { id: 'manage_directorates', group: 'Administration', label: 'Manage Directorates' },
+    { id: 'manage_divisions', group: 'Administration', label: 'Manage Divisions' },
+    { id: 'manage_departments', group: 'Administration', label: 'Manage Departments' },
     { id: 'manage_units', group: 'Administration', label: 'Manage Units' },
     { id: 'manage_job_descriptions', group: 'Administration', label: 'Manage Job Descriptions' },
-    { id: 'manage_users', group: 'Administration', label: 'Manage System Users' },
     { id: 'view_logs', group: 'Administration', label: 'View Activity Log' },
 ];
 
@@ -97,45 +111,21 @@ export type Position = typeof POSITIONS[number];
 // full company roster. Scope enforcement lives server-side in employeeController.resolveEmployeeScope.
 export const POSITION_DEFAULTS: Record<string, string[]> = {
     EMPLOYEE: [],
-    // HR_MANAGER/PERSONNEL aren't org-hierarchy levels (they're absent from POSITIONS/ORG_RANK, same
-    // as GENERAL_MANAGER's cross-cutting treatment) and are NO LONGER selectable User.role values —
-    // removed from the UserForm.tsx/EmployeeForm.tsx dropdowns. The intended pattern now is a real org
-    // Position (e.g. HEAD_DEPARTMENT) + the same-named Functional Hat layered on top. These two
-    // POSITION_DEFAULTS entries are kept only so any pre-existing account still carrying one of these
-    // role strings in the DB keeps working exactly as before (nothing here forces a migration) —
-    // mirrors each hat's own permission list exactly, so no capability differs between "has the
-    // literal role" and "has the hat".
-    HR_MANAGER: [
-        'view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
-        'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager',
-        'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control',
-        'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
-        'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking',
-        'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
-        'manage_evaluation_control', 'manage_job_descriptions',
-    ],
-    // Expanded to match every permission a literal role==='PERSONNEL' account is actually granted
-    // via role-list checks across the codebase (routes/controllers pairing 'PERSONNEL' alongside a
-    // permission via authorizeAccess), so the "Personnel" Functional Hat is a full substitute for the
-    // role once PERSONNEL is retired as an assignable Position — same reasoning as HR_MANAGER above.
-    PERSONNEL: [
-        'view_directory', 'view_employees', 'register_employees', 'edit_employees',
-        'view_contracts', 'manage_contract_management', 'view_lifecycle',
-        'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
-        'view_payroll', 'view_time_tracking', 'manage_time_tracking',
-        'view_evaluations', 'submit_evaluations', 'view_hr_evaluations', 'manage_evaluation_control',
-    ],
+    // NOTE: 'HR_MANAGER' and 'PERSONNEL' are NOT positions and no longer appear here. They exist
+    // only as Functional Hat keys (SYSTEM_HATS below). The system has exactly the positions in
+    // POSITIONS; anyone needing HR-Manager or Personnel powers keeps their real chart position and
+    // wears the matching hat on top. Nothing anywhere may test User.role against those two strings.
     // view_personnel_relations deliberately excluded from every Head/GM/Chairman default below —
     // no screen honors it alone anymore (each Personnel Relations tab requires its own specific
     // manage_* permission, which these roles never hold), so it only ever produced a dead-end nav
     // entry into a section with nothing they could actually do.
-    HEAD_UNIT: ['view_directory', 'manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'nominate_exceptional_award'],
-    HEAD_DEPARTMENT: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
-    HEAD_OFFICE: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
-    HEAD_DIVISION: ['view_directory', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
-    HEAD_DIRECTOR: ['view_directory', 'view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
-    GENERAL_MANAGER: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
-    CHAIRMAN: ['view_directory', 'view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
+    HEAD_UNIT: ['manage_leaves', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'nominate_exceptional_award'],
+    HEAD_DEPARTMENT: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_OFFICE: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'nominate_exceptional_award'],
+    HEAD_DIVISION: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
+    HEAD_DIRECTOR: ['view_contracts', 'manage_leaves', 'manage_announcements', 'manager_approvals', 'view_evaluations', 'submit_evaluations', 'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'nominate_exceptional_award'],
+    GENERAL_MANAGER: ['view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manage_announcements', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
+    CHAIRMAN: ['view_employees', 'view_contracts', 'view_payroll', 'view_evaluations', 'submit_evaluations', 'manager_approvals', 'view_recruitment', 'recruitment_approvals'],
     SUPER_ADMIN: ALL_PERMISSION_IDS,
 };
 
@@ -148,7 +138,7 @@ export const SYSTEM_HATS: HatSeed[] = [
         name: 'HR Manager',
         description: 'Full HR operations: employees, contracts, lifecycle, payroll, evaluations.',
         permissions: [
-            'view_directory', 'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
+            'view_employees', 'manage_employees', 'register_employees', 'edit_employees',
             'view_recruitment', 'manage_recruitment', 'recruitment_approvals', 'approve_hr_manager',
             'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control',
             'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
@@ -160,8 +150,8 @@ export const SYSTEM_HATS: HatSeed[] = [
     {
         key: 'HEAD_ATTENDANCE',
         name: 'Head of Attendance',
-        description: 'Owns attendance & time tracking, approves attendance exceptions.',
-        permissions: ['view_time_tracking', 'manage_time_tracking', 'approve_attendance', 'manage_leaves'],
+        description: 'Owns attendance & time tracking, its settings, and attendance approvals.',
+        permissions: ['view_time_tracking', 'manage_time_tracking', 'manage_attendance_settings', 'approve_attendance', 'manage_leaves'],
     },
     {
         key: 'HEAD_RECRUITMENT',
@@ -176,11 +166,22 @@ export const SYSTEM_HATS: HatSeed[] = [
         permissions: ['view_payroll', 'manage_payroll'],
     },
     {
+        // Lets the Administration group be delegated without handing out SUPER_ADMIN (which bypasses
+        // every check in the app). Mirrors the Administration group in PERMISSIONS exactly.
+        key: 'SYSTEM_ADMIN',
+        name: 'System Administrator',
+        description: 'Manages system configuration: users & hats, org structure, job descriptions, activity log.',
+        permissions: [
+            'manage_users', 'manage_groups', 'manage_directorates', 'manage_divisions',
+            'manage_departments', 'manage_units', 'manage_job_descriptions', 'view_logs',
+        ],
+    },
+    {
         key: 'PERSONNEL',
         name: 'Personnel',
         description: 'Full personnel operations on top of a real position: employees, contracts, lifecycle, rewards/disciplinary/offboarding/promotions, time tracking, evaluations.',
         permissions: [
-            'view_directory', 'view_employees', 'register_employees', 'edit_employees',
+            'view_employees', 'register_employees', 'edit_employees',
             'view_contracts', 'manage_contract_management', 'view_lifecycle',
             'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
             'view_payroll', 'view_time_tracking', 'manage_time_tracking',

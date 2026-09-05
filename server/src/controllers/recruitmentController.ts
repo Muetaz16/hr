@@ -13,10 +13,9 @@ const cleanId = (val: any): string | null => (val === '' || val === 'null' || va
 // session, so a Head-role account wearing the HR Manager Functional Hat is recognized as "HR" here
 // too. notifyRoles() only ever queries a literal role list (it doesn't expand Functional Hats), so
 // call sites that need hat-aware HR notification resolve this list and call notify() per recipient
-// instead of notifyRoles(['HR_MANAGER'], ...).
+// instead of a role-based notifyRoles() call.
 async function resolveHrManagerIds(): Promise<string[]> {
-    const roleHolders = await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } });
-    return Array.from(new Set([...roleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+    return await resolveUsersWithPermission(prisma, 'approve_hr_manager');
 }
 async function notifyHrManagers(title: string, content: string, link?: string) {
     const ids = await resolveHrManagerIds();
@@ -134,14 +133,14 @@ export const getAllRecruitmentRequests = async (req: Request, res: Response) => 
 
         // Company-wide visibility for HR/GM/Admin/Director — also anyone holding the HR Manager hat
         // (approve_hr_manager), the GM hat (approve_gm), or the Head of Recruitment/Hiring Unit hat
-        // (approve_hr_recruitment), not just a literal role==='HR_MANAGER'/'GENERAL_MANAGER' account.
+        // (approve_hr_recruitment), not just a literal role==='GENERAL_MANAGER' account.
         // The Hiring Unit stage is cross-department by nature (it approves EVERY hire requisition
         // once it clears Dept/Division, regardless of which department raised it) — scoping it to the
         // holder's own department/division would hide every other department's requisitions once
         // they reach that stage. Deliberately NOT falling back to plain manage_recruitment/
         // recruitment_approvals here — regular Heads already hold those by default and must stay
         // scoped to their own branch, not see every requisition.
-        if (!['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole)
+        if (!['SUPER_ADMIN', 'GENERAL_MANAGER', 'HEAD_DIRECTOR'].includes(userRole)
             && !userPerms.includes('approve_hr_manager') && !userPerms.includes('approve_gm') && !userPerms.includes('approve_hr_recruitment')) {
             const scope = await getActorScope(userId, (req as any).user);
             const or: any[] = [{ requesterId: userId }];
@@ -375,7 +374,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             updateData.deptApprovedAt = new Date();
         } else if (status === 'HR_APPROVED') {
             // Intermediate HR approval only applies to JD changes (which still need GM afterwards).
-            if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
+            if (!isAdmin && !perms.includes('manage_recruitment')) {
                 return res.status(403).json({ error: 'Only HR can approve at this stage.' });
             }
             updateData.hrApprovedById = userId;
@@ -384,7 +383,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
         } else if (status === 'FULLY_APPROVED') {
             if (existing.type === 'HIRE') {
                 // A hire is finalised by HR — it does not go to the GM.
-                if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
+                if (!isAdmin && !perms.includes('manage_recruitment')) {
                     return res.status(403).json({ error: 'Only HR grants final approval for a hire requisition.' });
                 }
                 updateData.hrApprovedById = userId;
@@ -422,7 +421,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
                 }
                 updateData.deptNote = note; updateData.deptApprovedById = userId; updateData.deptApprovedAt = new Date();
             } else if (existing.status === 'DEPT_APPROVED') {
-                if (!isAdmin && userRole !== 'HR_MANAGER' && !perms.includes('manage_recruitment') && !perms.includes('approve_hr_manager')) {
+                if (!isAdmin && !perms.includes('manage_recruitment') && !perms.includes('approve_hr_manager')) {
                     return res.status(403).json({ error: 'Only HR can reject at this stage.' });
                 }
                 updateData.hrNote = note; updateData.hrApprovedById = userId; updateData.hrApprovedAt = new Date();
@@ -434,7 +433,7 @@ export const updateRecruitmentRequestStatus = async (req: Request, res: Response
             }
         } else if (status === 'FILLED') {
             // Mark an approved hire as filled once the employee has been enrolled.
-            if (userRole !== 'HR_MANAGER' && !isAdmin && !perms.includes('manage_recruitment')) {
+            if (!isAdmin && !perms.includes('manage_recruitment')) {
                 return res.status(403).json({ error: 'Only HR can mark a requisition as filled.' });
             }
             if (existing.status !== 'FULLY_APPROVED' || existing.type !== 'HIRE') {
@@ -574,7 +573,7 @@ export const deleteRecruitmentRequest = async (req: Request, res: Response) => {
         const existing = await prisma.recruitmentRequest.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ error: 'Request not found' });
 
-        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HR_MANAGER' && userRole !== 'HEAD_DIVISION'
+        if (existing.requesterId !== userId && userRole !== 'SUPER_ADMIN' && userRole !== 'HEAD_DIVISION'
             && !userPerms.includes('approve_hr_manager') && !userPerms.includes('recruitment_approvals')) {
             return res.status(403).json({ error: 'Unauthorized to delete this request' });
         }
@@ -617,7 +616,7 @@ const isEligibleForStage = (
             // recruitment_approvals is what a Head of Division holds by default.
             return (role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals')) && (!reqDivisionId || actorScope.divisionId === reqDivisionId);
         case 'hrManager':
-            return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
+            return perms.includes('approve_hr_manager');
         case 'hrRecruitment':
             return perms.includes('approve_hr_recruitment');
         case 'gm':

@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 // for staffHubController.ts to notify HR once an Exceptional Performance nomination's approval
 // chain completes and a draft RewardCase is ready to finalize.
 export async function resolveHrRecipients(): Promise<string[]> {
-    const roleHolders = await prisma.user.findMany({ where: { role: { in: ['HR_MANAGER', 'PERSONNEL'] } }, select: { id: true } });
+    const roleHolders: { id: string }[] = [];
     return Array.from(new Set([...roleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'manage_rewards'))]));
 }
 

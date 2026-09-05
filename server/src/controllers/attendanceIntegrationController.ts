@@ -19,7 +19,7 @@ const resolveMyEmployee = async (req: AuthRequest) => {
 // GET /api/attendance-integration/me/monthly-report?start=&end=
 // Self-service: the logged-in employee's own daily breakdown for a date range — same shape as
 // getAttendanceMonthlyReport below, just resolving "me" to a BioTime empId instead of taking one
-// as a path param. Any authenticated employee can call this (not just SUPER_ADMIN/HR_MANAGER/PERSONNEL).
+// as a path param. Any authenticated employee can call this (not just attendance-permission holders).
 export const getMyMonthlyReport = async (req: Request, res: Response) => {
     try {
         const employee = await resolveMyEmployee(req as AuthRequest);

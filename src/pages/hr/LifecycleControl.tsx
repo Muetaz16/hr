@@ -731,7 +731,7 @@ const LifecycleControl: React.FC = () => {
                                 </Section>
 
                                 <Section icon={Briefcase} title={t('employment_details', { defaultValue: 'Employment Details' })} color="bg-blue-50 text-blue-600">
-                                    <Field label={t('role_type', { defaultValue: 'Role' })} k="role" options={['EMPLOYEE', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN', 'PERSONNEL']} />
+                                    <Field label={t('role_type', { defaultValue: 'Role' })} k="role" options={['EMPLOYEE', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER', 'CHAIRMAN']} />
                                     <Field label={t('position', { defaultValue: 'Position' })} k="position" />
                                     <Field label={t('job_category', { defaultValue: 'Job Category' })} k="jobCategory" />
                                     <Field label={t('job_grade', { defaultValue: 'Job Grade' })} k="jobGrade" />

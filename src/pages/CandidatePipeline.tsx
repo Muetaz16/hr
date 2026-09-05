@@ -74,7 +74,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     // only as the requesting head: review + technical evaluation of their own department's candidates,
     // no Add, scoped to their department.
     const isHeadRole = ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'].includes(currentUser?.role || '');
-    const isHR = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['approve_hr_recruitment']);
+    const isHR = canAccess(currentUser, [], ['approve_hr_recruitment']);
     const isAdmin = currentUser?.role === 'SUPER_ADMIN';
     // Higher management can accept/reject candidates as an override (in addition to the owning head).
     const isMgmt = canAccess(currentUser, ['GENERAL_MANAGER', 'CHAIRMAN'], ['recruitment_approvals']);

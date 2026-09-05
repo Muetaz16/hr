@@ -218,22 +218,22 @@ const MainLayout: React.FC = () => {
         {
             title: t('nav_group_core', { defaultValue: 'Core' }),
             items: [
-                { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
+                { label: t('nav_dashboard'), path: '/', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 {
                     label: t('nav_staff_hub', { defaultValue: 'Staff Hub' }),
                     icon: Zap,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'EMPLOYEE'],
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'EMPLOYEE'],
                     children: [
-                        { label: t('nav_my_requests', { defaultValue: 'My Requests' }), path: '/staff-hub', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                        { label: t('nav_my_requests', { defaultValue: 'My Requests' }), path: '/staff-hub', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                         // Unified inbox — every request awaiting this approver (leaves, work-auth, missing-punch,
                         // exceptional performance, and recruitment) aggregated in one place for heads/GM/directors.
-                        { label: t('nav_my_approvals', { defaultValue: 'My Approvals' }), path: '/my-approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals'] },
+                        { label: t('nav_my_approvals', { defaultValue: 'My Approvals' }), path: '/my-approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals'] },
                     ]
                 },
-                { label: t('nav_report_incident', { defaultValue: 'Report an Incident' }), path: '/report-incident', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_resignation_request', { defaultValue: 'Resignation Request' }), path: '/resignation-request', icon: UserMinus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
-                { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
+                { label: t('nav_report_incident', { defaultValue: 'Report an Incident' }), path: '/report-incident', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
+                { label: t('nav_resignation_request', { defaultValue: 'Resignation Request' }), path: '/resignation-request', icon: UserMinus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
+                { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
+                { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 // Standalone — fill in evaluations for the employees under you. Previously only
                 // reachable through Personnel Relations Department > Performance Reviews, which
                 // meant any Head role (even without the personnel-relations permission) got a
@@ -241,8 +241,8 @@ const MainLayout: React.FC = () => {
                 // with every other tab in it showing as locked. Moved out here so Heads no longer
                 // need personnel-relations access at all; Personnel Relations now only keeps the
                 // HR-only Evaluation Control screen (open/close windows, monitor submissions).
-                { label: t('nav_evaluations', { defaultValue: 'Evaluations' }), path: '/evaluations', icon: ClipboardList, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permissions: ['view_evaluations'] },
-                { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_evaluations', { defaultValue: 'Evaluations' }), path: '/evaluations', icon: ClipboardList, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permissions: ['view_evaluations'] },
+                { label: t('notice_board', { defaultValue: 'Announcements' }), path: '/announcements', icon: Megaphone, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                 {
                     // Only the stages department heads actually take part in — request a hire,
                     // get it approved up the chain, browse the resulting Job Description. Once a
@@ -251,11 +251,11 @@ const MainLayout: React.FC = () => {
                     // under HR & Personnel below.
                     label: t('nav_recruitment', { defaultValue: 'Recruitment' }),
                     icon: UserPlus,
-                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER'],
+                    roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER'],
                     children: [
-                        { label: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), path: '/recruitment/requests', roles: ['SUPER_ADMIN', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions-browse', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
-                        { label: t('nav_recruitment_approvals', { defaultValue: 'Approvals' }), path: '/recruitment/approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HR_MANAGER', 'GENERAL_MANAGER'], permissions: ['recruitment_approvals'] },
+                        { label: t('nav_req_hiring_jd', { defaultValue: 'Request Hiring & JD' }), path: '/recruitment/requests', roles: ['SUPER_ADMIN', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions-browse', roles: ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'], permissions: ['view_recruitment', 'manage_recruitment'] },
+                        { label: t('nav_recruitment_approvals', { defaultValue: 'Approvals' }), path: '/recruitment/approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'GENERAL_MANAGER'], permissions: ['recruitment_approvals'] },
                         // Heads review (accept/reject) candidates sourced against their own approved
                         // requisitions — they can't add candidates (that's HR, on the Recruitment
                         // Department pipeline). The page itself scopes to the head's requisitions and
@@ -267,7 +267,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['recruitment_approvals'] },
                     ]
                 },
-                { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'EMPLOYEE'] },
+                { label: t('nav_organization', { defaultValue: 'Our Organization' }), path: '/organization', icon: Users, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
             ]
         },
         {
@@ -278,7 +278,7 @@ const MainLayout: React.FC = () => {
             items: [
                 {
                     label: t('nav_exceptional_performance_award', { defaultValue: 'Exceptional Performance Award' }), path: '/exceptional-performance', icon: Award,
-                    roles: ['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER'],
+                    roles: ['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER'],
                     permissions: ['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards'],
                 },
             ]
@@ -293,15 +293,15 @@ const MainLayout: React.FC = () => {
                     // getting its own dedicated section under HR & Personnel later.
                     label: t('nav_attendance_payroll', { defaultValue: 'Attendance' }),
                     icon: Clock,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    roles: ['SUPER_ADMIN'],
                     permissions: ['view_time_tracking', 'manage_time_tracking'],
                     children: [
-                        { label: t('nav_overview', { defaultValue: 'Overview' }), path: '/attendance/overview', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_exceptions', { defaultValue: 'Exceptions' }), path: '/attendance/exceptions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_daily_logging', { defaultValue: 'Daily Logging' }), path: '/attendance/daily-logging', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_employees', { defaultValue: 'Employees' }), path: '/attendance/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_settings', { defaultValue: 'Settings' }), path: '/attendance/settings', roles: ['SUPER_ADMIN'] },
+                        { label: t('nav_overview', { defaultValue: 'Overview' }), path: '/attendance/overview', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_exceptions', { defaultValue: 'Exceptions' }), path: '/attendance/exceptions', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_daily_logging', { defaultValue: 'Daily Logging' }), path: '/attendance/daily-logging', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_employees', { defaultValue: 'Employees' }), path: '/attendance/employees', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_settings', { defaultValue: 'Settings' }), path: '/attendance/settings', roles: ['SUPER_ADMIN'], permissions: ['manage_attendance_settings'] },
                     ]
                 },
                 {
@@ -311,7 +311,7 @@ const MainLayout: React.FC = () => {
                     label: t('nav_payroll_section', { defaultValue: 'Payroll' }),
                     path: '/payroll',
                     icon: Wallet,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    roles: ['SUPER_ADMIN'],
                     permissions: ['view_payroll', 'manage_payroll'],
                 },
                 {
@@ -319,22 +319,22 @@ const MainLayout: React.FC = () => {
                     // tab they could actually use (evaluations) now lives in its own standalone
                     // "Evaluations" nav item above; every other tab here is HR-only (Rewards &
                     // Recognition's Head-role entries were dead too — RewardsTab.tsx gates every
-                    // real action on manage_rewards, which only SUPER_ADMIN/HR_MANAGER/PERSONNEL
+                    // real action on manage_rewards, which only Super Admin and hat holders
                     // ever hold). Restricted to actual personnel-relations permission holders.
                     label: t('nav_personnel_relations_dept', { defaultValue: 'Personnel Relations Department' }),
                     icon: HeartHandshake,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    roles: ['SUPER_ADMIN'],
                     permissions: ['view_personnel_relations'],
                     children: [
-                        { label: t('nav_employee_lifecycle', { defaultValue: 'Employee Lifecycle' }), path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_lifecycle'] },
-                        { label: t('nav_contract_renewals', { defaultValue: 'Contract Renewals' }), path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_contract_management', 'view_lifecycle'] },
-                        { label: t('nav_personnel_action_forms', { defaultValue: 'Personnel Action Forms' }), path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
-                        { label: t('nav_promotion_management', { defaultValue: 'Promotion Management' }), path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_promotions'] },
-                        { label: t('nav_rewards_recognition', { defaultValue: 'Rewards & Recognition' }), path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_rewards'] },
-                        { label: t('nav_disciplinary_actions', { defaultValue: 'Disciplinary Actions' }), path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
-                        { label: t('nav_offboarding', { defaultValue: 'Offboarding' }), path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
-                        { label: t('nav_evaluation_control', { defaultValue: 'Evaluation Control' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['manage_evaluation_control'] },
-                        { label: t('nav_employee_control', { defaultValue: 'Employee Control' }), path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['view_employees', 'manage_employees'] }
+                        { label: t('nav_employee_lifecycle', { defaultValue: 'Employee Lifecycle' }), path: '/personnel-relations/lifecycle', roles: ['SUPER_ADMIN'], permissions: ['view_lifecycle'] },
+                        { label: t('nav_contract_renewals', { defaultValue: 'Contract Renewals' }), path: '/personnel-relations/renewals', roles: ['SUPER_ADMIN'], permissions: ['manage_contract_management', 'view_lifecycle'] },
+                        { label: t('nav_personnel_action_forms', { defaultValue: 'Personnel Action Forms' }), path: '/personnel-relations/action-forms', roles: ['SUPER_ADMIN'], permissions: ['view_personnel_relations', 'manage_personnel_actions'] },
+                        { label: t('nav_promotion_management', { defaultValue: 'Promotion Management' }), path: '/personnel-relations/promotions', roles: ['SUPER_ADMIN'], permissions: ['view_personnel_relations', 'manage_promotions'] },
+                        { label: t('nav_rewards_recognition', { defaultValue: 'Rewards & Recognition' }), path: '/personnel-relations/rewards', roles: ['SUPER_ADMIN'], permissions: ['view_personnel_relations', 'manage_rewards'] },
+                        { label: t('nav_disciplinary_actions', { defaultValue: 'Disciplinary Actions' }), path: '/personnel-relations/disciplinary', roles: ['SUPER_ADMIN'], permissions: ['view_personnel_relations', 'manage_disciplinary'] },
+                        { label: t('nav_offboarding', { defaultValue: 'Offboarding' }), path: '/personnel-relations/offboarding', roles: ['SUPER_ADMIN'], permissions: ['view_personnel_relations', 'manage_offboarding'] },
+                        { label: t('nav_evaluation_control', { defaultValue: 'Evaluation Control' }), path: '/personnel-relations/evaluations', roles: ['SUPER_ADMIN'], permissions: ['manage_evaluation_control'] },
+                        { label: t('nav_employee_control', { defaultValue: 'Employee Control' }), path: '/personnel-relations/employee-control', roles: ['SUPER_ADMIN'], permissions: ['view_employees', 'manage_employees'] }
                     ]
                 },
                 {
@@ -348,14 +348,14 @@ const MainLayout: React.FC = () => {
                     // limited head steps under the standalone "Recruitment" section above.
                     label: t('nav_recruitment_pipeline', { defaultValue: 'Recruitment Department' }),
                     icon: UserPlus,
-                    roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'],
+                    roles: ['SUPER_ADMIN'],
                     permissions: ['approve_hr_recruitment'],
                     children: [
-                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
-                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
-                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
-                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
-                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_positions_to_fill', { defaultValue: 'Positions to Fill' }), path: '/recruitment/positions', roles: ['SUPER_ADMIN'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_hiring_list', { defaultValue: 'Applicant List' }), path: '/recruitment/hiring', roles: ['SUPER_ADMIN'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_interviews', { defaultValue: 'Interviews' }), path: '/recruitment/interviews', roles: ['SUPER_ADMIN'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_job_offers', { defaultValue: 'Job Offers' }), path: '/recruitment/offers', roles: ['SUPER_ADMIN'], permissions: ['approve_hr_recruitment'] },
+                        { label: t('nav_onboarding', { defaultValue: 'Onboarding' }), path: '/recruitment/onboarding', roles: ['SUPER_ADMIN'], permissions: ['approve_hr_recruitment'] },
                     ]
                 }
             ]
@@ -370,7 +370,7 @@ const MainLayout: React.FC = () => {
                     children: [
                         { label: t('nav_departments'), path: '/departments', roles: ['SUPER_ADMIN'], permissions: ['manage_departments'] },
                         { label: t('nav_units', { defaultValue: 'Units' }), path: '/units', roles: ['SUPER_ADMIN'], permissions: ['manage_units'] },
-                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions', roles: ['SUPER_ADMIN', 'HR_MANAGER'], permissions: ['manage_job_descriptions'] },
+                        { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions', roles: ['SUPER_ADMIN'], permissions: ['manage_job_descriptions'] },
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
@@ -388,7 +388,7 @@ const MainLayout: React.FC = () => {
 
     // --- Global search ---------------------------------------------------------------------------
     // Employee lookup is only offered to users who can actually open the Employees admin page.
-    const canSearchEmployees = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['view_employees', 'manage_employees']);
+    const canSearchEmployees = canAccess(currentUser, ['SUPER_ADMIN'], ['view_employees', 'manage_employees']);
 
     // Load the roster once, the first time a permitted user opens search.
     useEffect(() => {
@@ -438,7 +438,7 @@ const MainLayout: React.FC = () => {
 
     useEffect(() => {
         const checkUrgentContracts = async () => {
-            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
+            if (canAccess(currentUser, [], ['view_contracts'])) {
                 try {
                     const expiringurgent = await employeeService.getExpiringContracts(7);
                     if (expiringurgent.length > 0) {

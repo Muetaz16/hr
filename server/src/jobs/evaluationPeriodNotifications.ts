@@ -1,4 +1,6 @@
-import { notify, notifyRoles } from '../controllers/notificationController';
+import { notify } from '../controllers/notificationController';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
+import { prisma } from '../lib/prisma';
 import { buildMonthlyAssignments, getIncompleteForManager } from '../utils/evaluationAssignments';
 import { LEVEL_LABEL } from '../utils/evaluationHierarchy';
 import { sendMail } from '../utils/mailer';
@@ -24,12 +26,15 @@ export const sendPeriodOpenedNotifications = async (month: string): Promise<void
             ...unscopedManagers.map(m => `- ${m.user.fullName || m.user.email} (${LEVEL_LABEL[m.level]}) has no organizational scope assigned and was skipped from this month's evaluation batch.`),
             ...vacantScopes.map(v => `- No ${LEVEL_LABEL[v.level]} is assigned to evaluate employees such as "${v.sampleEmployeeName}".`),
         ];
-        await notifyRoles(
-            ['HR_MANAGER', 'SUPER_ADMIN'],
+        // Resolved by permission, not by role: notifyRoles() cannot see Functional Hats, so a
+        // role-based lookup would now only ever reach SUPER_ADMIN.
+        const recipients = await resolveUsersWithPermission(prisma, 'manage_evaluation_control');
+        await Promise.all(recipients.map(id => notify(
+            id,
             `Evaluation setup issues for ${month}`,
             lines.join('\n'),
-            '/evaluation-control'
-        );
+            '/evaluation-control',
+        )));
     }
 };
 

@@ -16,7 +16,7 @@ const AnnouncementsFeed: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('ALL');
 
-    const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+    const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
     const isManager = managerRoles.includes(currentUser?.role || '');
 
     useEffect(() => {

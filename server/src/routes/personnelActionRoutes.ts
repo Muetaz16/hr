@@ -6,13 +6,13 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.get('/', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), listPersonnelActions);
+router.get('/', authorizeAccess([], ['manage_personnel_actions', 'view_personnel_relations']), listPersonnelActions);
 router.get('/employee/:employeeId', getPersonnelActionsByEmployee);
-router.get('/:id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), getPersonnelActionById);
-router.post('/', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions']), createPersonnelAction);
-router.post('/inter-company', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions']), createInterCompanyTransfer);
-router.get('/:id/form', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_personnel_actions', 'view_personnel_relations']), generatePersonnelActionFormDoc);
+router.get('/:id', authorizeAccess([], ['manage_personnel_actions', 'view_personnel_relations']), getPersonnelActionById);
+router.post('/', authorizeAccess([], ['manage_personnel_actions']), createPersonnelAction);
+router.post('/inter-company', authorizeAccess([], ['manage_personnel_actions']), createInterCompanyTransfer);
+router.get('/:id/form', authorizeAccess([], ['manage_personnel_actions', 'view_personnel_relations']), generatePersonnelActionFormDoc);
 // Accepting applies the transfer to the employee record — restrict to HR managers.
-router.post('/:id/decide', authorizeAccess(['HR_MANAGER'], ['manage_personnel_actions']), decidePersonnelAction);
+router.post('/:id/decide', authorizeAccess([], ['manage_personnel_actions']), decidePersonnelAction);
 
 export default router;

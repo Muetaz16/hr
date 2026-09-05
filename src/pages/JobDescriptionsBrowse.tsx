@@ -10,7 +10,7 @@ import { FileText, ChevronDown, Building2, Users, Crown, Search } from 'lucide-r
 // A read-only browse view of Job Descriptions.
 // HR / Super Admin (and org-wide roles) see every JD and can filter by department & division.
 // Heads only ever see the JDs that belong to their own scope.
-const PRIVILEGED = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR'];
+const PRIVILEGED = ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR'];
 
 const JobDescriptionsBrowse: React.FC = () => {
     const { t } = useTranslation();

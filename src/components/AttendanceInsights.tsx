@@ -92,7 +92,7 @@ const AttendanceInsights: React.FC<Props> = ({ rows }) => {
                             <Tooltip
                                 cursor={{ fill: '#f8fafc' }}
                                 contentStyle={tooltipStyle}
-                                formatter={(value: number) => [`${value} employee${value === 1 ? '' : 's'}`, '']}
+                                formatter={(value: any) => [`${value ?? 0} employee${value === 1 ? '' : 's'}`, '']}
                             />
                             <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={20}>
                                 {punctualityData.map((entry, i) => <Cell key={i} fill={entry.color} />)}

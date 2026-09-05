@@ -1,8 +1,17 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { notify, notifyRoles } from './notificationController';
+import { notify } from './notificationController';
+import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
 
 import { prisma } from '../lib/prisma';
+
+// The recruitment team, resolved by permission (individual grant, Functional Hat, or SUPER_ADMIN) —
+// NOT by User.role. notifyRoles() only ever matches literal role strings, so a role-based lookup
+// here would notify nobody now that HR-Manager access comes from a hat rather than a role.
+const notifyRecruiters = async (title: string, content: string, link?: string) => {
+    const ids = await resolveUsersWithPermission(prisma, 'approve_hr_recruitment');
+    await Promise.all(ids.map(id => notify(id, title, content, link)));
+};
 
 const cleanStr = (v: any): string | null =>
     (v === '' || v === 'null' || v === 'undefined' || v == null) ? null : String(v).trim();
@@ -183,7 +192,7 @@ export const submitOnboarding = async (req: Request, res: Response) => {
         if (candidate.requisition?.requesterId) {
             await notify(candidate.requisition.requesterId, 'Onboarding submitted', `${candidate.fullName} completed their onboarding form for "${title}".`, '/recruitment/onboarding').catch(() => {});
         }
-        await notifyRoles(['HR_MANAGER'], 'Onboarding submitted', `${candidate.fullName} completed their onboarding form for "${title}" and is ready to enroll.`, '/recruitment/onboarding').catch(() => {});
+        await notifyRecruiters('Onboarding submitted', `${candidate.fullName} completed their onboarding form for "${title}" and is ready to enroll.`, '/recruitment/onboarding').catch(() => {});
 
         res.json({ ok: true, message: 'Your details have been submitted. Thank you!' });
     } catch (error) {
@@ -260,7 +269,7 @@ export const submitApplication = async (req: Request, res: Response) => {
         // 5. Notify the requesting head and HR that a new application arrived.
         const jobTitle = position.jobTitle;
         await notify(position.requesterId, 'New application received', `${name} applied for "${jobTitle}" via the Careers page.`, '/recruitment/hiring').catch(() => {});
-        await notifyRoles(['HR_MANAGER'], 'New application received', `${name} applied for "${jobTitle}" via the Careers page.`, '/recruitment/hiring').catch(() => {});
+        await notifyRecruiters('New application received', `${name} applied for "${jobTitle}" via the Careers page.`, '/recruitment/hiring').catch(() => {});
 
         // Return only a confirmation — never leak internal candidate data publicly.
         res.status(201).json({ ok: true, message: 'Your application has been received. Thank you!', reference: candidate.id });

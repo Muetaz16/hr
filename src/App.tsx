@@ -93,19 +93,19 @@ function App() {
                 <Route element={<MainLayout />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/tasks" element={<TasksPage />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_employees', 'manage_employees']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_employees', 'manage_employees']} />}>
                     <Route path="/employees" element={<EmployeesPage />} />
                     <Route path="/employees/new" element={<EmployeeFormPage />} />
                     <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL']} allowedPermissions={['view_evaluations']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT']} allowedPermissions={['view_evaluations']} />}>
                     <Route path="/evaluations" element={<EvaluationsPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_contracts', 'manage_contract_management']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_contracts', 'manage_contract_management']} />}>
                     <Route path="/contracts/:id" element={<ContractDetailPage />} />
                   </Route>
                   <Route path="/staff-hub" element={<StaffHubPage />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER']} allowedPermissions={['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DIVISION', 'HEAD_DIRECTOR', 'GENERAL_MANAGER']} allowedPermissions={['nominate_exceptional_award', 'approve_hr_manager', 'approve_gm', 'manage_rewards']} />}>
                     <Route path="/exceptional-performance" element={<ExceptionalPerformanceAwardPage />} />
                   </Route>
                   <Route path="/report-incident" element={<ReportIncidentPage />} />
@@ -114,7 +114,7 @@ function App() {
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_personnel_relations']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_personnel_relations']} />}>
                     <Route path="/personnel-relations/:tab" element={<PersonnelRelationsPage />} />
                     <Route path="/personnel-relations/disciplinary/:caseId" element={<DisciplinaryCaseDetailPage />} />
                     <Route path="/personnel-relations/offboarding/:caseId" element={<OffboardingCaseDetailPage />} />
@@ -123,23 +123,23 @@ function App() {
                     <Route path="/personnel-relations/rewards/candidates/:type/:employeeId" element={<RewardCandidateDetailPage />} />
                     <Route path="/personnel-relations/transfer/:id" element={<TransferDetailPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']} />}>
                     {/* Manager Control Room was merged into My Approvals — keep the old path working
                         for existing notification deep-links and bookmarks. */}
                     <Route path="/approvals" element={<Navigate to="/my-approvals" replace />} />
                     <Route path="/my-approvals" element={<MyApprovalsPage />} />
                   </Route>
                   <Route path="/attendance" element={<Navigate to="/attendance/overview" replace />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
                     <Route path="/attendance/:tab" element={<AttendancePage />} />
                     <Route path="/approved-leaves" element={<ApprovedLeavesPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
                     <Route path="/payroll" element={<PayrollPage />} />
                   </Route>
                   <Route path="/recruitment" element={<Navigate to="/recruitment/requests" replace />} />
                   {/* Head-facing stages: request a hire, get it approved. */}
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
                     <Route path="/recruitment/requests" element={<RecruitmentRequestsPage />} />
                     <Route path="/recruitment/new" element={<RecruitmentCreatePage />} />
                     <Route path="/recruitment/approvals" element={<RecruitmentApprovalsPage />} />
@@ -148,7 +148,7 @@ function App() {
                       candidates on the Applicant List and submits the technical evaluation in
                       Interviews — for their own requisitions only. Both pages scope to their
                       requisitions and hide every HR-only action (Add, schedule, HR eval, etc.). */}
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['view_recruitment', 'manage_recruitment', 'recruitment_approvals']} />}>
                     <Route path="/recruitment/hiring" element={<HiringListPage />} />
                     <Route path="/recruitment/interviews" element={<InterviewsPage />} />
                   </Route>
@@ -156,20 +156,20 @@ function App() {
                       only (HR roles or the "Approve as Head of Recruitment" permission). NOT gated on
                       view/manage_recruitment, which heads inherit. Mirrors the "Recruitment
                       Department" nav group under HR & Personnel. */}
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['approve_hr_recruitment']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['approve_hr_recruitment']} />}>
                     <Route path="/recruitment/positions" element={<PositionsToFillPage />} />
                     <Route path="/recruitment/offers" element={<JobOffersPage />} />
                     <Route path="/recruitment/onboarding" element={<OnboardingPage />} />
                   </Route>
 
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['manage_evaluation_control']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_evaluation_control']} />}>
                     <Route path="/evaluation-control" element={<EvaluationControlPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL']} allowedPermissions={['view_lifecycle', 'manage_lifecycle_control']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_lifecycle', 'manage_lifecycle_control']} />}>
                     <Route path="/lifecycle-control" element={<LifecycleControlPage />} />
                   </Route>
 
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT']} allowedPermissions={['view_personnel_relations']} />}>
                     <Route path="/job-descriptions-browse" element={<JobDescriptionsBrowsePage />} />
                   </Route>
 
@@ -179,7 +179,7 @@ function App() {
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_units']} />}>
                     <Route path="/units" element={<UnitsPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']} allowedPermissions={['manage_job_descriptions']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_job_descriptions']} />}>
                     <Route path="/job-descriptions" element={<JobDescriptionsPage />} />
                     <Route path="/job-descriptions/new" element={<JobDescriptionFormPage />} />
                     <Route path="/job-descriptions/:id/edit" element={<JobDescriptionFormPage />} />

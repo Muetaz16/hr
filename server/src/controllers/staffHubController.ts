@@ -1506,7 +1506,7 @@ export const createAnnouncement = async (req: AuthRequest, res: Response) => {
         const authorId = req.user?.id;
         const authorRole = req.user?.role;
 
-        const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+        const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
         const hasManagePermission = (req.user?.permissions || []).includes('manage_announcements');
 
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
@@ -1543,7 +1543,7 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response) => {
         const { id } = req.params;
         const authorRole = req.user?.role;
 
-        const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+        const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
         const hasManagePermission = (req.user?.permissions || []).includes('manage_announcements');
 
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
@@ -1571,7 +1571,7 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response) => {
         const { targetType, targetId, title, content, expiryDate } = req.body;
         const authorRole = req.user?.role;
 
-        const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+        const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
         const hasManagePermission = (req.user?.permissions || []).includes('manage_announcements');
 
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
@@ -1617,7 +1617,7 @@ export const getAllAnnouncements = async (req: AuthRequest, res: Response) => {
         const userPermissions = req.user?.permissions || [];
         const hasManagePermission = userPermissions.includes('manage_announcements');
         
-        const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+        const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
         
         if (!managerRoles.includes(authorRole || '') && !hasManagePermission) {
             return res.status(403).json({ error: 'Unauthorized' });

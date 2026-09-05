@@ -172,7 +172,7 @@ const PersonnelRelations: React.FC = () => {
     const { currentUser } = useAuth();
     // Document control (add/replace/delete) is HR-only — everyone else who can see this screen
     // (heads, plain employees) stays view-only, same as the rest of the detail modal.
-    const isHRRole = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['manage_lifecycle_control']);
+    const isHRRole = canAccess(currentUser, [], ['manage_lifecycle_control']);
 
     // Determine active tab from route path
     const getActiveTab = () => {
@@ -195,17 +195,17 @@ const PersonnelRelations: React.FC = () => {
     // the nav gating in MainLayout. canAccess bypasses SUPER_ADMIN and treats permissions as
     // authoritative for anyone who has any.
     const TAB_ACCESS: Record<string, { roles: string[]; perms: string[] }> = {
-        'lifecycle': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_lifecycle'] },
-        'renewals': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_contract_management', 'view_lifecycle'] },
-        'action-forms': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_personnel_actions'] },
-        'promotions': { roles: ['SUPER_ADMIN', 'HR_MANAGER'], perms: ['manage_promotions'] },
+        'lifecycle': { roles: ['SUPER_ADMIN'], perms: ['view_lifecycle'] },
+        'renewals': { roles: ['SUPER_ADMIN'], perms: ['manage_contract_management', 'view_lifecycle'] },
+        'action-forms': { roles: ['SUPER_ADMIN'], perms: ['manage_personnel_actions'] },
+        'promotions': { roles: ['SUPER_ADMIN'], perms: ['manage_promotions'] },
         // Head/GM roles removed — RewardsTab.tsx gates every real action on manage_rewards, which
-        // only SUPER_ADMIN/HR_MANAGER/PERSONNEL ever hold; Heads had no actionable use for this tab.
-        'rewards': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_rewards'] },
-        'disciplinary': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_disciplinary'] },
-        'offboarding': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_offboarding'] },
-        'evaluations': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['manage_evaluation_control'] },
-        'employee-control': { roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], perms: ['view_employees', 'manage_employees'] },
+        // only Super Admin and HR/Personnel hat holders ever hold; Heads had no use for this tab.
+        'rewards': { roles: ['SUPER_ADMIN'], perms: ['manage_rewards'] },
+        'disciplinary': { roles: ['SUPER_ADMIN'], perms: ['manage_disciplinary'] },
+        'offboarding': { roles: ['SUPER_ADMIN'], perms: ['manage_offboarding'] },
+        'evaluations': { roles: ['SUPER_ADMIN'], perms: ['manage_evaluation_control'] },
+        'employee-control': { roles: ['SUPER_ADMIN'], perms: ['view_employees', 'manage_employees'] },
     };
     const tabAccess = TAB_ACCESS[activeTab];
     const canSeeActiveTab = !tabAccess || canAccess(currentUser, tabAccess.roles, tabAccess.perms);
@@ -1674,7 +1674,7 @@ const PersonnelRelations: React.FC = () => {
             )}
 
             {activeTab === 'evaluations' && (
-                canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER'], ['manage_evaluation_control']) ? (
+                canAccess(currentUser, ['SUPER_ADMIN'], ['manage_evaluation_control']) ? (
                     // HR/Admin: open/close the evaluation window, monitor & delete submitted evaluations.
                     // Managers who fill in evaluations for their own team use the standalone /evaluations
                     // screen (see the "Evaluations" nav item) instead of this HR-only control panel.
@@ -1687,7 +1687,7 @@ const PersonnelRelations: React.FC = () => {
             )}
 
             {activeTab === 'employee-control' && (
-                canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_employees', 'manage_employees']) ? (
+                canAccess(currentUser, ['SUPER_ADMIN'], ['view_employees', 'manage_employees']) ? (
                     <EmployeesPage minimal />
                 ) : (
                     <div className="bg-white border border-[#511d29]/10 rounded-xl p-12 text-center text-slate-400">
@@ -2298,7 +2298,7 @@ const PersonnelRelations: React.FC = () => {
                         >
                             <option value="">{t('select_grade_dash', { defaultValue: '— Select grade —' })}</option>
                             {exceptionalEmployee && JOB_GRADES
-                                .filter((g, idx) => idx > JOB_GRADES.indexOf(exceptionalEmployee.jobGrade))
+                                .filter((_, idx) => idx > JOB_GRADES.indexOf(exceptionalEmployee.jobGrade as any))
                                 .map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                     </div>

@@ -40,8 +40,8 @@ const isHeadRole = (user: ReqUserLike) => HEAD_ONLY_ROLES.includes(user?.role ||
 // "Full recruiter" = HR roles, or anyone granted "Approve as Head of Recruitment"
 // (approve_hr_recruitment). NOT keyed on view/manage_recruitment — heads inherit those from their
 // position, so keying on them would let every head add candidates and see the whole pipeline.
-const isHRRole = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'PERSONNEL'].includes(user?.role || '') || (user?.permissions || []).includes('approve_hr_recruitment');
-const isPrivileged = (user: ReqUserLike) => ['HR_MANAGER', 'SUPER_ADMIN', 'PERSONNEL', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(user?.role || '') || (user?.permissions || []).includes('recruitment_approvals') || (user?.permissions || []).includes('approve_hr_recruitment');
+const isHRRole = (user: ReqUserLike) => user?.role === 'SUPER_ADMIN' || (user?.permissions || []).includes('approve_hr_recruitment');
+const isPrivileged = (user: ReqUserLike) => ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(user?.role || '') || (user?.permissions || []).includes('recruitment_approvals') || (user?.permissions || []).includes('approve_hr_recruitment');
 
 // Resolve a head's org scope from their employee record (falls back to the user's own department).
 const resolveHeadScope = async (userId?: string, user?: any) => {

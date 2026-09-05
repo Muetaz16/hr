@@ -16,17 +16,20 @@ import {
     updateEmployeeShift,
     deleteEmployeeShift,
 } from '../controllers/attendanceSettingsController';
-import { authenticateToken, authorizeRoles, authorizeAccess } from '../middleware/auth';
+import { authenticateToken, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticateToken);
 
 // Read-only: the Attendance & Leave Requests screens reference the scheduled work hours (e.g.
-// to show "Scheduled Shift: 09:00–17:00" next to actual punches), so HR_MANAGER/PERSONNEL can
-// read the snapshot even though only SUPER_ADMIN can manage these settings.
-router.get('/snapshot', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_time_tracking', 'manage_time_tracking']), getSystemSettingsSnapshot);
-
-router.use(authorizeRoles('SUPER_ADMIN'));
+// to show "Scheduled Shift: 09:00–17:00" next to actual punches), so attendance viewers can
+// read the snapshot even though managing these settings needs manage_attendance_settings.
+router.get('/snapshot', authorizeAccess(['SUPER_ADMIN'], ['view_time_tracking', 'manage_time_tracking']), getSystemSettingsSnapshot);
+// Everything below is attendance CONFIGURATION. It used to be authorizeRoles('SUPER_ADMIN') — the
+// only genuinely non-delegable role-only gate left on the server — which meant the Head of
+// Attendance hat could not open the settings it owns. Now role OR permission, like every other
+// route here, so the capability can be delegated via a hat or an individual grant.
+router.use(authorizeAccess(['SUPER_ADMIN'], ['manage_attendance_settings']));
 
 // Work-Hour Settings and Leave Types: edit only — no add/delete. Both are structural config the
 // attendance system's own calculations reference by key/id, so entries aren't meant to be freely

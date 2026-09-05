@@ -102,7 +102,7 @@ const EvaluationsPage: React.FC = () => {
             const allEmployees = (await employeeService.getAllEmployees())
                 .filter((e: any) => e.enrollmentStatus !== 'TRANSFERRED' && e.enrollmentStatus !== 'PENDING_ENROLLMENT');
 
-            const isAdminLike = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations']);
+            const isAdminLike = canAccess(currentUser, [], ['view_hr_evaluations']);
             const visible = isAdminLike
                 ? allEmployees
                 : allEmployees.filter(emp => myLevel && canEvaluate(placement, emp as OrgPlacement, myLevel));
@@ -290,17 +290,17 @@ const EvaluationsPage: React.FC = () => {
         const actions: (EvalLevel | 'PERSONNEL')[] = [];
         if (currentUser?.role === 'SUPER_ADMIN') {
             actions.push(...required); // admin may fill either required level
-        } else if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_hr_evaluations'])) {
+        } else if (canAccess(currentUser, [], ['view_hr_evaluations'])) {
             // Stand in only for levels nobody has evaluated yet, or to fix their own
             // prior stand-in entry — never to overwrite a real manager's submission.
             actions.push(...required.filter(l => {
                 const rec = maps[l]?.[emp.id];
-                return !rec || rec.submittedById === currentUser.id;
+                return !rec || rec.submittedById === currentUser?.id;
             }));
         } else if (myLevel && canEvaluate(me, emp as OrgPlacement, myLevel)) {
             actions.push(myLevel);
         }
-        if (currentUser?.role === 'PERSONNEL' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('view_hr_evaluations')) actions.push('PERSONNEL');
+        if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('view_hr_evaluations')) actions.push('PERSONNEL');
         return actions;
     };
 

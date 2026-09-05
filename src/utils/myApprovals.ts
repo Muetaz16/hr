@@ -28,7 +28,7 @@ export async function fetchMyApprovalCounts(currentUser: CurrentUser): Promise<M
     const empty: MyApprovalCounts = { total: 0, staff: 0, exceptional: 0, recruitment: 0, cover: 0 };
     if (!currentUser) return empty;
 
-    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
+    const isHR = canAccess(currentUser, [], ['manage_recruitment']);
     const isDirector = canAccess(currentUser, ['HEAD_DIRECTOR'], ['recruitment_approvals']);
     const isDivisionHead = canAccess(currentUser, ['HEAD_DIVISION'], ['recruitment_approvals']);
 
@@ -36,7 +36,7 @@ export async function fetchMyApprovalCounts(currentUser: CurrentUser): Promise<M
     if (currentUser.role === 'HEAD_DEPARTMENT') statusFilter = 'PENDING,APPROVED_BY_UNIT';
     else if (currentUser.role === 'HEAD_DIVISION') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT';
     else if (currentUser.role === 'HEAD_DIRECTOR') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION';
-    else if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
+    else if (currentUser.role === 'SUPER_ADMIN' || currentUser.permissions?.includes('approve_hr_manager')) statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
 
     try {
         const [steps, legacy, recruitment, coverReqs, departments, myRecord] = await Promise.all([
@@ -73,7 +73,7 @@ export async function fetchMyApprovalCounts(currentUser: CurrentUser): Promise<M
             switch (stage) {
                 case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE' || perms.includes('manage_recruitment');
                 case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals');
-                case 'hrManager': return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
+                case 'hrManager': return perms.includes('approve_hr_manager');
                 case 'hrRecruitment': return perms.includes('approve_hr_recruitment');
                 case 'gm': return role === 'GENERAL_MANAGER' || perms.includes('approve_gm');
                 default: return false;

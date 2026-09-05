@@ -3,6 +3,19 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import { prisma } from '../lib/prisma';
+import { POSITIONS, ALL_PERMISSION_IDS } from '../utils/accessCatalog';
+
+// User.role is a plain String in the schema, so without this guard any value could be written
+// straight through the API — including the retired 'HR_MANAGER'/'PERSONNEL' strings, which no
+// longer grant anything and would silently produce an account with no access. A user holds exactly
+// one POSITION; HR-Manager/Personnel powers come from the same-named Functional Hats instead.
+const isValidPosition = (role: unknown): role is string => typeof role === 'string' && (POSITIONS as readonly string[]).includes(role);
+const INVALID_ROLE_ERROR = `Invalid position. Must be one of: ${POSITIONS.join(', ')}. HR Manager / Personnel are Functional Hats, not positions.`;
+
+// Individual grants are stored unsanitised otherwise, so a stale or invented key would persist
+// forever — mirrors functionalHatController's sanitizePermissions.
+const sanitizeGrants = (perms: unknown): string[] =>
+    Array.isArray(perms) ? perms.filter((p): p is string => typeof p === 'string' && ALL_PERMISSION_IDS.includes(p)) : [];
 
 // Get all users
 export const getUsers = async (req: Request, res: Response) => {
@@ -46,6 +59,7 @@ export const getUsers = async (req: Request, res: Response) => {
 export const createUser = async (req: Request, res: Response) => {
     try {
         const { email, password, fullName, role, departmentId, unitId, divisionId, departmentIds, groupId, employeeId, permissions, functionalHatIds } = req.body;
+        if (!isValidPosition(role)) return res.status(400).json({ error: INVALID_ROLE_ERROR });
         const normalizedEmail = email?.toLowerCase();
 
         const existingUser = await prisma.user.findUnique({
@@ -68,7 +82,7 @@ export const createUser = async (req: Request, res: Response) => {
             divisionId: divisionId || null,
             departmentIds: departmentIds || [],
             groupId,
-            permissions: permissions || [],
+            permissions: sanitizeGrants(permissions),
             functionalHatIds: functionalHatIds || [],
         };
         if (req.body.id) data.id = req.body.id;
@@ -111,6 +125,7 @@ export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { email, fullName, role, departmentId, unitId, divisionId, departmentIds, groupId, password, employeeId, permissions, functionalHatIds } = req.body;
+        if (role !== undefined && !isValidPosition(role)) return res.status(400).json({ error: INVALID_ROLE_ERROR });
         const normalizedEmail = email?.toLowerCase();
 
         const dataToUpdate: any = {
@@ -122,7 +137,7 @@ export const updateUser = async (req: Request, res: Response) => {
             divisionId: divisionId || null,
             departmentIds: departmentIds || [],
             groupId,
-            permissions: permissions || [],
+            permissions: sanitizeGrants(permissions),
             functionalHatIds: functionalHatIds || [],
         };
 

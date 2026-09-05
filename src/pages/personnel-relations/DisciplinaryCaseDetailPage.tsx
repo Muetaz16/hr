@@ -318,7 +318,7 @@ const DisciplinaryCaseDetailPage: React.FC = () => {
         );
     };
 
-    const completedStages = STAGE_ORDER.filter(stage => !!c[STAGE_COMPLETED_AT_FIELD[stage]]);
+    const completedStages = STAGE_ORDER.filter(stage => !!(c as any)?.[STAGE_COMPLETED_AT_FIELD[stage]]);
     // The original report's own fields are only editable while still at Incident Report — editing
     // them after the case has moved on requires the dedicated override permission (enforced again
     // server-side in updateCaseDetails; this just keeps the "Edit" button from appearing when it

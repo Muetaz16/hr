@@ -23,7 +23,7 @@ router.use(authenticateToken);
 // EMPLOYEE has no legitimate reason to read the whole company's evaluation
 // data, and only ever needs their own record (via the single-record GET
 // routes below, which enforce ownership per-request instead).
-const EVALUATOR_ROLES = ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', ...MANAGER_ROLES];
+const EVALUATOR_ROLES = ['SUPER_ADMIN', ...MANAGER_ROLES];
 // Permission fallback so a hat holder (e.g. the "HR Manager"/"Personnel" Functional Hat on top of a
 // different base role) reaches these bulk reads too, not just the literal roles above.
 const authorizeEvaluators = authorizeAccess(EVALUATOR_ROLES, ['view_hr_evaluations', 'submit_evaluations', 'manage_evaluation_control']);
@@ -31,7 +31,7 @@ const authorizeEvaluators = authorizeAccess(EVALUATOR_ROLES, ['view_hr_evaluatio
 // `manage_evaluation_control`). Previously these POSTs were open to any authenticated user.
 const authorizeEvalWrite = authorizeAccess(EVALUATOR_ROLES, ['submit_evaluations', 'manage_evaluation_control']);
 // Deleting / finalizing evaluation data is an admin/control action.
-const authorizeEvalControl = authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['manage_evaluation_control']);
+const authorizeEvalControl = authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']);
 const authorizeEvalDelete = authorizeAccess(['SUPER_ADMIN'], ['manage_evaluation_control']);
 
 // HR

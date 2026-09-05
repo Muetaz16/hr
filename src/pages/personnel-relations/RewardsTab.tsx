@@ -61,7 +61,7 @@ const RewardsTab: React.FC = () => {
     const queryClient = useQueryClient();
     const { currentUser } = useAuth();
 
-    const canManageAwards = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['manage_rewards']);
+    const canManageAwards = canAccess(currentUser, ['SUPER_ADMIN'], ['manage_rewards']);
 
     const [view, setView] = useState<'awards' | 'history'>('awards');
 

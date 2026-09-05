@@ -9,7 +9,7 @@ router.use(authenticateToken);
 // Performance nominations are submitted via StaffHub and decided via the generic approval-chain
 // engine (staff-hub routes) — this router only ever sees them once a case already exists here to
 // finalize, exactly like every other award type.
-const canManage = authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_rewards']);
+const canManage = authorizeAccess([], ['manage_rewards']);
 router.use(canManage);
 
 router.get('/candidates/month', rewardController.getMonthCandidates);

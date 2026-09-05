@@ -79,7 +79,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
     const [jdMode, setJdMode] = useState<'edit' | 'new'>('new'); // JD_CHANGE mode
     const [jdForm, setJdForm] = useState<JDFormValue>(emptyJDForm());
 
-    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
+    const isHR = canAccess(currentUser, [], ['manage_recruitment']);
     // The Head of Directorate acts as the GM for final approval.
     // JD changes are finalised by the Head of Directorate (not the GM).
     const isDirector = canAccess(currentUser, ['HEAD_DIRECTOR'], ['recruitment_approvals']);
@@ -303,7 +303,7 @@ const Recruitment: React.FC<{ mode?: 'requests' | 'positions' | 'approvals' | 'c
         switch (stage) {
             case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE' || perms.includes('manage_recruitment');
             case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals');
-            case 'hrManager': return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
+            case 'hrManager': return perms.includes('approve_hr_manager');
             case 'hrRecruitment': return perms.includes('approve_hr_recruitment');
             case 'gm': return role === 'GENERAL_MANAGER' || perms.includes('approve_gm');
             default: return false;

@@ -96,12 +96,12 @@ const MyApprovals: React.FC = () => {
     const [view, setView] = useState<'approvals' | 'history' | 'broadcasting'>('approvals');
     const [activeCategory, setActiveCategory] = useState<'all' | Category>('all');
     // Broadcasting is only for those who can post announcements (same gate as the old Control Room).
-    const canBroadcast = canAccess(currentUser, ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], ['manage_announcements']);
+    const canBroadcast = canAccess(currentUser, ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], ['manage_announcements']);
     const [docs, setDocs] = useState<Record<string, File | null>>({});
     const [submitting, setSubmitting] = useState<string | null>(null);
 
     // Recruitment eligibility mirrors Recruitment.tsx exactly.
-    const isHR = canAccess(currentUser, ['HR_MANAGER'], ['manage_recruitment']);
+    const isHR = canAccess(currentUser, [], ['manage_recruitment']);
     const isDirector = canAccess(currentUser, ['HEAD_DIRECTOR'], ['recruitment_approvals']);
     const isDivisionHead = canAccess(currentUser, ['HEAD_DIVISION'], ['recruitment_approvals']);
 
@@ -127,7 +127,7 @@ const MyApprovals: React.FC = () => {
             if (currentUser?.role === 'HEAD_DEPARTMENT') statusFilter = 'PENDING,APPROVED_BY_UNIT';
             else if (currentUser?.role === 'HEAD_DIVISION') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT';
             else if (currentUser?.role === 'HEAD_DIRECTOR') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION';
-            else if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_MANAGER') statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
+            else if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.permissions?.includes('approve_hr_manager')) statusFilter = 'PENDING,APPROVED_BY_UNIT,APPROVED_BY_DEPT,APPROVED_BY_DIVISION,APPROVED_BY_DIRECTOR';
 
             const [steps, legacy, recruitment, coverReqs, employees, departments, myRecord] = await Promise.all([
                 staffHubService.getMyPendingSteps().catch(() => [] as LeaveApprovalStep[]),
@@ -205,7 +205,7 @@ const MyApprovals: React.FC = () => {
                 switch (stage) {
                     case 'deptHead': return role === 'HEAD_DEPARTMENT' || role === 'HEAD_OFFICE' || perms.includes('manage_recruitment');
                     case 'divHead': return role === 'HEAD_DIVISION' || role === 'HEAD_OFFICE' || perms.includes('recruitment_approvals');
-                    case 'hrManager': return role === 'HR_MANAGER' || perms.includes('approve_hr_manager');
+                    case 'hrManager': return perms.includes('approve_hr_manager');
                     case 'hrRecruitment': return perms.includes('approve_hr_recruitment');
                     case 'gm': return role === 'GENERAL_MANAGER' || perms.includes('approve_gm');
                     default: return false;

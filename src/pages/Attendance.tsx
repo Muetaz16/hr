@@ -16,6 +16,7 @@ import {
 } from '../services/attendanceSettingsService';
 import { staffHubService } from '../services/staffHubService';
 import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/access';
 import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
 import { resolveDayStatus, fillMissingDays } from '../utils/attendanceDayStatus';
 import Modal from '../components/Modal';
@@ -119,7 +120,10 @@ const AttendancePage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { currentUser } = useAuth();
-    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+    // Attendance Settings used to be hard-locked to a literal SUPER_ADMIN role, so the Head of
+    // Attendance hat could not open the settings it owns. Now role OR the manage_attendance_settings
+    // permission — matching the same gate on attendanceSettingsRoutes.ts.
+    const canManageSettings = canAccess(currentUser, ['SUPER_ADMIN'], ['manage_attendance_settings']);
     const tab: Tab = location.pathname.includes('/exceptions')
         ? 'exceptions'
         : location.pathname.includes('/daily-logging')
@@ -194,7 +198,7 @@ const AttendancePage: React.FC = () => {
     const { data: settingsSnapshot, isLoading: isLoadingSnapshot } = useQuery({
         queryKey: ['attendance-settings-snapshot'],
         queryFn: () => attendanceSettingsService.getSnapshot(),
-        enabled: !!detailRow || (tab === 'settings' && isSuperAdmin),
+        enabled: !!detailRow || (tab === 'settings' && canManageSettings),
         retry: false,
         staleTime: 5 * 60 * 1000,
     });
@@ -538,19 +542,19 @@ const AttendancePage: React.FC = () => {
     const { data: holidaysList = [], isLoading: isLoadingHolidays } = useQuery({
         queryKey: ['attendance-settings-holidays'],
         queryFn: () => attendanceSettingsService.getHolidays(),
-        enabled: tab === 'settings' && settingsSubTab === 'holidays' && isSuperAdmin,
+        enabled: tab === 'settings' && settingsSubTab === 'holidays' && canManageSettings,
         retry: false,
     });
     const { data: multipliersList = [], isLoading: isLoadingMultipliers } = useQuery({
         queryKey: ['attendance-settings-multipliers'],
         queryFn: () => attendanceSettingsService.getMultiplierFactors(),
-        enabled: tab === 'settings' && settingsSubTab === 'multipliers' && isSuperAdmin,
+        enabled: tab === 'settings' && settingsSubTab === 'multipliers' && canManageSettings,
         retry: false,
     });
     const { data: employeeShiftsList = [], isLoading: isLoadingEmployeeShifts } = useQuery({
         queryKey: ['attendance-settings-employee-shifts'],
         queryFn: () => attendanceSettingsService.getEmployeeShifts(),
-        enabled: tab === 'settings' && settingsSubTab === 'shifts' && isSuperAdmin,
+        enabled: tab === 'settings' && settingsSubTab === 'shifts' && canManageSettings,
         retry: false,
     });
 
@@ -746,7 +750,7 @@ const AttendancePage: React.FC = () => {
                     { key: 'exceptions' as Tab, label: t('exceptions', { defaultValue: 'Exceptions' }), Icon: AlertTriangle },
                     { key: 'daily-logging' as Tab, label: t('daily_logging', { defaultValue: 'Daily Logging' }), Icon: PlusCircle },
                     { key: 'employees' as Tab, label: t('employees', { defaultValue: 'Employees' }), Icon: Users },
-                    ...(isSuperAdmin ? [{ key: 'settings' as Tab, label: t('settings', { defaultValue: 'Settings' }), Icon: SettingsIcon }] : []),
+                    ...(canManageSettings ? [{ key: 'settings' as Tab, label: t('settings', { defaultValue: 'Settings' }), Icon: SettingsIcon }] : []),
                 ].map(({ key, label, Icon }) => (
                     <button
                         key={key}
@@ -1349,7 +1353,7 @@ const AttendancePage: React.FC = () => {
             )}
 
             {tab === 'settings' && (
-                !isSuperAdmin ? (
+                !canManageSettings ? (
                     <div className="p-10 text-center text-slate-400 font-bold">{t('you_don_t_have_permission_to_view_this_section', { defaultValue: "You don't have permission to view this section." })}</div>
                 ) : (
                 <div className="space-y-6">

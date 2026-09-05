@@ -37,27 +37,27 @@ router.delete('/functional-hats/:id', authorizeAccess([], ['manage_users']), del
 
 // Departments (Admin/HR only)
 // Departments (Viewable by all staff)
-router.get('/departments', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'GENERAL_MANAGER', 'CHAIRMAN'), getDepartments);
-router.post('/departments', authorizeAccess(['HR_MANAGER'], ['manage_departments']), createDepartment);
-router.put('/departments/:id', authorizeAccess(['HR_MANAGER'], ['manage_departments']), updateDepartment);
-router.delete('/departments/:id', authorizeAccess(['HR_MANAGER'], ['manage_departments']), deleteDepartment);
+router.get('/departments', authorizeRoles('SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_OFFICE', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE', 'GENERAL_MANAGER', 'CHAIRMAN'), getDepartments);
+router.post('/departments', authorizeAccess([], ['manage_departments']), createDepartment);
+router.put('/departments/:id', authorizeAccess([], ['manage_departments']), updateDepartment);
+router.delete('/departments/:id', authorizeAccess([], ['manage_departments']), deleteDepartment);
 
 // Groups (Admin/HR only)
 router.get('/groups', getGroups);
-router.post('/groups', authorizeAccess(['HR_MANAGER'], ['manage_groups']), createGroup);
-router.put('/groups/:id', authorizeAccess(['HR_MANAGER'], ['manage_groups']), updateGroup);
-router.delete('/groups/:id', authorizeAccess(['HR_MANAGER'], ['manage_groups']), deleteGroup);
+router.post('/groups', authorizeAccess([], ['manage_groups']), createGroup);
+router.put('/groups/:id', authorizeAccess([], ['manage_groups']), updateGroup);
+router.delete('/groups/:id', authorizeAccess([], ['manage_groups']), deleteGroup);
 
 // Divisions
 router.get('/divisions', getDivisions);
-router.post('/divisions', authorizeAccess(['HR_MANAGER'], ['manage_divisions']), createDivision);
-router.put('/divisions/:id', authorizeAccess(['HR_MANAGER'], ['manage_divisions']), updateDivision);
-router.delete('/divisions/:id', authorizeAccess(['HR_MANAGER'], ['manage_divisions']), deleteDivision);
+router.post('/divisions', authorizeAccess([], ['manage_divisions']), createDivision);
+router.put('/divisions/:id', authorizeAccess([], ['manage_divisions']), updateDivision);
+router.delete('/divisions/:id', authorizeAccess([], ['manage_divisions']), deleteDivision);
 
 // Directorates
 router.get('/directorates', getAllDirectorates);
-router.post('/directorates', authorizeAccess(['HR_MANAGER'], ['manage_directorates']), createDirectorate);
-router.put('/directorates/:id', authorizeAccess(['HR_MANAGER'], ['manage_directorates']), updateDirectorate);
-router.delete('/directorates/:id', authorizeAccess(['HR_MANAGER'], ['manage_directorates']), deleteDirectorate);
+router.post('/directorates', authorizeAccess([], ['manage_directorates']), createDirectorate);
+router.put('/directorates/:id', authorizeAccess([], ['manage_directorates']), updateDirectorate);
+router.delete('/directorates/:id', authorizeAccess([], ['manage_directorates']), deleteDirectorate);
 
 export default router;

@@ -90,7 +90,7 @@ const StaffHub: React.FC = () => {
     // Leave types that use the org approval chain and therefore require a replacement.
     const CHAIN_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE'];
 
-    const managerRoles = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
+    const managerRoles = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DEPARTMENT', 'HEAD_UNIT'];
     const isManager = managerRoles.includes(currentUser?.role || '');
 
     // Form States
@@ -117,7 +117,9 @@ const StaffHub: React.FC = () => {
             endTime: '',
             reason: '',
             workOrderType: 'SITE_MISSION',
-            placeOfAssignment: ''
+            placeOfAssignment: '',
+            missingPunchType: 'CHECK_IN',
+            missingPunchReason: 'FORGOT'
         });
         setRequestFile(null);
         setReplacementUserId('');

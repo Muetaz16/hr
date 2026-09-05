@@ -5,11 +5,11 @@ import { authenticateToken, authorizeRoles, authorizePermissions, authorizeAcces
 const router = Router();
 router.use(authenticateToken);
 
-router.get('/month/:month', authorizeAccess(['HR_MANAGER'], ['view_payroll']), getPayrollByMonth);
+router.get('/month/:month', authorizeAccess([], ['view_payroll']), getPayrollByMonth);
 // The per-employee/month Word form is exportable from both the Efficiency Evaluation page and the
 // Personnel Relations lifecycle tree, so it matches the broader "can view evaluations" audience.
-router.get('/evaluation-doc/:employeeId/:month', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_payroll', 'view_evaluations', 'manage_evaluation_control']), getMonthlyEvaluationDoc);
-router.post('/', authorizeAccess(['HR_MANAGER'], ['manage_payroll']), savePayrollResult);
+router.get('/evaluation-doc/:employeeId/:month', authorizeAccess([], ['view_payroll', 'view_evaluations', 'manage_evaluation_control']), getMonthlyEvaluationDoc);
+router.post('/', authorizeAccess([], ['manage_payroll']), savePayrollResult);
 router.delete('/:id', authorizeAccess([], ['manage_payroll']), deletePayrollResult);
 
 export default router;

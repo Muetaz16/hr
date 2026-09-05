@@ -14,7 +14,7 @@ import { PrismaClient, Employee } from '@prisma/client';
 //                             against the director's own Employee.directorateId, OR (legacy) the
 //                             employee's department listed in User.departmentIds  (the "Directorate" stage)
 // The Head-of-Attendance stage is granted by the "approve_attendance" permission (a function, not a
-// role); HR_MANAGER and GENERAL_MANAGER are global, unscoped roles. Every stage must have at least
+// role); the HR_MANAGER and GENERAL_MANAGER STAGES are global and unscoped. Every stage must have at least
 // one holder or the request is blocked — but ANY ONE person resolved for a given stage signing is
 // enough to complete it (staffHubController.ts's decideApprovalStep skips the other pending steps
 // in that same stage once one signs). This matters whenever a stage resolves to more than one
@@ -74,7 +74,7 @@ const REQUIRED_NONEMPTY_STAGES: ApprovalStage[] = ['HEAD_ATTENDANCE', 'HR_MANAGE
 
 // The requester's own seniority in the org. A head's leave must never route through their own
 // subordinates — approvers sit STRICTLY above the requester — so a Division Head's direct head is
-// the Director, not the Department Head beneath them. HEAD_ATTENDANCE and HR_MANAGER are cross-
+// the Director, not the Department Head beneath them. The HEAD_ATTENDANCE and HR_MANAGER stages are cross-
 // cutting functions (not levels) and always sign regardless of rank.
 const ORG_RANK: Record<string, number> = {
     EMPLOYEE: 0,
@@ -175,9 +175,8 @@ export async function resolveApprovalChain(
     // Role ∪ approve_hr_manager permission/hat ∪ SUPER_ADMIN — mirrors the GENERAL_MANAGER union
     // just below (and resolveExceptionalPerformanceApprovalChain's) exactly, so a person whose real
     // Position is a Head role (e.g. HEAD_DEPARTMENT) but who holds the HR Manager Functional Hat is
-    // recognized here too, not just a literal role==='HR_MANAGER' account.
-    const hrManagerRoleHolders = idsOf(await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } }));
-    const hrManagers = Array.from(new Set([...hrManagerRoleHolders, ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+    // recognized here. There is no HR_MANAGER role any more — this stage is purely permission-driven.
+    const hrManagers = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
 
     // Directorate head — the "Administrative Director" endorsement. Resolve two ways and union them so
     // the director always lands in the flow when the org structure says they head this branch:
@@ -488,8 +487,7 @@ export async function resolveExceptionalPerformanceApprovalChain(
         rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeads.map(u => u.id) });
     }
 
-    const hrRoleHolders = await prisma.user.findMany({ where: { role: 'HR_MANAGER' }, select: { id: true } });
-    const hrManagers = Array.from(new Set([...hrRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_hr_manager'))]));
+    const hrManagers = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
     rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
 
     const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });

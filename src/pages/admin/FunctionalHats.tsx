@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { permGroupKey, permLabelKey } from '../../utils/access';
 import { userService } from '../../services/userService';
 import type { FunctionalHat, AccessCatalog } from '../../types';
 import { Layers, Plus, Edit, Trash2, Lock, ShieldCheck } from 'lucide-react';
@@ -46,10 +47,12 @@ const FunctionalHatsPage: React.FC = () => {
         const map = new Map<string, { id: string; label: string }[]>();
         for (const p of catalog.permissions) {
             if (!map.has(p.group)) { map.set(p.group, []); order.push(p.group); }
-            map.get(p.group)!.push({ id: p.id, label: p.label });
+            map.get(p.group)!.push({ id: p.id, label: t(permLabelKey(p.id), { defaultValue: p.label }) });
         }
-        return order.map(g => ({ title: g, perms: map.get(g)! }));
-    }, [catalog]);
+        // Catalog group names/labels are English (it is the server's source of truth); resolve them
+        // to the current language, falling back to the catalog string when untranslated.
+        return order.map(g => ({ title: t(permGroupKey(g), { defaultValue: g }), perms: map.get(g)! }));
+    }, [catalog, t]);
 
     const openCreate = () => {
         setEditing(null);
@@ -106,7 +109,10 @@ const FunctionalHatsPage: React.FC = () => {
         </div>
     );
 
-    const labelFor = (id: string) => catalog?.permissions.find(p => p.id === id)?.label || id;
+    const labelFor = (id: string) => {
+        const p = catalog?.permissions.find(x => x.id === id);
+        return p ? t(permLabelKey(p.id), { defaultValue: p.label }) : id;
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">

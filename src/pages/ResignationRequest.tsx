@@ -170,7 +170,7 @@ const ResignationRequest: React.FC = () => {
                 effectiveDate,
                 reasonCategory,
                 reasonOther: reasonCategory === 'OTHERS' ? reasonOther : undefined,
-                ratings: ratings as ExitInterviewRatings,
+                ratings: ratings as unknown as ExitInterviewRatings,
                 appreciatedMost,
                 likedLeast,
                 improvementSuggestions,

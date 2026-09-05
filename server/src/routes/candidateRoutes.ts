@@ -29,8 +29,8 @@ router.use(authenticateToken);
 // The hiring pipeline (screening, evaluations, offers, hiring) is for recruitment participants:
 // HR, GM, and heads with recruitment access. Deleting a candidate is HR/admin only.
 const HEAD_ROLES = ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'];
-const canManageHiring = authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', ...HEAD_ROLES], ['manage_recruitment', 'view_recruitment']);
-const canDeleteCandidate = authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER'], ['manage_recruitment']);
+const canManageHiring = authorizeAccess(['SUPER_ADMIN', 'GENERAL_MANAGER', ...HEAD_ROLES], ['manage_recruitment', 'view_recruitment']);
+const canDeleteCandidate = authorizeAccess(['SUPER_ADMIN'], ['manage_recruitment']);
 
 // CV upload storage
 const uploadDir = path.join(__dirname, '../../uploads/cvs');

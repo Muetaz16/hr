@@ -19,7 +19,7 @@ const evidenceStorage = multer.diskStorage({
 });
 const evidenceUpload = multer({ storage: evidenceStorage, limits: { fileSize: 100 * 1024 * 1024, files: 5 } });
 
-const canManage = authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['manage_disciplinary']);
+const canManage = authorizeAccess([], ['manage_disciplinary']);
 
 // Stage 1 — any authenticated employee may file an incident report (no permission gate).
 router.post('/incident-report', disciplinaryController.createIncidentReport);

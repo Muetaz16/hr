@@ -464,7 +464,7 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => {
-                                    const headRoles = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_DIRECTOR', 'HR_MANAGER', 'PERSONNEL', 'SUPER_ADMIN'];
+                                    const headRoles = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_DIRECTOR', 'SUPER_ADMIN'];
                                     setSelectedRoles(headRoles);
                                 }}
                                 className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-all"
@@ -495,10 +495,8 @@ const EmployeesPage: React.FC<{ minimal?: boolean }> = ({ minimal = false }) => 
                                 { id: 'HEAD_OFFICE', name: 'Head of Office' },
                                 { id: 'HEAD_DIVISION', name: 'Head of Division' },
                                 { id: 'HEAD_DIRECTOR', name: t('role_head_director') },
-                                { id: 'HR_MANAGER', name: t('role_hr_manager') },
                                 { id: 'GENERAL_MANAGER', name: 'General Manager' },
                                 { id: 'CHAIRMAN', name: 'Chairman' },
-                                { id: 'PERSONNEL', name: t('role_personnel', { defaultValue: 'Personnel' }) },
                                 { id: 'SUPER_ADMIN', name: 'Global Administrator' }
                             ]}
                             selected={selectedRoles}

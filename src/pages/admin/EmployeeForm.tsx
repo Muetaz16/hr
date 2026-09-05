@@ -567,7 +567,7 @@ const EmployeeForm: React.FC = () => {
             return;
         }
 
-        const globalRoles = ['GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIVISION', 'HEAD_OFFICE', 'SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'];
+        const globalRoles = ['GENERAL_MANAGER', 'CHAIRMAN', 'HEAD_DIVISION', 'HEAD_OFFICE', 'SUPER_ADMIN'];
 
         if (!globalRoles.includes(formData.role || '') && formData.role !== 'HEAD_DIRECTOR' && !formData.departmentId) {
             toast.error(t('dept_group_required'));
@@ -1090,6 +1090,7 @@ const EmployeeForm: React.FC = () => {
                                     <option value="HEAD_DIRECTOR">{t('role_head_director')}</option>
                                     <option value="GENERAL_MANAGER">{t('role_general_manager', { defaultValue: 'General Manager' })}</option>
                                     <option value="CHAIRMAN">{t('role_chairman', { defaultValue: 'Chairman' })}</option>
+                            <option value="SUPER_ADMIN">{t('role_super_admin', { defaultValue: 'Super Admin' })}</option>
                                 </select>
                             </div>
 

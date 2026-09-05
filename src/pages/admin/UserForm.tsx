@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { permGroupKey, permLabelKey } from '../../utils/access';
 import { useNavigate, useParams } from 'react-router-dom';
 import { userService } from '../../services/userService';
 import { departmentService, divisionService } from '../../services/departmentService';
@@ -30,23 +31,27 @@ import { toast } from 'sonner';
 type PermItem = { id: string; label: string };
 type PermGroup = { key: string; title: string; perms: PermItem[] };
 
-// Build display groups (preserving catalog order) from the fetched catalog.
-const buildGroups = (catalog: AccessCatalog | null): PermGroup[] => {
+// Build display groups (preserving catalog order) from the fetched catalog. The catalog is the
+// server's own source of truth so its group names and labels are English; permGroupKey/permLabelKey
+// resolve them to the current language, falling back to the catalog string when untranslated.
+type Translate = (key: string, opts?: Record<string, unknown>) => string;
+const buildGroups = (catalog: AccessCatalog | null, t: Translate): PermGroup[] => {
     if (!catalog) return [];
     const order: string[] = [];
     const map = new Map<string, PermItem[]>();
     for (const p of catalog.permissions) {
         if (!map.has(p.group)) { map.set(p.group, []); order.push(p.group); }
-        map.get(p.group)!.push({ id: p.id, label: p.label });
+        map.get(p.group)!.push({ id: p.id, label: t(permLabelKey(p.id), { defaultValue: p.label }) });
     }
-    return order.map(g => ({ key: g, title: g, perms: map.get(g)! }));
+    return order.map(g => ({ key: g, title: t(permGroupKey(g), { defaultValue: g }), perms: map.get(g)! }));
 };
 
-// Organizational positions (a user holds exactly one). HR Manager / Personnel are deliberately NOT
-// offered here anymore — the correct pattern is a real position (e.g. Head of Department) plus the
-// matching Functional Hat layered on top, which already carries the full HR Manager / Personnel
-// permission bundle (see accessCatalog.ts). Any pre-existing account still carrying one of those two
-// role strings keeps working exactly as before; it's just no longer an assignable choice going forward.
+// Organizational positions — a user holds exactly one, and this list is the complete set (it
+// mirrors POSITIONS in server/src/utils/accessCatalog.ts, which the server now validates against).
+// "HR Manager" and "Personnel" are NOT positions: they are Functional Hats worn on top of a real
+// chart position. Super Admin is a position like the rest, but it bypasses every permission check
+// in the app — grant the System Administrator hat instead when someone only needs to manage
+// system configuration.
 const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
     { value: 'EMPLOYEE', labelDefault: 'Employee' },
     { value: 'HEAD_UNIT', labelDefault: 'Head of Unit' },
@@ -56,6 +61,7 @@ const POSITION_OPTIONS: { value: UserRole; labelDefault: string }[] = [
     { value: 'HEAD_DIRECTOR', labelDefault: 'Head of Directorate' },
     { value: 'GENERAL_MANAGER', labelDefault: 'General Manager' },
     { value: 'CHAIRMAN', labelDefault: 'Chairman' },
+    { value: 'SUPER_ADMIN', labelDefault: 'Super Admin' },
 ];
 
 const PermissionCheckbox: React.FC<{
@@ -172,7 +178,7 @@ const UserForm: React.FC = () => {
     }, [id, isEditMode]);
 
     // Display groups + catalog-derived ids.
-    const groups = buildGroups(catalog);
+    const groups = buildGroups(catalog, t);
     const allPermIds = catalog ? catalog.permissions.map(p => p.id) : [];
 
     // Inherited permissions come from the position's default bundle and every

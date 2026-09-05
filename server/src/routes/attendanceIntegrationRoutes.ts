@@ -37,7 +37,7 @@ router.get('/me/monthly-report', getMyMonthlyReport);
 
 // Role OR permission: the attendance/time-tracking permissions (granted to a Head of Attendance &
 // Payroll) open the attendance workspace even when the account's org role isn't listed here.
-router.use(authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_time_tracking', 'manage_time_tracking']));
+router.use(authorizeAccess(['SUPER_ADMIN'], ['view_time_tracking', 'manage_time_tracking']));
 
 router.get('/summary', getAttendanceSummary);
 router.get('/leave-types', getAttendanceLeaveTypes);

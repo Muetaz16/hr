@@ -85,7 +85,7 @@ const Dashboard: React.FC = () => {
 
             // Conditional fetching based on role or permissions
             const hasEmpView = currentUser.permissions?.includes('view_employees') || currentUser.permissions?.includes('manage_employees');
-            const isManager = ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'].includes(currentUser.role) || hasEmpView;
+            const isManager = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'].includes(currentUser.role) || hasEmpView;
 
             const [emps, depts, groups, units, _timeRecords, expiringSoonList, myEmployeeResult] = await Promise.all([
                 isManager ? employeeService.getAllEmployees().catch(() => []) : Promise.resolve([]),
@@ -93,10 +93,10 @@ const Dashboard: React.FC = () => {
                 groupService.getAllGroups().catch(() => []),
                 unitService.getAllUnits().catch(() => []),
                 // Only fetch time records for Admin/HR
-                canAccess(currentUser, ['HR_MANAGER'], ['view_time_tracking', 'manage_time_tracking'])
+                canAccess(currentUser, [], ['view_time_tracking', 'manage_time_tracking'])
                     ? timeService.getTimeRecordsByMonth(currentMonth).catch(() => [])
                     : Promise.resolve([]),
-                (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HR_MANAGER' || currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('view_lifecycle') || currentUser.permissions?.includes('manage_lifecycle_control'))
+                (currentUser.role === 'SUPER_ADMIN' || currentUser.permissions?.includes('view_lifecycle') || currentUser.permissions?.includes('manage_lifecycle_control'))
                     ? employeeService.getExpiringContracts(7).catch(() => [])
                     : Promise.resolve([]),
                 // Fetch the current user's own Employee record (needed for org-scoping below)
@@ -141,7 +141,7 @@ const Dashboard: React.FC = () => {
             // Analytics Data Preparation (Only for Super Admin / HR)
             let analyticsData: any[] = [];
             let analyticsDepts: string[] = [];
-            const showAnalytics = canAccess(currentUser, ['HR_MANAGER'], ['view_hr_evaluations']);
+            const showAnalytics = canAccess(currentUser, [], ['view_hr_evaluations']);
 
             if (showAnalytics) {
                 try {
@@ -240,11 +240,6 @@ const Dashboard: React.FC = () => {
                 managedEntity = 'IPH SYSTEM';
                 myGroup = 'Executive Board';
                 myDept = 'System Administration';
-            } else if (currentUser.role === 'HR_MANAGER') {
-                positionName = t('hr_manager', { defaultValue: 'HR Manager' });
-                managedEntity = t('corporate_administration', { defaultValue: 'Corporate Administration' });
-                myGroup = 'Human Resources IPH SYSTEM';
-                myDept = 'Corporate Administration';
             } else if (currentUser.role === 'HEAD_DIRECTOR') {
                 positionName = t('head_of_directorate', { defaultValue: 'Head of Directorate' });
                 managedEntity = myEmployeeData?.directorateId ? t('directorate', { defaultValue: 'Directorate' }) : (nameOf(groups.find(g => g.id === currentUser.groupId)) || t('directorate', { defaultValue: 'Directorate' }));
@@ -257,7 +252,7 @@ const Dashboard: React.FC = () => {
             } else if (currentUser.role === 'HEAD_UNIT') {
                 positionName = t('head_of_unit', { defaultValue: 'Head of Unit' });
                 managedEntity = nameOf(units.find(u => u.id === (currentUser as any).unitId)) || t('unit', { defaultValue: 'Unit' });
-            } else if (currentUser.role === 'PERSONNEL' || currentUser.permissions?.includes('manage_personnel_actions')) {
+            } else if (currentUser.permissions?.includes('manage_personnel_actions')) {
                 positionName = t('personnel_officer', { defaultValue: 'Personnel Officer' });
                 managedEntity = t('human_resources', { defaultValue: 'Human Resources' });
                 myGroup = 'Human Resources IPH SYSTEM';
@@ -267,22 +262,22 @@ const Dashboard: React.FC = () => {
             // Refined Pending Counts
             let totalPendingAction = evaluationPendingCount;
 
-            if (canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts'])) {
+            if (canAccess(currentUser, [], ['view_contracts'])) {
                 totalPendingAction += (expiringSoonList as any[]).length;
             }
 
             const stats = [
-                { label: t('active_employees'), value: scopedEmps.length.toString(), icon: Users, change: t('current'), color: 'text-primary-600', bg: 'bg-primary-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_employees' },
-                { label: t('evaluation_ratio', { defaultValue: 'Evaluation Ratio' }), value: `${evalPercent}%`, icon: CheckCircle2, change: `${finishedEvals}/${scopedEmps.length}`, color: 'text-green-600', bg: 'bg-green-50', visible: ['SUPER_ADMIN', 'HR_MANAGER', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_evaluations' },
-                { label: t('evaluations_awaiting', { defaultValue: 'Evaluations Awaiting' }), value: evaluationPendingCount.toString(), icon: FileText, change: t('action_required', { defaultValue: 'Action Required' }), color: 'text-orange-600', bg: 'bg-orange-50', visible: ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'PERSONNEL'], permission: 'view_hr_evaluations' },
-                { id: 'system_alerts', label: t('system_alerts', { defaultValue: 'System Alerts' }), value: totalPendingAction.toString(), icon: Activity, change: t('critical', { defaultValue: 'Critical' }), color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN', 'HR_MANAGER'], permission: 'manage_users' },
+                { label: t('active_employees'), value: scopedEmps.length.toString(), icon: Users, change: t('current'), color: 'text-primary-600', bg: 'bg-primary-50', visible: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_employees' },
+                { label: t('evaluation_ratio', { defaultValue: 'Evaluation Ratio' }), value: `${evalPercent}%`, icon: CheckCircle2, change: `${finishedEvals}/${scopedEmps.length}`, color: 'text-green-600', bg: 'bg-green-50', visible: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_evaluations' },
+                { label: t('evaluations_awaiting', { defaultValue: 'Evaluations Awaiting' }), value: evaluationPendingCount.toString(), icon: FileText, change: t('action_required', { defaultValue: 'Action Required' }), color: 'text-orange-600', bg: 'bg-orange-50', visible: ['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], permission: 'view_hr_evaluations' },
+                { id: 'system_alerts', label: t('system_alerts', { defaultValue: 'System Alerts' }), value: totalPendingAction.toString(), icon: Activity, change: t('critical', { defaultValue: 'Critical' }), color: 'text-red-600', bg: 'bg-red-50', visible: ['SUPER_ADMIN'], permission: 'manage_users' },
             ].filter(s =>
                 (!s.visible || s.visible.includes(currentUser.role)) ||
                 (s.permission && currentUser.permissions?.includes(s.permission))
             );
 
             // Breakdown behind the "System Alerts" counter, so clicking it shows what's outstanding.
-            const showsContracts = canAccess(currentUser, ['HR_MANAGER', 'PERSONNEL'], ['view_contracts']);
+            const showsContracts = canAccess(currentUser, [], ['view_contracts']);
             const systemAlerts = {
                 total: totalPendingAction,
                 evaluations: evaluationPendingCount,
@@ -304,7 +299,7 @@ const Dashboard: React.FC = () => {
     // Company-wide analytics rollup — HR + executive audience. Fetched from the single
     // server-side aggregation endpoint (mirrors the route's own authorization).
     const canViewInsights =
-        ['SUPER_ADMIN', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(currentUser?.role || '') ||
+        ['SUPER_ADMIN', 'GENERAL_MANAGER', 'CHAIRMAN'].includes(currentUser?.role || '') ||
         !!currentUser?.permissions?.includes('view_employees');
 
     const { data: insights } = useQuery({
@@ -327,7 +322,7 @@ const Dashboard: React.FC = () => {
     // performance, recruitment, cover, personnel actions). Clicking the card opens /my-approvals.
     const canSeeApprovals = canAccess(
         currentUser,
-        ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HR_MANAGER', 'GENERAL_MANAGER', 'CHAIRMAN'],
+        ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'],
         ['manage_leaves', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']
     );
     const { data: approvalCounts } = useQuery({
@@ -394,7 +389,7 @@ const Dashboard: React.FC = () => {
     // systemAlerts.total — NOT stats[3], whose index shifts once the stats array is
     // role-filtered above.
     const pendingReviewCount = String(systemAlerts.total ?? 0);
-    const showAnalytics = canAccess(currentUser, ['HR_MANAGER'], ['view_hr_evaluations']);
+    const showAnalytics = canAccess(currentUser, [], ['view_hr_evaluations']);
 
     const renderDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return '-';

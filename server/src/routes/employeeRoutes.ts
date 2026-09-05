@@ -23,29 +23,29 @@ const documentStorage = multer.diskStorage({
 });
 const documentUpload = multer({ storage: documentStorage, limits: { fileSize: 15 * 1024 * 1024 } });
 
-router.post('/upload-document', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), documentUpload.single('file'), uploadEmployeeDocument);
+router.post('/upload-document', authorizeAccess([], ['register_employees', 'edit_employees']), documentUpload.single('file'), uploadEmployeeDocument);
 
-router.get('/contracts/expiring', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_contracts']), getExpiringContracts);
+router.get('/contracts/expiring', authorizeAccess([], ['view_contracts']), getExpiringContracts);
 router.get('/me', getMyEmployeeRecord);
-router.get('/next-staff-id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), getNextStaffId);
-router.post('/regenerate-staff-ids', authorizeAccess(['HR_MANAGER'], ['register_employees', 'edit_employees']), regenerateAllStaffIds);
-router.get('/', authorizeRoles('SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HEAD_OFFICE', 'CHAIRMAN', 'GENERAL_MANAGER', 'EMPLOYEE'), getAllEmployees);
+router.get('/next-staff-id', authorizeAccess([], ['register_employees', 'edit_employees']), getNextStaffId);
+router.post('/regenerate-staff-ids', authorizeAccess([], ['register_employees', 'edit_employees']), regenerateAllStaffIds);
+router.get('/', authorizeRoles('SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'HEAD_OFFICE', 'CHAIRMAN', 'GENERAL_MANAGER', 'EMPLOYEE'), getAllEmployees);
 router.get('/:id', getEmployeeById);
-router.post('/', authorizeAccess(['HR_MANAGER'], ['register_employees']), createEmployee);
-router.put('/:id', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['edit_employees']), updateEmployee);
-router.delete('/:id', authorizeAccess(['HR_MANAGER'], ['edit_employees']), deleteEmployee);
+router.post('/', authorizeAccess([], ['register_employees']), createEmployee);
+router.put('/:id', authorizeAccess([], ['edit_employees']), updateEmployee);
+router.delete('/:id', authorizeAccess([], ['edit_employees']), deleteEmployee);
 
 // Lifecycle handover summary (IPH letterhead) — for HR / Personnel Relations use.
-router.get('/:id/handover-summary', authorizeAccess(['SUPER_ADMIN', 'HR_MANAGER', 'PERSONNEL'], ['view_personnel_relations', 'manage_personnel_actions', 'view_lifecycle']), generateHandoverSummary);
+router.get('/:id/handover-summary', authorizeAccess(['SUPER_ADMIN'], ['view_personnel_relations', 'manage_personnel_actions', 'view_lifecycle']), generateHandoverSummary);
 
 // Contract Lifecycle
-router.get('/:id/renewal-form', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['view_contracts', 'manage_contract_management']), generateContractRenewalForm);
-router.post('/:id/renew', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), renewContract);
-router.post('/:id/terminate', authorizeAccess(['HR_MANAGER'], ['manage_contract_management']), terminateEmployee);
+router.get('/:id/renewal-form', authorizeAccess([], ['view_contracts', 'manage_contract_management']), generateContractRenewalForm);
+router.post('/:id/renew', authorizeAccess([], ['manage_contract_management']), renewContract);
+router.post('/:id/terminate', authorizeAccess([], ['manage_contract_management']), terminateEmployee);
 
 // Free-form employee documents (additional certificates, etc. beyond the fixed CV/degree/etc. slots)
-router.get('/:id/documents', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), getEmployeeDocuments);
-router.post('/:id/documents', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), addEmployeeDocument);
-router.delete('/:id/documents/:docId', authorizeAccess(['HR_MANAGER', 'PERSONNEL'], ['register_employees', 'edit_employees']), deleteEmployeeDocument);
+router.get('/:id/documents', authorizeAccess([], ['register_employees', 'edit_employees']), getEmployeeDocuments);
+router.post('/:id/documents', authorizeAccess([], ['register_employees', 'edit_employees']), addEmployeeDocument);
+router.delete('/:id/documents/:docId', authorizeAccess([], ['register_employees', 'edit_employees']), deleteEmployeeDocument);
 
 export default router;
