@@ -88,6 +88,27 @@ export interface Unit {
     };
 }
 
+// A staffing company supplying non-resident employees. `percentage` is the provider's cut,
+// charged to IPH on top of the employee's salary — it is never deducted from the employee.
+export interface ServiceProvider {
+    id: string;
+    name: string;
+    nameArabic?: string | null;
+    percentage: number;
+    contactPerson?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    contractStart?: string | null;
+    contractEnd?: string | null;
+    notes?: string | null;
+    isActive: boolean;
+    _count?: {
+        employees: number;
+        candidates: number;
+    };
+}
+
 export interface Group {
     id: string;
     name: string;
@@ -235,7 +256,9 @@ export interface Employee {
     bankBranchNameArabic?: string;
 
     // Onboarding-only fields (self-service onboarding form)
-    serviceProviderCompany?: string;
+    serviceProviderId?: string | null;
+    serviceProvider?: { id: string; name: string; nameArabic?: string | null } | null;
+    serviceProviderCompany?: string; // legacy free-text name (pre-dates the provider table)
     employeeTravelDate?: string;
     employeeStartDate?: string;
     ticketUrl?: string;
@@ -599,6 +622,8 @@ export interface Candidate {
     degreePath?: string;
     portfolioPath?: string;
     source?: string;
+    serviceProviderId?: string | null;
+    serviceProvider?: { id: string; name: string; nameArabic?: string | null } | null;
     speciality?: string;
     yearsExperience?: string;
     salaryExpectation?: string;

@@ -9,12 +9,28 @@ export interface AttendanceSummaryEmployee {
     department: string;
     positionName: string;
     totalEarlyPunchMins: number;
+    // totalWorkMins is ALREADY net of leave: the attendance system credits a leave day a full
+    // day's minutes in its daily rows, then subtracts that credit back out of the roll-up and
+    // parks it in totalPaidMins. Verified arithmetically (sum of daily minutes - totalPaidMins ==
+    // grandTotalWork). So totalPaidMins and totalUnpaidLeaveMins are DISJOINT from totalWorkMins —
+    // never subtract totalUnpaidLeaveMins from it, that would deduct the same absence twice.
     totalWorkMins: number;
+    // Paid-leave minutes, covering annual AND emergency leave together (both leave types are
+    // isPaid). There is no breakdown in this figure. Payroll multiplies it by the hourly rate
+    // WITHOUT the salary factors. Present on every API row but previously missing from this
+    // interface, so TypeScript could not see it.
+    totalPaidMins: number;
+    // Unpaid-leave minutes. Display only — see the note on totalWorkMins.
+    totalUnpaidLeaveMins: number;
     totalLateMins: number;
     totalEarlyOutMins: number;
     totalLeaveMins: number;
     totalOTMins: number;
     totalApprovedOTMins: number;
+    // WARNING: paidLeaveDays and emergencyLeaveDays are SWAPPED by the attendance service —
+    // paidLeaveDays actually counts Emergency Leave days and emergencyLeaveDays counts Annual
+    // Leave days (verified by isolating one employee's two adjacent leave records). paidLeaveDays
+    // also double-counts duplicate leave records. Prefer totalPaidMins, which is correct.
     paidLeaveDays: number;
     unpaidLeaveDays: number;
     emergencyLeaveDays: number;

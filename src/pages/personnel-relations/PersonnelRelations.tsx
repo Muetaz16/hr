@@ -11,12 +11,12 @@ import { directorateService } from '../../services/directorateService';
 import { timeService } from '../../services/timeService';
 import { staffHubService } from '../../services/staffHubService';
 import { evaluationService, type EvaluationHistoryMonth } from '../../services/evaluationService';
-import { disciplinaryService, type DisciplinaryCase, type DisciplinaryActionType, type DisciplinaryStage, type DisciplinaryOutcome } from '../../services/disciplinaryService';
-import { offboardingService, type OffboardingCase, type OffboardingStage } from '../../services/offboardingService';
+import { disciplinaryService, type DisciplinaryStage } from '../../services/disciplinaryService';
+import { offboardingService, type OffboardingStage } from '../../services/offboardingService';
 import { promotionService, type PromotionStage, type PromotionCase } from '../../services/promotionService';
 import { rewardService, type RewardCase } from '../../services/rewardService';
 import { getPromotionRule, monthsSince, EVALUATION_INDEX_THRESHOLD } from '../../utils/jobGrades';
-import { DISCIPLINARY_CATEGORY_LABELS, DISCIPLINARY_ACTION_LABELS, DISCIPLINARY_VIOLATIONS, VIOLATIONS_BY_ID, type DisciplinaryCategory } from '../../constants/disciplinaryViolations';
+import { DISCIPLINARY_CATEGORY_LABELS, DISCIPLINARY_ACTION_LABELS, VIOLATIONS_BY_ID, type DisciplinaryCategory } from '../../constants/disciplinaryViolations';
 import { payrollService } from '../../services/payrollService';
 import { SERVER_URL } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
@@ -26,7 +26,6 @@ import {
     FileText,
     Award,
     AlertOctagon,
-    CheckCircle2,
     Building2,
     ShieldAlert,
     Search,
@@ -64,7 +63,7 @@ import { getRequiredLevels, type EvalLevel } from '../../utils/evaluationHierarc
 import { buildEvaluationBreakdown } from '../../utils/evaluationScoring';
 import EvaluationBreakdownView from '../../components/EvaluationBreakdownView';
 import JobDescriptionView from '../../components/JobDescriptionView';
-import SearchSelect, { type SearchOption } from '../../components/SearchSelect';
+import SearchSelect from '../../components/SearchSelect';
 import EvaluationControl from '../hr/EvaluationControl';
 import EmployeesPage from '../admin/Employees';
 import RewardsTab, { REWARD_TYPE_LABELS } from './RewardsTab';
@@ -710,11 +709,6 @@ const PersonnelRelations: React.FC = () => {
         XLSX.writeFile(wb, `IPH_Personnel_Relations_Lifecycle_${format(new Date(), 'yyyyMMdd')}.xlsx`);
         toast.success(t('lifecycle_report_exported', { defaultValue: 'Lifecycle report exported.' }));
     };
-
-    const [clearances] = useState<any[]>([
-        { id: 1, name: 'Michael Scott', type: 'Voluntary (Resignation)', date: '2026-08-15', clearance: { IT: true, HR: true, Finance: false }, payrollStatus: 'Withheld' },
-        { id: 2, name: 'Jim Halpert', type: 'Voluntary (Resignation)', date: '2026-08-30', clearance: { IT: false, HR: false, Finance: false }, payrollStatus: 'Pending Documentation' }
-    ]);
 
     // Handlers
     // Create a Personnel Action Form (internal transfer). Persists a PENDING record; the DOCX is
@@ -2618,10 +2612,10 @@ const PersonnelRelations: React.FC = () => {
                                             <Row label={t('login_account', { defaultValue: 'Login Account' })} value={emp.userId ? t('yes', { defaultValue: 'Yes' }) : t('no', { defaultValue: 'No' })} />
                                         </div>
 
-                                        {(showField('serviceProviderCompany') || showField('employeeTravelDate') || showField('employeeStartDate')) && (emp.serviceProviderCompany || emp.employeeTravelDate || emp.employeeStartDate) && (
+                                        {(showField('serviceProviderCompany') || showField('employeeTravelDate') || showField('employeeStartDate')) && (emp.serviceProvider || emp.serviceProviderCompany || emp.employeeTravelDate || emp.employeeStartDate) && (
                                             <TreeBranch isOpen={expandedNodes.has('employment.onboarding')} onToggle={() => toggleNode('employment.onboarding')} level={1} icon={Building2} title={t('onboarding_submission_details', { defaultValue: 'Onboarding Submission Details' })} color="bg-cyan-50 text-cyan-600">
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                                    <Field emp={emp} label={t('service_provider_company', { defaultValue: 'Service Provider Company' })} k="serviceProviderCompany" />
+                                                    <Row label={t('service_provider_company', { defaultValue: 'Service Provider Company' })} value={emp.serviceProvider?.name || emp.serviceProviderCompany || ''} />
                                                     <Field emp={emp} label={t('travel_date', { defaultValue: 'Travel Date' })} k="employeeTravelDate" type="date" />
                                                     <Field emp={emp} label={t('employee_start_date', { defaultValue: 'Employee Start Date' })} k="employeeStartDate" type="date" />
                                                 </div>

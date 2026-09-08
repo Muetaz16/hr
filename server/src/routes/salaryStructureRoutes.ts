@@ -1,6 +1,9 @@
 import { Router } from 'express';
-import { getAllSalaryStructures, getSalaryStructure } from '../controllers/salaryStructureController';
-import { authenticateToken } from '../middleware/auth';
+import {
+    getAllSalaryStructures, getSalaryStructure, getSalaryStructureCoverage,
+    createSalaryStructure, updateSalaryStructure, deleteSalaryStructure,
+} from '../controllers/salaryStructureController';
+import { authenticateToken, authorizeAccess } from '../middleware/auth';
 
 const router = Router();
 
@@ -10,6 +13,15 @@ const router = Router();
 router.use(authenticateToken);
 
 router.get('/', getAllSalaryStructures);
+// Declared before any '/:id' route so the literal paths are not swallowed by the parameter.
 router.get('/lookup', getSalaryStructure);
+router.get('/coverage', authorizeAccess([], ['view_payroll']), getSalaryStructureCoverage);
+
+// Writes change what every employee on that rate is owed next month, so they are payroll-only —
+// unlike the reads above, which several unrelated roles depend on.
+const canManage = authorizeAccess([], ['manage_payroll']);
+router.post('/', canManage, createSalaryStructure);
+router.patch('/:id', canManage, updateSalaryStructure);
+router.delete('/:id', canManage, deleteSalaryStructure);
 
 export default router;

@@ -13,12 +13,13 @@ export const candidateService = {
         nationality?: string; dateOfBirth?: string; placeOfLiving?: string;
         salaryStructure?: string; jobGrade?: string; placeOfWork?: string; contractMonths?: number | string;
         residentStatus?: string;
+        serviceProviderId?: string;
         cv?: File | null; degree?: File | null; portfolio?: File | null;
     }): Promise<Candidate> => {
         const form = new FormData();
         form.append('requisitionId', data.requisitionId);
         form.append('fullName', data.fullName);
-        const textFields: (keyof typeof data)[] = ['phone', 'email', 'source', 'speciality', 'yearsExperience', 'salaryExpectation', 'nationality', 'dateOfBirth', 'placeOfLiving', 'salaryStructure', 'jobGrade', 'placeOfWork', 'contractMonths', 'residentStatus'];
+        const textFields: (keyof typeof data)[] = ['phone', 'email', 'source', 'speciality', 'yearsExperience', 'salaryExpectation', 'nationality', 'dateOfBirth', 'placeOfLiving', 'salaryStructure', 'jobGrade', 'placeOfWork', 'contractMonths', 'residentStatus', 'serviceProviderId'];
         textFields.forEach(k => { const v = data[k]; if (v !== undefined && v !== null && v !== '') form.append(k as string, String(v)); });
         if (data.cv) form.append('cv', data.cv);
         if (data.degree) form.append('degree', data.degree);

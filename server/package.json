@@ -9,7 +9,8 @@
         "build": "tsc -p tsconfig.json",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
-        "seed:hats": "ts-node prisma/seed-hats.ts"
+        "seed:hats": "ts-node prisma/seed-hats.ts",
+        "check:payroll": "ts-node src/utils/payrollEngine.check.ts"
     },
     "dependencies": {
         "@prisma/client": "^5.10.2",

@@ -8,54 +8,55 @@ datasource db {
 }
 
 model User {
-  id                       String                 @id @default(uuid())
-  email                    String                 @unique
-  password                 String
-  fullName                 String?
-  role                     String
-  departmentId             String?
-  groupId                  String?
-  createdAt                DateTime               @default(now())
-  departmentIds            String[]               @default([])
-  unitId                   String?
-  divisionId               String?                // the division a HEAD_DIVISION owns (drives leave-approval routing for all its departments)
-  permissions              String[]               @default([]) // individual permission GRANTS layered on top of position + hats
-  functionalHatIds         String[]               @default([]) // FunctionalHat ids the user holds (many); each adds its permissions
-  signature                String?
-  announcements            Announcement[]
-  deptEvaluations          DepartmentEvaluation[] @relation("DeptEvaluationsSubmittedBy")
-  directorEvaluations      DirectorEvaluation[]   @relation("DirectorEvaluationsSubmittedBy")
-  divisionEvaluations      DivisionEvaluation[]   @relation("DivisionEvaluationsSubmittedBy")
-  gmEvaluations            GMEvaluation[]         @relation("GMEvaluationsSubmittedBy")
-  chairmanEvaluations      ChairmanEvaluation[]   @relation("ChairmanEvaluationsSubmittedBy")
-  employee                 Employee?
-  enabledPeriods           EvaluationPeriod[]     @relation("EvaluationPeriodEnabledBy")
-  disabledPeriods          EvaluationPeriod[]     @relation("EvaluationPeriodDisabledBy")
-  evaluationFinalizations  EvaluationFinalization[] @relation("EvaluationFinalizationsFinalizedBy")
-  hrEvaluations            HREvaluation[]         @relation("HREvaluationsSubmittedBy")
-  leaveDeptApprovals       LeaveRequest[]         @relation("LeaveDeptApprovals")
-  leaveDivisionApprovals   LeaveRequest[]         @relation("LeaveDivisionApprovals")
-  leaveDirApprovals        LeaveRequest[]         @relation("LeaveDirApprovals")
-  leaveUnitApprovals       LeaveRequest[]         @relation("LeaveUnitApprovals")
-  leaveRequests            LeaveRequest[]
-  leaveReplacements        LeaveRequest[]         @relation("LeaveReplacement")
-  leaveApprovalSteps       LeaveApprovalStep[]    @relation("LeaveApprovalStepApprover")
-  notifications            Notification[]
-  personnelEvaluations     PersonnelEvaluation[]  @relation("PersonnelEvaluationsSubmittedBy")
-  deptRecruitmentApprovals RecruitmentRequest[]   @relation("RecruitmentDeptApproval")
-  gmRecruitmentApprovals   RecruitmentRequest[]   @relation("RecruitmentGMApproval")
-  hrRecruitmentApprovals   RecruitmentRequest[]   @relation("RecruitmentHRApproval")
-  recruitmentRequests      RecruitmentRequest[]   @relation("RecruitmentRequester")
-  candidatesCreated        Candidate[]            @relation("CandidateCreator")
-  candidatesScreened       Candidate[]            @relation("CandidateScreener")
-  candidatesHrEvaluated    Candidate[]            @relation("CandidateHrEvaluator")
-  candidatesTechEvaluated  Candidate[]            @relation("CandidateTechEvaluator")
-  unitEvaluations          UnitEvaluation[]       @relation("UnitEvaluationsSubmittedBy")
-  disciplinaryReports              DisciplinaryCase[]   @relation("DisciplinaryReportedBy")
-  disciplinaryIncidentReports      DisciplinaryCase[]   @relation("DisciplinaryIncidentReportCompletedBy")
-  disciplinaryNoticesToExplain     DisciplinaryCase[]   @relation("DisciplinaryNoticeToExplainCompletedBy")
-  disciplinaryInvestigations       DisciplinaryCase[]   @relation("DisciplinaryInvestigationCompletedBy")
-  disciplinaryActionsCompleted     DisciplinaryCase[]   @relation("DisciplinaryActionCompletedBy")
+  id                           String                   @id @default(uuid())
+  email                        String                   @unique
+  password                     String
+  fullName                     String?
+  role                         String
+  departmentId                 String?
+  groupId                      String?
+  createdAt                    DateTime                 @default(now())
+  departmentIds                String[]                 @default([])
+  unitId                       String?
+  divisionId                   String? // the division a HEAD_DIVISION owns (drives leave-approval routing for all its departments)
+  permissions                  String[]                 @default([]) // individual permission GRANTS layered on top of position + hats
+  functionalHatIds             String[]                 @default([]) // FunctionalHat ids the user holds (many); each adds its permissions
+  signature                    String?
+  announcements                Announcement[]
+  deptEvaluations              DepartmentEvaluation[]   @relation("DeptEvaluationsSubmittedBy")
+  directorEvaluations          DirectorEvaluation[]     @relation("DirectorEvaluationsSubmittedBy")
+  divisionEvaluations          DivisionEvaluation[]     @relation("DivisionEvaluationsSubmittedBy")
+  gmEvaluations                GMEvaluation[]           @relation("GMEvaluationsSubmittedBy")
+  chairmanEvaluations          ChairmanEvaluation[]     @relation("ChairmanEvaluationsSubmittedBy")
+  employee                     Employee?
+  enabledPeriods               EvaluationPeriod[]       @relation("EvaluationPeriodEnabledBy")
+  disabledPeriods              EvaluationPeriod[]       @relation("EvaluationPeriodDisabledBy")
+  evaluationFinalizations      EvaluationFinalization[] @relation("EvaluationFinalizationsFinalizedBy")
+  hrEvaluations                HREvaluation[]           @relation("HREvaluationsSubmittedBy")
+  leaveDeptApprovals           LeaveRequest[]           @relation("LeaveDeptApprovals")
+  leaveDivisionApprovals       LeaveRequest[]           @relation("LeaveDivisionApprovals")
+  leaveDirApprovals            LeaveRequest[]           @relation("LeaveDirApprovals")
+  leaveUnitApprovals           LeaveRequest[]           @relation("LeaveUnitApprovals")
+  leaveRequests                LeaveRequest[]
+  leaveReplacements            LeaveRequest[]           @relation("LeaveReplacement")
+  leaveApprovalSteps           LeaveApprovalStep[]      @relation("LeaveApprovalStepApprover")
+  notifications                Notification[]
+  personnelEvaluations         PersonnelEvaluation[]    @relation("PersonnelEvaluationsSubmittedBy")
+  deptRecruitmentApprovals     RecruitmentRequest[]     @relation("RecruitmentDeptApproval")
+  gmRecruitmentApprovals       RecruitmentRequest[]     @relation("RecruitmentGMApproval")
+  hrRecruitmentApprovals       RecruitmentRequest[]     @relation("RecruitmentHRApproval")
+  recruitmentRequests          RecruitmentRequest[]     @relation("RecruitmentRequester")
+  candidatesCreated            Candidate[]              @relation("CandidateCreator")
+  candidatesScreened           Candidate[]              @relation("CandidateScreener")
+  candidatesHrEvaluated        Candidate[]              @relation("CandidateHrEvaluator")
+  candidatesTechEvaluated      Candidate[]              @relation("CandidateTechEvaluator")
+  unitEvaluations              UnitEvaluation[]         @relation("UnitEvaluationsSubmittedBy")
+  payrollApprovalSteps         PayrollApprovalStep[]    @relation("PayrollApprovalStepApprover")
+  disciplinaryReports          DisciplinaryCase[]       @relation("DisciplinaryReportedBy")
+  disciplinaryIncidentReports  DisciplinaryCase[]       @relation("DisciplinaryIncidentReportCompletedBy")
+  disciplinaryNoticesToExplain DisciplinaryCase[]       @relation("DisciplinaryNoticeToExplainCompletedBy")
+  disciplinaryInvestigations   DisciplinaryCase[]       @relation("DisciplinaryInvestigationCompletedBy")
+  disciplinaryActionsCompleted DisciplinaryCase[]       @relation("DisciplinaryActionCompletedBy")
 }
 
 model Group {
@@ -94,14 +95,14 @@ model Department {
 }
 
 model Directorate {
-  id          String       @id @default(uuid())
-  name        String
-  nameArabic  String?
-  divisions   Division[]
-  employees   Employee[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  positionFactor Float     @default(1.0)
+  id              String           @id @default(uuid())
+  name            String
+  nameArabic      String?
+  divisions       Division[]
+  employees       Employee[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  positionFactor  Float            @default(1.0)
   jobDescriptions JobDescription[]
 }
 
@@ -131,27 +132,27 @@ model Unit {
 }
 
 model JobDescription {
-  id             String       @id @default(uuid())
-  title          String
-  titleArabic    String?
-  description    String?
-  descriptionArabic String?
-  isHead         Boolean      @default(false)
-  plannedCount   Int          @default(1)
-  jobCategories  String[]     @default([])
-  workLocations  String[]     @default([])
-  details        Json?
-  directorateId  String?
-  divisionId     String?
-  departmentId   String?
-  unitId         String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  directorate    Directorate? @relation(fields: [directorateId], references: [id], onDelete: Cascade)
-  division       Division?    @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  unit           Unit?        @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  employees      Employee[]
+  id                  String               @id @default(uuid())
+  title               String
+  titleArabic         String?
+  description         String?
+  descriptionArabic   String?
+  isHead              Boolean              @default(false)
+  plannedCount        Int                  @default(1)
+  jobCategories       String[]             @default([])
+  workLocations       String[]             @default([])
+  details             Json?
+  directorateId       String?
+  divisionId          String?
+  departmentId        String?
+  unitId              String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  directorate         Directorate?         @relation(fields: [directorateId], references: [id], onDelete: Cascade)
+  division            Division?            @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  department          Department?          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  unit                Unit?                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  employees           Employee[]
   recruitmentRequests RecruitmentRequest[]
 
   @@index([directorateId])
@@ -161,10 +162,10 @@ model JobDescription {
 }
 
 model Employee {
-  id                     String                 @id @default(uuid())
-  fullName               String
-  email                  String?                @unique
-  role                   String                 @default("EMPLOYEE")
+  id                               String                   @id @default(uuid())
+  fullName                         String
+  email                            String?                  @unique
+  role                             String                   @default("EMPLOYEE")
   // "ACTIVE" for fully-enrolled employees; "PENDING_ENROLLMENT" for stubs imported from BioTime
   // that still need a Job Description / role / department (and a login account) assigned by HR;
   // "TRANSFERRED" for staff moved to another company (data retained + visible, but excluded from
@@ -173,85 +174,85 @@ model Employee {
   // "SEPARATED" once an OffboardingCase for this employee reaches CLOSED (voluntary resignation or
   // involuntary termination/non-renewal/retrenchment) — excludes them from active-employee views
   // (e.g. disciplinaryController.getAttendanceCandidates already filters on ACTIVE only).
-  enrollmentStatus       String                 @default("ACTIVE")
-  separationDate         DateTime?
+  enrollmentStatus                 String                   @default("ACTIVE")
+  separationDate                   DateTime?
   // Set when an inter-company transfer is accepted: destination company name + date.
-  transferredCompany     String?
-  transferredAt          DateTime?
-  departmentId           String?
-  groupId                String?
-  joinDate               DateTime
-  staffId                String?
-  bioId                  Int?
-  contractEndDate        DateTime?
-  contractStartDate      DateTime?
-  contractStatus         String?
-  contractType           String?
-  contractWorkType       String?                @default("Full Time") // 'Full Time' | 'Part Time'
-  holidaysUsed           Float                  @default(0)
-  bonusHolidays          Float                  @default(0)
-  userId                 String?                @unique
-  unitId                 String?
-  position               String?
-  placeOfWork            String?
-  contractNumber         String?
-  emergencyHolidaysUsed  Float                  @default(0)
-  fullNameArabic         String?
-  jobCategory            String?
-  jobGrade               String?
-  salaryStructureType    String?
-  nationality            String?
-  passportNumber         String?
-  unpaidHolidaysUsed     Float                  @default(0)
-  positionFactor         Float                  @default(1.0)
-  siteFactor             Float                  @default(1.0)
-  skillFactor            Float                  @default(1.0)
-  languageFactor         Float                  @default(1.0)
-  evaluationPoints       Float                  @default(0)
-  promotionNotified      Boolean                @default(false)
+  transferredCompany               String?
+  transferredAt                    DateTime?
+  departmentId                     String?
+  groupId                          String?
+  joinDate                         DateTime
+  staffId                          String?
+  bioId                            Int?
+  contractEndDate                  DateTime?
+  contractStartDate                DateTime?
+  contractStatus                   String?
+  contractType                     String?
+  contractWorkType                 String?                  @default("Full Time") // 'Full Time' | 'Part Time'
+  holidaysUsed                     Float                    @default(0)
+  bonusHolidays                    Float                    @default(0)
+  userId                           String?                  @unique
+  unitId                           String?
+  position                         String?
+  placeOfWork                      String?
+  contractNumber                   String?
+  emergencyHolidaysUsed            Float                    @default(0)
+  fullNameArabic                   String?
+  jobCategory                      String?
+  jobGrade                         String?
+  salaryStructureType              String?
+  nationality                      String?
+  passportNumber                   String?
+  unpaidHolidaysUsed               Float                    @default(0)
+  positionFactor                   Float                    @default(1.0)
+  siteFactor                       Float                    @default(1.0)
+  skillFactor                      Float                    @default(1.0)
+  languageFactor                   Float                    @default(1.0)
+  evaluationPoints                 Float                    @default(0)
+  promotionNotified                Boolean                  @default(false)
   // Set when a PromotionCase closes (or backfilled from contractStartDate/joinDate at migration
   // time) — "how long has this employee been at their CURRENT grade", which neither joinDate
   // (company tenure) nor contractStartDate (can be reset by an unrelated renewal) reliably tracks.
   // Drives the Trainee/Intern tenure-based promotion eligibility checks.
-  currentGradeSince      DateTime?
-  promotionCases         PromotionCase[]
-  rewardCases            RewardCase[]
+  currentGradeSince                DateTime?
+  promotionCases                   PromotionCase[]
+  rewardCases                      RewardCase[]
   // --- Extended Identity Details (recruitment intake form) ---
-  dateOfBirth                DateTime?
-  placeOfBirth               String?
-  nationalId                 String?
-  academicQualification      String?
-  gender                     String?
-  bloodType                  String?
-  idCardNumber               String?
-  idPlaceOfIssue             String?
-  idIssueDate                DateTime?
-  passportPlaceOfIssue       String?
-  passportExpiryDate         DateTime?
-  drivingLicenseType         String?
-  drivingLicenseNumber       String?
-  drivingLicenseExpiry       DateTime?
-  drivingLicensePlaceOfIssue String?
-  personalPhone              String?
-  personalEmail              String?
-  emergencyContactNumber     String?
-  residentialAddress         String?
-  workedBefore               String?
-  hasRelativesInCompany      String?
-  relativesNames             String?
-  bankName                   String?
-  bankBranchName             String?
-  bankAccountNumber          String?
-  arrivalDate                DateTime?
-  cvUrl                      String?
-  degreeUrl                  String?
-  birthCertUrl               String?
-  passportCopyUrl            String?
-  bankCheckUrl               String?
-  photoUrl                   String?
-  idCardUrl                  String?
-  jobOfferUrl                String?
-  healthCertUrl              String?
+  dateOfBirth                      DateTime?
+  placeOfBirth                     String?
+  nationalId                       String?
+  academicQualification            String?
+  gender                           String?
+  bloodType                        String?
+  idCardNumber                     String?
+  idPlaceOfIssue                   String?
+  idIssueDate                      DateTime?
+  passportPlaceOfIssue             String?
+  passportExpiryDate               DateTime?
+  drivingLicenseType               String?
+  drivingLicenseNumber             String?
+  drivingLicenseExpiry             DateTime?
+  drivingLicensePlaceOfIssue       String?
+  personalPhone                    String?
+  personalEmail                    String?
+  emergencyContactNumber           String?
+  residentialAddress               String?
+  workedBefore                     String?
+  hasRelativesInCompany            String?
+  relativesNames                   String?
+  bankName                         String?
+  bankBranchName                   String?
+  bankAccountNumber                String?
+  arrivalDate                      DateTime?
+  cvUrl                            String?
+  degreeUrl                        String?
+  birthCertUrl                     String?
+  passportCopyUrl                  String?
+  bankCheckUrl                     String?
+  photoUrl                         String?
+  idCardUrl                        String?
+  jobOfferUrl                      String?
+  healthCertUrl                    String?
   // --- Arabic counterparts of the bilingual onboarding fields ---
   placeOfBirthArabic               String?
   nationalityArabic                String?
@@ -267,39 +268,47 @@ model Employee {
   // --- Onboarding-only fields (self-service onboarding form) ---
   // NOTE: department, job category/level and hourly rate are NOT stored here — they're assigned
   // by the recruitment team on the Candidate (before the offer), not self-reported by the hire.
-  serviceProviderCompany String? // Service Provider onboarding: the supplying company's name
-  employeeTravelDate    DateTime? // Service Provider onboarding: travel date
-  employeeStartDate     DateTime? // date the hire indicates they can start (from onboarding)
-  ticketUrl             String? // Non-Resident / Service Provider onboarding: airplane ticket
-  residencyDocumentUrl  String? // Non-Resident / Service Provider onboarding: residency document
-  interviewEvaluationUrl String? // Service Provider onboarding: interview evaluation form
-  jobDescriptionId       String?
-  jobDescription         JobDescription?        @relation(fields: [jobDescriptionId], references: [id])
-  contracts              Contract[]
-  documents              EmployeeDocument[]
-  personnelActionForms   PersonnelActionForm[]
-  disciplinaryCases      DisciplinaryCase[]
-  offboardingCases       OffboardingCase[]
-  departmentEvaluations  DepartmentEvaluation[]
-  directorEvaluations    DirectorEvaluation[]
-  divisionEvaluations    DivisionEvaluation[]
-  gmEvaluations          GMEvaluation[]
-  chairmanEvaluations    ChairmanEvaluation[]
-  divisionId             String?
-  directorateId          String?
-  directorate            Directorate?           @relation(fields: [directorateId], references: [id])
-  division               Division?              @relation(fields: [divisionId], references: [id])
-  department             Department?            @relation(fields: [departmentId], references: [id])
-  group                  Group?                 @relation(fields: [groupId], references: [id])
-  unit                   Unit?                  @relation(fields: [unitId], references: [id])
-  user                   User?                  @relation(fields: [userId], references: [id])
-  hrEvaluations          HREvaluation[]
-  leaveRequests          LeaveRequest[]
-  payrollResults         PayrollResult[]
-  personnelEvaluations   PersonnelEvaluation[]
-  timeRecords            TimeRecord[]
-  unitEvaluations        UnitEvaluation[]
-  evaluationFinalizations EvaluationFinalization[]
+  // Real link to the registered provider (Administration -> Service Providers). The legacy
+  // free-text name below is kept for records captured before providers were a DB entity.
+  serviceProviderId                String?
+  serviceProvider                  ServiceProvider?         @relation(fields: [serviceProviderId], references: [id])
+  serviceProviderCompany           String? // legacy free-text name typed on the old onboarding form
+  employeeTravelDate               DateTime? // Service Provider onboarding: travel date
+  employeeStartDate                DateTime? // date the hire indicates they can start (from onboarding)
+  ticketUrl                        String? // Non-Resident / Service Provider onboarding: airplane ticket
+  residencyDocumentUrl             String? // Non-Resident / Service Provider onboarding: residency document
+  interviewEvaluationUrl           String? // Service Provider onboarding: interview evaluation form
+  jobDescriptionId                 String?
+  jobDescription                   JobDescription?          @relation(fields: [jobDescriptionId], references: [id])
+  contracts                        Contract[]
+  documents                        EmployeeDocument[]
+  personnelActionForms             PersonnelActionForm[]
+  disciplinaryCases                DisciplinaryCase[]
+  offboardingCases                 OffboardingCase[]
+  departmentEvaluations            DepartmentEvaluation[]
+  directorEvaluations              DirectorEvaluation[]
+  divisionEvaluations              DivisionEvaluation[]
+  gmEvaluations                    GMEvaluation[]
+  chairmanEvaluations              ChairmanEvaluation[]
+  divisionId                       String?
+  directorateId                    String?
+  directorate                      Directorate?             @relation(fields: [directorateId], references: [id])
+  division                         Division?                @relation(fields: [divisionId], references: [id])
+  department                       Department?              @relation(fields: [departmentId], references: [id])
+  group                            Group?                   @relation(fields: [groupId], references: [id])
+  unit                             Unit?                    @relation(fields: [unitId], references: [id])
+  user                             User?                    @relation(fields: [userId], references: [id])
+  hrEvaluations                    HREvaluation[]
+  leaveRequests                    LeaveRequest[]
+  payrollResults                   PayrollResult[]
+  personnelEvaluations             PersonnelEvaluation[]
+  timeRecords                      TimeRecord[]
+  unitEvaluations                  UnitEvaluation[]
+  evaluationFinalizations          EvaluationFinalization[]
+  payrollLines                     PayrollLine[]
+  advances                         EmployeeAdvance[]
+  payrollDeductions                EmployeeDeduction[]
+  cashAllocationRequests           CashAllocationRequest[]
 
   @@index([departmentId])
   @@index([unitId])
@@ -331,20 +340,20 @@ model EmployeeDocument {
 // JD and the signed form is filed under their Lifecycle documents. `current*` snapshots the
 // placement at creation for the document + audit; `new*` mirrors the target JD's placement.
 model PersonnelActionForm {
-  id                  String    @id @default(uuid())
-  employeeId          String
-  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  actionType          String    @default("TRANSFER")
-  status              String    @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  actionType String @default("TRANSFER")
+  status     String @default("PENDING") // PENDING | ACCEPTED | REJECTED
 
-  currentDivision     String?
-  currentDepartment   String?
-  currentUnit         String?
-  currentPosition     String?
-  currentJobCategory  String?
-  currentJobGrade     String?
-  currentPlaceOfWork  String?
+  currentDivision    String?
+  currentDepartment  String?
+  currentUnit        String?
+  currentPosition    String?
+  currentJobCategory String?
+  currentJobGrade    String?
+  currentPlaceOfWork String?
 
   newJobDescriptionId String? // the target JD that drives the move
   newDivisionId       String?
@@ -359,27 +368,27 @@ model PersonnelActionForm {
   // Inter-company transfer (actionType = "INTER_COMPANY_TRANSFER"). The destination is another
   // company outside this system, so its org placement is captured as free text and the four factors
   // are entered on the form (not read from the Employee record).
-  newCompany          String?
-  newDivisionName     String?
-  newDepartmentName   String?
-  newUnitName         String?
-  englishFactor       Float?
-  positionFactor      Float?
-  locationFactor      Float?
-  skillFactor         Float?
+  newCompany        String?
+  newDivisionName   String?
+  newDepartmentName String?
+  newUnitName       String?
+  englishFactor     Float?
+  positionFactor    Float?
+  locationFactor    Float?
+  skillFactor       Float?
 
-  typeOfTransfer      String?
-  effectiveDate       DateTime?
-  justification       String?
+  typeOfTransfer String?
+  effectiveDate  DateTime?
+  justification  String?
 
-  documentUrl         String?
-  documentName        String?
+  documentUrl  String?
+  documentName String?
 
-  createdByName       String?
-  decidedByName       String?
-  decidedAt           DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdByName String?
+  decidedByName String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([employeeId])
   @@index([status])
@@ -394,41 +403,41 @@ model PersonnelActionForm {
 // opened via the attendance-candidates screen (which starts directly at `DISCIPLINARY_ACTION`,
 // since the violation — tardiness count — is already objectively proven by system data).
 model DisciplinaryCase {
-  id                  String    @id @default(uuid())
+  id String @id @default(uuid())
 
-  employeeId          String
-  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  caseNumber          String    @unique // "IR No" — IPH-CCHR-FRM-INCREP-000 style, incrementing, assigned at creation
-  source              String    @default("EMPLOYEE_REPORT") // EMPLOYEE_REPORT | SYSTEM_ATTENDANCE
-  reportedById        String?   // the logged-in filer, kept for internal accountability (null only for SYSTEM_ATTENDANCE cases)
-  reportedBy          User?     @relation("DisciplinaryReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
-  reportedByName      String?   // optional — the original submitter's name, for internal reference only
-  reportedByEmail     String?   // optional contact email, for internal reference only
-  reportedDate        DateTime? // "Date Reported" on the Incident Report form — editable, defaults to submission day
-  preparedByName      String?   // "Prepared by" on the printed form — whoever finalizes the Incident Report document (usually HR), distinct from the original reporter
-  preparedByNameAr    String?   // Arabic translation of the preparer's name
+  caseNumber       String    @unique // "IR No" — IPH-CCHR-FRM-INCREP-000 style, incrementing, assigned at creation
+  source           String    @default("EMPLOYEE_REPORT") // EMPLOYEE_REPORT | SYSTEM_ATTENDANCE
+  reportedById     String? // the logged-in filer, kept for internal accountability (null only for SYSTEM_ATTENDANCE cases)
+  reportedBy       User?     @relation("DisciplinaryReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  reportedByName   String? // optional — the original submitter's name, for internal reference only
+  reportedByEmail  String? // optional contact email, for internal reference only
+  reportedDate     DateTime? // "Date Reported" on the Incident Report form — editable, defaults to submission day
+  preparedByName   String? // "Prepared by" on the printed form — whoever finalizes the Incident Report document (usually HR), distinct from the original reporter
+  preparedByNameAr String? // Arabic translation of the preparer's name
 
-  subjectPositionTitle   String?  // snapshot of the subject employee's position at intake time (auto-filled, editable)
-  subjectPositionTitleAr String?  // Arabic translation — filled in by HR if the reporter only gave one language
-  subjectDepartment      String?  // snapshot of the subject employee's department at intake time (auto-filled, editable)
-  subjectDepartmentAr    String?  // Arabic translation
+  subjectPositionTitle   String? // snapshot of the subject employee's position at intake time (auto-filled, editable)
+  subjectPositionTitleAr String? // Arabic translation — filled in by HR if the reporter only gave one language
+  subjectDepartment      String? // snapshot of the subject employee's department at intake time (auto-filled, editable)
+  subjectDepartmentAr    String? // Arabic translation
 
-  incidentDate        DateTime?
-  incidentPlace       String?
-  incidentPlaceAr     String?   // Arabic translation of the incident place
-  incidentDescription String?
+  incidentDate          DateTime?
+  incidentPlace         String?
+  incidentPlaceAr       String? // Arabic translation of the incident place
+  incidentDescription   String?
   incidentDescriptionAr String? // Arabic translation of the incident description
-  violationId         String?   // unknown at intake — confirmed at Investigation Result (or set directly for SYSTEM_ATTENDANCE)
-  category            String?   // MINOR | SERIOUS | MAJOR — set once violationId is confirmed
-  offenseNumber       Int?      // computed once, at Investigation Result completion (or at attendance auto-execute)
+  violationId           String? // unknown at intake — confirmed at Investigation Result (or set directly for SYSTEM_ATTENDANCE)
+  category              String? // MINOR | SERIOUS | MAJOR — set once violationId is confirmed
+  offenseNumber         Int? // computed once, at Investigation Result completion (or at attendance auto-execute)
 
   // Set only when a case is dismissed at Incident Report stage instead of proceeding to Notice to
   // Explain — distinguishes an intake dismissal from a normal NON_VIOLATION investigation closure
   // (that path always sets investigationOutcome; this one never does).
-  closureReason       String?
+  closureReason String?
 
-  stage               String    @default("INCIDENT_REPORT") // INCIDENT_REPORT | NOTICE_TO_EXPLAIN | INVESTIGATION_RESULT | DISCIPLINARY_ACTION | CLOSED
+  stage String @default("INCIDENT_REPORT") // INCIDENT_REPORT | NOTICE_TO_EXPLAIN | INVESTIGATION_RESULT | DISCIPLINARY_ACTION | CLOSED
 
   // Stage 1 — Incident Report: one generate+upload cycle
   incidentReportDocumentUrl   String?
@@ -438,8 +447,8 @@ model DisciplinaryCase {
   incidentReportCompletedBy   User?     @relation("DisciplinaryIncidentReportCompletedBy", fields: [incidentReportCompletedById], references: [id], onDelete: SetNull)
 
   // Stage 2 — Notice to Explain
-  noticeToExplainDescription   String?   // HR's formal rewrite of the incident description for the printed notice — the original intake description is untouched
-  noticeToExplainDescriptionAr String?   // Arabic version of the formal rewrite
+  noticeToExplainDescription   String? // HR's formal rewrite of the incident description for the printed notice — the original intake description is untouched
+  noticeToExplainDescriptionAr String? // Arabic version of the formal rewrite
   noticeToExplainDocumentUrl   String?
   noticeToExplainDocumentName  String?
   noticeToExplainCompletedAt   DateTime?
@@ -447,36 +456,36 @@ model DisciplinaryCase {
   noticeToExplainCompletedBy   User?     @relation("DisciplinaryNoticeToExplainCompletedBy", fields: [noticeToExplainCompletedById], references: [id], onDelete: SetNull)
 
   // Stage 3 — Investigation Result (Panel/Head-of-HR/Admin-Director sign-off is on this ONE document)
-  investigationOutcome        String?   // NON_VIOLATION | MINOR | SERIOUS | MAJOR
-  investigationResult         String?
-  investigationResultAr       String?
-  investigationRecommendation String?
+  investigationOutcome          String? // NON_VIOLATION | MINOR | SERIOUS | MAJOR
+  investigationResult           String?
+  investigationResultAr         String?
+  investigationRecommendation   String?
   investigationRecommendationAr String?
-  investigationActionTaken    String?
-  investigationActionTakenAr  String?
-  investigationDocumentUrl    String?
-  investigationDocumentName   String?
-  investigationCompletedAt    DateTime?
-  investigationCompletedById  String?
-  investigationCompletedBy    User?     @relation("DisciplinaryInvestigationCompletedBy", fields: [investigationCompletedById], references: [id], onDelete: SetNull)
+  investigationActionTaken      String?
+  investigationActionTakenAr    String?
+  investigationDocumentUrl      String?
+  investigationDocumentName     String?
+  investigationCompletedAt      DateTime?
+  investigationCompletedById    String?
+  investigationCompletedBy      User?     @relation("DisciplinaryInvestigationCompletedBy", fields: [investigationCompletedById], references: [id], onDelete: SetNull)
 
   // Stage 4 — Notice of Disciplinary Action (skipped straight to for SYSTEM_ATTENDANCE cases)
-  actionType             String?   // VERBAL_WARNING | WRITTEN_WARNING | SUSPENSION_3_DAYS | SUSPENSION_5_DAYS | SUSPENSION_7_DAYS | SUSPENSION_10_DAYS | TERMINATION
-  actionEffectiveDate    DateTime?
-  actionAdditionalInfo   String?
-  actionDocumentUrl      String?
-  actionDocumentName     String?
-  actionCompletedAt      DateTime?
-  actionCompletedById    String?
-  actionCompletedBy      User?     @relation("DisciplinaryActionCompletedBy", fields: [actionCompletedById], references: [id], onDelete: SetNull)
+  actionType           String? // VERBAL_WARNING | WRITTEN_WARNING | SUSPENSION_3_DAYS | SUSPENSION_5_DAYS | SUSPENSION_7_DAYS | SUSPENSION_10_DAYS | TERMINATION
+  actionEffectiveDate  DateTime?
+  actionAdditionalInfo String?
+  actionDocumentUrl    String?
+  actionDocumentName   String?
+  actionCompletedAt    DateTime?
+  actionCompletedById  String?
+  actionCompletedBy    User?     @relation("DisciplinaryActionCompletedBy", fields: [actionCompletedById], references: [id], onDelete: SetNull)
 
-  closedAt            DateTime?
+  closedAt DateTime?
 
-  createdByName       String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  evidence            DisciplinaryEvidence[]
+  evidence DisciplinaryEvidence[]
 
   @@index([employeeId])
   @@index([stage])
@@ -497,99 +506,99 @@ model DisciplinaryEvidence {
 }
 
 model OffboardingCase {
-  id                  String    @id @default(uuid())
+  id String @id @default(uuid())
 
-  employeeId          String
-  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  caseNumber          String    @unique // "IPH-CCHR-FRM-OFFBRD-000" style, same convention as disciplinary
+  caseNumber String @unique // "IPH-CCHR-FRM-OFFBRD-000" style, same convention as disciplinary
 
-  type                String    // VOLUNTARY | INVOLUNTARY
+  type                     String // VOLUNTARY | INVOLUNTARY
   // The 4 real separation types, each reachable through its own path: EMPLOYEE_RESIGNATION (self-
   // service Resignation Request, or manually recorded by HR) | DISCIPLINARY_TERMINATION (auto-created
   // when a Disciplinary Action reaches Termination) | TERMINATION (HR manually records a termination
   // with no disciplinary case behind it) | CONTRACT_NON_RENEWAL_EMPLOYEE | CONTRACT_NON_RENEWAL_COMPANY
-  source              String
+  source                   String
   // Set only when source = DISCIPLINARY_TERMINATION — the Disciplinary Action whose TERMINATION
   // penalty auto-created this case. Loose reference (no relation) since a DisciplinaryCase is never
   // deleted once closed and this is purely informational/cross-link, matching how violationId
   // references the static catalog "by convention" rather than a DB FK elsewhere in this schema.
   linkedDisciplinaryCaseId String?
-  reason              String?
+  reason                   String?
 
   // RESIGNATION_REQUEST (voluntary only — involuntary cases start straight at CLEARANCE, since the
   // Disciplinary Action's own Notice already serves as the separation notice) | CLEARANCE |
   // SEPARATION_LETTER | CLOSED
-  stage               String    @default("RESIGNATION_REQUEST")
+  stage String @default("RESIGNATION_REQUEST")
 
   // Stage 1 — Resignation Request (voluntary only): one generate+upload cycle. Intake fields below
   // mirror the real Google Form 1:1 — identity fields (name/unit/department/position) are NOT stored
   // here since they're read live off the Employee relation at display/generation time.
-  resignationFiledAt        DateTime?
-  resignationReason         String?   // "Reason for Resignation" — short text, as typed by the employee
+  resignationFiledAt         DateTime?
+  resignationReason          String? // "Reason for Resignation" — short text, as typed by the employee
   // The printed form is bilingual, but the employee only ever types one language — same convention
   // as disciplinary's incidentDescription/incidentDescriptionAr: HR adds the other language's
   // version before generating the official document (see generateStageForm's RESIGNATION_REQUEST
   // branch), and it's persisted here for next time.
-  resignationReasonAr       String?
+  resignationReasonAr        String?
   // "Head of Division" is NOT stored — resolved live at generation time from the org structure
   // (User.role = 'HEAD_DIVISION' + divisionId), same lookup leaveApprovalChain.ts already uses.
-  resignationLetterText     String?   // "Resignation Letter" — required long text (the letter's own written content), as typed by the employee
-  resignationLetterTextAr   String?   // HR-provided translation, same convention as resignationReasonAr
-  resignationAttachmentUrls  String[] @default([]) // optional "Additional Attachments" — up to 10 files
-  resignationAttachmentNames String[] @default([])
-  resignationEffectiveDate  DateTime? // set from the Exit Interview's "Effective Date of Resignation" once submitted
-  resignationDocumentUrl    String?
-  resignationDocumentName   String?
-  resignationCompletedAt    DateTime?
-  finalWorkingDate          DateTime?
+  resignationLetterText      String? // "Resignation Letter" — required long text (the letter's own written content), as typed by the employee
+  resignationLetterTextAr    String? // HR-provided translation, same convention as resignationReasonAr
+  resignationAttachmentUrls  String[]  @default([]) // optional "Additional Attachments" — up to 10 files
+  resignationAttachmentNames String[]  @default([])
+  resignationEffectiveDate   DateTime? // set from the Exit Interview's "Effective Date of Resignation" once submitted
+  resignationDocumentUrl     String?
+  resignationDocumentName    String?
+  resignationCompletedAt     DateTime?
+  finalWorkingDate           DateTime?
 
   // Stage 2 — Employee Clearance (both types) — the 6-way sign-off (Head of Unit, Head of
   // Department, IT, Assets, Finance & Treasury, Head of HR) is one document, one physical-signature
   // round, one upload — same convention as every other multi-approver disciplinary stage.
-  dateOfSeparation        DateTime?
-  clearanceDocumentUrl    String?
-  clearanceDocumentName   String?
-  clearanceCompletedAt    DateTime?
+  dateOfSeparation      DateTime?
+  clearanceDocumentUrl  String?
+  clearanceDocumentName String?
+  clearanceCompletedAt  DateTime?
 
   // Exit interview — in-system replacement for the external Google Form, field-for-field. Mandatory
   // for every case except source = DISCIPLINARY_TERMINATION (enforced in completeSeparationLetter).
-  exitInterviewSubmittedAt    DateTime?
-  exitInterviewReasonCategory String?   // one of REASON_FOR_LEAVING's values; 'OTHERS' pairs with exitInterviewReasonOther
-  exitInterviewReasonOther    String?
+  exitInterviewSubmittedAt              DateTime?
+  exitInterviewReasonCategory           String? // one of REASON_FOR_LEAVING's values; 'OTHERS' pairs with exitInterviewReasonOther
+  exitInterviewReasonOther              String?
   // 8-category rating scale, each one of 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
-  exitInterviewRatingManagement       String?
-  exitInterviewRatingCompanyCulture   String?
-  exitInterviewRatingPolicies         String?
-  exitInterviewRatingWorkingConditions String?
-  exitInterviewRatingCareerDevelopment String?
-  exitInterviewRatingSalary           String?
-  exitInterviewRatingBenefits         String?
-  exitInterviewRatingTraining         String?
-  exitInterviewAppreciatedMost        String?
-  exitInterviewLikedLeast             String?
-  exitInterviewImprovementSuggestions String?
+  exitInterviewRatingManagement         String?
+  exitInterviewRatingCompanyCulture     String?
+  exitInterviewRatingPolicies           String?
+  exitInterviewRatingWorkingConditions  String?
+  exitInterviewRatingCareerDevelopment  String?
+  exitInterviewRatingSalary             String?
+  exitInterviewRatingBenefits           String?
+  exitInterviewRatingTraining           String?
+  exitInterviewAppreciatedMost          String?
+  exitInterviewLikedLeast               String?
+  exitInterviewImprovementSuggestions   String?
   exitInterviewInterestedInReemployment Boolean?
-  exitInterviewWouldRecommend Boolean?
-  exitInterviewContactEmail   String?
-  exitInterviewContactNumber  String?
+  exitInterviewWouldRecommend           Boolean?
+  exitInterviewContactEmail             String?
+  exitInterviewContactNumber            String?
 
   // Stage 3 — Separation Letter (both types) — the document submitted to Payroll for final-pay;
   // completing this closes the case.
-  separationDocumentUrl   String?
-  separationDocumentName  String?
-  separationCompletedAt   DateTime?
+  separationDocumentUrl  String?
+  separationDocumentName String?
+  separationCompletedAt  DateTime?
 
   // Certificate of Employment — on-demand, not a gated workflow stage; only enabled once
   // clearanceCompletedAt is set.
-  certificateIssuedAt     DateTime?
-  certificateDocumentUrl  String?
+  certificateIssuedAt    DateTime?
+  certificateDocumentUrl String?
 
-  closedAt            DateTime?
+  closedAt DateTime?
 
-  createdByName       String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([employeeId])
   @@index([stage])
@@ -602,10 +611,10 @@ model AuditLog {
   userId     String?
   userName   String?
   userRole   String?
-  action     String   // human label, e.g. "Created announcement"
-  details    String?  // who/what the action was about, e.g. "for Hazem Adam Hussein (IPH-0125-001)"
-  method     String   // POST | PUT | PATCH | DELETE
-  path       String   // request path (no query string)
+  action     String // human label, e.g. "Created announcement"
+  details    String? // who/what the action was about, e.g. "for Hazem Adam Hussein (IPH-0125-001)"
+  method     String // POST | PUT | PATCH | DELETE
+  path       String // request path (no query string)
   statusCode Int?
   createdAt  DateTime @default(now())
 
@@ -620,20 +629,20 @@ model AuditLog {
 // to PROMOTION_REPORT. Closing the case (completing Promotion Report) is what actually applies the
 // grade change to the Employee record.
 model PromotionCase {
-  id                  String    @id @default(uuid())
+  id String @id @default(uuid())
 
-  employeeId          String
-  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  caseNumber          String    @unique // "IPH-CCHR-FRM-PROMOT-000" style, same convention as INCREP/OFFBRD
+  caseNumber String @unique // "IPH-CCHR-FRM-PROMOT-000" style, same convention as INCREP/OFFBRD
 
-  isExceptional       Boolean   @default(false)
-  toGrade             String    // target grade this case applies on close — fixed at creation, one of JOB_GRADES
-  basis               String?   // 'TENURE' | 'EVALUATION' | 'EXCEPTIONAL' — how eligibility was reached, display/audit only
-  reason              String?   // "Reason for Promotion" — printed on both forms
-  effectiveDate       DateTime? // "Effectivity Date:" printed field — does NOT drive currentGradeSince, see completePromotionReport
-  newJobTitle         String?
-  newJobCategory      String?
+  isExceptional  Boolean   @default(false)
+  toGrade        String // target grade this case applies on close — fixed at creation, one of JOB_GRADES
+  basis          String? // 'TENURE' | 'EVALUATION' | 'EXCEPTIONAL' — how eligibility was reached, display/audit only
+  reason         String? // "Reason for Promotion" — printed on both forms
+  effectiveDate  DateTime? // "Effectivity Date:" printed field — does NOT drive currentGradeSince, see completePromotionReport
+  newJobTitle    String?
+  newJobCategory String?
 
   // Stage 2 — Promotion Report (skipped entirely for isExceptional cases, which start straight here
   // instead). The overall rating is a live snapshot of Employee.evaluationPoints and the 3 monthly
@@ -647,7 +656,7 @@ model PromotionCase {
   promotionReportCompletedAt  DateTime?
 
   // NOTICE_OF_PROMOTION | PROMOTION_REPORT | CLOSED
-  stage               String    @default("NOTICE_OF_PROMOTION")
+  stage String @default("NOTICE_OF_PROMOTION")
 
   // Stage 1 — Notice of Promotion. Completing THIS stage no longer applies the grade change — that
   // now happens when Promotion Report (the last stage) completes, see completePromotionReport.
@@ -655,11 +664,11 @@ model PromotionCase {
   noticeOfPromotionDocumentName String?
   noticeOfPromotionCompletedAt  DateTime?
 
-  closedAt            DateTime?
+  closedAt DateTime?
 
-  createdByName       String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([employeeId])
   @@index([stage])
@@ -676,13 +685,13 @@ model RewardCase {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   caseNumber String   @unique // "IPH-CCHR-FRM-REWARD-000" style, same convention as INCREP/OFFBRD/PROMOT
 
-  type       String   // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE | EXCEPTIONAL_PERFORMANCE
+  type String // EMPLOYEE_OF_MONTH | ATTENDANCE_EXCELLENCE | EMPLOYEE_OF_YEAR | LOYALTY_MILESTONE | EXCEPTIONAL_PERFORMANCE
 
-  period         String?   // 'YYYY-MM' (Month/Attendance/Exceptional Performance's Payroll Coverage) or 'YYYY' (Employee of Year); null for Loyalty
-  milestoneYears Int?      // 5 or 10 — Loyalty only
+  period         String? // 'YYYY-MM' (Month/Attendance/Exceptional Performance's Payroll Coverage) or 'YYYY' (Employee of Year); null for Loyalty
+  milestoneYears Int? // 5 or 10 — Loyalty only
   milestoneDate  DateTime? // joinDate + milestoneYears, snapshotted at grant — Loyalty only
 
-  finalScoreSnapshot   Float?  // the winning EvaluationFinalization.finalScore — Employee of Month only
+  finalScoreSnapshot   Float? // the winning EvaluationFinalization.finalScore — Employee of Month only
   notes                String? // tie-break reasoning / selection justification (Exceptional Performance: the nomination's Justification) — any type
   natureOfContribution String? // Exceptional Performance only — what the employee actually did, from the nomination
 
@@ -713,6 +722,15 @@ model RewardCase {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // --- Payroll disbursement ---
+  // `period` says what the award is FOR; payoutPeriod says which payroll month pays it. They are
+  // usually the same, but EMPLOYEE_OF_YEAR's period is 'YYYY' and maps to no payroll month at all,
+  // and LOYALTY_MILESTONE has no period. With payoutPeriod the payroll engine needs exactly one
+  // predicate for every award type instead of branching on `type`.
+  payoutPeriod String? // 'YYYY-MM' — the payroll period this bonus is disbursed in
+  paidInRunId  String? // set when a payroll run is SUBMITTED, so re-computing consumes nothing
+  paidAt       DateTime?
+
   // Two unique constraints, not one: Postgres treats NULL as distinct from NULL, so each is inert
   // exactly for the types where its key column is always null — together they correctly dedupe every
   // award type (period-based types via the first, Loyalty via the second).
@@ -720,6 +738,7 @@ model RewardCase {
   @@unique([employeeId, type, milestoneYears])
   @@index([employeeId])
   @@index([type])
+  @@index([payoutPeriod])
 }
 
 model Contract {
@@ -747,25 +766,25 @@ model Contract {
 }
 
 model EvaluationPeriod {
-  id           String      @id @default(uuid())
-  month        String
-  departmentId String?
-  enabled      Boolean     @default(false)
-  enabledById  String?
-  enabledAt    DateTime    @default(now())
-  notes        String?
+  id                 String      @id @default(uuid())
+  month              String
+  departmentId       String?
+  enabled            Boolean     @default(false)
+  enabledById        String?
+  enabledAt          DateTime    @default(now())
+  notes              String?
   // true while this month's period is driven purely by the day-15/day-20 auto
   // open/close schedule; flipped to false the moment HR/SUPER_ADMIN manually
   // enables or disables it, so the daily reconciliation job stops touching it.
-  isAutoManaged      Boolean   @default(true)
+  isAutoManaged      Boolean     @default(true)
   disabledById       String?
   disabledAt         DateTime?
   // Idempotency markers so the daily job sends each monthly batch exactly once.
   openNotifiedAt     DateTime?
   reminderNotifiedAt DateTime?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  enabledBy    User?       @relation("EvaluationPeriodEnabledBy", fields: [enabledById], references: [id])
-  disabledBy   User?       @relation("EvaluationPeriodDisabledBy", fields: [disabledById], references: [id])
+  department         Department? @relation(fields: [departmentId], references: [id])
+  enabledBy          User?       @relation("EvaluationPeriodEnabledBy", fields: [enabledById], references: [id])
+  disabledBy         User?       @relation("EvaluationPeriodDisabledBy", fields: [disabledById], references: [id])
 }
 
 model TimeRecord {
@@ -927,15 +946,15 @@ model PersonnelEvaluation {
 // server/src/utils/evaluationPoints.ts. Never updated once created; the
 // @@unique guarantees it can only ever be awarded once per employee per month.
 model EvaluationFinalization {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   employeeId    String
   month         String
   finalScore    Float
-  finalizedAt   DateTime  @default(now())
+  finalizedAt   DateTime @default(now())
   finalizedById String?
-  isAuto        Boolean   @default(false)
-  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  finalizedBy   User?     @relation("EvaluationFinalizationsFinalizedBy", fields: [finalizedById], references: [id])
+  isAuto        Boolean  @default(false)
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  finalizedBy   User?    @relation("EvaluationFinalizationsFinalizedBy", fields: [finalizedById], references: [id])
 
   @@unique([employeeId, month])
 }
@@ -997,7 +1016,7 @@ model PayrollResult {
 }
 
 model LeaveRequest {
-  id                   String    @id @default(uuid())
+  id                   String              @id @default(uuid())
   employeeId           String
   userId               String
   type                 String
@@ -1036,7 +1055,7 @@ model LeaveRequest {
   finalDocumentName    String?
   managerNote          String?
   hrNote               String?
-  status               String    @default("PENDING")
+  status               String              @default("PENDING")
   // Replacement (cover) employee the requester nominates. The nominee must accept before the
   // manager approval chain unblocks; their saved signature is then stamped on the form.
   // replacementStatus: null = not required (requester had no eligible colleague) |
@@ -1044,19 +1063,19 @@ model LeaveRequest {
   replacementUserId    String?
   replacementStatus    String?
   replacementDecidedAt DateTime?
-  replacementUser      User?     @relation("LeaveReplacement", fields: [replacementUserId], references: [id])
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  replacementUser      User?               @relation("LeaveReplacement", fields: [replacementUserId], references: [id])
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
   deptApprovedById     String?
   divisionApprovedById String?
   directorApprovedById String?
   unitApprovedById     String?
-  deptApprovedBy       User?     @relation("LeaveDeptApprovals", fields: [deptApprovedById], references: [id])
-  divisionApprovedBy   User?     @relation("LeaveDivisionApprovals", fields: [divisionApprovedById], references: [id])
-  directorApprovedBy   User?     @relation("LeaveDirApprovals", fields: [directorApprovedById], references: [id])
-  employee             Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  unitApprovedBy       User?     @relation("LeaveUnitApprovals", fields: [unitApprovedById], references: [id])
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deptApprovedBy       User?               @relation("LeaveDeptApprovals", fields: [deptApprovedById], references: [id])
+  divisionApprovedBy   User?               @relation("LeaveDivisionApprovals", fields: [divisionApprovedById], references: [id])
+  directorApprovedBy   User?               @relation("LeaveDirApprovals", fields: [directorApprovedById], references: [id])
+  employee             Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  unitApprovedBy       User?               @relation("LeaveUnitApprovals", fields: [unitApprovedById], references: [id])
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   approvalSteps        LeaveApprovalStep[]
 
   @@index([employeeId])
@@ -1073,8 +1092,8 @@ model LeaveRequest {
 model LeaveApprovalStep {
   id             String    @id @default(uuid())
   leaveRequestId String
-  sequence       Int       // shared by every row belonging to the same logical stage
-  stage          String    // UNIT_HEAD | DEPT_HEAD | DIVISION_HEAD | HR_MANAGER | ADMIN_DIRECTOR | GENERAL_MANAGER
+  sequence       Int // shared by every row belonging to the same logical stage
+  stage          String // UNIT_HEAD | DEPT_HEAD | DIVISION_HEAD | HR_MANAGER | ADMIN_DIRECTOR | GENERAL_MANAGER
   // The printed form rows this single signature fills. One person can hold several posts (e.g. the
   // division head IS the direct manager, or the director IS the direct manager), so they sign once
   // but their signature is shown in every row they cover. Values are FORM-row stages:
@@ -1089,9 +1108,9 @@ model LeaveApprovalStep {
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   approver     User         @relation("LeaveApprovalStepApprover", fields: [approverUserId], references: [id])
 
+  @@unique([leaveRequestId, sequence, approverUserId])
   @@index([leaveRequestId])
   @@index([approverUserId, status])
-  @@unique([leaveRequestId, sequence, approverUserId])
 }
 
 model Announcement {
@@ -1122,52 +1141,52 @@ model Notification {
 }
 
 model RecruitmentRequest {
-  id               String     @id @default(uuid())
-  requesterId      String
-  unitId           String?
-  departmentId     String?
-  divisionId       String?
-  jobTitle         String
-  reason           String?
-  type             String     @default("HIRE") // HIRE | JD_CHANGE
-  jobDescriptionId String?
-  jdPayload        Json?
-  quantity         Int        @default(1) // number of people to hire under this requisition
-  filled           Boolean    @default(false)
-  filledAt         DateTime?
+  id                 String          @id @default(uuid())
+  requesterId        String
+  unitId             String?
+  departmentId       String?
+  divisionId         String?
+  jobTitle           String
+  reason             String?
+  type               String          @default("HIRE") // HIRE | JD_CHANGE
+  jobDescriptionId   String?
+  jdPayload          Json?
+  quantity           Int             @default(1) // number of people to hire under this requisition
+  filled             Boolean         @default(false)
+  filledAt           DateTime?
   // Careers portal: auto-published when a HIRE requisition is fully approved,
   // auto-removed when the position is marked filled.
-  publishedToCareers Boolean  @default(false)
+  publishedToCareers Boolean         @default(false)
   publishedAt        DateTime?
-  status           String     @default("PENDING")
-  hrNote           String?
-  gmNote           String?
-  hrApprovedById   String?
-  gmApprovedById   String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  deptApprovedById String?
-  deptNote         String?
-  deptApprovedAt   DateTime?
-  hrApprovedAt     DateTime?
-  gmApprovedAt     DateTime?
+  status             String          @default("PENDING")
+  hrNote             String?
+  gmNote             String?
+  hrApprovedById     String?
+  gmApprovedById     String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deptApprovedById   String?
+  deptNote           String?
+  deptApprovedAt     DateTime?
+  hrApprovedAt       DateTime?
+  gmApprovedAt       DateTime?
   // Personnel Requisition Form (PRF) extra fields captured on a HIRE request.
-  reportsTo        String?   // reports-to, written by the requester
-  employmentType   String?   // نوع التعيين — e.g. Full-time / Part-time / Contract
-  typeOfRequest    String?   // نوع الطلب — e.g. New Position / Replacement
-  languageEn       String?   // English language requirement level
-  languageAr       String?   // Arabic language requirement level
+  reportsTo          String? // reports-to, written by the requester
+  employmentType     String? // نوع التعيين — e.g. Full-time / Part-time / Contract
+  typeOfRequest      String? // نوع الطلب — e.g. New Position / Replacement
+  languageEn         String? // English language requirement level
+  languageAr         String? // Arabic language requirement level
   // Snapshot of each PRF approval stage: { deptHead|divHead|hrManager|hrRecruitment|gm: { byId, byName, signature, at, note } }
-  prfApprovals     Json?
-  department       Department?     @relation(fields: [departmentId], references: [id])
-  division         Division?       @relation(fields: [divisionId], references: [id])
-  jobDescription   JobDescription? @relation(fields: [jobDescriptionId], references: [id])
-  deptApprovedBy   User?      @relation("RecruitmentDeptApproval", fields: [deptApprovedById], references: [id])
-  gmApprovedBy     User?      @relation("RecruitmentGMApproval", fields: [gmApprovedById], references: [id])
-  hrApprovedBy     User?      @relation("RecruitmentHRApproval", fields: [hrApprovedById], references: [id])
-  requester        User       @relation("RecruitmentRequester", fields: [requesterId], references: [id])
-  unit             Unit?      @relation(fields: [unitId], references: [id])
-  candidates       Candidate[]
+  prfApprovals       Json?
+  department         Department?     @relation(fields: [departmentId], references: [id])
+  division           Division?       @relation(fields: [divisionId], references: [id])
+  jobDescription     JobDescription? @relation(fields: [jobDescriptionId], references: [id])
+  deptApprovedBy     User?           @relation("RecruitmentDeptApproval", fields: [deptApprovedById], references: [id])
+  gmApprovedBy       User?           @relation("RecruitmentGMApproval", fields: [gmApprovedById], references: [id])
+  hrApprovedBy       User?           @relation("RecruitmentHRApproval", fields: [hrApprovedById], references: [id])
+  requester          User            @relation("RecruitmentRequester", fields: [requesterId], references: [id])
+  unit               Unit?           @relation(fields: [unitId], references: [id])
+  candidates         Candidate[]
 
   @@index([status])
   @@index([type])
@@ -1178,7 +1197,7 @@ model RecruitmentRequest {
 // SCREENING (head accept/reject) -> INTERVIEW (schedule + HR & technical evaluations + final decision)
 // -> OFFER (candidate accepts/declines the offer) -> HIRED (enrolled as an employee) | REJECTED | WITHDRAWN.
 model Candidate {
-  id            String    @id @default(uuid())
+  id            String  @id @default(uuid())
   requisitionId String
   fullName      String
   phone         String?
@@ -1186,28 +1205,30 @@ model Candidate {
   cvPath        String?
 
   // Application profile captured when the candidate is added
-  source            String?   // where the candidate came from (referral / agency / job board...)
-  appliedViaCareers Boolean   @default(false) // submitted through the public careers portal
-  degreePath        String?   // uploaded degree certificate
-  portfolioPath     String?   // uploaded portfolio (designers only)
-  speciality        String?   // graduation certificate name / speciality (degree course)
-  educationLevel    String?   // highest education level (High School / Bachelor's / Master's ...)
-  yearsExperience   String?   // years of relevant work experience
-  salaryExpectation String?   // salary expectations
+  source            String? // where the candidate came from (referral / agency / job board...)
+  serviceProviderId String? // set when the candidate was supplied by a registered service provider
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderId], references: [id])
+  appliedViaCareers Boolean          @default(false) // submitted through the public careers portal
+  degreePath        String? // uploaded degree certificate
+  portfolioPath     String? // uploaded portfolio (designers only)
+  speciality        String? // graduation certificate name / speciality (degree course)
+  educationLevel    String? // highest education level (High School / Bachelor's / Master's ...)
+  yearsExperience   String? // years of relevant work experience
+  salaryExpectation String? // salary expectations
   nationality       String?
   dateOfBirth       DateTime?
   placeOfLiving     String?
 
-  stage         String    @default("SCREENING") // SCREENING | INTERVIEW | OFFER | HIRED | REJECTED | WITHDRAWN
+  stage String @default("SCREENING") // SCREENING | INTERVIEW | OFFER | HIRED | REJECTED | WITHDRAWN
 
   // Self-service onboarding: HR generates a private link; the new hire fills their own data.
   onboardingToken       String?   @unique // unguessable token embedded in the onboarding link
-  onboardingStatus      String?   // PENDING | SUBMITTED | ENROLLED
-  onboardingData        Json?     // the identity/bank/document data the hire submitted
+  onboardingStatus      String? // PENDING | SUBMITTED | ENROLLED
+  onboardingData        Json? // the identity/bank/document data the hire submitted
   onboardingSubmittedAt DateTime?
 
   // Screening — the requesting head accepts or rejects the candidate
-  screenDecision String?  // ACCEPTED | REJECTED
+  screenDecision String? // ACCEPTED | REJECTED
   screenNote     String?
   screenById     String?
   screenAt       DateTime?
@@ -1221,7 +1242,7 @@ model Candidate {
   hrScore     Int?
   hrRecommend Boolean?
   hrNote      String?
-  hrCriteria  Json?    // { englishProficiency, motivation, culturalFit, communication, professionalism } each 1-5
+  hrCriteria  Json? // { englishProficiency, motivation, culturalFit, communication, professionalism } each 1-5
   hrEvalById  String?
   hrEvalAt    DateTime?
 
@@ -1229,26 +1250,26 @@ model Candidate {
   techScore     Int?
   techRecommend Boolean?
   techNote      String?
-  techCriteria  Json?  // { technicalKnowledge, problemSolving, relevantExperience, softwareProficiency, learningAdaptability } each 1-5
+  techCriteria  Json? // { technicalKnowledge, problemSolving, relevantExperience, softwareProficiency, learningAdaptability } each 1-5
   techEvalById  String?
   techEvalAt    DateTime?
 
   // Final decision after both evaluations
-  finalDecision String?  // ACCEPTED | REJECTED
+  finalDecision String? // ACCEPTED | REJECTED
   finalNote     String?
 
   // Offer / onboarding — the candidate's response to the offer
-  offerDecision String?  // ACCEPTED | DECLINED
+  offerDecision String? // ACCEPTED | DECLINED
   offerNote     String?
   offerAt       DateTime?
 
   // Job-offer parameters captured up front (on the hiring list) and reused to generate the offer
-  salaryStructure String?  // e.g. SS-01-LYD
-  jobGrade        String?  // experience-derived grade: Trainee | Intern | Junior | Lead | Senior
-  jobCategory     String?  // derived from Job Description
-  placeOfWork     String?  // chosen from the job description's work locations
-  contractMonths  Int?     // 3 or 6
-  residentStatus  String?  // RESDANT | DIRCT NONE RESDANT | NONE RESDANT (maps to the employee contract type)
+  salaryStructure String? // e.g. SS-01-LYD
+  jobGrade        String? // experience-derived grade: Trainee | Intern | Junior | Lead | Senior
+  jobCategory     String? // derived from Job Description
+  placeOfWork     String? // chosen from the job description's work locations
+  contractMonths  Int? // 3 or 6
+  residentStatus  String? // RESDANT | DIRCT NONE RESDANT | NONE RESDANT (maps to the employee contract type)
 
   // Stamped when HR generates the candidate's job-offer document
   offerGeneratedAt DateTime?
@@ -1256,7 +1277,7 @@ model Candidate {
   // Set once the accepted candidate is enrolled as an employee
   employeeId String?
 
-  events      Json?    @default("[]") // Array of event objects: { action, performedBy, timestamp, note }
+  events Json? @default("[]") // Array of event objects: { action, performedBy, timestamp, note }
 
   createdById String?
   createdAt   DateTime @default(now())
@@ -1303,42 +1324,569 @@ model DivisionEvaluation {
 }
 
 model GMEvaluation {
-  id               String    @id @default(uuid())
-  employeeId       String
-  month            String
-  finalScore       Float?
-  comments         String?
-  locked           Boolean   @default(false)
-  lockedAt         DateTime?
-  submittedById    String?
-  employee         Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  submittedBy      User?     @relation("GMEvaluationsSubmittedBy", fields: [submittedById], references: [id])
+  id            String    @id @default(uuid())
+  employeeId    String
+  month         String
+  finalScore    Float?
+  comments      String?
+  locked        Boolean   @default(false)
+  lockedAt      DateTime?
+  submittedById String?
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  submittedBy   User?     @relation("GMEvaluationsSubmittedBy", fields: [submittedById], references: [id])
 
   @@index([employeeId, month])
 }
 
 model ChairmanEvaluation {
-  id               String    @id @default(uuid())
-  employeeId       String
-  month            String
-  finalScore       Float?
-  comments         String?
-  locked           Boolean   @default(false)
-  lockedAt         DateTime?
-  submittedById    String?
-  employee         Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  submittedBy      User?     @relation("ChairmanEvaluationsSubmittedBy", fields: [submittedById], references: [id])
+  id            String    @id @default(uuid())
+  employeeId    String
+  month         String
+  finalScore    Float?
+  comments      String?
+  locked        Boolean   @default(false)
+  lockedAt      DateTime?
+  submittedById String?
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  submittedBy   User?     @relation("ChairmanEvaluationsSubmittedBy", fields: [submittedById], references: [id])
 
   @@index([employeeId, month])
 }
 
 model SalaryStructure {
-  id              String   @id @default(uuid())
-  jobCategory     String
-  jobGrade        String
-  structureLevel  String
-  hourlyRate      Float
-  monthlyRate     Float
+  id             String @id @default(uuid())
+  jobCategory    String
+  jobGrade       String
+  structureLevel String
+  hourlyRate     Float
+  monthlyRate    Float
 
   @@unique([jobCategory, jobGrade, structureLevel])
+}
+
+// A staffing/manpower company that supplies non-resident ("NONE RESDANT") employees to IPH.
+// `percentage` is the provider's cut expressed as a percentage of the employee's total salary,
+// charged to IPH ON TOP of that salary — it is NOT deducted from what the employee receives and
+// therefore never appears on a payslip. Payroll uses it only for the provider cost report.
+// Replaces the hardcoded name lists that used to live in careers/app.js and the free-text
+// `Employee.serviceProviderCompany` box (kept below purely to preserve pre-existing values).
+model ServiceProvider {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  nameArabic    String?
+  percentage    Float       @default(0) // e.g. 15 = 15% of total salary, billed to IPH on top
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  contractStart DateTime?
+  contractEnd   DateTime?
+  notes         String?
+  isActive      Boolean     @default(true) // inactive providers stay linked to history but leave the dropdowns
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  employees     Employee[]
+  candidates    Candidate[]
+
+  @@index([isActive])
+}
+
+// ============================================================================================
+// PAYROLL
+// --------------------------------------------------------------------------------------------
+// The monthly payroll cycle, per SOP IPH-HR-PRM-06. NOTE: `PayrollResult` above is NOT payroll —
+// it is the Evaluations module's score sheet, and nothing here touches it.
+//
+// The governing design rule is SNAPSHOT EVERYTHING. Employee factors, job grade, SalaryStructure
+// rates and ServiceProvider percentages are all mutable in place with no history; the primary
+// input is a remote biometric service that revises punches retroactively; and the General Manager
+// signs one specific number. A locked run must therefore be reproducible from Postgres alone,
+// with zero network calls and zero dependence on what any other table says today.
+// ============================================================================================
+
+// One payroll cycle. The financial month runs 25th of N-1 -> 24th of N and is labelled by the
+// month it ENDS in, so period '2026-09' covers 2026-08-25 -> 2026-09-24 (see utils/payrollPeriod).
+model PayrollRun {
+  id        String @id @default(uuid())
+  runNumber String @unique // IPH-CCHR-FRM-PAYRUN-000
+  period    String // 'YYYY-MM'
+  // A period can be run more than once only by cancelling the previous attempt: a partial unique
+  // index (hand-written in the migration, Prisma cannot express it) enforces at most one
+  // non-CANCELLED run per period. Corrections supersede rather than edit.
+  revision  Int    @default(1)
+
+  periodStart DateTime
+  periodEnd   DateTime
+  cutoffAt    DateTime? // 27th 17:00 — advisory banner, never a hard lock
+
+  status String @default("DRAFT") // DRAFT | IN_REVIEW | APPROVED | PAID | CANCELLED
+  stage  String @default("PAYROLL_SPECIALIST") // denormalised current approval stage; 'COMPLETED' after GM
+
+  // Two distinct freezes. lockedAt lands at SUBMIT, because recalculation has to stop the moment
+  // reviewers start signing — otherwise a later recompute silently changes numbers someone already
+  // approved. approvedAt lands at GM signature and additionally freezes manual items and overrides;
+  // a database trigger enforces that one even against a stray prisma.payrollLine.update().
+  lockedAt   DateTime?
+  approvedAt DateTime?
+
+  paidAt              DateTime?
+  paymentReference    String?
+  paymentDocumentUrl  String?
+  paymentDocumentName String?
+
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  // Bumped whenever the engine's formula changes, so an old run is never mistaken for one that
+  // would compute the same way today.
+  calcVersion Int       @default(1)
+  // Concurrency claim: set by a conditional updateMany so two specialists pressing Compute at the
+  // same moment cannot interleave. Always cleared in a finally block.
+  computingAt DateTime?
+
+  // Attendance provenance — what was asked for, what came back, and what went wrong.
+  attendanceFetchedAt   DateTime?
+  attendanceSourceStart String?
+  attendanceSourceEnd   String?
+  attendanceRowCount    Int       @default(0)
+  attendanceWarnings    Json?
+
+  approvalDocumentUrl  String? // the GM's signed payroll summary — required to approve
+  approvalDocumentName String?
+  // The Salary Approval memo is signed on paper; this records who pressed Close in the system.
+  approvedByName       String?
+
+  notes         String?
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines     PayrollLine[]
+  totals    PayrollRunTotal[]
+  steps     PayrollApprovalStep[]
+  overrides PayrollLineOverride[]
+
+  @@unique([period, revision])
+  @@index([status])
+  @@index([period])
+}
+
+// One employee's pay for one run. Every input is copied in, including the raw attendance row, so a
+// dispute six months later is adjudicated against exactly what the biometric service returned.
+model PayrollLine {
+  id    String     @id @default(uuid())
+  runId String
+  run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  // Nullable on purpose: deleting an employee must never destroy a signed run. Every field the
+  // payslip prints is duplicated below as a plain string for exactly that reason.
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  // --- identity snapshot (payslip: EMPLOYEE INFORMATION) ---
+  staffId           String?
+  fullName          String?
+  fullNameArabic    String?
+  divisionName      String?
+  departmentName    String?
+  unitName          String?
+  positionTitle     String?
+  workLocation      String?
+  bankName          String?
+  bankAccountNumber String?
+  // Printed on the MASTER DATA review sheet. Snapshotted like every other identity field, because
+  // employeeId is SetNull on delete and a signed run must still print in full.
+  passportNumber    String?
+  email             String?
+  nationality       String?
+  contractEndDate   DateTime?
+  // RESDANT | DIRCT NONE RESDANT | NONE RESDANT — drives the GM report's three blocks.
+  residencyType     String?
+
+  // --- rate resolution snapshot ---
+  jobCategory    String?
+  jobGrade       String?
+  structureLevel String?
+  currency       String  @default("LYD") // parsed from the structureLevel suffix
+  hourlyRate     Float   @default(0)
+
+  // --- factor snapshot ---
+  positionFactor Float @default(1)
+  siteFactor     Float @default(1)
+  skillFactor    Float @default(1)
+  languageFactor Float @default(1)
+  factorF        Float @default(1) // display/reconciliation only; the allowances below carry the money
+
+  // --- attendance snapshot ---
+  attendanceMatched Boolean @default(false)
+  empCode           String?
+  workMins          Int     @default(0) // already NET of leave — never subtract unpaid leave from it
+  otMins            Int     @default(0) // punch-derived, informational
+  approvedOtMins    Int     @default(0) // the paid one
+  paidLeaveMins     Int     @default(0) // annual + emergency combined; no breakdown exists
+  unpaidLeaveMins   Int     @default(0) // display only
+  lateMins          Int     @default(0)
+  earlyOutMins      Int     @default(0)
+  absenceDays       Float   @default(0)
+  suspensionDays    Float   @default(0)
+  attendanceRaw     Json?
+
+  // --- computed, each already rounded to 2dp so printed lines add up to printed totals ---
+  basicHours        Float @default(0)
+  overtimeHours     Float @default(0)
+  totalWorkingHours Float @default(0)
+  paidAbsenceHours  Float @default(0)
+  unpaidHours       Float @default(0)
+
+  basicSalary             Float @default(0)
+  // The payslip has no "Full Salary" row — it itemises each factor's contribution instead. Because
+  // position and skill are mutually exclusive, one of those two is always 0.
+  positionAllowance       Float @default(0)
+  siteAllowance           Float @default(0)
+  languageAllowance       Float @default(0)
+  skillAllowance          Float @default(0)
+  paidAbsenceAmount       Float @default(0)
+  bonusPercent            Float @default(0)
+  bonusAmount             Float @default(0)
+  totalEarnings           Float @default(0)
+  deductionsTotal         Float @default(0)
+  netSalary               Float @default(0)
+  // Printed in the DEDUCTIONS box but NOT part of deductionsTotal — it is the outstanding advance
+  // balance shown for the employee's information. Including it would deduct the same money twice.
+  remainingAdvanceBalance Float @default(0)
+
+  // --- company cost, never printed on the payslip ---
+  serviceProviderId         String?
+  serviceProviderName       String?
+  serviceProviderPercentage Float?
+  serviceProviderFee        Float   @default(0)
+  employerTotalCost         Float   @default(0)
+
+  // --- performance evaluation: DISPLAY ONLY, never affects an amount ---
+  presenceScore             Float?
+  execScore                 Float?
+  adminScore                Float?
+  careScore                 Float?
+  trainingScore             Float?
+  evaluationTotal           Float?
+  promotionEligibilityIndex Float?
+
+  // --- leave entitlement balances (payslip: LEAVE ENTITLEMENT) ---
+  paidLeaveBalance      Float?
+  unpaidLeaveBalance    Float?
+  emergencyLeaveBalance Float?
+
+  // OK | BLOCKED | EXCLUDED. A line with no resolvable rate is BLOCKED with zeroed amounts and
+  // hard-blocks submission — it is never quietly paid as zero.
+  status        String   @default("OK")
+  blockReasons  String[] @default([])
+  excludeReason String?
+  reviewNote    String?
+
+  payslipUrl         String?
+  payslipName        String?
+  payslipGeneratedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items PayrollLineItem[]
+
+  @@unique([runId, employeeId])
+  @@index([runId, status])
+  @@index([runId, currency])
+  @@index([employeeId])
+}
+
+// One printed money row on a payslip. Earnings and deductions share a table because they are the
+// same thing to the renderer: a labelled amount. The category set is closed and mirrors the
+// template's rows exactly — the template offers no free-form "other" row.
+model PayrollLineItem {
+  id     String      @id @default(uuid())
+  lineId String
+  line   PayrollLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  kind     String // EARNING | DEDUCTION
+  // EARNING:   REWARD_BONUS | PREVIOUS_UNDERPAYMENT
+  // DEDUCTION: CASH_ADVANCE | TICKET_COST | PENALTY | HEALTH_INSURANCE_OVERRUN | PREVIOUS_OVERPAYMENT
+  // CASH_ADVANCE carries both the advance instalment and any recovered cash allocation; the
+  // template gives them one shared row.
+  category String
+
+  label       String
+  labelArabic String?
+  amount      Float
+  currency    String
+  percent     Float? // for REWARD_BONUS: the % of Basic this row represents
+
+  sourceType String? // REWARD_CASE | ADVANCE | CASH_ALLOCATION | DEDUCTION | MANUAL
+  sourceId   String?
+
+  // The two @unique columns are the strongest available guarantee that an instalment is charged,
+  // and a bonus paid, exactly once across the whole system.
+  advanceInstalmentId String? @unique
+  rewardCaseId        String? @unique
+
+  // Required for PREVIOUS_UNDERPAYMENT / PREVIOUS_OVERPAYMENT: a correction must say which run and
+  // which line it is correcting, or the trail is lost the moment it is printed.
+  correctedRunId  String?
+  correctedLineId String?
+  correctionNote  String?
+
+  createdByName String?
+  createdAt     DateTime @default(now())
+
+  @@index([lineId])
+  @@index([category])
+}
+
+// Manual review decisions, kept OUTSIDE the line so that Compute can be a destructive rebuild
+// (deleteMany -> re-insert) and still be safe to press twice. Merge-style upserts are where
+// double-counting comes from; these are replayed after the rebuild instead.
+model PayrollLineOverride {
+  id    String     @id @default(uuid())
+  runId String
+  run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  employeeId String
+
+  excluded      Boolean @default(false)
+  excludeReason String?
+  reviewNote    String?
+  manualItems   Json? // manual earnings/deductions the specialist added, replayed after a rebuild
+
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([runId, employeeId])
+}
+
+// Per-currency (and optionally per-residency-block) totals, snapshotted at lock. Totals are NEVER
+// summed across currencies — there is no FX rate source in this system and inventing one would
+// produce numbers Finance cannot reconcile.
+model PayrollRunTotal {
+  id    String     @id @default(uuid())
+  runId String
+  run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  currency      String
+  // 'ALL' for the whole-run row, else one of the three canonical residency types. A literal 'ALL'
+  // rather than NULL because Postgres treats NULLs as distinct in a unique index, which would let
+  // duplicate whole-run rows through.
+  residencyType String @default("ALL")
+
+  employeeCount           Int   @default(0)
+  basicTotal              Float @default(0)
+  allowanceTotal          Float @default(0)
+  paidLeaveTotal          Float @default(0)
+  bonusTotal              Float @default(0)
+  deductionTotal          Float @default(0)
+  netTotal                Float @default(0)
+  serviceProviderFeeTotal Float @default(0)
+  employerCostTotal       Float @default(0)
+
+  @@unique([runId, currency, residencyType])
+}
+
+// The approval chain, modelled on LeaveApprovalStep: real per-approver rows, because the SOP names
+// people who must each personally sign and we need both turn enforcement and identity enforcement.
+// No `coversStages` here — that exists on the leave chain only because the printed leave form has
+// six signature rows that collapse onto fewer signers. Payroll has three, and they do not collapse.
+model PayrollApprovalStep {
+  id    String     @id @default(uuid())
+  runId String
+  run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  sequence Int
+  stage    String // HEAD_ATTENDANCE_PAYROLL | HR_MANAGER | GENERAL_MANAGER
+
+  approverUserId String
+  approver       User   @relation("PayrollApprovalStepApprover", fields: [approverUserId], references: [id])
+
+  status    String    @default("PENDING") // PENDING | APPROVED | REJECTED | SKIPPED
+  note      String?
+  decidedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([runId, sequence, approverUserId])
+  @@index([runId])
+  @@index([approverUserId, status])
+}
+
+// A salary advance or loan. Same model for residents and non-residents — the difference is in how
+// the money is disbursed, not in how it is recovered. Follows the project rule that money-affecting
+// actions need a signed document and an explicit approval step, never a one-click grant.
+model EmployeeAdvance {
+  id            String   @id @default(uuid())
+  requestNumber String   @unique // IPH-CCHR-FRM-ADVNC-000
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type      String @default("SALARY_ADVANCE") // SALARY_ADVANCE | LOAN | TRAVEL_TICKET | OTHER
+  currency  String
+  principal Float
+
+  // --- how the request arrived -------------------------------------------------------------
+  // SELF: the employee filed it from their own screen. HR: payroll entered it on their behalf.
+  requestSource     String  @default("HR")
+  requestedByUserId String?
+  requestedByName   String?
+  // The form asked for these two and the system does not hold them; everything else the old
+  // Google Form collected (name, staff ID, position, e-mail) is read from the employee record.
+  contactEmail   String?
+  whatsappNumber String?
+
+  // Residents and directly-contracted non-residents pick a multiple of their basic salary rather
+  // than typing a figure. The multiple AND the basic it was applied to are both stored: the rate
+  // card is mutable, so without the snapshot the record could not explain its own amount later.
+  basicSalaryMonths   Int?
+  basicSalarySnapshot Float?
+
+  // Snapshotted because the two request types follow different procedures after submission, and an
+  // employee can be moved between providers.
+  residencyType       String?
+  serviceProviderId   String?
+  serviceProviderName String?
+
+  // --- provider cash-advance round -----------------------------------------------------
+  // A provider employee needs their provider's written consent, collected on one Cash Advance
+  // Request form covering every requester of that provider in that currency. The reference number
+  // printed on the form is what groups them; there is deliberately no batch table.
+  providerFormRef      String?
+  providerFormIssuedAt DateTime?
+
+  instalmentCount      Int    @default(1)
+  firstDeductionPeriod String // 'YYYY-MM'
+  // Kept in step with the instalments as they are deducted; feeds the payslip's informational
+  // "Remaining Advance" row.
+  outstandingAmount    Float  @default(0)
+
+  reason String?
+  status String  @default("PENDING") // PENDING | APPROVED | REJECTED | ACTIVE | SETTLED | CANCELLED
+
+  approvedAt      DateTime?
+  approvedByName  String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  disbursedAt     DateTime?
+  settledAt       DateTime?
+
+  documentUrl  String? // the signed agreement — required before approval
+  documentName String?
+
+  notes         String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  instalments EmployeeAdvanceInstalment[]
+
+  @@index([employeeId, status])
+  @@index([requestedByUserId])
+  @@index([requestSource, status])
+  @@index([providerFormRef])
+  @@index([serviceProviderId, status])
+}
+
+// Instalments are materialised up front rather than derived, so that deferral, waiver, "which run
+// consumed this" and the rounding remainder are all explicit and queryable. The LAST instalment
+// absorbs the remainder, so the instalments always sum to the principal exactly.
+model EmployeeAdvanceInstalment {
+  id        String          @id @default(uuid())
+  advanceId String
+  advance   EmployeeAdvance @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+
+  sequence Int
+  period   String // 'YYYY-MM'
+  amount   Float
+
+  status          String    @default("SCHEDULED") // SCHEDULED | DEDUCTED | WAIVED | DEFERRED
+  deductedInRunId String?
+  deductedAt      DateTime?
+  note            String?
+
+  @@unique([advanceId, sequence])
+  @@index([period, status])
+}
+
+// A one-off or recurring deduction. The categories are exactly the payslip's remaining rows —
+// health insurance in particular gets no policy model, because no policy data exists in this system
+// and inventing a schema for it now would guarantee a rewrite.
+model EmployeeDeduction {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // TICKET_COST | PENALTY | HEALTH_INSURANCE_OVERRUN | PREVIOUS_OVERPAYMENT | CASH_ADVANCE
+  category    String
+  label       String
+  labelArabic String?
+  currency    String
+  amount      Float
+
+  period      String? // 'YYYY-MM' for a one-off
+  recurring   Boolean @default(false)
+  startPeriod String?
+  endPeriod   String?
+
+  status         String    @default("PENDING") // PENDING | APPROVED | APPLIED | CANCELLED
+  approvedAt     DateTime?
+  approvedByName String?
+  appliedInRunId String?
+
+  documentUrl  String?
+  documentName String?
+
+  notes         String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([period])
+}
+
+// SOP section 10: a non-resident asks for local spending money, the service provider letters the
+// General Manager, the Treasury releases cash against a signed receipt, and payroll recovers it.
+// Recovered in full in one period — unlike an advance, this has no instalments. It prints on the
+// payslip's "Cash Advance Deduction" row, which is the only row the template offers for it.
+model CashAllocationRequest {
+  id            String   @id @default(uuid())
+  requestNumber String   @unique // IPH-CCHR-FRM-CASHAL-000
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  serviceProviderId String?
+  purpose           String?
+  currency          String
+  amountRequested   Float
+  amountApproved    Float?
+  neededBy          DateTime?
+
+  status String @default("SUBMITTED") // SUBMITTED | APPROVED | REJECTED | DISBURSED | LIQUIDATED | RECOVERED | CANCELLED
+
+  approvedAt       DateTime?
+  approvedByName   String?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+  disbursedAt      DateTime?
+  liquidatedAt     DateTime?
+  amountLiquidated Float?
+  // approved - liquidated; becomes a CASH_ADVANCE deduction in the recovery period.
+  amountToRecover  Float?
+  recoveryPeriod   String?
+  recoveredInRunId String?
+
+  documentUrl  String? // the signed treasury receipt
+  documentName String?
+
+  notes         String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status])
 }

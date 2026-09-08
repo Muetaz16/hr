@@ -15,6 +15,14 @@ const TasksPage = lazy(() => import('./pages/Tasks'));
 const GroupsPage = lazy(() => import('./pages/admin/Groups'));
 const DepartmentsPage = lazy(() => import('./pages/admin/Departments'));
 const UnitsPage = lazy(() => import('./pages/admin/Units'));
+const ServiceProvidersPage = lazy(() => import('./pages/admin/ServiceProviders'));
+const PayrollRunDetailPage = lazy(() => import('./pages/payroll/PayrollRunDetail'));
+const PayrollLineDetailPage = lazy(() => import('./pages/payroll/PayrollLineDetail'));
+const PayrollAdvancesPage = lazy(() => import('./pages/payroll/Advances'));
+const PayrollDeductionsPage = lazy(() => import('./pages/payroll/Deductions'));
+const PayrollRewardsDuePage = lazy(() => import('./pages/payroll/RewardsDue'));
+const PayrollProviderAdvancesPage = lazy(() => import('./pages/payroll/ProviderAdvances'));
+const PayrollStructuresPage = lazy(() => import('./pages/payroll/SalaryStructures'));
 const JobDescriptionsPage = lazy(() => import('./pages/admin/JobDescriptions'));
 const JobDescriptionFormPage = lazy(() => import('./pages/admin/JobDescriptionForm'));
 const JobDescriptionsBrowsePage = lazy(() => import('./pages/JobDescriptionsBrowse'));
@@ -32,6 +40,8 @@ const ExceptionalPerformanceAwardPage = lazy(() => import('./pages/ExceptionalPe
 const ReportIncidentPage = lazy(() => import('./pages/ReportIncident'));
 const ResignationRequestPage = lazy(() => import('./pages/ResignationRequest'));
 const MyAttendancePage = lazy(() => import('./pages/MyAttendance'));
+const MyAdvancesPage = lazy(() => import('./pages/MyAdvances'));
+const MyPayslipsPage = lazy(() => import('./pages/MyPayslips'));
 const EvaluationDetailPage = lazy(() => import('./pages/EvaluationDetail'));
 const AnnouncementsFeedPage = lazy(() => import('./pages/AnnouncementsFeed'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
@@ -111,6 +121,9 @@ function App() {
                   <Route path="/report-incident" element={<ReportIncidentPage />} />
                   <Route path="/resignation-request" element={<ResignationRequestPage />} />
                   <Route path="/my-attendance" element={<MyAttendancePage />} />
+                  {/* Open to every signed-in employee: asking for an advance needs no permission. */}
+                  <Route path="/my-advances" element={<MyAdvancesPage />} />
+                  <Route path="/my-payslips" element={<MyPayslipsPage />} />
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />
@@ -135,7 +148,16 @@ function App() {
                     <Route path="/approved-leaves" element={<ApprovedLeavesPage />} />
                   </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_payroll', 'manage_payroll']} />}>
-                    <Route path="/payroll" element={<PayrollPage />} />
+                    <Route path="/payroll" element={<Navigate to="/payroll/runs" replace />} />
+                    <Route path="/payroll/runs" element={<PayrollPage />} />
+                    <Route path="/payroll/advances" element={<PayrollAdvancesPage />} />
+                    <Route path="/payroll/provider-advances" element={<PayrollProviderAdvancesPage />} />
+                    <Route path="/payroll/deductions" element={<PayrollDeductionsPage />} />
+
+                    <Route path="/payroll/rewards" element={<PayrollRewardsDuePage />} />
+                    <Route path="/payroll/structures" element={<PayrollStructuresPage />} />
+                    <Route path="/payroll/runs/:runId" element={<PayrollRunDetailPage />} />
+                    <Route path="/payroll/runs/:runId/lines/:lineId" element={<PayrollLineDetailPage />} />
                   </Route>
                   <Route path="/recruitment" element={<Navigate to="/recruitment/requests" replace />} />
                   {/* Head-facing stages: request a hire, get it approved. */}
@@ -175,6 +197,9 @@ function App() {
 
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_departments']} />}>
                     <Route path="/departments" element={<DepartmentsPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_service_providers']} />}>
+                    <Route path="/service-providers" element={<ServiceProvidersPage />} />
                   </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_units']} />}>
                     <Route path="/units" element={<UnitsPage />} />

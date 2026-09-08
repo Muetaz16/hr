@@ -5,6 +5,7 @@ import { employeeService } from '../../services/employeeService';
 import api, { SERVER_URL } from '../../services/apiClient';
 import { departmentService, groupService, divisionService } from '../../services/departmentService';
 import { unitService } from '../../services/unitService';
+import { serviceProviderService } from '../../services/serviceProviderService';
 import { directorateService } from '../../services/directorateService';
 import { jobDescriptionService } from '../../services/jobDescriptionService';
 import { candidateService } from '../../services/candidateService';
@@ -148,6 +149,7 @@ const EmployeeForm: React.FC = () => {
         bankNameArabic: '',
         bankBranchNameArabic: '',
         // Onboarding-only fields (self-service onboarding form)
+        serviceProviderId: '',
         serviceProviderCompany: '',
         employeeTravelDate: '',
         employeeStartDate: '',
@@ -197,6 +199,17 @@ const EmployeeForm: React.FC = () => {
     const divisions = orgData?.divisions || [];
     const directorates = orgData?.directorates || [];
     const jobDescriptions = orgData?.jobDescriptions || [];
+
+    // Registered service providers (Administration -> System -> Service Providers). Only active ones
+    // are offered, but an already-linked inactive provider is added back below so editing an existing
+    // record never silently drops its provider.
+    const { data: serviceProviders = [] } = useQuery({
+        queryKey: ['service-providers'],
+        queryFn: () => serviceProviderService.getAll().catch(() => []),
+    });
+    const providerOptions = serviceProviders.filter(
+        sp => sp.isActive || sp.id === formData.serviceProviderId,
+    );
 
     const isGlobalScopeRole = ['GENERAL_MANAGER', 'CHAIRMAN'].includes(formData.role || '');
 
@@ -353,6 +366,7 @@ const EmployeeForm: React.FC = () => {
                     bankNameArabic: emp.bankNameArabic || '',
                     bankBranchNameArabic: emp.bankBranchNameArabic || '',
                     // Onboarding-only fields
+                    serviceProviderId: emp.serviceProviderId || '',
                     serviceProviderCompany: emp.serviceProviderCompany || '',
                     employeeTravelDate: formatDate(emp.employeeTravelDate),
                     employeeStartDate: formatDate(emp.employeeStartDate),
@@ -1057,7 +1071,26 @@ const EmployeeForm: React.FC = () => {
                             </div>
                             <p className="text-[11px] text-slate-400 font-medium mb-6 relative z-10">{t('onboarding_submission_hint', { defaultValue: 'Only present for Service Provider hires — as submitted on the self-service onboarding form. Department, job category/grade and compensation come from the candidate\'s offer, assigned by recruitment.' })}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                                {renderText('serviceProviderCompany', t('service_provider_company', { defaultValue: 'Service Provider Company' }), { placeholder: 'اسم الشركة المزودة للخدمة' })}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('service_provider_company', { defaultValue: 'Service Provider Company' })}</label>
+                                    <select
+                                        value={formData.serviceProviderId || ''}
+                                        onChange={(e) => setField('serviceProviderId', e.target.value)}
+                                        className={`${fieldClass} cursor-pointer`}
+                                    >
+                                        <option value="">{t('sp_select', { defaultValue: '— Select a registered provider —' })}</option>
+                                        {providerOptions.map(sp => (
+                                            <option key={sp.id} value={sp.id}>{sp.name}{sp.isActive ? '' : ` (${t('inactive', { defaultValue: 'Inactive' })})`}</option>
+                                        ))}
+                                    </select>
+                                    {/* Records captured before providers became a real entity kept a hand-typed
+                                        company name. Surface it so HR can map it to a registered provider. */}
+                                    {!formData.serviceProviderId && formData.serviceProviderCompany && (
+                                        <p className="text-[11px] text-amber-600 font-medium">
+                                            {t('sp_legacy_value', { defaultValue: 'Previously entered as free text:' })} “{formData.serviceProviderCompany}”
+                                        </p>
+                                    )}
+                                </div>
                                 {renderDate('employeeTravelDate', t('employee_travel_date', { defaultValue: 'Travel Date (Service Provider)' }))}
                             </div>
                         </section>

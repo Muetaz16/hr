@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
 import { generateMonthlyEvaluationDocx } from '../utils/monthlyEvaluationForm';
+import { loadMonthlyEvaluationScores, pickCriteria } from '../utils/monthlyEvaluationScores';
 
 export const getPayrollByMonth = async (req: Request, res: Response) => {
     try {
@@ -50,32 +51,6 @@ export const savePayrollResult = async (req: Request, res: Response) => {
 };
 
 // Metric criteria shared by every manager-evaluation level.
-const METRIC_KEYS = [
-    'relColleagues', 'teamwork', 'workOrg', 'commSkills', 'regCompliance',
-    'taskQuality', 'timeCommit', 'orgCompliance', 'probSolving', 'pressureHandling', 'contDev',
-    'regAdherence', 'safetyAdherence', 'appearance', 'resPreservation', 'dataPrivacy',
-] as const;
-const ADMIN_KEYS = ['relColleagues', 'teamwork', 'workOrg', 'commSkills', 'regCompliance'];
-const EXEC_KEYS = ['taskQuality', 'timeCommit', 'orgCompliance', 'probSolving', 'pressureHandling', 'contDev'];
-const CARE_KEYS = ['regAdherence', 'safetyAdherence', 'appearance', 'resPreservation', 'dataPrivacy'];
-
-const pickCriteria = (src: any): Record<string, number | null | undefined> => {
-    const out: Record<string, number | null | undefined> = {};
-    if (!src) return out;
-    for (const k of METRIC_KEYS) out[k] = src[k];
-    return out;
-};
-
-// Average the two evaluators' scores for one criterion, following the same "one present → use it,
-// none present → null" rule the payroll compile uses.
-const combine = (a: any, b: any): number | null => {
-    const an = a ?? null, bn = b ?? null;
-    if (an !== null && bn !== null) return (an + bn) / 2;
-    if (an !== null) return an;
-    if (bn !== null) return bn;
-    return null;
-};
-
 const monthLabel = (month: string): string => {
     const [y, m] = month.split('-').map(Number);
     if (!y || !m) return month;
@@ -96,75 +71,23 @@ export const getMonthlyEvaluationDoc = async (req: Request, res: Response) => {
         });
         if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
-        const [hr, personnel, unit, dept, division, director] = await Promise.all([
-            prisma.hREvaluation.findFirst({ where: { employeeId, month } }),
-            prisma.personnelEvaluation.findFirst({ where: { employeeId, month } }),
-            prisma.unitEvaluation.findFirst({ where: { employeeId, month }, include: { submittedBy: { select: { fullName: true } } } }),
-            prisma.departmentEvaluation.findFirst({ where: { employeeId, month }, include: { submittedBy: { select: { fullName: true } } } }),
-            prisma.divisionEvaluation.findFirst({ where: { employeeId, month }, include: { submittedBy: { select: { fullName: true } } } }),
-            prisma.directorEvaluation.findFirst({ where: { employeeId, month }, include: { submittedBy: { select: { fullName: true } } } }),
-        ]);
-
-        // The two managers who actually evaluated, ordered shallow→deep (direct manager, then skip-level).
-        const presentMetricEvals = [unit, dept, division, director].filter(Boolean) as any[];
-        const directEvalRec = presentMetricEvals[0] || null;
-        const nextEvalRec = presentMetricEvals[1] || null;
-
-        // Per-criterion FINAL = average of the two evaluators (computed live from the source records).
-        const finalCriteria: Record<string, number | null> = {};
-        for (const k of METRIC_KEYS) finalCriteria[k] = combine(directEvalRec?.[k], nextEvalRec?.[k]);
-        const categorySum = (keys: string[]): number | null => {
-            const vals = keys.map(k => finalCriteria[k]).filter(v => v !== null) as number[];
-            return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
-        };
-        const adminScore = categorySum(ADMIN_KEYS);
-        const execScore = categorySum(EXEC_KEYS);
-        const careScore = categorySum(CARE_KEYS);
-
-        // Presence per-item points, computed from the HR evaluation's real counts.
-        const h: any = hr || {};
-        const presence = hr ? {
-            absence: Math.max(0, 7 - (h.absenceUnauthorized || 0)),
-            delay: Math.max(0, 7 - ((h.delayMinutes || 0) / 180 * 7)),
-            emergency: Math.max(0, 2 - ((h.emergencyLeaves || 0) / 3 * 2)),
-            unpaid: Math.max(0, 2 - ((h.unpaidLeaves || 0) / 14 * 2)),
-            annual: Math.max(0, 2 - ((h.annualPaidLeaves || 0) / 14 * 2)),
-        } : { absence: null, delay: null, emergency: null, unpaid: null, annual: null };
-        const presenceTotal = hr
-            ? (presence.absence! + presence.delay! + presence.emergency! + presence.unpaid! + presence.annual!)
-            : null;
-
-        // Exceptional performance (±20%) and Training (+10%) contributions — same formula as the compile.
-        let exceptionalScore = 0;
-        let trainingScore = 0;
-        if (personnel) {
-            exceptionalScore += 5 * Math.min(1, (personnel.appreciationMessages || 0) / 3);
-            exceptionalScore += 5 * Math.min(1, (personnel.exceptionalAssignments || 0) / 30);
-            exceptionalScore -= 5 * Math.min(1, (personnel.warningMessages || 0) / 3);
-            exceptionalScore -= 5 * Math.min(1, (personnel.disciplinaryDeduction || 0) / 14);
-            if (personnel.specializedTraining) trainingScore += 3;
-            if (personnel.supportingTraining) trainingScore += 3;
-            if (personnel.languageTraining) trainingScore += 2;
-            if (personnel.softwareTraining) trainingScore += 2;
-        }
-
-        const hasAnyData = hr || personnel || directEvalRec || nextEvalRec;
-        const finalScore = hasAnyData
-            ? (presenceTotal || 0) + (adminScore || 0) + (execScore || 0) + (careScore || 0) + exceptionalScore + trainingScore
-            : null;
+        // One scorer, shared with the payslip — see utils/monthlyEvaluationScores.ts. Two copies of
+        // this formula is how the form and the payslip start disagreeing about the same month.
+        const scores = await loadMonthlyEvaluationScores(prisma, employeeId, month);
+        const { presence, presenceTotal, finalCriteria, personnel, finalScore } = scores;
 
         const buffer = generateMonthlyEvaluationDocx({
             employeeId: employee.staffId || '',
             employeeName: employee.fullName || '',
             department: employee.department?.name || '',
             position: employee.position || '',
-            directSupervisor: directEvalRec?.submittedBy?.fullName || '',
-            nextAuthority: nextEvalRec?.submittedBy?.fullName || '',
+            directSupervisor: scores.directSupervisorName,
+            nextAuthority: scores.nextAuthorityName,
             monthLabel: monthLabel(month),
             final: finalCriteria,
             presence,
-            directEval: directEvalRec ? pickCriteria(directEvalRec) : null,
-            nextEval: nextEvalRec ? pickCriteria(nextEvalRec) : null,
+            directEval: scores.directEval ? pickCriteria(scores.directEval) : null,
+            nextEval: scores.nextEval ? pickCriteria(scores.nextEval) : null,
             exceptional: personnel ? {
                 warnings: personnel.warningMessages,
                 discipline: personnel.disciplinaryDeduction,

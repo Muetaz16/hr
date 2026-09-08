@@ -84,6 +84,7 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'manage_departments', group: 'Administration', label: 'Manage Departments' },
     { id: 'manage_units', group: 'Administration', label: 'Manage Units' },
     { id: 'manage_job_descriptions', group: 'Administration', label: 'Manage Job Descriptions' },
+    { id: 'manage_service_providers', group: 'Administration', label: 'Manage Service Providers' },
     { id: 'view_logs', group: 'Administration', label: 'View Activity Log' },
 ];
 
@@ -173,7 +174,8 @@ export const SYSTEM_HATS: HatSeed[] = [
         description: 'Manages system configuration: users & hats, org structure, job descriptions, activity log.',
         permissions: [
             'manage_users', 'manage_groups', 'manage_directorates', 'manage_divisions',
-            'manage_departments', 'manage_units', 'manage_job_descriptions', 'view_logs',
+            'manage_departments', 'manage_units', 'manage_job_descriptions',
+            'manage_service_providers', 'view_logs',
         ],
     },
     {

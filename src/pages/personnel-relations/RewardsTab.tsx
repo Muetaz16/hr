@@ -67,7 +67,7 @@ const RewardsTab: React.FC = () => {
 
     // Same query key the parent (PersonnelRelations.tsx) uses for its own employee roster — React
     // Query dedupes this against the already-cached data, no extra network call.
-    const { data: employees = [] } = useQuery({
+    useQuery({
         queryKey: ['relations-employees'],
         queryFn: () => employeeService.getAllEmployees(),
     });

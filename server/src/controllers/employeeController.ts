@@ -138,7 +138,7 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
         const includeSeparated = req.query.includeSeparated === 'true';
         const employees = await prisma.employee.findMany({
             where: includeSeparated ? {} : { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER },
-            include: { user: { select: { permissions: true } }, jobDescription: true }
+            include: { user: { select: { permissions: true } }, jobDescription: true, serviceProvider: { select: { id: true, name: true, nameArabic: true } } }
         });
 
         const scope = await resolveEmployeeScope(req.user!);
@@ -175,6 +175,7 @@ export const getEmployeeById = async (req: AuthRequest, res: Response) => {
             include: {
                 user: { select: { permissions: true } },
                 jobDescription: true,
+                serviceProvider: { select: { id: true, name: true, nameArabic: true } },
                 contracts: {
                     orderBy: { createdAt: 'desc' }
                 }
@@ -430,6 +431,26 @@ const parseFloatSafe = (val: any): number => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
+// The only three contract types the system understands. Everything downstream keys off this exact
+// vocabulary: the Staff ID residency digit (residencyDigit below), the BioTime position push
+// (BIOTIME_POSITION_BY_CONTRACT_TYPE), the onboarding form variants
+// (src/utils/employeeFieldVisibility.ts) and the payroll report's three blocks. The column had
+// previously drifted to 8 values because it was written straight through from req.body with no
+// check — see migration 20260906140000. This is the guard that stops it drifting again.
+const CANONICAL_CONTRACT_TYPES = ['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT'] as const;
+
+// Returns the canonical value, or null to clear it. Anything unrecognised is rejected outright
+// rather than silently stored or silently blanked — a wrong residency misfiles someone in payroll.
+const normalizeContractType = (value: unknown): { ok: true; value: string | null } | { ok: false } => {
+    if (value === undefined || value === null || value === '') return { ok: true, value: null };
+    const v = String(value).trim().toUpperCase();
+    const match = (CANONICAL_CONTRACT_TYPES as readonly string[]).find(t => t === v);
+    return match ? { ok: true, value: match } : { ok: false };
+};
+
+const INVALID_CONTRACT_TYPE_ERROR =
+    `Invalid contract type. Must be one of: ${CANONICAL_CONTRACT_TYPES.join(', ')}.`;
+
 // Residency → the leading digit of the auto Staff ID (IPH-<digit><YY>-<SEQ>).
 const residencyDigit = (status?: string): string | null => {
     const v = (status || '').trim().toUpperCase();
@@ -546,7 +567,7 @@ export const createEmployee = async (req: Request, res: Response) => {
             // Onboarding-only fields (self-service onboarding form) — department and job
             // category/level/rate are deliberately NOT accepted here; they come from the
             // candidate's requisition/offer, assigned by the recruitment team.
-            serviceProviderCompany,
+            serviceProviderId, serviceProviderCompany,
             employeeTravelDate, employeeStartDate, ticketUrl, residencyDocumentUrl, interviewEvaluationUrl
         } = req.body;
 
@@ -557,6 +578,10 @@ export const createEmployee = async (req: Request, res: Response) => {
         const cleanDivisionId = (divisionId === '' || divisionId === 'null' || divisionId === 'undefined' || !divisionId) ? null : divisionId;
         const cleanDirectorateId = (directorateId === '' || directorateId === 'null' || directorateId === 'undefined' || !directorateId) ? null : directorateId;
         const cleanJobDescriptionId = (jobDescriptionId === '' || jobDescriptionId === 'null' || jobDescriptionId === 'undefined' || !jobDescriptionId) ? null : jobDescriptionId;
+
+        const contractTypeResult = normalizeContractType(contractType);
+        if (!contractTypeResult.ok) return res.status(400).json({ error: INVALID_CONTRACT_TYPE_ERROR });
+        const cleanContractType = contractTypeResult.value;
 
         // Validate every date field up-front and report exactly which one is bad, instead of letting
         // an out-of-range value (e.g. a mistyped 5-digit year) reach Prisma and surface as a cryptic
@@ -728,7 +753,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 placeOfWork: placeOfWork || null,
                 contractStartDate: parseDate(contractStartDate),
                 contractEndDate: parseDate(contractEndDate),
-                contractType: contractType || null,
+                contractType: cleanContractType,
                 contractWorkType: contractWorkType || 'Full Time',
                 contractStatus: contractStatus || 'Active',
                 holidaysUsed: parseFloatSafe(holidaysUsed),
@@ -796,6 +821,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                 bankNameArabic: bankNameArabic || null,
                 bankBranchNameArabic: bankBranchNameArabic || null,
                 // Onboarding-only fields (self-service onboarding form)
+                serviceProviderId: (serviceProviderId === '' || !serviceProviderId) ? null : serviceProviderId,
                 serviceProviderCompany: serviceProviderCompany || null,
                 employeeTravelDate: parseDate(employeeTravelDate),
                 employeeStartDate: parseDate(employeeStartDate),
@@ -844,7 +870,7 @@ export const createEmployee = async (req: Request, res: Response) => {
                     endDate: parseDate(contractEndDate),
                     salary: initialSalary,
                     contractNumber: contractNumber || "1st",
-                    type: contractType || null,
+                    type: cleanContractType,
                     status: 'ACTIVE',
                     notes: 'Initial contract created during registration.'
                 }
@@ -998,7 +1024,11 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.placeOfWork !== undefined) data.placeOfWork = body.placeOfWork || null;
         if (body.contractStartDate !== undefined) data.contractStartDate = parseDate(body.contractStartDate);
         if (body.contractEndDate !== undefined) data.contractEndDate = parseDate(body.contractEndDate);
-        if (body.contractType !== undefined) data.contractType = body.contractType || null;
+        if (body.contractType !== undefined) {
+            const r = normalizeContractType(body.contractType);
+            if (!r.ok) return res.status(400).json({ error: INVALID_CONTRACT_TYPE_ERROR });
+            data.contractType = r.value;
+        }
         if (body.contractWorkType !== undefined) data.contractWorkType = body.contractWorkType || 'Full Time';
         if (body.contractStatus !== undefined) data.contractStatus = body.contractStatus || null;
         if (body.holidaysUsed !== undefined) data.holidaysUsed = parseFloatSafe(body.holidaysUsed);
@@ -1069,6 +1099,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
         if (body.bankBranchNameArabic !== undefined) data.bankBranchNameArabic = body.bankBranchNameArabic || null;
 
         // --- Onboarding-only fields (self-service onboarding form) ---
+        if (body.serviceProviderId !== undefined) data.serviceProviderId = body.serviceProviderId || null;
         if (body.serviceProviderCompany !== undefined) data.serviceProviderCompany = body.serviceProviderCompany || null;
         if (body.employeeTravelDate !== undefined) data.employeeTravelDate = parseDate(body.employeeTravelDate);
         if (body.employeeStartDate !== undefined) data.employeeStartDate = parseDate(body.employeeStartDate);

@@ -39,6 +39,7 @@ function stateCard(icon, title, msg) {
 
 // value comes from saved data, else the prefill we already have on file.
 let VALUES = {};
+let PROVIDERS = []; // registered service providers, loaded for the Service Provider form only
 function val(name) { return VALUES[name] != null ? VALUES[name] : ''; }
 
 function input(name, label, type = 'text', opts = {}) {
@@ -60,6 +61,18 @@ function select(name, label, options, opts = {}) {
     const cur = val(name);
     const o = ['<option value="">— Select —</option>']
         .concat(options.map((x) => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(x)}</option>`))
+        .join('');
+    return `<div class="field${opts.full ? ' full' : ''}">
+        <label class="label">${esc(label)}${opts.required ? ' *' : ''}</label>
+        <select class="select" name="${name}" ${opts.required ? 'required' : ''}>${o}</select>
+    </div>`;
+}
+// Like select() but with distinct values and labels — needed for the provider picker, whose value
+// is a database id rather than the displayed company name.
+function selectKV(name, label, options, opts = {}) {
+    const cur = val(name);
+    const o = ['<option value="">— Select —</option>']
+        .concat(options.map((x) => `<option value="${esc(x.value)}" ${x.value === cur ? 'selected' : ''}>${esc(x.label)}</option>`))
         .join('');
     return `<div class="field${opts.full ? ' full' : ''}">
         <label class="label">${esc(label)}${opts.required ? ' *' : ''}</label>
@@ -93,6 +106,11 @@ async function load() {
         return;
     }
     VALUES = Object.assign({}, info.prefill || {}, info.data || {});
+    // Only the Service Provider form needs the list; fetch it there and never let a failure block
+    // the rest of the onboarding form from rendering.
+    if (info.residentStatus === 'NONE RESDANT') {
+        PROVIDERS = await api('/service-providers').catch(() => []);
+    }
     renderForm(info);
 }
 
@@ -115,7 +133,7 @@ function renderForm(info) {
     // ==========================================
     if (isServiceProv) {
         formHTML += card('Company Information / معلومات الشركة',
-            input('serviceProviderCompany', 'Service provider company name / اسم الشركة المزودة للخدمة', 'text', { required: true, full: true }) +
+            selectKV('serviceProviderId', 'Service provider company / الشركة المزودة للخدمة', PROVIDERS.map((sp) => ({ value: sp.id, label: sp.name })), { required: true, full: true }) +
             fileField('interviewEvaluation', 'Attach the Interview evaluation form / إرفاق نموذج تقييم المقابلة', 'interviewEvaluationUrl') +
             fileField('jobOffer', 'Attach the job offer / إرفاق عرض العمل', 'jobOfferUrl')
         );

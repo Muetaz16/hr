@@ -11,10 +11,12 @@ const CFG = {
 
 // Option lists (edit freely). The Position list is NOT here — it is loaded live
 // from the open roles in the HR system.
+// The individual provider companies used to be spelled out here, one hardcoded line each.
+// They now live in the HR system (Administration -> Service Providers) and are fetched at render
+// time; picking "Service Provider" below reveals a second, live-loaded dropdown.
+const SOURCE_SERVICE_PROVIDER = 'Service Provider';
 const SOURCES = [
-    'Service Provider - Montenegro Warmth',
-    'Service Provider - Pure Pharma',
-    'Service Provider - Art Ocbija',
+    SOURCE_SERVICE_PROVIDER,
     'Libyan Jobs',
     'LinkedIn',
     'Recommendation',
@@ -88,8 +90,12 @@ async function renderForm() {
     root.innerHTML = spinner;
 
     let positions;
+    let providers = [];
     try {
         positions = await api('/positions');
+        // A failed provider lookup must not block the whole application form — the picker just
+        // stays empty and the applicant can still submit with a plain source.
+        providers = await api('/service-providers').catch(() => []);
     } catch (e) {
         root.innerHTML = stateCard('⚠️', 'Could not load positions', e.message);
         return;
@@ -125,6 +131,13 @@ async function renderForm() {
                 ${textField('email', 'Email', 'email', true, 'jane@example.com')}
                 ${textField('phone', 'Mobile number', 'tel', true, '+218 …')}
                 ${selectField('source', 'Application source', SOURCES, true)}
+                <div class="field" id="providerField" style="display:none">
+                    <label class="label">Service provider company *</label>
+                    <select class="select" name="serviceProviderId">
+                        <option value="">— Select —</option>
+                        ${providers.map((sp) => `<option value="${esc(sp.id)}">${esc(sp.name)}</option>`).join('')}
+                    </select>
+                </div>
                 ${selectField('nationality', 'Nationality', NATIONALITIES, true)}
                 ${textField('placeOfLiving', 'Place of residence', 'text', true, 'Tripoli')}
                 ${textField('dateOfBirth', 'Birthdate', 'date', true)}
@@ -149,6 +162,20 @@ async function renderForm() {
             <button id="submitBtn" class="btn" type="submit">Submit Application</button>
         </form>
     </div>`;
+
+    // The provider picker only applies to provider-sourced applications; keep it hidden (and not
+    // required, and not submitted) otherwise so a direct applicant is never asked for a company.
+    const sourceSel = document.querySelector('[name="source"]');
+    const providerField = document.getElementById('providerField');
+    const providerSel = providerField.querySelector('select');
+    const syncProviderField = () => {
+        const on = sourceSel.value === SOURCE_SERVICE_PROVIDER;
+        providerField.style.display = on ? '' : 'none';
+        providerSel.required = on;
+        if (!on) providerSel.value = '';
+    };
+    sourceSel.addEventListener('change', syncProviderField);
+    syncProviderField();
 
     document.getElementById('applyForm').addEventListener('submit', submitApplication);
 }

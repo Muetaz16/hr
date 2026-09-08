@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { canAccess } from '../utils/access';
+import { serviceProviderService } from '../services/serviceProviderService';
+import type { ServiceProvider } from '../types';
 
 type View = 'screening' | 'interview' | 'offer' | 'onboarding';
 type ActionType = 'screen' | 'schedule' | 'hrEval' | 'techEval' | 'finalize' | 'offer' | 'details' | 'editOffer';
@@ -82,6 +84,7 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
     // Add-candidate modal (screening view)
     const emptyAddForm = {
         requisitionId: '', fullName: '', phone: '', email: '', source: '', speciality: '',
+        serviceProviderId: '',
         yearsExperience: '', salaryExpectation: '', nationality: '', dateOfBirth: '', placeOfLiving: '',
         // Job-offer parameters — captured here so the offer can be generated in one click later.
         salaryStructure: '', jobGrade: '', placeOfWork: '', contractMonths: 6 as number, residentStatus: '',
@@ -116,6 +119,12 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
 
     useEffect(() => {
         api.get('/salary-structures').then(res => setSalaryStructures(res.data)).catch(console.error);
+    }, []);
+
+    // Registered service providers, for candidates supplied by a staffing company.
+    const [serviceProviders, setServiceProviders] = useState<ServiceProvider[]>([]);
+    useEffect(() => {
+        serviceProviderService.getAll().then(sp => setServiceProviders(sp.filter(x => x.isActive))).catch(() => {});
     }, []);
 
     const fetchData = async () => {
@@ -905,6 +914,13 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('source', { defaultValue: 'Source' })}</label>
                             <input value={addForm.source} onChange={e => setAdd({ source: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700" placeholder={t('source_ph', { defaultValue: 'Referral / LinkedIn / Agency…' })} />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('service_provider', { defaultValue: 'Service Provider' })}</label>
+                            <select value={addForm.serviceProviderId} onChange={e => setAdd({ serviceProviderId: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white font-medium text-slate-700">
+                                <option value="">{t('sp_none_direct', { defaultValue: '— None (direct hire) —' })}</option>
+                                {serviceProviders.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('email', { defaultValue: 'Email address' })}</label>

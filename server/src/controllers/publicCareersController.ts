@@ -46,6 +46,31 @@ const positionInclude = {
 } as const;
 
 // GET /api/public/positions — the live job board (published + still-open positions).
+// GET /api/public/service-providers — the registered staffing companies, for the "Application
+// source" list and the onboarding form's company picker. Only id/name are exposed: the percentage
+// and contact details are internal and must never reach the public site.
+export const listServiceProviders = async (_req: Request, res: Response) => {
+    try {
+        const providers = await prisma.serviceProvider.findMany({
+            where: { isActive: true },
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, nameArabic: true },
+        });
+        res.json(providers);
+    } catch (error) {
+        console.error('Error listing service providers:', error);
+        res.status(500).json({ error: 'Failed to load service providers.' });
+    }
+};
+
+// Resolves a submitted provider id to an active provider, or null. Never trusts the client: an
+// unknown/inactive id is silently dropped rather than stored as a dangling reference.
+const resolveServiceProvider = async (raw: unknown) => {
+    const id = cleanStr(raw);
+    if (!id) return null;
+    return prisma.serviceProvider.findFirst({ where: { id, isActive: true }, select: { id: true, name: true } });
+};
+
 export const listOpenPositions = async (_req: Request, res: Response) => {
     try {
         const positions = await prisma.recruitmentRequest.findMany({
@@ -115,6 +140,9 @@ const ONBOARDING_TEXT_FIELDS = [
     // they're assigned by the recruitment team (on the Candidate) after the interview, before the
     // offer is generated, and department comes from the candidate's linked requisition. Letting the
     // onboarding form re-ask for them would let the hire overwrite what recruitment already decided.
+    // serviceProviderCompany stays listed only so legacy free-text values survive a re-submit;
+    // the form itself now sends serviceProviderId, handled separately below (it needs validating
+    // against the provider table, which a blind cleanStr copy cannot do).
     'serviceProviderCompany', 'employeeTravelDate', 'employeeStartDate'
 ];
 // Upload field name -> key stored in onboardingData (matches Employee's *Url columns).
@@ -183,9 +211,23 @@ export const submitOnboarding = async (req: Request, res: Response) => {
             if (files[field]?.[0]) data[key] = `/uploads/careers/${files[field][0].filename}`;
         }
 
+        // The picked provider is stored twice on purpose: on the Candidate column so recruitment can
+        // query it, and inside onboardingData so EmployeeForm's generic prefill carries it through
+        // to the Employee record at enrollment without any special-casing.
+        const provider = await resolveServiceProvider(req.body.serviceProviderId);
+        if (req.body.serviceProviderId !== undefined) {
+            data.serviceProviderId = provider?.id || null;
+            data.serviceProviderCompany = provider?.name || null;
+        }
+
         await prisma.candidate.update({
             where: { id: candidate.id },
-            data: { onboardingData: data, onboardingStatus: 'SUBMITTED', onboardingSubmittedAt: new Date() } as any,
+            data: {
+                onboardingData: data,
+                onboardingStatus: 'SUBMITTED',
+                onboardingSubmittedAt: new Date(),
+                ...(req.body.serviceProviderId !== undefined ? { serviceProviderId: provider?.id || null } : {}),
+            } as any,
         });
 
         const title = candidate.requisition?.jobTitle || 'the role';
@@ -208,7 +250,7 @@ export const submitApplication = async (req: Request, res: Response) => {
         const {
             positionId, fullName, email, phone, speciality, source,
             educationLevel, yearsExperience, salaryExpectation, nationality,
-            dateOfBirth, placeOfLiving, captchaToken,
+            dateOfBirth, placeOfLiving, captchaToken, serviceProviderId,
         } = req.body;
 
         const ip = req.ip || req.socket.remoteAddress || undefined;
@@ -241,6 +283,8 @@ export const submitApplication = async (req: Request, res: Response) => {
             return res.status(409).json({ error: 'Sorry, this position is no longer accepting applications.' });
         }
 
+        const provider = await resolveServiceProvider(serviceProviderId);
+
         const dob = dateOfBirth ? new Date(dateOfBirth) : null;
 
         // 4. Create the candidate directly in the hiring list.
@@ -259,6 +303,9 @@ export const submitApplication = async (req: Request, res: Response) => {
                 nationality: cleanStr(nationality),
                 dateOfBirth: dob && !isNaN(dob.getTime()) ? dob : null,
                 placeOfLiving: cleanStr(placeOfLiving),
+                // A provider-sourced application also records the real provider link, not just the
+                // "Service Provider - X" text in `source`.
+                serviceProviderId: provider?.id || null,
                 source: cleanStr(source) || 'Careers Portal',
                 appliedViaCareers: true,
                 stage: 'SCREENING',

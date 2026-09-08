@@ -31,7 +31,9 @@ import {
     AlertTriangle,
     UserMinus,
     Award,
-    Wallet
+    Wallet,
+    HandCoins,
+    Receipt
 } from 'lucide-react';
 import { roleThemes } from '../config/roleThemes';
 import { canAccess } from '../utils/access';
@@ -233,6 +235,11 @@ const MainLayout: React.FC = () => {
                 { label: t('nav_report_incident', { defaultValue: 'Report an Incident' }), path: '/report-incident', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                 { label: t('nav_resignation_request', { defaultValue: 'Resignation Request' }), path: '/resignation-request', icon: UserMinus, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                 { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
+                // Every role, including GM and Chairman: an advance is a personal request, not a
+                // managerial one, and it needs no payroll permission to ask for.
+                { label: t('nav_my_advances', { defaultValue: 'Salary Advance' }), path: '/my-advances', icon: HandCoins, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
+                // Everyone has a salary, so everyone gets this — no payroll permission involved.
+                { label: t('nav_my_payslips', { defaultValue: 'My Payslips' }), path: '/my-payslips', icon: Receipt, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 // Standalone — fill in evaluations for the employees under you. Previously only
                 // reachable through Personnel Relations Department > Performance Reviews, which
@@ -305,14 +312,21 @@ const MainLayout: React.FC = () => {
                     ]
                 },
                 {
-                    // New, empty scaffold — real Payroll screens land here later (see
-                    // project_payroll_section memory). Deliberately its own nav item, not folded
-                    // back into the Attendance group above.
+                    // Its own group, not folded back into Attendance above: the monthly run is only
+                    // one of payroll's procedures, and the registers that feed it (advances,
+                    // deductions, cash allocations, the rate table) each need their own screen.
                     label: t('nav_payroll_section', { defaultValue: 'Payroll' }),
-                    path: '/payroll',
                     icon: Wallet,
                     roles: ['SUPER_ADMIN'],
                     permissions: ['view_payroll', 'manage_payroll'],
+                    children: [
+                        { label: t('nav_payroll_runs', { defaultValue: 'Monthly Runs' }), path: '/payroll/runs', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_advances', { defaultValue: 'Advances' }), path: '/payroll/advances', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_provider_advances', { defaultValue: 'Provider Advances' }), path: '/payroll/provider-advances', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_deductions', { defaultValue: 'Deductions' }), path: '/payroll/deductions', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_rewards', { defaultValue: 'Bonuses Due' }), path: '/payroll/rewards', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_structures', { defaultValue: 'Salary Structures' }), path: '/payroll/structures', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                    ]
                 },
                 {
                     // Heads have no actionable role anywhere in this department anymore — the one
@@ -372,6 +386,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_units', { defaultValue: 'Units' }), path: '/units', roles: ['SUPER_ADMIN'], permissions: ['manage_units'] },
                         { label: t('nav_job_descriptions', { defaultValue: 'Job Descriptions' }), path: '/job-descriptions', roles: ['SUPER_ADMIN'], permissions: ['manage_job_descriptions'] },
                         { label: t('nav_groups'), path: '/groups', roles: ['SUPER_ADMIN'], permissions: ['manage_groups'] },
+                        { label: t('nav_service_providers', { defaultValue: 'Service Providers' }), path: '/service-providers', roles: ['SUPER_ADMIN'], permissions: ['manage_service_providers'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_system_logs', { defaultValue: 'Activity Log' }), path: '/system-logs', roles: ['SUPER_ADMIN'], permissions: ['view_logs'] },

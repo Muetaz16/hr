@@ -21,6 +21,7 @@ const candidateInclude = {
             requester: { select: { id: true, fullName: true } },
         }
     },
+    serviceProvider: { select: { id: true, name: true, nameArabic: true } },
     createdBy: { select: { id: true, fullName: true } },
     screenBy: { select: { id: true, fullName: true } },
     hrEvalBy: { select: { id: true, fullName: true } },
@@ -131,7 +132,7 @@ export const createCandidate = async (req: Request, res: Response) => {
         }
 
         const {
-            requisitionId, fullName, phone, email, source, speciality,
+            requisitionId, fullName, phone, email, source, speciality, serviceProviderId,
             yearsExperience, salaryExpectation, nationality, dateOfBirth, placeOfLiving,
             salaryStructure, jobGrade, placeOfWork, contractMonths, residentStatus,
         } = req.body;
@@ -163,6 +164,7 @@ export const createCandidate = async (req: Request, res: Response) => {
                 degreePath: filePath('degree'),
                 portfolioPath: filePath('portfolio'),
                 source: cleanStr(source),
+                serviceProviderId: cleanStr(serviceProviderId),
                 speciality: cleanStr(speciality),
                 yearsExperience: cleanStr(yearsExperience),
                 salaryExpectation: cleanStr(salaryExpectation),
@@ -811,7 +813,7 @@ export const updateCandidateOfferDetails = async (req: Request, res: Response) =
         const candidate = await prisma.candidate.findUnique({ where: { id } });
         if (!candidate) return res.status(404).json({ error: 'Candidate not found.' });
 
-        const { salaryStructure, jobGrade, jobCategory, placeOfWork, contractMonths, residentStatus, yearsExperience, salaryExpectation } = req.body;
+        const { salaryStructure, jobGrade, jobCategory, placeOfWork, contractMonths, residentStatus, yearsExperience, salaryExpectation, serviceProviderId } = req.body;
         const data: any = {};
         data.events = appendEvent(candidate.events, 'EDIT_OFFER_DETAILS', (req as any).user?.fullName || 'Unknown User', `Edited offer parameters`);
 
@@ -820,6 +822,7 @@ export const updateCandidateOfferDetails = async (req: Request, res: Response) =
         if (jobCategory !== undefined) data.jobCategory = cleanStr(jobCategory);
         if (placeOfWork !== undefined) data.placeOfWork = cleanStr(placeOfWork);
         if (residentStatus !== undefined) data.residentStatus = cleanStr(residentStatus);
+        if (serviceProviderId !== undefined) data.serviceProviderId = cleanStr(serviceProviderId);
         if (yearsExperience !== undefined) data.yearsExperience = cleanStr(yearsExperience);
         if (salaryExpectation !== undefined) data.salaryExpectation = cleanStr(salaryExpectation);
         if (contractMonths !== undefined) {

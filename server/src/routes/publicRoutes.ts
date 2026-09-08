@@ -4,7 +4,7 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { rateLimit } from '../middleware/rateLimit';
-import { listOpenPositions, getPublicPosition, submitApplication, getOnboarding, submitOnboarding } from '../controllers/publicCareersController';
+import { listOpenPositions, getPublicPosition, submitApplication, getOnboarding, submitOnboarding, listServiceProviders } from '../controllers/publicCareersController';
 
 const router = Router();
 
@@ -66,6 +66,7 @@ const applyLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 5, message: 'Too
 // --- Public endpoints (no authentication) ---
 router.get('/positions', listLimiter, listOpenPositions);
 router.get('/positions/:id', listLimiter, getPublicPosition);
+router.get('/service-providers', listLimiter, listServiceProviders);
 
 // Wrap multer so a rejected file (wrong type / too big) returns a clean 400.
 const applyUpload = upload.fields([{ name: 'cv', maxCount: 1 }, { name: 'degree', maxCount: 1 }]);

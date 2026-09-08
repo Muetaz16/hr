@@ -53,4 +53,21 @@ api.interceptors.response.use(
 
 export const SERVER_URL = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5001';
 
+/**
+ * Absolute URL for a stored file.
+ *
+ * Uploads are saved as server-relative paths ("/uploads/documents/x.pdf") and served by Express,
+ * NOT by the app's own origin. Putting one straight into an href resolves it against the frontend
+ * instead, which in dev hits Vite's SPA fallback: the browser gets index.html, the router sees an
+ * unknown path, and the user lands on a blank route rather than their document.
+ *
+ * Returns null for a missing path so a caller can decide not to render the link at all.
+ */
+export const fileUrl = (path?: string | null): string | null => {
+    if (!path) return null;
+    // An already-absolute URL (or a data: blob) is handed back untouched.
+    if (/^(https?:|data:|blob:)/i.test(path)) return path;
+    return `${SERVER_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
 export default api;
