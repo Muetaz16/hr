@@ -3069,5 +3069,9 @@
     "payslip_bulk_download": "كل كشوف الرواتب للطباعة",
     "payslip_bulk_failed": "تعذّر إنشاء كشوف الرواتب.",
     "payslip_bulk_skips": "{{n}} موظفاً غير مُدرَجين في الملف — سطرهم غير قابل للصرف، وكشفهم كان سيخرج بأصفار.",
-    "payslip_pdf_note": "يُصدَر الكشف بصيغة PDF لا وورد، حتى لا يكون قابلاً للتعديل بعد استلامه."
+    "payslip_pdf_note": "يُصدَر الكشف بصيغة PDF لا وورد، حتى لا يكون قابلاً للتعديل بعد استلامه.",
+    "perm_close_payroll_period": "إقفال واعتماد فترة الرواتب",
+    "perm_manage_salary_structures": "تحرير هياكل الرواتب (جدول الأسعار)",
+    "perm_approve_advances": "اعتماد وصرف السلف",
+    "perm_manage_payroll_corrections": "إضافة تصحيحات الرواتب (يدوية + / −)"
 }

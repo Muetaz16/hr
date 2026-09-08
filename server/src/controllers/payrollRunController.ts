@@ -78,6 +78,9 @@ const loadEligibleEmployees = (periodStart: Date, periodEnd: Date) =>
         orderBy: { fullName: 'asc' },
     });
 
+/** How long a compute claim stays valid before it is treated as abandoned. See computePayrollRun. */
+const STALE_CLAIM_MS = 5 * 60 * 1000;
+
 const CANONICAL_RESIDENCY = ['RESDANT', 'DIRCT NONE RESDANT', 'NONE RESDANT'];
 
 // Everything that stops a line from being payable. A blocked line is written with zeroed amounts
@@ -374,8 +377,17 @@ export const computePayrollRun = async (req: AuthRequest, res: Response) => {
 
         // Claim the run so two specialists pressing Compute cannot interleave. Conditional update:
         // whoever writes computingAt first wins, the other is told to wait.
+        //
+        // The claim is a LEASE, not a flag. It is released in a finally block, but a finally block
+        // cannot run if the process dies mid-compute — and a claim left behind that way made the
+        // period permanently uncomputable, with no way to clear it from any screen. So a claim
+        // older than the lease is treated as abandoned and taken over.
+        //
+        // Five minutes is well above any legitimate compute (about 9s for 97 employees, up to ~70s
+        // when the attendance service is retrying) and short enough that nobody waits on a crash.
+        const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
         const claim = await prisma.payrollRun.updateMany({
-            where: { id, computingAt: null },
+            where: { id, OR: [{ computingAt: null }, { computingAt: { lt: staleBefore } }] },
             data: { computingAt: new Date() },
         });
         if (claim.count === 0) {

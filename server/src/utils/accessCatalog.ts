@@ -36,7 +36,25 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'approve_attendance', group: 'Attendance', label: 'Approve as Head of Attendance' },
     // --- Payroll (الرواتب) ---
     { id: 'view_payroll', group: 'Payroll', label: 'View Payroll' },
+    // Everything monthly: open a period, compute it, record advances and deductions, schedule a
+    // reward payout. Still a superset of the four narrower grants below, so nobody who holds it
+    // today loses anything — authorizeAccess is OR, not AND.
     { id: 'manage_payroll', group: 'Payroll', label: 'Manage Payroll' },
+    // The four below exist so one duty can be granted WITHOUT manage_payroll. Each is a separable
+    // job that a different person may hold:
+    //
+    // Signing the month off. It sets approvedAt, which a database trigger reads to refuse every
+    // later change to the run — the one payroll action that cannot be undone.
+    { id: 'close_payroll_period', group: 'Payroll', label: 'Close & Sign Off a Payroll Period' },
+    // The rate card. An edit here changes what every employee on that rate earns next month, which
+    // is a compensation-policy decision rather than part of running a month.
+    { id: 'manage_salary_structures', group: 'Payroll', label: 'Edit Salary Structures (rate card)' },
+    // Approving or handing over an advance — the step that actually moves money to a person, as
+    // opposed to recording that they asked for one.
+    { id: 'approve_advances', group: 'Payroll', label: 'Approve & Disburse Advances' },
+    // Manual previous-miscalculation rows: the only place a figure is added to, or taken off, a
+    // payslip by hand.
+    { id: 'manage_payroll_corrections', group: 'Payroll', label: 'Add Payroll Corrections (manual +/-)' },
     // --- Recruitment (التوظيف) ---
     { id: 'view_recruitment', group: 'Recruitment', label: 'View Recruitment' },
     { id: 'manage_recruitment', group: 'Recruitment', label: 'Raise & Manage Hiring Requests' },

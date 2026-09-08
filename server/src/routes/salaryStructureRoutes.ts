@@ -19,7 +19,7 @@ router.get('/coverage', authorizeAccess([], ['view_payroll']), getSalaryStructur
 
 // Writes change what every employee on that rate is owed next month, so they are payroll-only —
 // unlike the reads above, which several unrelated roles depend on.
-const canManage = authorizeAccess([], ['manage_payroll']);
+const canManage = authorizeAccess([], ['manage_payroll', 'manage_salary_structures']);
 router.post('/', canManage, createSalaryStructure);
 router.patch('/:id', canManage, updateSalaryStructure);
 router.delete('/:id', canManage, deleteSalaryStructure);

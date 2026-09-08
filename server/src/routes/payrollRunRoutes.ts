@@ -22,6 +22,11 @@ router.use(authenticateToken);
 const canView = authorizeAccess([], ['view_payroll']);
 const canManage = authorizeAccess([], ['manage_payroll']);
 
+// Two duties that can be held on their own. authorizeAccess is OR, so manage_payroll still covers
+// both — the narrower grant is purely additive, letting someone hold one duty without all of payroll.
+const canClose = authorizeAccess([], ['manage_payroll', 'close_payroll_period']);
+const canCorrect = authorizeAccess([], ['manage_payroll', 'manage_payroll_corrections']);
+
 // Signed Salary Approval memos land in the same folder as every other uploaded document. Payroll
 // has its own upload route because /employees/upload-document is gated on employee-registration
 // permissions, which a payroll specialist has no reason to hold.
@@ -53,11 +58,11 @@ router.get('/:id/payslips', canView, getRunPayslips);
 router.post('/', canManage, createPayrollRun);
 router.post('/:id/compute', canManage, computePayrollRun);
 router.post('/:id/documents', canManage, documentUpload.single('file'), uploadPayrollDocument);
-router.post('/:id/close', canManage, closePayrollRun);
+router.post('/:id/close', canClose, closePayrollRun);
 router.patch('/:id/lines/:lineId', canManage, updatePayrollLine);
 // Previous-miscalculation corrections. Stored on the override so they survive a recompute.
-router.post('/:id/lines/:lineId/corrections', canManage, addLineCorrection);
-router.delete('/:id/lines/:lineId/corrections/:correctionId', canManage, removeLineCorrection);
+router.post('/:id/lines/:lineId/corrections', canCorrect, addLineCorrection);
+router.delete('/:id/lines/:lineId/corrections/:correctionId', canCorrect, removeLineCorrection);
 router.delete('/:id', canManage, deletePayrollRun);
 
 export default router;

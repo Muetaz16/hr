@@ -19,6 +19,10 @@ router.use(authenticateToken);
 const canView = authorizeAccess([], ['view_payroll']);
 const canManage = authorizeAccess([], ['manage_payroll']);
 
+// Approving or handing over an advance is the money-moving step, separable from recording that
+// someone asked for one. OR semantics, so manage_payroll still covers it.
+const canApprove = authorizeAccess([], ['manage_payroll', 'approve_advances']);
+
 // Signed advance agreements and provider consent forms. Payroll has its own upload route because
 // /employees/upload-document is gated on employee-registration permissions, which a payroll
 // specialist has no reason to hold.
@@ -41,14 +45,14 @@ router.post('/documents', canManage, documentUpload.single('file'), (req, res) =
 // Provider rounds. Declared before '/:id' so the literal path is not swallowed by the parameter.
 router.get('/provider-batches', canView, listProviderBatches);
 router.post('/provider-batches/:providerId/form', canManage, generateProviderForm);
-router.post('/provider-batches/:providerId/approve', canManage, approveProviderBatch);
-router.post('/provider-batches/:providerId/disburse', canManage, disburseProviderBatch);
+router.post('/provider-batches/:providerId/approve', canApprove, approveProviderBatch);
+router.post('/provider-batches/:providerId/disburse', canApprove, disburseProviderBatch);
 
 router.get('/', canView, listAdvances);
 router.get('/:id', canView, getAdvance);
 router.post('/', canManage, createAdvance);
-router.post('/:id/approve', canManage, approveAdvance);
-router.post('/:id/reject', canManage, rejectAdvance);
+router.post('/:id/approve', canApprove, approveAdvance);
+router.post('/:id/reject', canApprove, rejectAdvance);
 router.post('/:id/cancel', canManage, cancelAdvance);
 router.patch('/:id/instalments/:instalmentId', canManage, updateInstalment);
 
