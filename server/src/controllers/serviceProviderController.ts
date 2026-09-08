@@ -112,6 +112,8 @@ export const updateServiceProvider = async (req: express.Request, res: express.R
             },
             include: countsInclude,
         });
+        // The percentage is what IPH pays on top of every one of this provider's salaries.
+        res.locals.auditDetails = `${provider.name} — fee ${provider.percentage}%`;
         res.json(provider);
     } catch (error) {
         console.error('Error updating service provider:', error);
@@ -133,7 +135,8 @@ export const deleteServiceProvider = async (req: express.Request, res: express.R
                 error: `This provider is linked to ${employees} employee(s) and ${candidates} candidate(s). Deactivate it instead of deleting — deleting would erase that link.`,
             });
         }
-        await prisma.serviceProvider.delete({ where: { id } });
+        const gone = await prisma.serviceProvider.delete({ where: { id } });
+        res.locals.auditDetails = gone.name;
         res.json({ message: 'Service provider deleted successfully' });
     } catch (error) {
         console.error('Error deleting service provider:', error);

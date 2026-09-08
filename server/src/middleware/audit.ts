@@ -136,6 +136,65 @@ function describeAction(method: string, rawPath: string): string {
         return 'Added candidate';
     }
 
+    // --- Payroll -----------------------------------------------------------------------------
+    // Every path here carries UUIDs, so without these branches the log reads
+    // "Created payroll-runs/82c0309f-.../compute" — technically accurate and useless to read.
+    if (s0 === 'payroll-runs') {
+        if (!s1) return 'Opened a payroll period';
+        if (s2 === 'compute') return 'Computed a payroll period';
+        if (s2 === 'close') return 'Closed and signed off a payroll period';
+        if (s2 === 'documents') return 'Uploaded a payroll document';
+        if (s2 === 'lines') {
+            // .../lines/:lineId/corrections[/:correctionId]
+            if (seg[4] === 'corrections') {
+                return method === 'DELETE' ? 'Removed a payroll correction' : 'Added a payroll correction';
+            }
+            if (seg[4] === 'payslip') return 'Downloaded an employee payslip';
+            return 'Updated a payroll line';
+        }
+        // Reads. Logged because each one carries every employee's salary out of the system.
+        if (s2 === 'master-data') return 'Exported the payroll review sheet';
+        if (s2 === 'approval-form') return 'Downloaded the salary approval form';
+        if (s2 === 'payslips') return 'Downloaded every payslip for a period';
+        if (method === 'DELETE') return 'Deleted a payroll period';
+        return `${verb} payroll period`;
+    }
+    if (s0 === 'payroll-advances') {
+        if (s1 === 'documents') return 'Uploaded a payroll document';
+        if (s1 === 'provider-batches') {
+            if (s3 === 'form') return 'Issued a provider cash advance form';
+            if (s3 === 'approve') return "Recorded a provider's approval of advances";
+            if (s3 === 'disburse') return 'Recorded an advance cash handover';
+            return 'Updated a provider advance round';
+        }
+        if (s2 === 'approve') return 'Approved a salary advance';
+        if (s2 === 'reject') return 'Rejected a salary advance';
+        if (s2 === 'cancel') return 'Cancelled a salary advance';
+        if (s2 === 'instalments') return 'Updated an advance instalment';
+        return 'Recorded a salary advance';
+    }
+    if (s0 === 'advance-requests') {
+        // The employee's own screen, so the actor is the employee rather than payroll.
+        if (s3 === 'withdraw') return 'Withdrew their salary advance request';
+        return 'Requested a salary advance';
+    }
+    if (s0 === 'payroll-deductions') {
+        if (s2 === 'approve') return 'Approved a salary deduction';
+        if (s2 === 'cancel') return 'Cancelled a salary deduction';
+        if (method === 'PATCH' || method === 'PUT') return 'Updated a salary deduction';
+        return 'Recorded a salary deduction';
+    }
+    if (s0 === 'payroll-rewards') return "Changed a bonus's payout month";
+    if (s0 === 'salary-structures') {
+        if (method === 'DELETE') return 'Removed a salary rate';
+        if (method === 'PATCH' || method === 'PUT') return 'Changed a salary rate';
+        return 'Added a salary rate';
+    }
+    if (s0 === 'service-providers') {
+        if (method === 'DELETE') return 'Deleted a service provider';
+        if (method === 'PATCH' || method === 'PUT') return 'Updated a service provider';
+        return 'Added a service provider';
+    }
     const NOUNS: Record<string, string> = {
         employees: 'employee', users: 'user', departments: 'department', groups: 'group',
         divisions: 'division', directorates: 'directorate', units: 'unit', 'job-descriptions': 'job description',
@@ -232,9 +291,27 @@ async function resolveTarget(req: Request): Promise<string | null> {
 // Records every successful state-changing request. Mount globally BEFORE the routers: the finish
 // handler runs after each router's authenticateToken has populated req.user. Fail-soft — a logging
 // error must never break the actual request.
+/**
+ * Reads that are worth logging even though they change nothing.
+ *
+ * A GET normally leaves no trace here, which is right for browsing — but these four carry every
+ * employee's salary out of the system as a file. "Who downloaded the payroll and when" is the first
+ * question an auditor asks, and until now nothing could answer it.
+ */
+const AUDITED_READS: RegExp[] = [
+    /^\/api\/payroll-runs\/[^/]+\/master-data$/,     // the full 62-column review sheet
+    /^\/api\/payroll-runs\/[^/]+\/approval-form$/,   // the memo carrying every net total
+    /^\/api\/payroll-runs\/[^/]+\/payslips$/,        // every payslip in one file
+    /^\/api\/payroll-runs\/[^/]+\/lines\/[^/]+\/payslip$/,
+];
+
 export function auditLogger(req: Request, res: Response, next: NextFunction) {
     const method = req.method.toUpperCase();
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    // Matched on the path only, so a query string cannot slip a download past the check.
+    const isAuditedRead = method === 'GET'
+        && AUDITED_READS.some(re => re.test(req.originalUrl.split('?')[0]));
+    if (!isMutation && !isAuditedRead) return next();
 
     res.on('finish', () => {
         (async () => {

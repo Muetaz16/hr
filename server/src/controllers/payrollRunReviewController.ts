@@ -24,6 +24,13 @@ const TEMPLATE = 'Salary Approval .docx';
 const fmtMoney = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "LYD 1,234,567.89 + EUR 12,000.00 net" — the whole-run figure, one entry per currency. */
+const netSummary = (totals: { currency: string; residencyType: string; netTotal: number }[]): string => {
+    const whole = totals.filter(t => t.residencyType === 'ALL' && t.netTotal !== 0);
+    if (!whole.length) return '';
+    return whole.map(t => `${t.currency} ${fmtMoney(t.netTotal)}`).join(' + ') + ' net';
+};
+
 const fmtDate = (d: Date | null) =>
     d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
@@ -72,6 +79,11 @@ export const getPayrollMasterData = async (req: Request, res: Response) => {
             orderBy: [{ status: 'desc' }, { fullName: 'asc' }],
         });
 
+        // The export carries every employee's pay, so the log records what was taken, not just that
+        // something was.
+        res.locals.auditDetails =
+            `for ${periodLabel(run.period)} (${run.runNumber}) — ${lines.length} employee(s), `
+            + (netSummary(run.totals) || 'no totals yet');
         res.json({ run, lines });
     } catch (error: any) {
         console.error('Error building payroll master data:', error);
@@ -119,6 +131,8 @@ export const generateSalaryApprovalForm = async (req: Request, res: Response) =>
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename="Salary_Approval_${run.period}.docx"`);
+        res.locals.auditDetails =
+            `for ${periodLabel(run.period)} (${run.runNumber}) — ${netSummary(run.totals) || 'no totals yet'}`;
         res.send(buffer);
     } catch (error: any) {
         console.error('Error generating salary approval form:', error);
@@ -155,6 +169,7 @@ export const uploadPayrollDocument = async (req: Request, res: Response) => {
     try {
         const file = (req as any).file;
         if (!file) return res.status(400).json({ error: 'No file uploaded' });
+        res.locals.auditDetails = file.originalname;
         res.json({ url: `/uploads/documents/${file.filename}`, name: file.originalname });
     } catch (error) {
         console.error('Error uploading payroll document:', error);

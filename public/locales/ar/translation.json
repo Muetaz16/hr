@@ -1655,7 +1655,7 @@
     "evaluation_finalized": "تم إنهاء التقييم.",
     "evaluation_form_generated": "تم إنشاء نموذج التقييم.",
     "evaluation_status_by_department": "حالة التقييم حسب القسم",
-    "every_create_update_and_delete_across_the_system": "كل عملية إنشاء وتحديث وحذف عبر النظام — من قام بها ومتى.",
+    "every_create_update_and_delete_across_the_system": "كل عملية إنشاء وتحديث وحذف عبر النظام، وكل تصدير لبيانات المرتبات — من قام بها ومتى.",
     "evidence": "الأدلة",
     "exceptional_20": "استثنائي ±20",
     "excused": "− بعذر",
@@ -3073,5 +3073,6 @@
     "perm_close_payroll_period": "إقفال واعتماد فترة الرواتب",
     "perm_manage_salary_structures": "تحرير هياكل الرواتب (جدول الأسعار)",
     "perm_approve_advances": "اعتماد وصرف السلف",
-    "perm_manage_payroll_corrections": "إضافة تصحيحات الرواتب (يدوية + / −)"
+    "perm_manage_payroll_corrections": "إضافة تصحيحات الرواتب (يدوية + / −)",
+    "action_exported": "تم التصدير / التحميل"
 }

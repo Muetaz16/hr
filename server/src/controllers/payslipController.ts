@@ -61,6 +61,8 @@ export const getLinePayslip = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'This employee is excluded from the run, so there is no payslip for them this period.' });
         }
 
+        res.locals.auditDetails =
+            `for ${line.fullName || 'an employee'}${line.staffId ? ` (${line.staffId})` : ''} — ${run.period}`;
         send(res, line, run.period);
     } catch (error: any) {
         console.error('Error generating payslip:', error);

@@ -1308,8 +1308,14 @@ export const getExpiringContracts = async (req: Request, res: Response) => {
                     lte: futureDate,
                     not: null
                 },
+                // Somebody who has already left has no contract to renew. Without this the alert
+                // counted separated employees that the Contract Renewals table — which reads the
+                // active roster — could never show, so the badge and the table disagreed.
+                enrollmentStatus: ACTIVE_ENROLLMENT_FILTER,
+                // Same two exclusions the renewals table applies, so both sides count the same
+                // rows. contractStatus is nullable and SQL's NOT IN drops NULLs, hence the OR.
                 OR: [
-                    { contractStatus: { not: 'Inactive' } },
+                    { contractStatus: { notIn: ['Inactive', 'Terminated'] } },
                     { contractStatus: null }
                 ]
             },

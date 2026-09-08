@@ -6,6 +6,9 @@ import { Search, ScrollText, ChevronLeft, ChevronRight, User } from 'lucide-reac
 import { format, parseISO } from 'date-fns';
 
 const METHOD_STYLE: Record<string, string> = {
+    // Reads are logged only when they take data out of the system (payroll exports, payslips), so
+    // they get their own colour rather than the neutral fallback.
+    GET: 'bg-amber-100 text-amber-700',
     POST: 'bg-emerald-100 text-emerald-700',
     PUT: 'bg-blue-100 text-blue-700',
     PATCH: 'bg-blue-100 text-blue-700',
@@ -46,7 +49,7 @@ const SystemLogs: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-outfit font-black text-slate-800 tracking-tight">{t('system_activity_log', { defaultValue: 'System Activity Log' })}</h1>
-                        <p className="text-slate-500 text-sm font-medium">{t('every_create_update_and_delete_across_the_system', { defaultValue: 'Every create, update and delete across the system — who did it and when.' })}</p>
+                        <p className="text-slate-500 text-sm font-medium">{t('every_create_update_and_delete_across_the_system', { defaultValue: 'Every create, update and delete across the system, plus every payroll export — who did it and when.' })}</p>
                     </div>
                 </div>
                 <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{total.toLocaleString()} {t('entries', { defaultValue: 'entries' })}</span>
@@ -74,6 +77,7 @@ const SystemLogs: React.FC = () => {
                     <option value="PUT">{t('action_updated_put', { defaultValue: 'Updated (PUT)' })}</option>
                     <option value="PATCH">{t('action_updated_patch', { defaultValue: 'Updated (PATCH)' })}</option>
                     <option value="DELETE">{t('action_deleted', { defaultValue: 'Deleted' })}</option>
+                    <option value="GET">{t('action_exported', { defaultValue: 'Exported / downloaded' })}</option>
                 </select>
             </div>
 

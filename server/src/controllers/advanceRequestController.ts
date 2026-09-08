@@ -315,6 +315,7 @@ export const withdrawMyAdvanceRequest = async (req: AuthRequest, res: Response) 
             return res.status(409).json({ error: 'This request has already been decided and can no longer be withdrawn.' });
         }
 
+        res.locals.auditDetails = `${found.requestNumber} — ${found.currency} ${found.principal}`;
         res.json(await prisma.employeeAdvance.update({
             where: { id: found.id },
             data: { status: 'CANCELLED', notes: [found.notes, 'Withdrawn by the employee.'].filter(Boolean).join('\n') },

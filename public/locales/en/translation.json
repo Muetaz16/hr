@@ -1202,5 +1202,7 @@
     "nav_employee_control": "Employee Control",
     "place": "Place",
     "role_head_unit": "Head of Unit",
-    "perm_manage_service_providers": "Manage Service Providers"
+    "perm_manage_service_providers": "Manage Service Providers",
+    "action_exported": "Exported / downloaded",
+    "every_create_update_and_delete_across_the_system": "Every create, update and delete across the system, plus every payroll export — who did it and when."
 }

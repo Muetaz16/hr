@@ -785,6 +785,8 @@ export const deletePayrollRun = async (req: Request, res: Response) => {
             return res.status(409).json({ error: 'Only a draft payroll run can be deleted. Cancel it instead.' });
         }
         await prisma.payrollRun.delete({ where: { id: run.id } });
+        // The row is gone, so the log line is the only record the period ever existed.
+        res.locals.auditDetails = `for ${periodLabel(run.period)} (${run.runNumber})`;
         res.json({ message: 'Payroll run deleted' });
     } catch (error) {
         console.error('Error deleting payroll run:', error);

@@ -152,6 +152,10 @@ export const updateDeduction = async (req: AuthRequest, res: Response) => {
         const updated = await prisma.employeeDeduction.update({
             where: { id: found.id }, data, include: { employee: EMPLOYEE_SELECT },
         });
+        // Both values, because "changed the amount" without the numbers answers nothing.
+        res.locals.auditDetails =
+            `${found.label} for ${updated.employee?.fullName || 'an employee'} — `
+            + `${found.currency} ${found.amount} → ${updated.currency} ${updated.amount}, ${updated.period || updated.startPeriod}`;
         res.json(updated);
     } catch (error) {
         console.error('Error updating deduction:', error);
@@ -191,6 +195,8 @@ export const cancelDeduction = async (req: AuthRequest, res: Response) => {
         const updated = await prisma.employeeDeduction.update({
             where: { id: found.id }, data: { status: 'CANCELLED' }, include: { employee: EMPLOYEE_SELECT },
         });
+        res.locals.auditDetails =
+            `${found.label} for ${updated.employee?.fullName || 'an employee'} — ${found.currency} ${found.amount} no longer collected`;
         res.json(updated);
     } catch (error) {
         console.error('Error cancelling deduction:', error);

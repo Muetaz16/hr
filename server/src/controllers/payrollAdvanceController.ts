@@ -232,6 +232,7 @@ export const rejectAdvance = async (req: AuthRequest, res: Response) => {
             data: { status: 'REJECTED', rejectedAt: new Date(), rejectionReason: reason },
             include: { employee: EMPLOYEE_SELECT, instalments: true },
         });
+        res.locals.auditDetails = `${advance.requestNumber} — ${reason}`;
         res.json(advance);
     } catch (error) {
         console.error('Error rejecting advance:', error);
@@ -267,6 +268,11 @@ export const cancelAdvance = async (req: AuthRequest, res: Response) => {
             where: { id },
             include: { employee: EMPLOYEE_SELECT, instalments: { orderBy: { sequence: 'asc' } } },
         });
+        // Say how much collection was stopped — that is the part with money consequences.
+        const waived = found.instalments.filter(i => i.status === 'SCHEDULED');
+        res.locals.auditDetails =
+            `${found.requestNumber} — ${waived.length} scheduled instalment(s) waived, `
+            + `${found.currency} ${waived.reduce((t, i) => t + i.amount, 0).toFixed(2)} no longer collected`;
         res.json(advance);
     } catch (error) {
         console.error('Error cancelling advance:', error);
@@ -281,7 +287,10 @@ export const cancelAdvance = async (req: AuthRequest, res: Response) => {
 export const updateInstalment = async (req: AuthRequest, res: Response) => {
     try {
         const { id, instalmentId } = req.params;
-        const instalment = await prisma.employeeAdvanceInstalment.findFirst({ where: { id: instalmentId, advanceId: id } });
+        const instalment = await prisma.employeeAdvanceInstalment.findFirst({
+            where: { id: instalmentId, advanceId: id },
+            include: { advance: { select: { requestNumber: true } } },
+        });
         if (!instalment) return res.status(404).json({ error: 'Instalment not found' });
         if (instalment.status === 'DEDUCTED') {
             return res.status(409).json({ error: 'This instalment has already been collected by a payroll run and cannot be changed.' });
@@ -305,6 +314,8 @@ export const updateInstalment = async (req: AuthRequest, res: Response) => {
         if (!Object.keys(data).length) return res.status(400).json({ error: 'Nothing to update.' });
 
         const updated = await prisma.employeeAdvanceInstalment.update({ where: { id: instalmentId }, data });
+        res.locals.auditDetails =
+            `${instalment.advance.requestNumber} — instalment ${updated.sequence} now ${updated.status} in ${updated.period}`;
         res.json(updated);
     } catch (error) {
         console.error('Error updating instalment:', error);
