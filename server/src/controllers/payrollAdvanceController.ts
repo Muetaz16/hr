@@ -14,12 +14,15 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { round2 } from '../utils/payrollEngine';
 import { isValidPeriod, currentPeriod } from '../utils/payrollPeriod';
+import { advanceKindFor, isProviderResidency } from '../utils/advanceKind';
+import { monthlyBasicFor } from './advanceRequestController';
 
 interface AuthRequest extends Request {
     user?: { id: string; role: string; fullName?: string };
 }
 
-const ADVANCE_TYPES = ['SALARY_ADVANCE', 'LOAN', 'TRAVEL_TICKET', 'OTHER'];
+// No ADVANCE_TYPES list any more: the kind is derived from the employee's contract type, so
+// there is nothing for a caller to choose and nothing to validate. See utils/advanceKind.ts.
 const CURRENCIES = ['LYD', 'USD', 'EUR'];
 
 const EMPLOYEE_SELECT = {
@@ -108,7 +111,9 @@ export const getAdvance = async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------------------------
 export const createAdvance = async (req: AuthRequest, res: Response) => {
     try {
-        const { employeeId, type, currency, principal, instalmentCount, firstDeductionPeriod, reason, notes } = req.body || {};
+        // No `type` here on purpose: it is derived below, so accepting one from the body would
+        // advertise a choice the caller does not actually have.
+        const { employeeId, currency, principal, instalmentCount, firstDeductionPeriod, reason, notes } = req.body || {};
 
         if (!employeeId) return res.status(400).json({ error: 'Select an employee.' });
         const employee = await prisma.employee.findUnique({ where: { id: String(employeeId) } });
@@ -116,6 +121,24 @@ export const createAdvance = async (req: AuthRequest, res: Response) => {
 
         const amount = Number(principal);
         if (!isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'The advance amount must be greater than zero.' });
+
+        // An advance is recovered from ONE salary month by design, so more than a month's salary
+        // cannot be taken back as agreed whoever typed it — it would leave a negative net or an
+        // uncollected remainder. Held here as well as on the employee's own form, otherwise the
+        // ceiling is only a suggestion. Loans are not capped this way: they are a multiple of basic
+        // pay by construction and repaid over several months.
+        if (isProviderResidency(employee.contractType)) {
+            const ceiling = await monthlyBasicFor(employee);
+            if (!ceiling) {
+                return res.status(400).json({ error: "This employee's salary cannot be worked out from their job category, grade and salary structure, so the advance ceiling cannot be checked." });
+            }
+            if (round2(amount) > ceiling) {
+                return res.status(400).json({
+                    error: `An advance cannot be more than one month's salary (${ceiling}). It is recovered from a single salary month.`,
+                    maxAdvance: ceiling,
+                });
+            }
+        }
 
         const count = Number(instalmentCount) || 1;
         if (!Number.isInteger(count) || count < 1 || count > 60) {
@@ -128,8 +151,10 @@ export const createAdvance = async (req: AuthRequest, res: Response) => {
         const cur = String(currency || '').toUpperCase();
         if (!CURRENCIES.includes(cur)) return res.status(400).json({ error: `Currency must be one of: ${CURRENCIES.join(', ')}.` });
 
-        const advanceType = String(type || 'SALARY_ADVANCE').toUpperCase();
-        if (!ADVANCE_TYPES.includes(advanceType)) return res.status(400).json({ error: `Type must be one of: ${ADVANCE_TYPES.join(', ')}.` });
+        // Derived, never taken from the body. A payroll clerk could otherwise file a "loan" for a
+        // service-provider employee, whose money is recovered in one month like an advance — the
+        // record would then describe a procedure that was not the one followed.
+        const advanceType = advanceKindFor(employee.contractType);
 
         // Snapshotted so a payroll-entered advance is grouped and routed exactly like a
         // self-filed one, instead of being invisible to the provider screen.

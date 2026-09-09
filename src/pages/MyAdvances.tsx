@@ -106,9 +106,14 @@ const MyAdvances: React.FC = () => {
             : ctx.viaProvider
                 ? (!Number(amount) || Number(amount) <= 0
                     ? t('advance_need_amount', { defaultValue: 'Enter the amount you are requesting.' })
-                    : !salaryMonth
-                        ? t('advance_need_month', { defaultValue: 'Choose the salary month this amount comes from.' })
-                        : null)
+                    : (ctx.maxAdvance != null && Number(amount) > ctx.maxAdvance)
+                        ? t('advance_over_ceiling', {
+                            max: ctx.maxAdvance, currency: ctx.currency,
+                            defaultValue: 'An advance cannot be more than one monthly salary ({{max}} {{currency}}) — it is taken back from a single salary month.',
+                        })
+                        : !salaryMonth
+                            ? t('advance_need_month', { defaultValue: 'Choose the salary month this amount comes from.' })
+                            : null)
                 : (months === null ? t('advance_need_months', { defaultValue: 'Choose how many months of basic salary.' }) : null);
 
     if (isLoading) return <div className="p-8 text-slate-400 font-medium">{t('loading', 'Loading...')}</div>;
@@ -132,7 +137,7 @@ const MyAdvances: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
-            <Header t={t} />
+            <Header t={t} viaProvider={ctx.viaProvider} />
 
             {/* Everything the company already holds. Shown, not asked for. */}
             <div className="bg-white border border-[#511d29]/10 rounded-2xl p-5">
@@ -192,10 +197,18 @@ const MyAdvances: React.FC = () => {
                                         {t('advance_amount', { defaultValue: 'Amount requested' })} ({ctx.currency}) *
                                     </span>
                                     <input
-                                        type="number" min="0" step="0.01" value={amount}
+                                        type="number" min="0" step="0.01" max={ctx.maxAdvance ?? undefined} value={amount}
                                         onChange={e => setAmount(e.target.value)}
                                         className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-700"
                                     />
+                                    {ctx.maxAdvance != null && (
+                                        <span className="block text-[11px] font-medium text-slate-400 mt-1">
+                                            {t('advance_ceiling_hint', {
+                                                max: ctx.maxAdvance, currency: ctx.currency,
+                                                defaultValue: 'At most {{max}} {{currency}} — one monthly salary, taken back in one go.',
+                                            })}
+                                        </span>
+                                    )}
                                 </label>
                                 <label className="block">
                                     <span className="block text-xs font-bold text-slate-500 mb-1">
@@ -360,16 +373,26 @@ const MyAdvances: React.FC = () => {
     );
 };
 
-const Header: React.FC<{ t: any }> = ({ t }) => (
+// Names the thing the employee is actually entitled to instead of calling both an advance. While
+// the context is still loading there is nothing to base it on, so it stays generic.
+const Header: React.FC<{ t: any; viaProvider?: boolean | null }> = ({ t, viaProvider }) => (
     <div className="mb-2">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <HandCoins size={22} className="text-[#511d29]" />
-            {t('nav_my_advances', { defaultValue: 'Salary Advance' })}
+            {viaProvider == null
+                ? t('nav_my_advances', { defaultValue: 'Loans & Advances' })
+                : viaProvider
+                    ? t('advance_title_advance', { defaultValue: 'Salary Advance' })
+                    : t('advance_title_loan', { defaultValue: 'Loan' })}
         </h1>
         <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            {t('advance_page_subtitle', {
-                defaultValue: 'Request an advance on your salary and follow what has been deducted so far. Payroll decides on the request; sending it moves no money.',
-            })}
+            {viaProvider === false
+                ? t('loan_page_subtitle', {
+                    defaultValue: 'Request a loan against your salary and follow what has been repaid so far. It is repaid over as many months as the number of basic salaries you take. Payroll decides on the request; sending it moves no money.',
+                })
+                : t('advance_page_subtitle', {
+                    defaultValue: 'Request an advance on your salary and follow what has been deducted so far. Payroll decides on the request; sending it moves no money.',
+                })}
         </p>
     </div>
 );

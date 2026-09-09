@@ -11,7 +11,7 @@ import { CalendarRange, HandCoins, Receipt, Table2, Award, Building2 } from 'luc
 
 const TABS = [
     { to: '/payroll/runs', icon: CalendarRange, key: 'payroll_tab_runs', fallback: 'Monthly Runs' },
-    { to: '/payroll/advances', icon: HandCoins, key: 'payroll_tab_advances', fallback: 'Advances' },
+    { to: '/payroll/advances', icon: HandCoins, key: 'payroll_tab_advances', fallback: 'Loans' },
     // A separate procedure with an outside counterparty, so a separate screen — not a section
     // of the advances register.
     { to: '/payroll/provider-advances', icon: Building2, key: 'payroll_tab_provider_advances', fallback: 'Provider Advances' },

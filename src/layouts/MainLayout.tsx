@@ -237,7 +237,7 @@ const MainLayout: React.FC = () => {
                 { label: t('nav_my_attendance', { defaultValue: 'My Attendance' }), path: '/my-attendance', icon: Clock, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                 // Every role, including GM and Chairman: an advance is a personal request, not a
                 // managerial one, and it needs no payroll permission to ask for.
-                { label: t('nav_my_advances', { defaultValue: 'Salary Advance' }), path: '/my-advances', icon: HandCoins, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
+                { label: t('nav_my_advances', { defaultValue: 'Loans & Advances' }), path: '/my-advances', icon: HandCoins, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 // Everyone has a salary, so everyone gets this — no payroll permission involved.
                 { label: t('nav_my_payslips', { defaultValue: 'My Payslips' }), path: '/my-payslips', icon: Receipt, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
                 { label: t('nav_my_evaluation_results', { defaultValue: 'My Evaluation' }), path: '/my-evaluation', icon: ClipboardCheck, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'] },
@@ -321,7 +321,7 @@ const MainLayout: React.FC = () => {
                     permissions: ['view_payroll', 'manage_payroll'],
                     children: [
                         { label: t('nav_payroll_runs', { defaultValue: 'Monthly Runs' }), path: '/payroll/runs', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
-                        { label: t('nav_payroll_advances', { defaultValue: 'Advances' }), path: '/payroll/advances', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
+                        { label: t('nav_payroll_advances', { defaultValue: 'Loans' }), path: '/payroll/advances', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: t('nav_payroll_provider_advances', { defaultValue: 'Provider Advances' }), path: '/payroll/provider-advances', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: t('nav_payroll_deductions', { defaultValue: 'Deductions' }), path: '/payroll/deductions', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },
                         { label: t('nav_payroll_rewards', { defaultValue: 'Bonuses Due' }), path: '/payroll/rewards', roles: ['SUPER_ADMIN'], permissions: ['view_payroll', 'manage_payroll'] },

@@ -39,10 +39,12 @@ const ProviderBatchCard: React.FC<{ batch: ProviderBatch; canManage: boolean }> 
     const getForm = async () => {
         setBusy('form');
         try {
-            const blob = await providerAdvanceService.form(providerKey, b.currency);
+            const blob = await providerAdvanceService.form(providerKey, b.currency, b.formRef);
             const safe = (b.providerName || 'provider').replace(/[^a-zA-Z0-9]+/g, '_');
-            saveBlob(blob, `Cash_Advance_${safe}_${b.currency}.docx`);
-            toast.success(t('provider_batch_form_ready', { defaultValue: 'Form generated. Send it to the provider for signature.' }));
+            saveBlob(blob, `Cash_Advance_${safe}_${b.currency}_${b.formRef || 'new'}.docx`);
+            toast.success(b.formRef
+                ? t('provider_batch_form_reprinted', { defaultValue: 'The same form reprinted, unchanged. Its reference and its list are as they were sent.' })
+                : t('provider_batch_form_ready', { defaultValue: 'Form generated. Send it to the provider for signature. Anyone who asks from now on goes on the next form.' }));
             invalidate();
         } catch (err: any) {
             toast.error(err?.response?.data?.error || t('provider_batch_form_failed', { defaultValue: 'Could not generate the form.' }));
@@ -65,7 +67,7 @@ const ProviderBatchCard: React.FC<{ batch: ProviderBatch; canManage: boolean }> 
 
     const approve = useMutation({
         mutationFn: () => providerAdvanceService.approve(providerKey, {
-            currency: b.currency, documentUrl: doc!.url, documentName: doc!.name,
+            currency: b.currency, formRef: b.formRef!, documentUrl: doc!.url, documentName: doc!.name,
         }),
         onSuccess: (r) => {
             // "Approved" reads like "done" and it is not — nothing is deducted until the cash is
@@ -81,7 +83,7 @@ const ProviderBatchCard: React.FC<{ batch: ProviderBatch; canManage: boolean }> 
     });
 
     const disburse = useMutation({
-        mutationFn: () => providerAdvanceService.disburse(providerKey, { currency: b.currency }),
+        mutationFn: () => providerAdvanceService.disburse(providerKey, { currency: b.currency, formRef: b.formRef! }),
         onSuccess: (r) => {
             toast.success(t('provider_batch_disbursed', {
                 defaultValue: '{{n}} advance(s) handed over and scheduled for deduction.',
@@ -204,15 +206,28 @@ const ProviderBatchCard: React.FC<{ batch: ProviderBatch; canManage: boolean }> 
                                     className="inline-flex items-center gap-2 bg-[#511d29] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#3f1620] disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     {busy === 'form' ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
-                                    {t('provider_batch_get_form', { defaultValue: 'Cash Advance Request form (Word)' })}
+                                    {b.formRef
+                                        ? t('provider_batch_reprint_form', { defaultValue: 'Reprint the same form (Word)' })
+                                        : t('provider_batch_get_form', { defaultValue: 'Cash Advance Request form (Word)' })}
                                 </button>
                                 <p className="text-[11px] text-slate-400 font-medium mt-2">
-                                    {t('provider_batch_step1_desc', {
-                                        defaultValue: 'One form lists every request above with its total. It carries a reference number that is stamped on each request.',
-                                    })}
+                                    {b.formRef
+                                        ? t('provider_batch_reprint_desc', {
+                                            defaultValue: 'Reprints this form exactly as it was sent — same reference, same names, same total. It does not pick up requests made since.',
+                                        })
+                                        : t('provider_batch_step1_desc', {
+                                            defaultValue: 'One form lists every request above with its total, under a reference number stamped on each of them. Printing it closes this round: anyone who asks afterwards goes onto the next form.',
+                                        })}
                                 </p>
                             </Step>
 
+                            {!b.formRef ? (
+                                <p className="text-[11px] font-semibold text-slate-400 ps-8">
+                                    {t('provider_batch_print_first', {
+                                        defaultValue: 'Print the form before approving — approval is recorded against the reference of the form the provider actually signed.',
+                                    })}
+                                </p>
+                            ) : (
                             <Step n={2} title={t('provider_batch_step2', { defaultValue: 'Attach the signed form and approve' })}>
                                 <input
                                     ref={fileRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.docx"
@@ -242,6 +257,7 @@ const ProviderBatchCard: React.FC<{ batch: ProviderBatch; canManage: boolean }> 
                                     </button>
                                 </div>
                             </Step>
+                            )}
                         </>
                     )}
 

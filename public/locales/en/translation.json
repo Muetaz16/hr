@@ -1212,5 +1212,15 @@
     "payslip_view_failed": "That payslip could not be loaded.",
     "back_to_my_payslips": "Back to my payslips",
     "payslip_both_note": "Open a payslip to read every figure on screen, or download it as a Word document to print or keep.",
-    "payslip_screen_note": "These figures are read from the signed-off payroll period every time you open this screen. A month runs from the 25th to the 24th and is named after the month it ends in. For any question about your salary, email payroll@iph-ly.com."
+    "payslip_screen_note": "These figures are read from the signed-off payroll period every time you open this screen. A month runs from the 25th to the 24th and is named after the month it ends in. For any question about your salary, email payroll@iph-ly.com.",
+    "nav_my_advances": "Loans & Advances",
+    "nav_payroll_advances": "Loans",
+    "payroll_tab_advances": "Loans",
+    "advance_title_loan": "Loan",
+    "advance_title_advance": "Salary Advance",
+    "advance_new": "New Loan",
+    "advance_approve_title": "Approve Loan",
+    "advance_type_after_employee": "Pick an employee first",
+    "loan_page_subtitle": "Request a loan against your salary and follow what has been repaid so far. It is repaid over as many months as the number of basic salaries you take. Payroll decides on the request; sending it moves no money.",
+    "advances_hint": "Loans for residents and directly-contracted non-residents: a multiple of basic pay, repaid over as many months as the number of salaries taken. Service-provider staff take an advance instead, on the next tab. A loan is only collected once it has been approved with the signed agreement attached — approving it is what schedules the instalments."
 }

@@ -54,6 +54,8 @@ export interface AdvanceContext {
     serviceProvider: { id: string; name: string; nameArabic: string | null } | null;
     currency: string | null;
     monthlyBasic: number | null;
+    /** Provider employees only: the most that may be requested — one month's salary. */
+    maxAdvance: number | null;
     options: {
         months: number;
         amount: number;

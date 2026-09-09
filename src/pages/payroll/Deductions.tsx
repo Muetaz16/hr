@@ -14,6 +14,7 @@ import { Plus, CheckCircle2, Ban, Loader2, Receipt, Repeat } from 'lucide-react'
 
 import PayrollTabs from '../../components/payroll/PayrollTabs';
 import Modal from '../../components/Modal';
+import SearchSelect from '../../components/SearchSelect';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
@@ -82,6 +83,13 @@ const DeductionsPage: React.FC = () => {
         () => [...employees].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '')),
         [employees],
     );
+    // value/label/sub — SearchSelect matches the query against all three, so typing either the name
+    // or the staff ID finds the person.
+    const employeeOptions = useMemo(
+        () => sortedEmployees.map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined })),
+        [sortedEmployees],
+    );
+
 
     const refresh = () => qc.invalidateQueries({ queryKey: ['payroll', 'deductions'] });
     const set = (patch: Partial<typeof EMPTY>) => setForm(prev => ({ ...prev, ...patch }));
@@ -239,13 +247,17 @@ const DeductionsPage: React.FC = () => {
                 <form onSubmit={submit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">{t('employee', { defaultValue: 'Employee' })} *</label>
-                        <select required value={form.employeeId} onChange={e => set({ employeeId: e.target.value })}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                            <option value="">{t('select_employee', { defaultValue: '— Select —' })}</option>
-                            {sortedEmployees.map(e => (
-                                <option key={e.id} value={e.id}>{e.fullName}{e.staffId ? ` (${e.staffId})` : ''}</option>
-                            ))}
-                        </select>
+                        {/* Searchable rather than a plain <select>: the roster is long enough that
+                            scrolling it is the bottleneck, and payroll knows people by staff ID as
+                            often as by name — both are matched. */}
+                        <div className="mt-1">
+                            <SearchSelect
+                                value={form.employeeId}
+                                onChange={v => set({ employeeId: v })}
+                                options={employeeOptions}
+                                placeholder={t('select_employee', { defaultValue: '— Select —' })}
+                            />
+                        </div>
                     </div>
 
                     <div>
@@ -310,7 +322,7 @@ const DeductionsPage: React.FC = () => {
                     <div className="flex justify-end gap-3 pt-2">
                         <button type="button" onClick={() => setIsOpen(false)}
                             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700">{t('cancel', { defaultValue: 'Cancel' })}</button>
-                        <button type="submit" disabled={saving}
+                        <button type="submit" disabled={saving || !form.employeeId}
                             className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50">{t('create', { defaultValue: 'Create' })}</button>
                     </div>
                 </form>

@@ -21,6 +21,7 @@ import { prisma } from '../lib/prisma';
 import { round2 } from '../utils/payrollEngine';
 import { isValidPeriod, currentPeriod, periodLabel } from '../utils/payrollPeriod';
 import { currencyOf } from './payrollRunController';
+import { advanceKindFor, PROVIDER_RESIDENCY as PROVIDER_RESIDENCY_VALUE } from '../utils/advanceKind';
 
 interface AuthRequest extends Request {
     user?: { id: string; email?: string; role: string; fullName?: string };
@@ -42,7 +43,9 @@ const MAX_INSTALMENTS = 12;
 export const minInstalmentsFor = (basicSalaryMonths: number): number =>
     Math.max(1, Math.min(MAX_INSTALMENTS, Math.floor(basicSalaryMonths)));
 
-const PROVIDER_RESIDENCY = 'NONE RESDANT';
+// Re-exported from the shared rule rather than declared again — this file used to own the
+// constant, and a second copy is how the label and the procedure drift apart.
+const PROVIDER_RESIDENCY = PROVIDER_RESIDENCY_VALUE;
 
 const ADVANCE_SELECT = {
     id: true, requestNumber: true, type: true, currency: true, principal: true,
@@ -78,7 +81,7 @@ const resolveSelfEmployee = async (user: { id: string; email?: string }) => {
 };
 
 /** Contractual monthly basic from the rate card — NOT last month's pay, which moves with hours. */
-const monthlyBasicFor = async (emp: { jobCategory: string | null; jobGrade: string | null; salaryStructureType: string | null }) => {
+export const monthlyBasicFor = async (emp: { jobCategory: string | null; jobGrade: string | null; salaryStructureType: string | null }) => {
     if (!emp.jobCategory || !emp.jobGrade || !emp.salaryStructureType) return null;
     const row = await prisma.salaryStructure.findUnique({
         where: {
@@ -113,7 +116,10 @@ export const getMyAdvanceContext = async (req: AuthRequest, res: Response) => {
         let currency: string | null = null;
         try { currency = currencyOf(emp.salaryStructureType); } catch { currency = null; }
 
-        const monthlyBasic = viaProvider ? null : await monthlyBasicFor(emp);
+        // Resolved for provider employees too, now that it is their ceiling: an advance may not be
+        // larger than one month's salary. It used to be skipped for them because they type a free
+        // amount and nothing bounded it.
+        const monthlyBasic = await monthlyBasicFor(emp);
 
         // An open request is one still being decided or still being repaid. A second advance on top
         // of an unpaid one is a decision for payroll, not something the form should quietly allow.
@@ -137,6 +143,9 @@ export const getMyAdvanceContext = async (req: AuthRequest, res: Response) => {
             serviceProvider: emp.serviceProvider ? { id: emp.serviceProvider.id, name: emp.serviceProvider.name, nameArabic: emp.serviceProvider.nameArabic } : null,
             currency,
             monthlyBasic,
+            // The most a provider employee may ask for: one month's salary, recovered in one go.
+            // Sent so the form can show and enforce the same number the server checks.
+            maxAdvance: viaProvider ? monthlyBasic : null,
             // Empty for provider employees (they type an amount) and for anyone whose rate cannot be
             // resolved — the screen says why rather than offering a broken dropdown.
             options: monthlyBasic
@@ -153,9 +162,11 @@ export const getMyAdvanceContext = async (req: AuthRequest, res: Response) => {
             defaultPeriodLabel: periodLabel(nextDeductionPeriod()),
             openRequests: open,
             // Why the form cannot be used, if it cannot. Checked again on submit.
-            blockedReason: viaProvider
+            // A provider employee with no resolvable salary now has no ceiling either, so the form
+            // cannot be used until payroll fixes the rate — the same bar the other path already had.
+            blockedReason: monthlyBasic
                 ? (currency ? null : 'NO_CURRENCY')
-                : (monthlyBasic ? null : 'NO_BASIC_SALARY'),
+                : 'NO_BASIC_SALARY',
         });
     } catch (error) {
         console.error('Error building advance request context:', error);
@@ -231,6 +242,20 @@ export const createMyAdvanceRequest = async (req: AuthRequest, res: Response) =>
             // Typed amount, one named salary month, recovered in full.
             const amount = Number(req.body?.amount);
             if (!isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'Enter the amount you are requesting.' });
+
+            // An advance is taken back out of ONE salary, so anything above a month's salary could
+            // not be recovered as agreed — it would leave a negative net or an unpaid remainder.
+            const ceiling = await monthlyBasicFor(emp);
+            if (!ceiling) {
+                return res.status(400).json({ error: 'Your salary cannot be worked out from your job category, grade and salary structure, so the most you may request cannot be determined. Contact Human Resources.' });
+            }
+            if (round2(amount) > ceiling) {
+                return res.status(400).json({
+                    error: `An advance cannot be more than one month's salary (${ceiling} ${currency}). It is recovered from a single salary month.`,
+                    maxAdvance: ceiling,
+                });
+            }
+
             const month = String(req.body?.salaryMonth || '');
             if (!isValidPeriod(month)) return res.status(400).json({ error: 'Choose the salary month this amount is taken from.' });
             principal = round2(amount);
@@ -267,7 +292,8 @@ export const createMyAdvanceRequest = async (req: AuthRequest, res: Response) =>
             data: {
                 requestNumber: await nextRequestNumber(),
                 employeeId: emp.id,
-                type: 'SALARY_ADVANCE',
+                // Loan or advance is decided by the contract type, not by anything asked here.
+                type: advanceKindFor(emp.contractType),
                 currency,
                 principal,
                 instalmentCount,

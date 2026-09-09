@@ -1,8 +1,19 @@
-// Payroll -> Advances (السلف).
+// Payroll -> Loans & Advances (القروض والسلف).
 //
-// The register of salary advances and loans. An advance does NOT start being collected when it is
-// created: it has to be approved with the signed agreement attached, and only then are the monthly
-// instalments scheduled. That two-step is deliberate — nothing that moves money is a single click.
+// The register of both, and they are two different things the system already ran differently —
+// only the naming used to lump them together:
+//
+//   Loan     residents and directly-contracted non-residents: a multiple of basic pay, repaid
+//            over as many months as the number of basic salaries taken
+//   Advance  service-provider staff: one typed amount with the provider's written consent,
+//            recovered in full from a single salary month
+//
+// Which one a request is follows from the employee's contract type and is never chosen here — see
+// server/src/utils/advanceKind.ts, the one place that rule lives.
+//
+// Neither starts being collected when it is created: it has to be approved with the signed
+// agreement attached, and only then are the instalments scheduled. That two-step is deliberate —
+// nothing that moves money is a single click.
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,11 +22,13 @@ import { Plus, CheckCircle2, XCircle, Ban, Loader2, HandCoins, Upload, Phone } f
 
 import PayrollTabs from '../../components/payroll/PayrollTabs';
 import Modal from '../../components/Modal';
+import SearchSelect from '../../components/SearchSelect';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
 import { employeeService } from '../../services/employeeService';
 import { payrollAdvanceService } from '../../services/payrollAdvanceService';
+import { advanceKindFor, ADVANCE_KIND_LABELS } from '../../services/payrollAdvanceService';
 import type { EmployeeAdvance, AdvanceStatus } from '../../services/payrollAdvanceService';
 
 const STATUS_STYLES: Record<AdvanceStatus, string> = {
@@ -27,12 +40,7 @@ const STATUS_STYLES: Record<AdvanceStatus, string> = {
     CANCELLED: 'bg-slate-100 text-slate-400',
 };
 
-const TYPES = [
-    { value: 'SALARY_ADVANCE', en: 'Salary advance', ar: 'سلفة راتب' },
-    { value: 'LOAN', en: 'Loan', ar: 'قرض' },
-    { value: 'TRAVEL_TICKET', en: 'Travel ticket', ar: 'تذكرة سفر' },
-    { value: 'OTHER', en: 'Other', ar: 'أخرى' },
-];
+
 const CURRENCIES = ['LYD', 'USD', 'EUR'];
 
 const money = (n: number, currency: string) =>
@@ -46,7 +54,7 @@ const defaultPeriod = () => {
 };
 
 const EMPTY = {
-    employeeId: '', type: 'SALARY_ADVANCE', currency: 'LYD',
+    employeeId: '', currency: 'LYD',
     principal: '', instalmentCount: '1', firstDeductionPeriod: defaultPeriod(), reason: '',
 };
 
@@ -76,10 +84,29 @@ const AdvancesPage: React.FC = () => {
         staleTime: 5 * 60 * 1000,
     });
 
+    // Service-provider staff are left out of the picker on purpose. Their money follows the advance
+    // procedure — one amount, the provider's written consent, recovered from a single month — which
+    // is the next tab. Offering them here would create a record that vanishes from this list the
+    // moment it is saved, because the list is scoped to non-provider employees.
     const sortedEmployees = useMemo(
-        () => [...employees].sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '')),
+        () => employees
+            .filter((e: any) => advanceKindFor(e.contractType) === 'LOAN')
+            .sort((a: any, b: any) => (a.fullName || '').localeCompare(b.fullName || '')),
         [employees],
     );
+    // value/label/sub — SearchSelect matches the query against all three, so typing either the name
+    // or the staff ID finds the person.
+    const employeeOptions = useMemo(
+        () => sortedEmployees.map((e: any) => ({ value: e.id, label: e.fullName || '—', sub: e.staffId || undefined })),
+        [sortedEmployees],
+    );
+
+    // Loan or advance, decided by the picked employee's contract type — shown before submitting so
+    // the clerk knows which procedure this request will follow.
+    const selectedKind = useMemo(() => {
+        const emp = employees.find((e: any) => e.id === form.employeeId);
+        return emp ? advanceKindFor((emp as any).contractType) : null;
+    }, [employees, form.employeeId]);
 
     const refresh = () => qc.invalidateQueries({ queryKey: ['payroll', 'advances'] });
 
@@ -92,7 +119,6 @@ const AdvancesPage: React.FC = () => {
         try {
             await payrollAdvanceService.create({
                 employeeId: form.employeeId,
-                type: form.type,
                 currency: form.currency,
                 principal: Number(form.principal),
                 instalmentCount: Number(form.instalmentCount),
@@ -161,13 +187,13 @@ const AdvancesPage: React.FC = () => {
         <div className="p-6">
             <PayrollTabs
                 subtitle={t('advances_hint', {
-                    defaultValue: 'Salary advances and loans. An advance is only collected once it has been approved with the signed agreement attached — approving it is what schedules the monthly instalments.',
+                    defaultValue: 'Loans for residents and directly-contracted non-residents: a multiple of basic pay, repaid over as many months as the number of salaries taken. Service-provider staff take an advance instead, on the next tab. A loan is only collected once it has been approved with the signed agreement attached — approving it is what schedules the instalments.',
                 })}
                 actions={canManage && (
                     <button onClick={() => { setForm({ ...EMPTY }); setIsOpen(true); }}
                         className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
                         <Plus size={18} className="me-2" />
-                        {t('advance_new', { defaultValue: 'New Advance' })}
+                        {t('advance_new', { defaultValue: 'New Loan' })}
                     </button>
                 )}
             />
@@ -233,7 +259,7 @@ const AdvancesPage: React.FC = () => {
                                         )}
                                     </td>
                                     <td className="px-5 py-4 text-sm text-gray-500">
-                                        {TYPES.find(x => x.value === a.type)?.ar || a.type}
+                                        {ADVANCE_KIND_LABELS[a.type]?.ar || a.type}
                                     </td>
                                     <td className="px-5 py-4 text-sm whitespace-nowrap">
                                         <div className="font-bold text-slate-700">{money(a.principal, a.currency)}</div>
@@ -283,26 +309,34 @@ const AdvancesPage: React.FC = () => {
             )}
 
             {/* New advance */}
-            <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={t('advance_new', { defaultValue: 'New Advance' })}>
+            <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={t('advance_new', { defaultValue: 'New Loan' })}>
                 <form onSubmit={submit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">{t('employee', { defaultValue: 'Employee' })} *</label>
-                        <select required value={form.employeeId} onChange={e => set({ employeeId: e.target.value })}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                            <option value="">{t('select_employee', { defaultValue: '— Select —' })}</option>
-                            {sortedEmployees.map(e => (
-                                <option key={e.id} value={e.id}>{e.fullName}{e.staffId ? ` (${e.staffId})` : ''}</option>
-                            ))}
-                        </select>
+                        {/* Searchable rather than a plain <select>: the roster is long enough that
+                            scrolling it is the bottleneck, and payroll knows people by staff ID as
+                            often as by name — both are matched. */}
+                        <div className="mt-1">
+                            <SearchSelect
+                                value={form.employeeId}
+                                onChange={v => set({ employeeId: v })}
+                                options={employeeOptions}
+                                placeholder={t('select_employee', { defaultValue: '— Select —' })}
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">{t('advance_type', { defaultValue: 'Type' })}</label>
-                            <select value={form.type} onChange={e => set({ type: e.target.value })}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                                {TYPES.map(x => <option key={x.value} value={x.value}>{x.ar}</option>)}
-                            </select>
+                            {/* Read-only. The kind follows the employee's contract type — a loan for
+                                residents and direct hires, an advance for service-provider staff —
+                                so there is nothing here to get wrong. */}
+                            <div className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-md bg-slate-50 text-sm font-bold text-slate-700">
+                                {selectedKind
+                                    ? ADVANCE_KIND_LABELS[selectedKind].ar
+                                    : <span className="font-medium text-slate-400">{t('advance_type_after_employee', { defaultValue: 'Pick an employee first' })}</span>}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">{t('currency', { defaultValue: 'Currency' })} *</label>
@@ -344,14 +378,14 @@ const AdvancesPage: React.FC = () => {
                     <div className="flex justify-end gap-3 pt-2">
                         <button type="button" onClick={() => setIsOpen(false)}
                             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700">{t('cancel', { defaultValue: 'Cancel' })}</button>
-                        <button type="submit" disabled={saving}
+                        <button type="submit" disabled={saving || !form.employeeId}
                             className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50">{t('create', { defaultValue: 'Create' })}</button>
                     </div>
                 </form>
             </Modal>
 
             {/* Approve — the signed agreement is mandatory, so the button stays disabled without it */}
-            <Modal isOpen={!!approving} onClose={() => setApproving(null)} title={t('advance_approve_title', { defaultValue: 'Approve Advance' })}>
+            <Modal isOpen={!!approving} onClose={() => setApproving(null)} title={t('advance_approve_title', { defaultValue: 'Approve Loan' })}>
                 <div className="space-y-4">
                     <p className="text-sm text-slate-600">
                         {t('advance_approve_hint', { defaultValue: 'Approving schedules the instalments and starts collecting them from the chosen month. Attach the signed agreement first.' })}
