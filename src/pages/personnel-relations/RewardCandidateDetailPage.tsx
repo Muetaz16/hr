@@ -247,7 +247,7 @@ const RewardCandidateDetailPage: React.FC = () => {
                             placeholder="e.g. 10"
                             className="w-full p-2 border border-slate-200 rounded"
                         />
-                        <p className="text-[10px] text-slate-400 mt-1">{t('the_actual_currency_amount_is_pending_payroll_integration', { defaultValue: 'The actual currency amount is pending Payroll Integration — this only records the agreed percentage.' })}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{t('the_bonus_amount_is_calculated_by_payroll', { defaultValue: 'This records the agreed percentage. Payroll calculates the amount in the payout month: basic salary × this percentage.' })}</p>
                     </div>
                 </div>
             )}

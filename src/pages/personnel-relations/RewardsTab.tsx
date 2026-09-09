@@ -389,7 +389,7 @@ const RewardsTab: React.FC = () => {
                                                 <CaseStatusBadge completed={!!existingCase.completedAt} />
                                                 <p className="text-xs font-black text-slate-700">{existingCase.employee?.fullName} — {existingCase.caseNumber}</p>
                                             </div>
-                                            <span className="text-[10px] text-slate-400 font-bold">{existingCase.bonusPercent != null ? t('bonus_pending_payroll', { percent: existingCase.bonusPercent, defaultValue: '{{percent}}% bonus — Pending Payroll Integration' }) : t('no_bonus_set', { defaultValue: 'No bonus % set' })}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold">{existingCase.bonusPercent != null ? t('bonus_percent_of_basic_salary', { percent: existingCase.bonusPercent, defaultValue: '{{percent}}% bonus of basic salary' }) : t('no_bonus_set', { defaultValue: 'No bonus % set' })}</span>
                                         </div>
                                         {existingCase.notes && <p className="text-[11px] italic text-slate-500">"{existingCase.notes}"</p>}
                                         <button onClick={() => navigate(`/personnel-relations/rewards/${existingCase.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
@@ -480,7 +480,7 @@ const RewardsTab: React.FC = () => {
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <CaseStatusBadge completed={!!g.completedAt} />
                                                     <p className="text-xs font-black text-slate-700">{g.employee?.fullName} — {t('n_year_milestone', { years: g.milestoneYears, defaultValue: '{{years}}-year Milestone' })}</p>
-                                                    <span className="text-[10px] text-slate-400">{t('bonus_pending_payroll', { percent: g.bonusPercent, defaultValue: '{{percent}}% bonus — Pending Payroll Integration' })}{g.physicalRewardFulfilledAt ? t('gift_fulfilled_suffix', { defaultValue: ' · Gift Fulfilled' }) : ''}</span>
+                                                    <span className="text-[10px] text-slate-400">{t('bonus_percent_of_basic_salary', { percent: g.bonusPercent, defaultValue: '{{percent}}% bonus of basic salary' })}{g.physicalRewardFulfilledAt ? t('gift_fulfilled_suffix', { defaultValue: ' · Gift Fulfilled' }) : ''}</span>
                                                 </div>
                                                 <button onClick={() => navigate(`/personnel-relations/rewards/${g.id}`)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded hover:bg-slate-100">
                                                     {g.completedAt ? t('view_case', { defaultValue: 'View Case' }) : t('complete_case', { defaultValue: 'Complete Case' })}

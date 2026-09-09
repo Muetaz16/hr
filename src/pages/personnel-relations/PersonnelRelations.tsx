@@ -2862,7 +2862,7 @@ const PersonnelRelations: React.FC = () => {
                                                     if (c.period) detailParts.push(c.period);
                                                     if (c.milestoneYears) detailParts.push(`${c.milestoneYears}-year milestone`);
                                                     if (c.finalScoreSnapshot != null) detailParts.push(`Score ${c.finalScoreSnapshot.toFixed(2)}%`);
-                                                    if (c.bonusPercent != null) detailParts.push(`${c.bonusPercent}% bonus — Pending Payroll Integration`);
+                                                    if (c.bonusPercent != null) detailParts.push(`${c.bonusPercent}% one-time bonus`);
                                                     return (
                                                         <div key={c.id} className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
                                                             <div className="flex items-center justify-between gap-3">

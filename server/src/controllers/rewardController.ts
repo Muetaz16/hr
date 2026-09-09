@@ -401,7 +401,7 @@ function rewardDescription(rc: { type: string; milestoneYears: number | null; bo
     }
     if (rc.type === 'EMPLOYEE_OF_YEAR') parts.push('a Certificate of Appreciation');
     if (rc.type === 'LOYALTY_MILESTONE') parts.push(rc.milestoneYears === 10 ? 'a commemorative plaque/trophy' : 'an engraved watch');
-    if (rc.bonusPercent != null) parts.push(`a one-time bonus of ${rc.bonusPercent}% of salary (pending Payroll integration)`);
+    if (rc.bonusPercent != null) parts.push(`a one-time bonus of ${rc.bonusPercent}% of salary`);
     return parts.length ? parts.join(', ') : 'N/A';
 }
 

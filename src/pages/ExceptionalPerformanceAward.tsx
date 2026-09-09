@@ -306,7 +306,7 @@ const ExceptionalPerformanceAward: React.FC = () => {
                         <div>
                             <label className="block text-[#511d29] font-black uppercase text-[10px] mb-1">{t('proposed_bonus_of_monthly_basic_salary_5_25', { defaultValue: 'Proposed Bonus % of Monthly Basic Salary (5–25%)' })}</label>
                             <input type="number" min={5} max={25} step="0.1" value={bonusPercent} onChange={e => setBonusPercent(e.target.value)} placeholder="e.g. 15" className="w-full p-2.5 border border-slate-200 rounded-xl font-normal normal-case" />
-                            <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">{t('the_department_division_head_decides_the_percentage_5', { defaultValue: 'The Department/Division Head decides the percentage (5–25%). The General Manager approves or rejects this nomination — including the proposed % — as a whole. The actual currency amount is pending Payroll Integration.' })}</p>
+                            <p className="text-[10px] text-slate-400 font-normal normal-case mt-1">{t('the_department_division_head_decides_the_percentage_5', { defaultValue: 'The Department/Division Head decides the percentage (5–25%). The General Manager approves or rejects this nomination — including the proposed % — as a whole. Payroll turns the percentage into money: the amount is the basic salary of the payout month multiplied by this percentage.' })}</p>
                         </div>
 
                         <button type="submit" disabled={submitting || (!!nominee && !!eligibility && !eligibility.eligible)} className="w-full py-3 bg-[#511d29] text-white font-black uppercase tracking-widest rounded-xl hover:bg-[#3a151d] disabled:opacity-50">

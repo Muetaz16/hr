@@ -20,7 +20,7 @@ export interface AppreciationLetterData {
     // award-type vocabulary.
     typeOfAppreciation: string;
     // Pre-formatted human-readable summary, e.g. "1 additional day of paid annual leave" or
-    // "Engraved watch and a one-time bonus of 5% of salary (pending Payroll integration)".
+    // "Engraved watch and a one-time bonus of 5% of salary".
     reward: string;
     // The literal number of leave days credited, or 'N/A' for awards that credit none (Loyalty).
     annualDaysAdded: string;

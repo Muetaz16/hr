@@ -117,7 +117,7 @@ const RewardCaseDetailPage: React.FC = () => {
     if (c.bonusLeaveDaysGranted > 0) rewardParts.push(`${c.bonusLeaveDaysGranted} additional day${c.bonusLeaveDaysGranted === 1 ? '' : 's'} of paid annual leave`);
     if (c.type === 'EMPLOYEE_OF_YEAR') rewardParts.push(t('certificate_of_appreciation', { defaultValue: 'Certificate of Appreciation' }));
     if (c.type === 'LOYALTY_MILESTONE') rewardParts.push(c.milestoneYears === 10 ? t('commemorative_plaque_trophy', { defaultValue: 'Commemorative plaque/trophy' }) : t('engraved_watch', { defaultValue: 'Engraved watch' }));
-    if (c.bonusPercent != null) rewardParts.push(`${c.bonusPercent}% one-time bonus — Pending Payroll Integration`);
+    if (c.bonusPercent != null) rewardParts.push(`${c.bonusPercent}% one-time bonus`);
     const hasPhysicalComponent = c.type === 'EMPLOYEE_OF_YEAR' || c.type === 'LOYALTY_MILESTONE';
 
     return (
