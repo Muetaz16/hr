@@ -219,9 +219,9 @@ const LifecycleControl: React.FC = () => {
                             className="pl-12 pr-10 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-primary-500/10 appearance-none shadow-sm cursor-pointer"
                         >
                             <option value="All">{t('all_contracts', { defaultValue: 'All Types' })}</option>
-                            <option value="RESDANT">RESDANT</option>
-                            <option value="DIRCT NONE RESDANT">DIRCT NONE RESDANT</option>
-                            <option value="NONE RESDANT">NONE RESDANT</option>
+                            <option value="RESDANT">{t('rs_resident', { defaultValue: 'Resident' })}</option>
+                            <option value="DIRCT NONE RESDANT">{t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })}</option>
+                            <option value="NONE RESDANT">NONE RESIDENT</option>
                         </select>
                     </div>
                 </div>

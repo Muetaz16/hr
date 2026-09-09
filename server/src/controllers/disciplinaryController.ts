@@ -295,6 +295,8 @@ export const generateStageForm = async (req: Request, res: Response) => {
             buffer = generateDisciplinaryActionDocx({
                 employeeId: emp?.staffId || '',
                 employeeName: subjectEmployee,
+                employeeNameAr: subjectEmployeeAr,
+                noticeDate: formatDate(new Date()),
                 actionTypeLabel: actionType ? DISCIPLINARY_ACTION_LABELS[actionType as keyof typeof DISCIPLINARY_ACTION_LABELS] : '',
                 categoryLabel: DISCIPLINARY_CATEGORY_LABELS[(violation?.category || found.category || 'MINOR') as keyof typeof DISCIPLINARY_CATEGORY_LABELS],
                 offenseNumber: String(found.offenseNumber || 1),

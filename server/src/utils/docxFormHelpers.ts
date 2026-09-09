@@ -378,6 +378,62 @@ export const appendToCellEnd = (xml: string, cellContains: string, value: string
     return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (c) => { i++; return i === idx ? updated : c; });
 };
 
+// Fills a value onto a label that lives as a run inside a SHARED paragraph rather than in its own
+// value cell — e.g. the notice header's "Date:" / "التاريخ:" / "To:" / "إلى:" lines, which are
+// stacked paragraphs inside one cell (label and value on the same line), not label/value cell
+// pairs like the tables. The cell-based fillTemplate never reaches these. The LABEL stays exactly
+// where it was; when `center` is set only the VALUE is centered — via a center-aligned tab stop at
+// the cell's horizontal midpoint (a `<w:tab/>` jumps the value there), so "Date:" keeps its edge
+// position while "09/08/2026" sits centered in the field. No-op if the label isn't found or the
+// value is empty, so an unset field just stays blank.
+export const appendAfterLabelInParagraph = (
+    xml: string,
+    labelText: string,
+    value: string | undefined | null,
+    opts: { bold?: boolean; center?: boolean } = {},
+): string => {
+    if (!value) return xml;
+    const paraText = (p: string): string =>
+        [...p.matchAll(/<w:t(?: [^>]*)?>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]).join('').replace(/\s+/g, ' ').trim();
+
+    const cells = xml.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || [];
+    const targetIdx = cells.findIndex((c) => (c.match(/<w:p\b[\s\S]*?<\/w:p>/g) || []).some((p) => paraText(p) === labelText));
+    if (targetIdx < 0) return xml;
+
+    const cellWidth = getTcW(cells[targetIdx]);
+    const tabPos = cellWidth ? Math.round(cellWidth / 2) : 0;
+
+    const isAr = ARABIC_RE.test(value);
+    const bold = opts.bold ? '<w:b/><w:bCs/>' : '';
+    const font = isAr
+        ? '<w:rFonts w:ascii="Readex Pro Light" w:hAnsi="Readex Pro Light" w:cs="Readex Pro Light"/>'
+        : '<w:rFonts w:ascii="Montserrat" w:hAnsi="Montserrat" w:cs="Readex Pro Light"/>';
+    const rtl = isAr ? '<w:rtl/>' : '';
+    // When centering, a leading <w:tab/> pushes the value to the center tab stop; otherwise just a space.
+    const lead = opts.center && tabPos ? '<w:tab/>' : '';
+    const spacer = opts.center && tabPos ? '' : ' ';
+    const run = `<w:r><w:rPr>${font}${bold}<w:color w:val="000000"/><w:sz w:val="16"/><w:szCs w:val="16"/>${rtl}</w:rPr>${lead}<w:t xml:space="preserve">${spacer}${escapeXml(value)}</w:t></w:r>`;
+
+    let paraDone = false;
+    const newCell = cells[targetIdx].replace(/<w:p\b[\s\S]*?<\/w:p>/g, (para) => {
+        if (paraDone || paraText(para) !== labelText) return para;
+        paraDone = true;
+        let updated = para.replace('</w:p>', `${run}</w:p>`);
+        if (opts.center && tabPos) {
+            // Add the center tab stop. <w:tabs> must precede spacing/ind/bidi in <w:pPr>, so insert it
+            // right after <w:pPr>; if the paragraph somehow has no pPr, create a minimal one.
+            const tabs = `<w:tabs><w:tab w:val="center" w:pos="${tabPos}"/></w:tabs>`;
+            updated = /<w:pPr>/.test(updated)
+                ? updated.replace('<w:pPr>', `<w:pPr>${tabs}`)
+                : updated.replace(/(<w:p\b[^>]*>)/, `$1<w:pPr>${tabs}</w:pPr>`);
+        }
+        return updated;
+    });
+
+    let ci = -1;
+    return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (c) => { ci++; return ci === targetIdx ? newCell : c; });
+};
+
 // Overwrites a label cell's own printed text (not the value beside it) — for templates that print a
 // specific static label baked in as literal text where the real value differs per case, e.g. the
 // Promotion Report's "Performance Evaluation Result Summary" table always prints the literal labels
@@ -395,6 +451,24 @@ export const relabelCell = (xml: string, oldLabel: string, newLabel: string, bas
     let i = -1;
     return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => { i++; return i === idx ? replacement : cell; });
 };
+
+// Forces specific cells back to TOP vertical alignment, overriding the document-wide
+// centerAllCellsVertically. Needed for the Disciplinary Notice's tall fixed-text body box: its
+// multi-paragraph legal text must read from the top of the box, not float vertically centered with
+// a ~1in empty gap above it. Cells are matched by the text they start with (the first words of each
+// language's paragraph block), so only the intended box is affected.
+export const topAlignCellsStartingWith = (xml: string, prefixes: string[]): string =>
+    xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cell) => {
+        const t = cellText(cell);
+        if (!prefixes.some((p) => t.startsWith(p))) return cell;
+        const tcPrMatch = cell.match(/<w:tcPr>[\s\S]*?<\/w:tcPr>/);
+        if (!tcPrMatch) return cell.replace(/^(<w:tc\b[^>]*>)/, '$1<w:tcPr><w:vAlign w:val="top"/></w:tcPr>');
+        const tcPr = tcPrMatch[0];
+        const newTcPr = /<w:vAlign\b[^>]*\/>/.test(tcPr)
+            ? tcPr.replace(/<w:vAlign\b[^>]*\/>/, '<w:vAlign w:val="top"/>')
+            : tcPr.replace('</w:tcPr>', '<w:vAlign w:val="top"/></w:tcPr>');
+        return cell.replace(tcPr, newTcPr);
+    });
 
 // Vertically centers every cell's content (Word's Table Properties -> Cell -> Vertical alignment ->
 // Center) — overrides any existing <w:vAlign> and adds one to cells that don't have any at all.

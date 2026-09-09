@@ -790,13 +790,13 @@ const MainLayout: React.FC = () => {
                                                 <button key={n.id} onClick={() => handleNotifClick(n)}
                                                     className={`w-full text-left px-4 py-3.5 border-b transition-colors flex gap-3 items-start group/notif
                                                         ${themeMode === 'dark' ? 'border-[#e3c4a2]/5 hover:bg-[#541c2c]/40' : 'border-slate-50 hover:bg-slate-50'}
-                                                        ${!n.isRead ? (themeMode === 'dark' ? 'bg-[#541c2c]/20' : 'bg-indigo-50/40') : ''}`}>
+                                                        ${!n.isRead ? (themeMode === 'dark' ? 'bg-amber-400/10' : 'bg-amber-50/70') : ''}`}>
                                                     <div className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0
                                                         ${!n.isRead
-                                                            ? 'bg-indigo-500/15 text-indigo-500'
+                                                            ? 'bg-amber-400/20 text-amber-500'
                                                             : (themeMode === 'dark' ? 'bg-[#541c2c]/40 text-[#e3c4a2]/50' : 'bg-slate-100 text-slate-400')}`}>
                                                         <Bell className="w-4 h-4" />
-                                                        {!n.isRead && <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`} />}
+                                                        {!n.isRead && <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 shadow-[0_0_6px_rgba(251,191,36,0.9)] ${themeMode === 'dark' ? 'border-[#300a15]' : 'border-white'}`} />}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className={`text-xs font-black truncate ${themeMode === 'dark' ? 'text-white' : 'text-slate-800'}`}>{n.title}</p>

@@ -1,4 +1,4 @@
-import { fillTemplate, bilingual, setCell, capRowHeight, widenStaticCell, transformDocument, cellText } from './docxFormHelpers';
+import { fillTemplate, bilingual, setCell, capRowHeight, widenStaticCell, transformDocument, cellText, topAlignCellsStartingWith, appendAfterLabelInParagraph } from './docxFormHelpers';
 
 // The 4 official bilingual Disciplinary Action templates live in the app's public folder. Uses the
 // shared PizZip cell-rewrite technique in docxFormHelpers.ts. Signature lines are always left blank
@@ -152,6 +152,8 @@ function markOutcomeSelected(buffer: Buffer, optionLabel: string): Buffer {
 export interface DisciplinaryActionData {
     employeeId: string;
     employeeName: string;
+    employeeNameAr?: string;
+    noticeDate: string;
     actionTypeLabel: string;
     categoryLabel: string;
     offenseNumber: string;
@@ -177,6 +179,18 @@ export const generateDisciplinaryActionDocx = (data: DisciplinaryActionData): Bu
     return transformDocument(buffer, xml => {
         xml = widenStaticCell(xml, 'إشعار باتخاذ إجراء تأديبي', 'right');
         xml = widenStaticCell(xml, 'إشعار بالإجراء التأديبي', 'left');
+        // The body box holds the fixed bilingual notice text; the document-wide vertical centering
+        // (loadNormalizedTemplate → centerAllCellsVertically) leaves a ~1in empty gap above it, so
+        // re-pin both language blocks to the top of the box.
+        xml = topAlignCellsStartingWith(xml, ['Following the review', 'بعد مراجعة']);
+        // Header block: Date / To lines are stacked paragraphs inside one shared cell (not value
+        // cells), so fillTemplate above never reached them. Fill them on both language sides — the
+        // issue date, and the recipient (the subject employee) — value centered and bold.
+        const headerOpts = { bold: true, center: true };
+        xml = appendAfterLabelInParagraph(xml, 'Date:', data.noticeDate, headerOpts);
+        xml = appendAfterLabelInParagraph(xml, 'التاريخ:', data.noticeDate, headerOpts);
+        xml = appendAfterLabelInParagraph(xml, 'To:', data.employeeName, headerOpts);
+        xml = appendAfterLabelInParagraph(xml, 'إلى:', data.employeeNameAr || data.employeeName, headerOpts);
         return xml;
     });
 };

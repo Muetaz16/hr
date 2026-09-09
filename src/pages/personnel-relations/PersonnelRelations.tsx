@@ -1081,9 +1081,9 @@ const PersonnelRelations: React.FC = () => {
                                     className="pl-10 pr-8 py-2.5 bg-white border border-[#511d29]/20 rounded-lg text-xs font-bold focus:ring-2 focus:ring-[#511d29]/10 appearance-none cursor-pointer"
                                 >
                                     <option value="All">{t('all_types', { defaultValue: 'All Types' })}</option>
-                                    <option value="RESDANT">RESDANT</option>
-                                    <option value="DIRCT NONE RESDANT">DIRCT NONE RESDANT</option>
-                                    <option value="NONE RESDANT">NONE RESDANT</option>
+                                    <option value="RESDANT">{t('rs_resident', { defaultValue: 'Resident' })}</option>
+                                    <option value="DIRCT NONE RESDANT">{t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })}</option>
+                                    <option value="NONE RESDANT">NONE RESIDENT</option>
                                 </select>
                             </div>
                         </div>

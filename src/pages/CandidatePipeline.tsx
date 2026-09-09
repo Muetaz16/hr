@@ -1276,9 +1276,9 @@ const CandidatePipeline: React.FC<{ view: View }> = ({ view }) => {
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('resident_status', { defaultValue: 'Resident Status' })}</label>
                                     <select value={editOfferForm.residentStatus} onChange={e => setEditOfferForm({ ...editOfferForm, residentStatus: e.target.value })} required className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 bg-white">
                                         <option value="">{t('select', { defaultValue: 'Select...' })}</option>
-                                        <option value="RESDANT">{t('resident', { defaultValue: 'RESDANT' })}</option>
-                                        <option value="DIRCT NONE RESDANT">{t('dirct_non_resident', { defaultValue: 'DIRCT NONE RESDANT' })}</option>
-                                        <option value="NONE RESDANT">{t('non_resident', { defaultValue: 'NONE RESDANT' })}</option>
+                                        <option value="RESDANT">{t('rs_resident', { defaultValue: 'Resident' })}</option>
+                                        <option value="DIRCT NONE RESDANT">{t('rs_direct_non_resident', { defaultValue: 'Direct Non-Resident' })}</option>
+                                        <option value="NONE RESDANT">NONE RESIDENT</option>
                                     </select>
                                 </div>
                                 <div>

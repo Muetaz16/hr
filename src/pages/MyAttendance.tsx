@@ -6,6 +6,7 @@ import { format, parseISO } from 'date-fns';
 import { attendanceService } from '../services/attendanceService';
 import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
 import { resolveDayStatus, fillMissingDays } from '../utils/attendanceDayStatus';
+import { formatLeaveTypeName } from '../utils/leaveTypeName';
 import DailyBreakdownTable from '../components/DailyBreakdownTable';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: React.ReactNode; color: string }) => (
@@ -219,7 +220,7 @@ const MyAttendancePage: React.FC = () => {
                             <div className="divide-y divide-slate-50">
                                 {report.empLeaves.map(leave => (
                                     <div key={leave.id} className="p-3 flex items-center justify-between text-xs">
-                                        <span className="font-bold text-slate-700">{leave.leaveType.name}</span>
+                                        <span className="font-bold text-slate-700">{formatLeaveTypeName(leave.leaveType.name)}</span>
                                         <span className="text-slate-500">{format(parseISO(leave.startDate), 'dd MMM')} – {format(parseISO(leave.endDate), 'dd MMM yyyy')} ({leave.daysCount} {t('days', { defaultValue: 'days' })})</span>
                                     </div>
                                 ))}

@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/access';
 import { formatMinutesAsHM, formatHmsAsHM } from '../utils/attendanceFormat';
 import { resolveDayStatus, fillMissingDays } from '../utils/attendanceDayStatus';
+import { formatLeaveTypeName } from '../utils/leaveTypeName';
 import Modal from '../components/Modal';
 import DailyBreakdownTable from '../components/DailyBreakdownTable';
 import AttendanceInsights from '../components/AttendanceInsights';
@@ -1426,7 +1427,7 @@ const AttendancePage: React.FC = () => {
                                     <tbody className="divide-y divide-[#511d29]/5 font-medium text-slate-700">
                                         {leaveTypesList.map(lt => (
                                             <tr key={lt.id} className="hover:bg-slate-50/50">
-                                                <td className="p-4 font-bold text-slate-800">{lt.name}</td>
+                                                <td className="p-4 font-bold text-slate-800">{formatLeaveTypeName(lt.name)}</td>
                                                 <td className="p-4">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${lt.isPaid ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{lt.isPaid ? t('paid', { defaultValue: 'Paid' }) : t('unpaid', { defaultValue: 'Unpaid' })}</span>
                                                 </td>
@@ -1771,7 +1772,7 @@ const AttendancePage: React.FC = () => {
                                 <div className="divide-y divide-slate-50">
                                     {monthlyReport.empLeaves.map(leave => (
                                         <div key={leave.id} className="p-3 flex items-center justify-between text-xs">
-                                            <span className="font-bold text-slate-700">{leave.leaveType.name}</span>
+                                            <span className="font-bold text-slate-700">{formatLeaveTypeName(leave.leaveType.name)}</span>
                                             <span className="text-slate-500">{format(parseISO(leave.startDate), 'dd MMM')} – {format(parseISO(leave.endDate), 'dd MMM yyyy')} ({leave.daysCount} {t('days_lc', { defaultValue: 'days' })})</span>
                                         </div>
                                     ))}
@@ -1856,7 +1857,7 @@ const AttendancePage: React.FC = () => {
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('leave_type', { defaultValue: 'Leave Type' })}</label>
                         <select value={leaveForm.leaveTypeId} onChange={e => setLeaveForm(f => ({ ...f, leaveTypeId: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold cursor-pointer">
                             <option value="">{t('select_type', { defaultValue: 'Select type…' })}</option>
-                            {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            {leaveTypes.map(t => <option key={t.id} value={t.id}>{formatLeaveTypeName(t.name)}</option>)}
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">

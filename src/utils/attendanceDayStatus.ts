@@ -3,6 +3,7 @@
 import { format } from 'date-fns';
 import type { DailyAttendanceResult, EmployeeLeaveRecord } from '../services/attendanceService';
 import { cleanReason } from './attendanceFormat';
+import { formatLeaveTypeName } from './leaveTypeName';
 
 // The only recognized weekly rest day (confirmed with HR) — JS Date#getDay(): 0=Sun..6=Sat.
 const WEEKLY_OFF_DAYS = [5]; // Friday
@@ -127,7 +128,7 @@ export function resolveDayStatus(day: DailyAttendanceResult, leaves: EmployeeLea
         return { kind: 'outWork', reason: outReason ? `Out-Work — ${outReason}` : 'Out-Work' };
     }
     if (leave) {
-        return { kind: leave.leaveType.isPaid ? 'onLeavePaid' : 'onLeaveUnpaid', reason: `On Leave — ${leave.leaveType.name}`, leave };
+        return { kind: leave.leaveType.isPaid ? 'onLeavePaid' : 'onLeaveUnpaid', reason: `On Leave — ${formatLeaveTypeName(leave.leaveType.name)}`, leave };
     }
     if (isWeeklyOff) return { kind: 'present', reason: '' }; // weekly off with no punches: not absent
 

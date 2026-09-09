@@ -233,6 +233,21 @@
     box-shadow: none !important;
   }
 
+  /* Placeholder text contrast. The browser default placeholder is too faint to read — nearly
+     invisible on white (light mode) and washed out against the burgundy input fill (dark mode).
+     Set explicit, readable colours for both themes so field hints (e.g. the Exceptional Award
+     nomination form) are legible. */
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b !important; /* slate-500 — readable on white, still lighter than typed text */
+    opacity: 1 !important;
+  }
+  body.dark-theme input::placeholder,
+  body.dark-theme textarea::placeholder {
+    color: rgba(227, 196, 162, 0.7) !important; /* legible cream against the burgundy fill */
+    opacity: 1 !important;
+  }
+
   /* App checkboxes — opt out of the global "pill" input skin above (which forces a
      white background, big padding and rounded shape on every input) so they render
      as proper check squares that clearly show a filled / checked state. */
@@ -564,14 +579,19 @@ body.dark-theme table tbody td div[class*="bg-indigo-"] {
 }
 
 /* 5. Slate / Neutral / Permanent Status Badges */
-body.dark-theme .bg-slate-50, 
+body.dark-theme .bg-slate-50,
 body.dark-theme .bg-slate-100,
-body.dark-theme .text-slate-600,
 body.dark-theme .border-slate-100,
 body.dark-theme .border-slate-200 {
   background-color: rgba(227, 196, 162, 0.1) !important;
   color: #e3c4a2 !important;
   border: 1px solid rgba(227, 196, 162, 0.25) !important;
+}
+/* `.text-slate-600` is a text-COLOUR utility used on plain paragraphs (e.g. the page-header
+   subtitles), not only on badges. It must not pull in a background + border — badges still get
+   skinned via their own `.bg-slate-*` / `.border-slate-*` classes above. Colour only. */
+body.dark-theme .text-slate-600 {
+  color: #cbb18f !important; /* readable muted sand on the burgundy surface */
 }
 
 body.dark-theme table tbody td span.bg-slate-50, 
