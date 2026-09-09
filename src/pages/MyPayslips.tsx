@@ -10,7 +10,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FileText, Download, Loader2, Receipt, CheckCircle2, Banknote, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { FileText, Download, Loader2, Receipt, CheckCircle2, Banknote, Info, Eye } from 'lucide-react';
 import { payslipService } from '../services/payslipService';
 import type { MyPayslip } from '../services/payslipService';
 
@@ -38,7 +39,7 @@ const MyPayslips: React.FC = () => {
     const download = async (slip: MyPayslip) => {
         setBusy(slip.period);
         try {
-            saveBlob(await payslipService.myDocument(slip.period), `Payslip_${slip.period}.pdf`);
+            saveBlob(await payslipService.myDocument(slip.period), `Payslip_${slip.period}.docx`);
         } catch (err: any) {
             toast.error(err?.response?.data?.error || t('payslip_download_failed', { defaultValue: 'Could not produce your payslip.' }));
         } finally {
@@ -114,14 +115,23 @@ const MyPayslips: React.FC = () => {
                                 )}
                             </dl>
 
-                            <button
-                                onClick={() => download(s)}
-                                disabled={busy === s.period}
-                                className="mt-4 inline-flex items-center gap-2 bg-[#511d29] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#3f1620] disabled:opacity-40"
-                            >
-                                {busy === s.period ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-                                {t('payslip_download', { defaultValue: 'Download the payslip' })}
-                            </button>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <Link
+                                    to={`/my-payslips/${s.period}`}
+                                    className="inline-flex items-center gap-2 bg-[#511d29] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#3f1620]"
+                                >
+                                    <Eye size={15} />
+                                    {t('payslip_open_on_screen', { defaultValue: 'Open the payslip' })}
+                                </Link>
+                                <button
+                                    onClick={() => download(s)}
+                                    disabled={busy === s.period}
+                                    className="inline-flex items-center gap-2 bg-white border border-[#511d29]/20 text-[#511d29] px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#511d29]/5 disabled:opacity-40"
+                                >
+                                    {busy === s.period ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                                    {t('payslip_download', { defaultValue: 'Download the payslip' })}
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -129,8 +139,8 @@ const MyPayslips: React.FC = () => {
 
             <p className="text-xs text-slate-400 font-medium flex items-start gap-2">
                 <Info size={13} className="mt-0.5 shrink-0" />
-                {t('payslip_pdf_note', {
-                    defaultValue: 'Payslips are issued as PDF rather than Word, so they cannot be edited after you receive one.',
+                {t('payslip_both_note', {
+                    defaultValue: 'Open a payslip to read every figure on screen, or download it as a Word document to print or keep.',
                 })}{' '}
                 {t('payslip_footer_note', {
                     defaultValue: 'A month runs from the 25th to the 24th and is named after the month it ends in. For any question about your salary, email payroll@iph-ly.com.',

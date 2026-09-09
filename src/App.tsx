@@ -42,6 +42,7 @@ const ResignationRequestPage = lazy(() => import('./pages/ResignationRequest'));
 const MyAttendancePage = lazy(() => import('./pages/MyAttendance'));
 const MyAdvancesPage = lazy(() => import('./pages/MyAdvances'));
 const MyPayslipsPage = lazy(() => import('./pages/MyPayslips'));
+const MyPayslipDetailPage = lazy(() => import('./pages/MyPayslipDetail'));
 const EvaluationDetailPage = lazy(() => import('./pages/EvaluationDetail'));
 const AnnouncementsFeedPage = lazy(() => import('./pages/AnnouncementsFeed'));
 const OrganizationPage = lazy(() => import('./pages/Organization'));
@@ -124,6 +125,7 @@ function App() {
                   {/* Open to every signed-in employee: asking for an advance needs no permission. */}
                   <Route path="/my-advances" element={<MyAdvancesPage />} />
                   <Route path="/my-payslips" element={<MyPayslipsPage />} />
+                  <Route path="/my-payslips/:period" element={<MyPayslipDetailPage />} />
                   <Route path="/my-evaluation" element={<EvaluationDetailPage />} />
                   <Route path="/announcements" element={<AnnouncementsFeedPage />} />
                   <Route path="/organization" element={<OrganizationPage />} />

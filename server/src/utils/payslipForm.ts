@@ -167,92 +167,187 @@ const fillTitle = (xml: string, period: string): string => {
     return xml.replace(paraMatch[0], para);
 };
 
-export const generatePayslipDocx = (line: PayslipLine, period: string): Buffer => {
+// ---------------------------------------------------------------------------------------------
+// The payslip's content, section by section.
+//
+// One list, two readers: the Word filler below, and the employee's on-screen payslip, which fetches
+// it over GET /api/payslips/me/:period/view. That sharing is the point — a second copy of these
+// forty-odd labels and their formatting in the frontend would be a second payslip, and it would
+// drift from this one the first time somebody changed a label.
+//
+// The bilingual labels are the TEMPLATE's own strings, read out of PAYSLIP.docx cell by cell rather
+// than translated here. The English label doubles as the key fillTemplate matches on, so changing
+// one stops that row from being filled — a blank box, which is the failure mode we want — instead
+// of putting a number in the wrong row.
+// ---------------------------------------------------------------------------------------------
+
+/** One printed row. */
+export interface PayslipRow {
+    label: string;
+    labelAr: string;
+    value: string;
+}
+
+/** A heading inside a section — SALARY INFORMATION has two: "Paid Hours" and "Earnings". */
+export interface PayslipSubheading {
+    subheading: string;
+    subheadingAr: string;
+}
+
+export interface PayslipSection {
+    key: string;
+    title: string;
+    titleAr: string;
+    /** The caption the template prints above the value column, where it prints one. */
+    valueHeader?: string;
+    rows: (PayslipRow | PayslipSubheading)[];
+}
+
+export const isSubheading = (r: PayslipRow | PayslipSubheading): r is PayslipSubheading =>
+    'subheading' in r;
+
+export const payslipSections = (line: PayslipLine): PayslipSection[] => {
     const cur = line.currency;
     const withCur = (n: number) => `${money(n)} ${cur}`;
 
-    // Position and skill are mutually exclusive — the engine already zeroes the loser's allowance,
-    // so printing both straight from the line is correct and one of the two always reads 0.00.
-    const fields: FieldFill[] = [
-        // --- EMPLOYEE INFORMATION -------------------------------------------------------------
-        { label: 'Employee Name', value: line.fullName || '—' },
-        { label: 'Employee ID', value: line.staffId || '—' },
-        { label: 'Division', value: line.divisionName || '—' },
-        { label: 'Department', value: line.departmentName || '—' },
-        { label: 'Job Position', value: line.positionTitle || '—' },
-        { label: 'Job Category', value: line.jobCategory || '—' },
-        { label: 'Job Grade', value: line.jobGrade || '—' },
-        { label: 'Work Location', value: line.workLocation || '—' },
+    return [
+        {
+            key: 'employee', title: 'EMPLOYEE INFORMATION', titleAr: 'بيانات الموظف',
+            rows: [
+                { label: 'Employee Name', labelAr: 'اسم الموظف', value: line.fullName || '—' },
+                { label: 'Employee ID', labelAr: 'الرقم الوظيفي', value: line.staffId || '—' },
+                { label: 'Division', labelAr: 'الإدارة', value: line.divisionName || '—' },
+                { label: 'Department', labelAr: 'القسم', value: line.departmentName || '—' },
+                { label: 'Job Position', labelAr: 'الوظيفة', value: line.positionTitle || '—' },
+                { label: 'Job Category', labelAr: 'فئة الوظيفة', value: line.jobCategory || '—' },
+                { label: 'Job Grade', labelAr: 'درجة الوظيفة', value: line.jobGrade || '—' },
+                { label: 'Work Location', labelAr: 'موقع العمل', value: line.workLocation || '—' },
+            ],
+        },
+        {
+            key: 'salary', title: 'SALARY INFORMATION', titleAr: 'بيانات الراتب',
+            rows: [
+                { subheading: 'Paid Hours', subheadingAr: 'الساعات المدفوعة' },
+                { label: 'Basic Hours', labelAr: 'ساعات العمل', value: hours(line.basicHours) },
+                { label: 'Overtime Hours', labelAr: 'ساعات العمل الإضافية', value: hours(line.overtimeHours) },
+                { label: 'Total Working Hours', labelAr: 'إجمالي ساعات العمل', value: hours(line.totalWorkingHours) },
+                { label: 'Total Paid Absences Hours', labelAr: 'إجمالي ساعات الغياب المدفوعة', value: hours(line.paidAbsenceHours) },
+                { label: 'Total Paid Absences Amount', labelAr: 'إجمالي قيمة ساعات الغياب المدفوعة', value: withCur(line.paidAbsenceAmount) },
 
-        // --- SALARY INFORMATION ----------------------------------------------------------------
-        { label: 'Basic Hours', value: hours(line.basicHours) },
-        { label: 'Overtime Hours', value: hours(line.overtimeHours) },
-        { label: 'Total Working Hours', value: hours(line.totalWorkingHours) },
-        { label: 'Total Paid Absences Hours', value: hours(line.paidAbsenceHours) },
-        { label: 'Total Paid Absences Amount', value: withCur(line.paidAbsenceAmount) },
-
-        // --- Earnings ---------------------------------------------------------------------------
-        { label: 'Basic Salary', value: withCur(line.basicSalary) },
-        { label: 'Site Factor Allowance', value: withCur(line.siteAllowance) },
-        { label: 'Position Factor Allowance', value: withCur(line.positionAllowance) },
-        { label: 'English Language Allowance', value: withCur(line.languageAllowance) },
-        { label: 'Skill Factor Allowance', value: withCur(line.skillAllowance) },
-        { label: 'Paid Absences', value: withCur(line.paidAbsenceAmount) },
-        { label: 'Bonus Allowance', value: withCur(line.bonusAmount) },
-        { label: 'Previous Miscalculation for Underpayment', value: withCur(sumItems(line, 'EARNING', 'PREVIOUS_UNDERPAYMENT')) },
-        { label: 'Total Earnings', value: withCur(line.totalEarnings) },
-
-        // --- PERFORMANCE EVALUATION (display only; never affects an amount) ---------------------
-        { label: 'Attendance', value: percent(line.presenceScore) },
-        { label: 'Executive Performance', value: percent(line.execScore) },
-        { label: 'Administrative Behavior', value: percent(line.adminScore) },
-        { label: 'Care and Discipline', value: percent(line.careScore) },
-        { label: 'Training and Education', value: percent(line.trainingScore) },
-        { label: 'Total', value: percent(line.evaluationTotal) },
-
-        // --- RATES & FACTORS --------------------------------------------------------------------
-        { label: 'Hourly Rate', value: withCur(line.hourlyRate) },
-        { label: 'Site Factor', value: factor(line.siteFactor) },
-        { label: 'Position Factor', value: factor(line.positionFactor) },
-        { label: 'English Language Factor', value: factor(line.languageFactor) },
-        { label: 'Skill Factor', value: factor(line.skillFactor) },
-        { label: 'Contract Expiration Date', value: date(line.contractEndDate) },
-
-        // --- UNPAID HOURS (display only — unpaid leave is not deducted) -------------------------
-        { label: 'Total Unpaid Hours', value: hours(line.unpaidHours) },
-
-        // --- DEDUCTIONS -------------------------------------------------------------------------
-        { label: 'Cash Advance Deduction', value: withCur(sumItems(line, 'DEDUCTION', 'CASH_ADVANCE')) },
-        // The outstanding balance. Inside the box, deliberately outside the total.
-        { label: 'Remaining Advance Deduction', value: withCur(line.remainingAdvanceBalance) },
-        { label: 'Ticket Cost Deduction', value: withCur(sumItems(line, 'DEDUCTION', 'TICKET_COST')) },
-        { label: 'Penalty Deduction', value: withCur(sumItems(line, 'DEDUCTION', 'PENALTY')) },
-        { label: 'Health Insurance Cost Overruns', value: withCur(sumItems(line, 'DEDUCTION', 'HEALTH_INSURANCE_OVERRUN')) },
-        { label: 'Previous Miscalculation for Overpayment', value: withCur(sumItems(line, 'DEDUCTION', 'PREVIOUS_OVERPAYMENT')) },
-        { label: 'Total Deduction', value: withCur(line.deductionsTotal) },
-
-        // --- NET SALARY -------------------------------------------------------------------------
-        { label: 'Amount', value: money(line.netSalary) },
-        { label: 'Currency', value: cur },
-
-        // --- LEAVE ENTITLEMENT ------------------------------------------------------------------
-        { label: 'Paid', value: line.paidLeaveBalance === null ? '—' : hours(line.paidLeaveBalance) },
-        { label: 'Unpaid', value: line.unpaidLeaveBalance === null ? '—' : hours(line.unpaidLeaveBalance) },
-        { label: 'Emergency', value: line.emergencyLeaveBalance === null ? '—' : hours(line.emergencyLeaveBalance) },
+                { subheading: 'Earnings', subheadingAr: 'الأرباح' },
+                { label: 'Basic Salary', labelAr: 'صافي المرتب', value: withCur(line.basicSalary) },
+                { label: 'Site Factor Allowance', labelAr: 'بدل عامل الموقع', value: withCur(line.siteAllowance) },
+                // Position and skill are mutually exclusive — the engine already zeroes the loser's
+                // allowance, so printing both straight from the line is correct and one always reads 0.00.
+                { label: 'Position Factor Allowance', labelAr: 'بدل عامل الوظيفة', value: withCur(line.positionAllowance) },
+                { label: 'English Language Allowance', labelAr: 'بدل عامل اللغة الإنجليزية', value: withCur(line.languageAllowance) },
+                { label: 'Skill Factor Allowance', labelAr: 'بدل عامل المهارة', value: withCur(line.skillAllowance) },
+                { label: 'Paid Absences', labelAr: 'إجازة مدفوعة الأجر', value: withCur(line.paidAbsenceAmount) },
+                { label: 'Bonus Allowance', labelAr: 'بدل المكافأة', value: withCur(line.bonusAmount) },
+                {
+                    label: 'Previous Miscalculation for Underpayment',
+                    labelAr: 'احتساب الخاطئ السابق لمبالغ الدفع الناقصة',
+                    value: withCur(sumItems(line, 'EARNING', 'PREVIOUS_UNDERPAYMENT')),
+                },
+                { label: 'Total Earnings', labelAr: 'إجمالي الأرباح', value: withCur(line.totalEarnings) },
+            ],
+        },
+        {
+            // Display only. These scores never alter an amount anywhere in the engine.
+            key: 'evaluation', title: 'PERFORMANCE EVALUATION', titleAr: 'تقييم الأداء الشهري',
+            valueHeader: 'Percentage / النسبة',
+            rows: [
+                { label: 'Attendance', labelAr: 'التواجـــد', value: percent(line.presenceScore) },
+                { label: 'Executive Performance', labelAr: 'الأداء التنفيذي', value: percent(line.execScore) },
+                { label: 'Administrative Behavior', labelAr: 'السلوك الإداري', value: percent(line.adminScore) },
+                { label: 'Care and Discipline', labelAr: 'الحرص والانضباط', value: percent(line.careScore) },
+                { label: 'Training and Education', labelAr: 'التدريب والتعليم', value: percent(line.trainingScore) },
+                { label: 'Total', labelAr: 'الإجمــــالي', value: percent(line.evaluationTotal) },
+                // KNOWN TEMPLATE DEFECT: this row has only two cells in PAYSLIP.docx — the English
+                // label and the Arabic one — where every other row has three. fillTemplate writes the
+                // value at label+1, which here is the Arabic cell, so the Word payslip prints the
+                // percentage OVER "معدل الاستحقاق للترقية" and loses that label. Fixing it means adding
+                // a value cell to that row in the .docx, which is the document owner's call. The
+                // on-screen payslip has no such shortage and shows all three.
+                {
+                    label: 'Promotion Eligibility Index', labelAr: 'معدل الاستحقاق للترقية',
+                    value: percent(line.promotionEligibilityIndex),
+                },
+            ],
+        },
+        {
+            key: 'rates', title: 'RATES & FACTORS', titleAr: 'المعدلات والعوامل',
+            rows: [
+                { label: 'Hourly Rate', labelAr: 'الأجر بالساعة', value: withCur(line.hourlyRate) },
+                { label: 'Site Factor', labelAr: 'عامل الموقع', value: factor(line.siteFactor) },
+                { label: 'Position Factor', labelAr: 'عامل الوظيفة', value: factor(line.positionFactor) },
+                { label: 'English Language Factor', labelAr: 'عامل اللغة الإنجليزية', value: factor(line.languageFactor) },
+                { label: 'Skill Factor', labelAr: 'عامل المهارة', value: factor(line.skillFactor) },
+                { label: 'Contract Expiration Date', labelAr: 'تاريخ انتهاء العقد', value: date(line.contractEndDate) },
+            ],
+        },
+        {
+            // Its own box with no amount beside it: unpaid leave is not deducted, because those
+            // hours were already excluded from the hours worked.
+            key: 'unpaid', title: 'UNPAID HOURS', titleAr: 'الساعات غير المدفوعة',
+            rows: [
+                { label: 'Total Unpaid Hours', labelAr: 'إجمالي الساعات غير المدفوعة', value: hours(line.unpaidHours) },
+            ],
+        },
+        {
+            key: 'deductions', title: 'DEDUCTIONS', titleAr: 'الخصومات',
+            rows: [
+                { label: 'Cash Advance Deduction', labelAr: 'خصم سلفة الراتب', value: withCur(sumItems(line, 'DEDUCTION', 'CASH_ADVANCE')) },
+                // The outstanding balance. Inside the box, deliberately outside the total — adding
+                // it in would deduct the same money twice.
+                { label: 'Remaining Advance Deduction', labelAr: 'باقي سلفة الراتب', value: withCur(line.remainingAdvanceBalance) },
+                { label: 'Ticket Cost Deduction', labelAr: 'خصم تكاليف التذاكر', value: withCur(sumItems(line, 'DEDUCTION', 'TICKET_COST')) },
+                { label: 'Penalty Deduction', labelAr: 'خصم عقوبة', value: withCur(sumItems(line, 'DEDUCTION', 'PENALTY')) },
+                {
+                    label: 'Health Insurance Cost Overruns', labelAr: 'تجاوزات تكاليف تأمين الصحة',
+                    value: withCur(sumItems(line, 'DEDUCTION', 'HEALTH_INSURANCE_OVERRUN')),
+                },
+                {
+                    label: 'Previous Miscalculation for Overpayment', labelAr: 'خطأ سابق في حساب دفع زائد',
+                    value: withCur(sumItems(line, 'DEDUCTION', 'PREVIOUS_OVERPAYMENT')),
+                },
+                { label: 'Total Deduction', labelAr: 'إجمالي الخصم', value: withCur(line.deductionsTotal) },
+            ],
+        },
+        {
+            key: 'net', title: 'NET SALARY', titleAr: 'الراتب الصافي',
+            rows: [
+                { label: 'Amount', labelAr: 'الكمية', value: money(line.netSalary) },
+                { label: 'Currency', labelAr: 'العملة', value: cur },
+            ],
+        },
+        {
+            key: 'leave', title: 'LEAVE ENTITLEMENT', titleAr: 'الإجازات المستحقة',
+            rows: [
+                { label: 'Paid', labelAr: 'مدفوعة', value: line.paidLeaveBalance === null ? '—' : hours(line.paidLeaveBalance) },
+                { label: 'Unpaid', labelAr: 'غير مدفوعة', value: line.unpaidLeaveBalance === null ? '—' : hours(line.unpaidLeaveBalance) },
+                { label: 'Emergency', labelAr: 'طارئة', value: line.emergencyLeaveBalance === null ? '—' : hours(line.emergencyLeaveBalance) },
+            ],
+        },
     ];
+};
 
-    // "Promotion Eligibility Index" is a two-cell row (label | value), unlike the three-cell rows
-    // above — so its value lands at label+1 all the same, but it is listed separately here to make
-    // that difference explicit rather than a coincidence.
-    fields.push({ label: 'Promotion Eligibility Index', value: percent(line.promotionEligibilityIndex) });
+/** Every data row, flattened out of the sections — what the Word filler matches labels against. */
+export const payslipRows = (line: PayslipLine): PayslipRow[] =>
+    payslipSections(line).flatMap(s => s.rows).filter((r): r is PayslipRow => !isSubheading(r));
+
+export const generatePayslipDocx = (line: PayslipLine, period: string): Buffer => {
+    // The size is stamped once here rather than on every row, so it cannot drift between rows and
+    // there is exactly one place to change it.
+    const fields: FieldFill[] = payslipRows(line).map(r => ({
+        label: r.label,
+        value: r.value,
+        baseSizeHalfPoints: VALUE_SIZE_HALF_POINTS,
+    }));
 
     // Two passes: fillTemplate handles the label/value cells, then the title's inline blank is
     // swapped in the body paragraph, which a cell-scoped fill cannot reach.
-    // Stamped once here rather than repeated on all ~48 fields, so the size cannot drift between
-    // rows and there is exactly one place to change it.
-    const sized = fields.map(f => ({ baseSizeHalfPoints: VALUE_SIZE_HALF_POINTS, ...f }));
-
-    const zip = new PizZip(fillTemplate(TEMPLATE, sized));
+    const zip = new PizZip(fillTemplate(TEMPLATE, fields));
     const docPath = 'word/document.xml';
     const xml = zip.file(docPath)?.asText();
     if (!xml) throw new Error('Payslip: the filled document is missing word/document.xml.');

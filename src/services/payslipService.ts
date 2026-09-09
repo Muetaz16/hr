@@ -21,10 +21,55 @@ export interface MyPayslip {
     netSalary: number;
 }
 
+/** One row of the payslip, with the template's own bilingual labels. */
+export interface PayslipRow {
+    label: string;
+    labelAr: string;
+    value: string;
+}
+
+/** A heading inside a section — SALARY INFORMATION has two. */
+export interface PayslipSubheading {
+    subheading: string;
+    subheadingAr: string;
+}
+
+export interface PayslipSection {
+    key: string;
+    title: string;
+    titleAr: string;
+    valueHeader?: string;
+    rows: (PayslipRow | PayslipSubheading)[];
+}
+
+export interface PayslipView {
+    period: string;
+    periodLabel: string;
+    monthNameArabic: string;
+    periodStart: string;
+    periodEnd: string;
+    status: 'APPROVED' | 'PAID' | string;
+    approvedAt: string | null;
+    paidAt: string | null;
+    currency: string;
+    netSalary: number;
+    sections: PayslipSection[];
+}
+
+export const isSubheading = (r: PayslipRow | PayslipSubheading): r is PayslipSubheading =>
+    'subheading' in r;
+
 export const payslipService = {
     mine: async (): Promise<MyPayslip[]> => (await api.get('/payslips/me')).data,
 
-    /** Returns a PDF, not a Word file — an editable payslip in an employee's hands is forgeable. */
+    /**
+     * The payslip as data, for the screen that shows it. Built from the same list on the server that
+     * fills the Word document, so the screen and the file cannot show different numbers.
+     */
+    myView: async (period: string): Promise<PayslipView> =>
+        (await api.get(`/payslips/me/${period}/view`)).data,
+
+    /** The payslip document (.docx), generated from the same template the payroll side prints. */
     myDocument: async (period: string): Promise<Blob> =>
         (await api.get(`/payslips/me/${period}`, { responseType: 'blob' })).data,
 

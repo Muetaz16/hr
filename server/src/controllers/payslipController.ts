@@ -4,7 +4,8 @@
 //
 //   GET /payroll-runs/:id/lines/:lineId/payslip   one employee, for payroll to check before it goes out
 //   GET /payslips/me                              the employee's own list — CLOSED periods only
-//   GET /payslips/me/:period                      the employee's own payslip for one month
+//   GET /payslips/me/:period                      the employee's own payslip as a Word document
+//   GET /payslips/me/:period/view                 the same payslip as data, for the screen
 //
 // The employee-facing routes deliberately refuse anything not yet closed. A draft period is rebuilt
 // on every press of Recompute; handing someone a figure that changes tomorrow is worse than making
@@ -12,10 +13,9 @@
 import { Request, Response } from 'express';
 
 import { prisma } from '../lib/prisma';
-import { generatePayslipDocx, generatePayslipBookDocx, PayslipLine } from '../utils/payslipForm';
-import { periodLabel } from '../utils/payrollPeriod';
+import { generatePayslipDocx, generatePayslipBookDocx, payslipSections, PayslipLine } from '../utils/payslipForm';
+import { periodLabel, periodMonthNameArabic } from '../utils/payrollPeriod';
 import { findRunLine } from './payrollRunController';
-import { docxToPdf, PdfConversionUnavailable } from '../utils/docxToPdf';
 
 interface AuthRequest extends Request {
     user?: { id: string; email?: string; role: string; fullName?: string };
@@ -145,27 +145,56 @@ export const getMyPayslip = async (req: AuthRequest, res: Response) => {
         });
         if (!line) return res.status(404).json({ error: 'You have no payslip for that month yet.' });
 
-        // PDF, not Word, and only on this route. A .docx handed to an employee is editable: anyone
-        // can change their own net salary in Word and forward it as if payroll had issued it. The
-        // payroll-side routes stay .docx because that side reviews and prints internally.
-        const docx = generatePayslipDocx(line as unknown as PayslipLine, req.params.period);
-        const pdf = await docxToPdf(docx, `Payslip_${line.staffId || 'employee'}_${req.params.period}`);
-
-        const safe = (line.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="Payslip_${safe}_${req.params.period}.pdf"`);
-        res.send(pdf);
+        // The same .docx the payroll side gets, through the same generator — so there is one
+        // payslip document in this system, not two that could differ. Nothing is converted, so the
+        // server needs no office suite installed.
+        send(res, line, req.params.period);
     } catch (error: any) {
-        // Never fall back to the .docx here: silently handing over an editable payslip would
-        // undo the whole reason this route converts.
-        if (error instanceof PdfConversionUnavailable) {
-            console.error('Payslip PDF requested but LibreOffice is missing:', error.message);
-            return res.status(503).json({
-                error: 'Payslips are issued as PDF and the converter is not available on the server right now. Contact Human Resources.',
-            });
-        }
         console.error('Error generating own payslip:', error);
         res.status(500).json({ error: 'Failed to generate your payslip', details: error.message });
+    }
+};
+
+// ---------------------------------------------------------------------------------------------
+// GET /api/payslips/me/:period/view
+//
+// The employee's payslip as data, for the screen that shows it without handing over a file.
+// Same sections, same labels and the same formatted values the Word document prints —
+// payslipSections() is the one source both read, so the screen and the file cannot disagree.
+// ---------------------------------------------------------------------------------------------
+export const getMyPayslipView = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user?.id) return res.status(401).json({ error: 'Unauthorized' });
+        const emp = await resolveSelfEmployee(req.user);
+        if (!emp) return res.status(404).json({ error: 'No employee record is linked to your account.' });
+
+        const { period } = req.params;
+        const line = await prisma.payrollLine.findFirst({
+            where: { employeeId: emp.id, status: 'OK', run: { period, ...CLOSED_RUN } },
+            include: {
+                ...LINE_INCLUDE,
+                run: { select: { status: true, approvedAt: true, paidAt: true, periodStart: true, periodEnd: true } },
+            },
+        });
+        if (!line) return res.status(404).json({ error: 'You have no payslip for that month yet.' });
+
+        res.json({
+            period,
+            periodLabel: periodLabel(period),
+            // The month name only. The English half of the printed title already carries the year.
+            monthNameArabic: periodMonthNameArabic(period),
+            periodStart: line.run.periodStart,
+            periodEnd: line.run.periodEnd,
+            status: line.run.status,
+            approvedAt: line.run.approvedAt,
+            paidAt: line.run.paidAt,
+            currency: line.currency,
+            netSalary: line.netSalary,
+            sections: payslipSections(line as unknown as PayslipLine),
+        });
+    } catch (error: any) {
+        console.error('Error building own payslip view:', error);
+        res.status(500).json({ error: 'Failed to load your payslip' });
     }
 };
 

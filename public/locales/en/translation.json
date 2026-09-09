@@ -1204,5 +1204,13 @@
     "role_head_unit": "Head of Unit",
     "perm_manage_service_providers": "Manage Service Providers",
     "action_exported": "Exported / downloaded",
-    "every_create_update_and_delete_across_the_system": "Every create, update and delete across the system, plus every payroll export — who did it and when."
+    "every_create_update_and_delete_across_the_system": "Every create, update and delete across the system, plus every payroll export — who did it and when.",
+    "bonus_percent_of_basic_salary": "{{percent}}% bonus of basic salary",
+    "the_bonus_amount_is_calculated_by_payroll": "This records the agreed percentage. Payroll calculates the amount in the payout month: basic salary × this percentage.",
+    "payslip_download": "Download the payslip",
+    "payslip_open_on_screen": "Open the payslip",
+    "payslip_view_failed": "That payslip could not be loaded.",
+    "back_to_my_payslips": "Back to my payslips",
+    "payslip_both_note": "Open a payslip to read every figure on screen, or download it as a Word document to print or keep.",
+    "payslip_screen_note": "These figures are read from the signed-off payroll period every time you open this screen. A month runs from the 25th to the 24th and is named after the month it ends in. For any question about your salary, email payroll@iph-ly.com."
 }
