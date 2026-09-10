@@ -41,3 +41,23 @@ export const RESIDENCY_LABELS: Record<string, string> = {
     'DIRCT NONE RESDANT': 'Direct non-resident',
     'NONE RESDANT': 'Service provider',
 };
+
+/**
+ * "2026-09" as a person reads it: "September 2026", translated.
+ *
+ * The stored form is a sort key, not something to show. It was being printed raw in the provider
+ * advances table while every other screen named the month, so the same month appeared in two
+ * different languages depending on where you looked.
+ */
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+export const periodLabel = (period: string | null | undefined, t: (k: string, o?: any) => string): string => {
+    if (!period) return '—';
+    const [y, m] = String(period).split('-').map(Number);
+    const name = MONTH_NAMES[m - 1];
+    if (!y || !name) return String(period);   // not a period after all — show it rather than lie
+    return `${t(`month_${name.toLowerCase()}`, { defaultValue: name })} ${y}`;
+};

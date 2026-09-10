@@ -18,6 +18,8 @@ import { payrollRewardService } from '../../services/payrollRewardService';
 import type { PayrollReward, RewardState } from '../../services/payrollRewardService';
 import { canAccess } from '../../utils/access';
 import { useAuth } from '../../context/AuthContext';
+import { usePrompt } from '../../components/PromptDialog';
+import { periodLabel } from '../../utils/payrollLabels';
 import PayrollTabs from '../../components/payroll/PayrollTabs';
 import { RESIDENCY_LABELS } from '../../utils/payrollLabels';
 
@@ -34,21 +36,12 @@ const ATTENTION: Record<string, { label: string; hint: string }> = {
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** The 12 months around the current period, for the payout-month picker. */
-const periodChoices = (current: string): string[] => {
-    const [y, m] = current.split('-').map(Number);
-    return Array.from({ length: 15 }, (_, i) => {
-        const d = new Date(y, m - 1 - 3 + i, 1);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    });
-};
-
 const RewardsDue: React.FC = () => {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
+    const prompt = usePrompt();
     const { currentUser } = useAuth();
     const canManage = canAccess(currentUser, [], ['manage_payroll']);
-
     const [state, setState] = useState<RewardState>('');
     const [period, setPeriod] = useState('');
     const [search, setSearch] = useState('');
@@ -60,16 +53,6 @@ const RewardsDue: React.FC = () => {
     const { data: rewards = [], isLoading } = useQuery({
         queryKey: ['payroll', 'rewards', { state, period }],
         queryFn: () => payrollRewardService.list({ state, period: period || undefined }),
-    });
-
-    const setPayout = useMutation({
-        mutationFn: ({ id, payoutPeriod }: { id: string; payoutPeriod: string | null }) =>
-            payrollRewardService.setPayoutPeriod(id, payoutPeriod),
-        onSuccess: () => {
-            toast.success(t('reward_payout_updated', { defaultValue: 'Payout month updated' }));
-            queryClient.invalidateQueries({ queryKey: ['payroll'] });
-        },
-        onError: (err: any) => toast.error(err?.response?.data?.error || t('reward_payout_failed', { defaultValue: 'Could not change the payout month.' })),
     });
 
     const filtered = useMemo(() => {
@@ -97,7 +80,37 @@ const RewardsDue: React.FC = () => {
     }, [filtered]);
 
     const needsAttention = filtered.filter(r => r.needsAttention).length;
-    const choices = periodChoices(periodData?.current || '2026-01');
+
+    // A correction, not the normal path: the month arrives derived from the award. Typed as
+    // YYYY-MM because the server validates that shape and rejects anything else.
+    const setPayout = useMutation({
+        mutationFn: ({ id, payoutPeriod }: { id: string; payoutPeriod: string | null }) =>
+            payrollRewardService.setPayoutPeriod(id, payoutPeriod),
+        onSuccess: () => {
+            toast.success(t('reward_payout_updated', { defaultValue: 'Payout month changed.' }));
+            queryClient.invalidateQueries({ queryKey: ['payroll'] });
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.error || t('reward_payout_failed', { defaultValue: 'Could not change the payout month.' })),
+    });
+
+    const askMonth = async (r: PayrollReward) => {
+        const entered = await prompt({
+            title: t('reward_change_month_title', { defaultValue: 'Move this bonus to another month' }),
+            message: t('reward_change_month_message', {
+                defaultValue: 'The month normally comes from the award itself. Enter the payroll month as YYYY-MM, or leave it empty to clear it.',
+            }),
+            defaultValue: r.payoutPeriod || '',
+            placeholder: '2026-09',
+            confirmText: t('save', { defaultValue: 'Save' }),
+        });
+        if (entered === null) return;
+        const value = entered.trim();
+        if (value && !/^d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+            toast.error(t('reward_month_format', { defaultValue: 'Use the form YYYY-MM, e.g. 2026-09.' }));
+            return;
+        }
+        setPayout.mutate({ id: r.id, payoutPeriod: value || null });
+    };
 
     return (
         <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
@@ -207,8 +220,7 @@ const RewardsDue: React.FC = () => {
                                 key={r.id}
                                 reward={r}
                                 canManage={canManage}
-                                choices={choices}
-                                onSetPayout={p => setPayout.mutate({ id: r.id, payoutPeriod: p })}
+                                onChangeMonth={() => askMonth(r)}
                                 t={t}
                             />
                         ))}
@@ -233,10 +245,9 @@ const Th: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const RewardRow: React.FC<{
     reward: PayrollReward;
     canManage: boolean;
-    choices: string[];
-    onSetPayout: (period: string | null) => void;
+    onChangeMonth: () => void;
     t: any;
-}> = ({ reward: r, canManage, choices, onSetPayout, t }) => {
+}> = ({ reward: r, canManage, onChangeMonth, t }) => {
     const attention = r.needsAttention ? ATTENTION[r.needsAttention] : null;
     const amount = r.actualAmount ?? r.estimatedAmount;
 
@@ -278,21 +289,30 @@ const RewardRow: React.FC<{
             <td className="px-5 py-3 whitespace-nowrap">
                 {r.paidInRun ? (
                     <Link to={`/payroll/runs/${r.paidInRun.id}`} className="text-sm font-bold text-slate-700 hover:text-[#511d29] hover:underline">
-                        <span dir="ltr">{r.paidInRun.period}</span>
+                        {periodLabel(r.paidInRun.period, t)}
                     </Link>
-                ) : canManage ? (
-                    <select
-                        value={r.payoutPeriod || ''}
-                        onChange={e => onSetPayout(e.target.value || null)}
-                        className={`px-2 py-1.5 border rounded-lg text-xs font-bold bg-white ${r.payoutPeriod ? 'border-slate-200 text-slate-700' : 'border-amber-300 text-amber-700'}`}
-                    >
-                        <option value="">{t('reward_pick_month', { defaultValue: '— pick a month —' })}</option>
-                        {choices.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
                 ) : (
-                    <span className="text-sm font-bold text-slate-600">
-                        <span dir="ltr">{r.payoutPeriod || '—'}</span>
-                    </span>
+                    <div className="flex items-center gap-2">
+                        {r.payoutPeriod ? (
+                            <span className="text-sm font-bold text-slate-600">{periodLabel(r.payoutPeriod, t)}</span>
+                        ) : (
+                            <span
+                                className="text-xs font-bold text-amber-700"
+                                title={t('reward_no_month_hint', { defaultValue: 'This award was granted before a payroll coverage month was recorded. It normally gets one when the case is completed.' }) as string}
+                            >
+                                {t('reward_no_month', { defaultValue: 'Not set on the award' })}
+                            </span>
+                        )}
+                        {canManage && (
+                            <button
+                                onClick={onChangeMonth}
+                                title={t('reward_change_month_hint', { defaultValue: 'The month comes from the award itself. Change it only to correct a mistake or move a bonus out of a closed month.' }) as string}
+                                className="text-[11px] font-bold text-slate-400 hover:text-[#511d29] underline decoration-dotted underline-offset-2"
+                            >
+                                {t('change', { defaultValue: 'change' })}
+                            </button>
+                        )}
+                    </div>
                 )}
             </td>
             <td className="px-5 py-3">

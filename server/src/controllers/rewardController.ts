@@ -8,6 +8,7 @@ import {
 } from '../utils/rewardEligibility';
 import { generateAppreciationLetterDocx } from '../utils/rewardForms';
 import { resolveUsersWithPermission } from '../utils/leaveApprovalChain';
+import { isValidPeriod, periodForDate } from '../utils/payrollPeriod';
 
 const prisma = new PrismaClient();
 
@@ -309,6 +310,27 @@ export const createEmployeeOfYearAward = async (req: Request, res: Response) => 
 // (collected outside the system, then uploaded here) is what actually applies the award: only now
 // does bonusLeaveDaysGranted get credited to the employee. Mirrors every other case module's
 // generate-form -> collect signature -> upload-signed-copy -> complete cycle.
+/**
+ * Which payroll month pays this bonus. Derived, never asked for again.
+ *
+ * The month is already chosen by the people who grant the award, so making payroll pick it a second
+ * time invites two different answers to the same question:
+ *
+ *   period is 'YYYY-MM'   the Payroll Coverage month the nominator chose (Exceptional Performance),
+ *                         or the month the award is for (Employee of the Month, Attendance
+ *                         Excellence). That month IS the payout month.
+ *
+ *   anything else         EMPLOYEE_OF_YEAR carries a year, and LOYALTY_MILESTONE carries nothing —
+ *                         neither maps to a payroll month. The user's rule: pay it in the month it
+ *                         was approved, which is the month the case completes.
+ *
+ * periodForDate applies the 25th boundary, so a case completed on the 26th belongs to the next
+ * payroll month — the same month its own payroll run covers.
+ */
+export const payoutPeriodFor = (
+    rc: { period: string | null }, completedAt: Date,
+): string => (rc.period && isValidPeriod(rc.period) ? rc.period : periodForDate(completedAt));
+
 export const completeReward = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
@@ -323,7 +345,13 @@ export const completeReward = async (req: Request, res: Response) => {
         const ops: any[] = [
             prisma.rewardCase.update({
                 where: { id },
-                data: { documentUrl, documentName: documentName || null, completedAt: now },
+                data: {
+                    documentUrl, documentName: documentName || null, completedAt: now,
+                    // Set here rather than on the payroll screen: completing the case is what makes
+                    // the bonus payable, and the month it is paid in follows from the award itself.
+                    // Left alone if something already set it, so a deliberate override survives.
+                    ...(found.payoutPeriod ? {} : { payoutPeriod: payoutPeriodFor(found, now) }),
+                },
                 include: CASE_INCLUDE,
             }),
         ];

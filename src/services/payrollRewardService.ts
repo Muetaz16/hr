@@ -47,6 +47,14 @@ export const payrollRewardService = {
     periods: async (): Promise<{ current: string; periods: { period: string; count: number }[] }> =>
         (await api.get('/payroll-rewards/periods')).data,
 
+    /**
+     * Move a bonus to a different payroll month.
+     *
+     * The month is DERIVED when the award completes — the Payroll Coverage month on the nomination,
+     * or the month the case was approved — so this is a correction, not the normal way it is set.
+     * Payroll keeps it because a month can be recorded wrongly and somebody has to be able to fix
+     * it, and because a bonus whose month has closed has nowhere else to go.
+     */
     setPayoutPeriod: async (id: string, payoutPeriod: string | null) =>
         (await api.patch(`/payroll-rewards/${id}`, { payoutPeriod })).data,
 };
