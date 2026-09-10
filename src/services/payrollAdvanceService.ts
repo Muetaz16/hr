@@ -48,7 +48,11 @@ export interface EmployeeAdvance {
     basicSalaryMonths: number | null;
     basicSalarySnapshot: number | null;
     residencyType: string | null;
+    serviceProviderId: string | null;
     serviceProviderName: string | null;
+    /** The Cash Advance Request form this one was printed on, once a round has sealed it. */
+    providerFormRef: string | null;
+    providerFormIssuedAt: string | null;
     instalments: AdvanceInstalment[];
 }
 

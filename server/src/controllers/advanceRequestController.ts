@@ -19,7 +19,7 @@ import { Request, Response } from 'express';
 
 import { prisma } from '../lib/prisma';
 import { round2 } from '../utils/payrollEngine';
-import { isValidPeriod, currentPeriod, periodLabel } from '../utils/payrollPeriod';
+import { isValidPeriod, currentPeriod, periodLabel, periodForDate } from '../utils/payrollPeriod';
 import { currencyOf } from './payrollRunController';
 import { advanceKindFor, PROVIDER_RESIDENCY as PROVIDER_RESIDENCY_VALUE } from '../utils/advanceKind';
 
@@ -52,6 +52,9 @@ const ADVANCE_SELECT = {
     instalmentCount: true, firstDeductionPeriod: true, outstandingAmount: true,
     basicSalaryMonths: true, basicSalarySnapshot: true,
     residencyType: true, serviceProviderName: true,
+    // Sent so the employee's screen can show WHY withdrawing is closed, rather than offering a
+    // button that fails.
+    providerFormRef: true, providerFormIssuedAt: true,
     whatsappNumber: true, contactEmail: true, reason: true,
     status: true, approvedAt: true, rejectedAt: true, rejectionReason: true,
     documentName: true, createdAt: true, requestSource: true, requestedByName: true,
@@ -97,6 +100,24 @@ export const monthlyBasicFor = async (emp: { jobCategory: string | null; jobGrad
 /** The payroll month a deduction can first land in — the one currently being worked on. */
 const nextDeductionPeriod = () => currentPeriod();
 
+/**
+ * The LAST payroll month anything can be deducted from: the financial month the contract ends in.
+ *
+ * Money can only come off a salary that is going to be paid. A deduction scheduled past the end of
+ * the contract lands in a month with no payroll for this person and is never collected.
+ *
+ * Used by the ADVANCE path only. Loans are left alone by agreement until their rules arrive, so
+ * nothing here bounds a repayment plan — see [[project_payroll_section]] for what is parked.
+ *
+ * periodForDate handles the 25th boundary, so a contract ending on the 28th belongs to the NEXT
+ * month's payroll. That month is still worked and still paid, so it still counts.
+ *
+ * Null when the contract has no end date — which is most of the roster (14 of 97 active employees
+ * carry one today). No end date means no last month, so nothing is capped rather than guessed.
+ */
+const lastDeductiblePeriod = (emp: { contractEndDate: Date | null }): string | null =>
+    (emp.contractEndDate ? periodForDate(new Date(emp.contractEndDate)) : null);
+
 // ---------------------------------------------------------------------------------------------
 // GET /api/advance-requests/me/context
 //
@@ -120,6 +141,11 @@ export const getMyAdvanceContext = async (req: AuthRequest, res: Response) => {
         // larger than one month's salary. It used to be skipped for them because they type a free
         // amount and nothing bounded it.
         const monthlyBasic = await monthlyBasicFor(emp);
+
+        // An ADVANCE is recovered from one named salary month, and that month cannot be past the
+        // end of the contract — there would be no payroll to take it from. Loans are deliberately
+        // left alone: their rules are the user's to define, and nothing here touches them.
+        const lastPeriod = lastDeductiblePeriod(emp);
 
         // An open request is one still being decided or still being repaid. A second advance on top
         // of an unpaid one is a decision for payroll, not something the form should quietly allow.
@@ -158,6 +184,11 @@ export const getMyAdvanceContext = async (req: AuthRequest, res: Response) => {
                 }))
                 : [],
             maxInstalments: MAX_INSTALMENTS,
+            // The contract end, and the last payroll month it can still be deducted from. Null for
+            // an open-ended contract — most of the roster — where nothing is capped.
+            contractEndDate: emp.contractEndDate,
+            lastDeductionPeriod: lastPeriod,
+            lastDeductionPeriodLabel: lastPeriod ? periodLabel(lastPeriod) : null,
             defaultPeriod: nextDeductionPeriod(),
             defaultPeriodLabel: periodLabel(nextDeductionPeriod()),
             openRequests: open,
@@ -258,6 +289,13 @@ export const createMyAdvanceRequest = async (req: AuthRequest, res: Response) =>
 
             const month = String(req.body?.salaryMonth || '');
             if (!isValidPeriod(month)) return res.status(400).json({ error: 'Choose the salary month this amount is taken from.' });
+            const contractLast = lastDeductiblePeriod(emp);
+            if (contractLast && month > contractLast) {
+                return res.status(400).json({
+                    error: `Your contract ends before that month, so nothing could be deducted from it. The last salary it can come out of is ${periodLabel(contractLast)}.`,
+                    lastDeductionPeriod: contractLast,
+                });
+            }
             principal = round2(amount);
             instalmentCount = 1;
             firstPeriod = month;
@@ -339,6 +377,16 @@ export const withdrawMyAdvanceRequest = async (req: AuthRequest, res: Response) 
         if (!found || found.employeeId !== emp.id) return res.status(404).json({ error: 'Request not found.' });
         if (found.status !== 'PENDING') {
             return res.status(409).json({ error: 'This request has already been decided and can no longer be withdrawn.' });
+        }
+        // Once the form carrying this name has gone to the provider it can no longer be taken back
+        // here. The provider is being asked to sign a specific list and a specific total; a name
+        // quietly disappearing from our side after that leaves the paper they signed describing
+        // something that never happened. Payroll can still cancel it — with a record of who did.
+        if (found.providerFormRef) {
+            return res.status(409).json({
+                error: 'Your request is already on the Cash Advance Request form sent to your service provider, so it can no longer be withdrawn here. Contact Payroll if it has to be cancelled.',
+                providerFormRef: found.providerFormRef,
+            });
         }
 
         res.locals.auditDetails = `${found.requestNumber} — ${found.currency} ${found.principal}`;

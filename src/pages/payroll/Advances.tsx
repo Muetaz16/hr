@@ -23,6 +23,7 @@ import { Plus, CheckCircle2, XCircle, Ban, Loader2, HandCoins, Upload, Phone } f
 import PayrollTabs from '../../components/payroll/PayrollTabs';
 import Modal from '../../components/Modal';
 import SearchSelect from '../../components/SearchSelect';
+import { periodLabel } from '../../utils/payrollLabels';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
@@ -282,7 +283,7 @@ const AdvancesPage: React.FC = () => {
                                         <span className="text-slate-300 mx-1">/</span>
                                         <span className="text-slate-400">{a.instalmentCount} × {money(a.principal / a.instalmentCount, a.currency)}</span>
                                     </td>
-                                    <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">{a.firstDeductionPeriod}</td>
+                                    <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">{periodLabel(a.firstDeductionPeriod, t)}</td>
                                     <td className="px-5 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 rounded-full text-[11px] font-semibold ${STATUS_STYLES[a.status]}`}>{a.status}</span>
                                     </td>
@@ -394,7 +395,7 @@ const AdvancesPage: React.FC = () => {
                         <div className="bg-slate-50 rounded-lg p-3 text-sm">
                             <div className="font-semibold text-slate-800">{approving.employee?.fullName}</div>
                             <div className="text-slate-500">
-                                {money(approving.principal, approving.currency)} · {approving.instalmentCount} × {money(approving.principal / approving.instalmentCount, approving.currency)} · {t('from', { defaultValue: 'from' })} {approving.firstDeductionPeriod}
+                                {money(approving.principal, approving.currency)} · {approving.instalmentCount} × {money(approving.principal / approving.instalmentCount, approving.currency)} · {t('from', { defaultValue: 'from' })} {periodLabel(approving.firstDeductionPeriod, t)}
                             </div>
                         </div>
                     )}

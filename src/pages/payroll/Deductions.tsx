@@ -15,6 +15,7 @@ import { Plus, CheckCircle2, Ban, Loader2, Receipt, Repeat } from 'lucide-react'
 import PayrollTabs from '../../components/payroll/PayrollTabs';
 import Modal from '../../components/Modal';
 import SearchSelect from '../../components/SearchSelect';
+import { periodLabel } from '../../utils/payrollLabels';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { canAccess } from '../../utils/access';
@@ -219,9 +220,9 @@ const DeductionsPage: React.FC = () => {
                                         {d.recurring ? (
                                             <span className="inline-flex items-center gap-1">
                                                 <Repeat size={12} className="text-blue-500" />
-                                                {d.startPeriod} → {d.endPeriod || '∞'}
+                                                {periodLabel(d.startPeriod, t)} → {d.endPeriod ? periodLabel(d.endPeriod, t) : '∞'}
                                             </span>
-                                        ) : d.period}
+                                        ) : periodLabel(d.period, t)}
                                     </td>
                                     <td className="px-5 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 rounded-full text-[11px] font-semibold ${STATUS_STYLES[d.status]}`}>{d.status}</span>

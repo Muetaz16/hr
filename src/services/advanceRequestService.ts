@@ -24,6 +24,9 @@ export interface MyAdvance {
     basicSalarySnapshot: number | null;
     residencyType: string | null;
     serviceProviderName: string | null;
+    /** Set once the Cash Advance Request form carrying this name has gone to the provider. */
+    providerFormRef: string | null;
+    providerFormIssuedAt: string | null;
     whatsappNumber: string | null;
     contactEmail: string | null;
     reason: string | null;
@@ -65,6 +68,10 @@ export interface AdvanceContext {
         maxInstalmentAmount: number;
     }[];
     maxInstalments: number;
+    /** The contract end, and the last payroll month anything can be deducted from. */
+    contractEndDate: string | null;
+    lastDeductionPeriod: string | null;
+    lastDeductionPeriodLabel: string | null;
     defaultPeriod: string;
     defaultPeriodLabel: string;
     openRequests: number;

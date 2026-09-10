@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-    HandCoins, Loader2, AlertTriangle, CheckCircle2, Clock, XCircle, Info, Send, Undo2,
+    HandCoins, Loader2, AlertTriangle, CheckCircle2, Clock, XCircle, Info, Send, Undo2, Lock,
 } from 'lucide-react';
 import { advanceRequestService } from '../services/advanceRequestService';
 import type { MyAdvance } from '../services/advanceRequestService';
@@ -219,10 +219,18 @@ const MyAdvances: React.FC = () => {
                                         onChange={e => setSalaryMonth(e.target.value)}
                                         className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-700 bg-white"
                                     >
-                                        {salaryMonthOptions(ctx.defaultPeriod).map(p => (
+                                        {salaryMonthOptions(ctx.defaultPeriod, ctx.lastDeductionPeriod).map(p => (
                                             <option key={p} value={p}>{monthLabel(p, t)}</option>
                                         ))}
                                     </select>
+                                    {ctx.lastDeductionPeriodLabel && (
+                                        <span className="block text-[11px] text-slate-400 font-medium mt-1.5">
+                                            {t('advance_contract_end_month_hint', {
+                                                defaultValue: 'Only up to {{last}} — your contract ends then, and nothing can be deducted after it.',
+                                                last: ctx.lastDeductionPeriodLabel,
+                                            })}
+                                        </span>
+                                    )}
                                 </label>
                             </div>
                             <p className="text-xs text-slate-400 font-medium flex items-start gap-2">
@@ -404,13 +412,25 @@ const Field: React.FC<{ label: string; value?: string | null }> = ({ label, valu
     </div>
 );
 
-/** The next 12 payroll months, starting with the one currently being worked on. */
-const salaryMonthOptions = (from: string): string[] => {
+/**
+ * The payroll months this advance may be taken from: the next 12, cut off at the contract end.
+ *
+ * Offering a month past the contract offers a salary that will not be paid — the deduction would
+ * sit in a period with no payroll for this person and never be collected. `last` is null for an
+ * open-ended contract, and then the full twelve stand.
+ *
+ * Always returns at least the first month, so somebody already inside their final month still has
+ * something to pick rather than an empty list.
+ */
+const salaryMonthOptions = (from: string, last: string | null): string[] => {
     const [y, m] = from.split('-').map(Number);
-    return Array.from({ length: 12 }, (_, i) => {
+    const all = Array.from({ length: 12 }, (_, i) => {
         const d = new Date(y, m - 1 + i, 1);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
+    if (!last) return all;
+    const within = all.filter(p => p <= last);
+    return within.length ? within : [all[0]];
 };
 
 const monthLabel = (period: string, t: any): string => {
@@ -429,8 +449,13 @@ const AdvanceCard: React.FC<{ advance: MyAdvance; onWithdraw: () => void; withdr
                 <div>
                     <div className="flex items-center gap-2.5">
                         <span className="text-base font-black text-slate-800">{fmt(advance.principal)} {advance.currency}</span>
+                        {/* "Awaiting a decision" is true but vague once the form is out — the wait
+                            is on the provider's desk, and that is also why Withdraw disappears. */}
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${meta.cls}`}>
-                            <Icon size={11} /> {t(`advance_status_${advance.status}`, { defaultValue: meta.label })}
+                            <Icon size={11} />{' '}
+                            {advance.status === 'PENDING' && advance.providerFormRef
+                                ? t('advance_status_with_provider', { defaultValue: 'With your service provider' })
+                                : t(`advance_status_${advance.status}`, { defaultValue: meta.label })}
                         </span>
                     </div>
                     <p className="text-xs text-slate-400 font-medium mt-1">
@@ -449,7 +474,20 @@ const AdvanceCard: React.FC<{ advance: MyAdvance; onWithdraw: () => void; withdr
                             </div>
                         </>
                     )}
-                    {advance.status === 'PENDING' && (
+                    {/* Withdrawing closes the moment the form carrying this name goes out: the
+                        provider is signing a specific list and total, and a name vanishing from our
+                        side afterwards leaves their signed paper describing something else. */}
+                    {advance.status === 'PENDING' && (advance.providerFormRef ? (
+                        <span
+                            className="inline-flex items-start gap-1.5 text-[11px] font-semibold text-slate-400 max-w-[16rem] text-end"
+                            title={advance.providerFormRef}
+                        >
+                            <Lock size={12} className="mt-0.5 shrink-0" />
+                            {t('advance_withdraw_locked', {
+                                defaultValue: 'Sent to your service provider for signature — it can no longer be withdrawn. Contact Payroll if it has to be cancelled.',
+                            })}
+                        </span>
+                    ) : (
                         <button
                             onClick={onWithdraw}
                             disabled={withdrawing}
@@ -457,7 +495,7 @@ const AdvanceCard: React.FC<{ advance: MyAdvance; onWithdraw: () => void; withdr
                         >
                             <Undo2 size={13} /> {t('advance_withdraw', { defaultValue: 'Withdraw' })}
                         </button>
-                    )}
+                    ))}
                 </div>
             </div>
 
