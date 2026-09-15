@@ -15,18 +15,7 @@ import { canAccess } from '../../utils/access';
 import { useAuth } from '../../context/AuthContext';
 import PayrollCorrections from '../../components/payroll/PayrollCorrections';
 import { payslipService } from '../../services/payslipService';
-
-const BLOCK_LABELS: Record<string, string> = {
-    NO_STRUCTURE_LEVEL: 'No salary structure set on the employee record',
-    NO_RATE_FOR_COMBINATION: 'No rate exists for this job category / grade / structure',
-    NO_ATTENDANCE: 'No attendance record matched this staff ID',
-    NO_RESIDENCY: 'Residency (contract type) is not set',
-    NEGATIVE_NET: 'Deductions exceed earnings',
-    BONUS_CAP_EXCEEDED: 'Bonus percentages add up to more than 100%',
-    GRADE_CHANGED_MID_PERIOD: 'Job grade changed during this period',
-    FINAL_SETTLEMENT_PENDING: 'Employee is leaving during this period',
-    JOINED_MID_PERIOD: 'Employee joined during this period',
-};
+import { BLOCK_LABELS } from '../../utils/payrollLabels';
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
@@ -126,7 +115,9 @@ const PayrollLineDetail: React.FC = () => {
                     </p>
                     <ul className="space-y-1">
                         {line.blockReasons.map(r => (
-                            <li key={r} className="text-xs text-amber-800/80 font-medium">· {BLOCK_LABELS[r] || r}</li>
+                            <li key={r} className="text-xs text-amber-800/80 font-medium">
+                                · {t(`payroll_block_${r}`, { defaultValue: BLOCK_LABELS[r] || r })}
+                            </li>
                         ))}
                     </ul>
                 </div>

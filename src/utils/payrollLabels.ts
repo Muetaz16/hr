@@ -61,3 +61,20 @@ export const periodLabel = (period: string | null | undefined, t: (k: string, o?
     if (!y || !name) return String(period);   // not a period after all — show it rather than lie
     return `${t(`month_${name.toLowerCase()}`, { defaultValue: name })} ${y}`;
 };
+
+/**
+ * The last `n` financial months as 'YYYY-MM', newest first — for a period picker.
+ *
+ * Only the month LABELS are built here. The 25th → 24th boundary they stand for is resolved
+ * server-side from the same payrollPeriod module payroll itself uses; a second copy of that
+ * arithmetic in the browser is how a screen's window quietly drifts out of step with the run.
+ */
+export const recentPeriods = (n: number, today: Date = new Date()): string[] => {
+    // On or after the 25th, today already belongs to NEXT month's payroll — so that is the month a
+    // picker should open on: the run not yet computed, and therefore the one still worth fixing.
+    const anchor = new Date(today.getFullYear(), today.getMonth() + (today.getDate() >= 25 ? 1 : 0), 1);
+    return Array.from({ length: n }, (_, i) => {
+        const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    });
+};

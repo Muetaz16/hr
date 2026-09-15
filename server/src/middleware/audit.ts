@@ -51,6 +51,9 @@ function describeAction(method: string, rawPath: string): string {
         if (s1 === 'announcements') return `${verb} announcement`;
         if (s1 === 'tasks') return `${verb} task`;
         if (s1 === 'requests') {
+            // Named apart from an ordinary "Created leave request": this one had no approval chain
+            // behind it, so the log has to say so on its face rather than look like every other row.
+            if (s2 === 'direct-leave') return 'Recorded a leave directly (no approval chain)';
             if (s3 === 'replacement-decision') return 'Decided leave replacement';
             if (seg.includes('decision')) return 'Decided leave approval step';
             if (s3 === 'status') return 'Updated leave request status';
@@ -67,8 +70,16 @@ function describeAction(method: string, rawPath: string): string {
     }
     if (s0 === 'attendance-integration') {
         if (s1 === 'missing-punches') return 'Logged a missing punch';
+        if (s1 === 'punch-corrections') return 'Corrected a punch';
         if (s1 === 'leaves' || s1 === 'employee-leaves') return `${verb === 'Deleted' ? 'Deleted' : 'Registered'} attendance leave`;
         if (s1 === 'overtimes') return 'Registered overtime';
+        if (s1 === 'overtime-approvals') {
+            // A revoke is a DELETE that sets the hours to zero — the attendance system has no
+            // delete for overtime — so the log says revoked, not deleted.
+            if (method === 'DELETE') return 'Revoked an overtime approval';
+            if (method === 'PATCH') return 'Changed approved overtime';
+            return 'Approved overtime';
+        }
         if (s1 === 'out-works') return `${verb === 'Deleted' ? 'Deleted' : 'Registered'} out-work`;
         if (s1 === 'excused-lates') return `${verb === 'Deleted' ? 'Deleted' : 'Registered'} excused late`;
         if (s1 === 'excused-early-outs') return `${verb === 'Deleted' ? 'Deleted' : 'Registered'} excused early-out`;

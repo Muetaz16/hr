@@ -190,6 +190,47 @@ const PayrollRunDetail: React.FC = () => {
                 </div>
             )}
 
+            {/* A punch was corrected in the attendance system after this run read it, so this run's
+                hours are now out of date at the source. Deliberately a separate banner from the one
+                above: that one is about corrections stored on the run, this one is about the run's
+                INPUT having changed underneath it — different cause, and on a closed run a
+                different remedy entirely, which is why the button disappears once it is signed. */}
+            {(run.staleAttendanceCorrections ?? 0) > 0 && (
+                <div className="border border-amber-300 bg-amber-50 rounded-2xl px-5 py-4 flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-black text-amber-900">
+                                {t('payroll_stale_attendance', {
+                                    defaultValue: '{{n}} punch correction(s) landed after this run read attendance',
+                                    count: run.staleAttendanceCorrections,
+                                    n: run.staleAttendanceCorrections,
+                                })}
+                            </p>
+                            <p className="text-xs text-amber-900/70 font-medium mt-0.5">
+                                {editable
+                                    ? t('payroll_stale_attendance_desc', {
+                                        defaultValue: 'The hours on this run are older than the attendance system\'s. Recompute to pick them up.',
+                                    })
+                                    : t('payroll_stale_attendance_closed', {
+                                        defaultValue: 'This run is closed and keeps the figures it was signed with. Recover the difference by adding an underpayment correction to the next run.',
+                                    })}
+                            </p>
+                        </div>
+                    </div>
+                    {canManage && editable && (
+                        <button
+                            onClick={handleCompute}
+                            disabled={computing}
+                            className="inline-flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-40 shrink-0"
+                        >
+                            {computing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                            {t('payroll_recompute', { defaultValue: 'Recompute' })}
+                        </button>
+                    )}
+                </div>
+            )}
+
             {blocked > 0 && (
                 <div className="border border-amber-200 bg-amber-50 rounded-2xl px-5 py-4 flex items-start gap-3">
                     <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />

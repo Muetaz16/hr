@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthRequest } from '../middleware/auth';
 import { ATTENDANCE_API_BASE, proxy, jsonPost, findBioTimeEmpIdByCode, fetchBioTimeRoster } from '../utils/attendanceApiProxy';
+import { resolveScheduledWorkHours } from '../utils/attendanceApiProxy';
+import { annotateReportDays } from '../utils/attendanceAnomaly';
+import {
+    scanPunchAnomalies, cachedScanPunchAnomalies, loadScanEmployees, localTodayKey,
+} from '../utils/punchAnomalyScan';
+import { currentPeriod, financialMonthRange, isValidPeriod, toApiDate } from '../utils/payrollPeriod';
 
 import { prisma } from '../lib/prisma';
 
@@ -14,6 +20,37 @@ const resolveMyEmployee = async (req: AuthRequest) => {
         employee = await prisma.employee.findFirst({ where: { email: req.user.email } });
     }
     return employee;
+};
+
+// Today as the LOCAL calendar day. Deliberately not toISOString().slice(0,10): that is UTC, and
+// between midnight and 02:00 Tripoli time it still reads yesterday — which would make the real
+// today look like a future date and get a still-in-progress day flagged as broken. Same shape as
+// disciplinaryAttendance.ts's own `fmt`.
+const localDayKey = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Attaches the punch-anomaly verdict to every day of a monthly report before it leaves the server.
+//
+// Doing it here rather than in each screen is the whole point: server/ and src/ share no code, and
+// the one existing hand-port (disciplinaryAttendance.ts) has already drifted from its original. With
+// the verdict on the payload, the HR screen, the employee's own page and the correction queue can
+// never disagree about whether a day is broken.
+//
+// The schedule is resolved ONCE per report, not per day — see annotateReportDays for why. Failure to
+// resolve it is not fatal: the anomaly rules that need it simply degrade (no suggested time for an
+// ADD, no short-day advisory), and a report is never withheld because a settings lookup failed.
+const withAnomalies = async (report: any, empCode?: string | null) => {
+    let workStart: string | undefined;
+    let workEnd: string | undefined;
+    if (empCode) {
+        try {
+            const first = report?.reportData?.[0]?.date;
+            const schedule = await resolveScheduledWorkHours(empCode, first ? String(first).slice(0, 10) : new Date());
+            workStart = schedule.workStart;
+            workEnd = schedule.workEnd;
+        } catch { /* degrade, never fail the report */ }
+    }
+    return annotateReportDays(report, { todayKey: localDayKey(new Date()), workStart, workEnd });
 };
 
 // GET /api/attendance-integration/me/monthly-report?start=&end=
@@ -53,7 +90,7 @@ export const getMyMonthlyReport = async (req: Request, res: Response) => {
         if (!response.ok) {
             return res.status(502).json({ error: `The attendance system returned an error (${response.status}).` });
         }
-        res.json(await response.json());
+        res.json(await withAnomalies(await response.json(), employee.staffId));
     } catch (error) {
         console.error('Error fetching my monthly report:', error);
         res.status(502).json({ error: 'Failed to reach the attendance system. Is it running?' });
@@ -171,7 +208,10 @@ export const getAttendanceMonthlyReport = async (req: Request, res: Response) =>
         if (!response.ok) {
             return res.status(502).json({ error: `The attendance system returned an error (${response.status}).` });
         }
-        res.json(await response.json());
+        const report: any = await response.json();
+        // empCode is not a path param here, but the report carries it — needed to resolve the
+        // employee's own shift rather than falling back to the company default.
+        res.json(await withAnomalies(report, report?.empCode));
     } catch (error) {
         console.error('Error fetching attendance monthly report:', error);
         res.status(502).json({ error: 'Failed to reach the attendance system. Is it running?' });
@@ -246,14 +286,9 @@ export const getEmployeeLeaves = (req: Request, res: Response) => proxy(res, '/a
 export const deleteEmployeeLeave = (req: Request, res: Response) =>
     proxy(res, `/api/system-settings/employee-leaves/${encodeURIComponent(req.params.id)}`, { method: 'DELETE' });
 
-// POST /api/attendance-integration/overtimes — upsert approved overtime for empCode+date.
-export const addOvertime = (req: Request, res: Response) => {
-    const { empCode, date, hours, minutes, reason } = req.body;
-    if (!empCode || !date || hours === undefined || minutes === undefined) {
-        return res.status(400).json({ error: 'empCode, date, hours and minutes are required.' });
-    }
-    return proxy(res, '/api/attendance/overtimes', jsonPost({ empCode, date, hours, minutes, reason }));
-};
+// Approved overtime moved to attendanceOvertimeController. The handler that stood here sent the
+// service's OLD single-`date` shape, which it no longer accepts — it takes a startDate/endDate
+// period now — so it is removed rather than left for somebody to re-route.
 
 // POST /api/attendance-integration/out-works — register an out-of-office/field-work period.
 export const addOutWork = (req: Request, res: Response) => {
@@ -433,3 +468,79 @@ export const syncEmployeesFromBioTime = async (req: Request, res: Response) => {
         return res.status(500).json({ error: error?.message || 'Failed to sync employees from the attendance system.' });
     }
 };
+
+// ---------------------------------------------------------------------------------------------
+// Punch anomalies — the cross-employee queue
+// ---------------------------------------------------------------------------------------------
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * GET /api/attendance-integration/punch-anomalies?period=|start=&end=&empCode=&refresh=true
+ *
+ * Every day, across the roster, whose punches did not come out as a working day. Ask by `period`
+ * (YYYY-MM, a financial month) or by an explicit `start`/`end` pair. With neither, it answers for
+ * the current financial month (25th -> 24th), which is the window a payroll run will read — the
+ * point of the queue is to clear it BEFORE that run computes.
+ *
+ * `empCode` narrows the sweep to one employee and bypasses the cache: it is what the correction
+ * screen calls to re-check its own work immediately after pushing a fix.
+ */
+export const getPunchAnomalies = async (req: Request, res: Response) => {
+    try {
+        const rawStart = typeof req.query.start === 'string' ? req.query.start : '';
+        const rawEnd = typeof req.query.end === 'string' ? req.query.end : '';
+        const rawPeriod = typeof req.query.period === 'string' ? req.query.period.trim() : '';
+        const empCode = typeof req.query.empCode === 'string' ? req.query.empCode.trim() : '';
+        const refresh = String(req.query.refresh || '') === 'true';
+
+        let start: string;
+        let end: string;
+        if (rawPeriod) {
+            // `period=YYYY-MM` is the normal way to ask, because a financial month is the unit that
+            // actually decides anything here: a day corrected before its run computes costs nobody
+            // a thing, the same day corrected after means a correction against an approved run.
+            // The 25th->24th arithmetic stays on THIS side deliberately — a second copy of it in
+            // the client is how the boundary quietly starts disagreeing with payroll.
+            if (!isValidPeriod(rawPeriod)) {
+                return res.status(400).json({ error: 'period must be YYYY-MM.' });
+            }
+            if (rawStart || rawEnd) {
+                return res.status(400).json({ error: 'Pass either period or start/end, not both.' });
+            }
+            const range = financialMonthRange(rawPeriod);
+            start = toApiDate(range.start);
+            end = toApiDate(range.end);
+        } else if (DATE_RE.test(rawStart) && DATE_RE.test(rawEnd)) {
+            start = rawStart;
+            end = rawEnd;
+        } else if (rawStart || rawEnd) {
+            // Half a range, or a malformed one, is not something to guess at: the attendance
+            // service ignores parameters it cannot parse and answers for a rolling last-7-days
+            // window instead, so a silent fallback would show a confidently wrong queue.
+            return res.status(400).json({ error: 'start and end must both be YYYY-MM-DD dates.' });
+        } else {
+            const range = financialMonthRange(currentPeriod());
+            start = toApiDate(range.start);
+            end = toApiDate(range.end);
+        }
+        if (start > end) return res.status(400).json({ error: 'start must not be after end.' });
+
+        // A single-employee sweep is one HTTP call, and it deliberately bypasses the cache: the
+        // caller asking for one employee is the correction screen, checking its own work landed.
+        if (empCode) {
+            const employees = await loadScanEmployees(empCode);
+            if (employees.length === 0) {
+                return res.status(404).json({ error: 'No active employee is linked to that staff code.' });
+            }
+            const result = await scanPunchAnomalies(employees, start, end, localTodayKey());
+            return res.json({ ...result, cached: false });
+        }
+
+        res.json(await cachedScanPunchAnomalies(start, end, { refresh }));
+    } catch (error) {
+        console.error('Error scanning punch anomalies:', error);
+        res.status(502).json({ error: 'Failed to reach the attendance system. Is it running?' });
+    }
+};
+

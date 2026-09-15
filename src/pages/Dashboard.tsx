@@ -21,7 +21,8 @@ import { employeeService } from '../services/employeeService';
 import { evaluationService } from '../services/evaluationService';
 import { canAccess } from '../utils/access';
 import { timeService } from '../services/timeService';
-import { departmentService, groupService } from '../services/departmentService';
+import { departmentService, groupService, divisionService } from '../services/departmentService';
+import { buildOrgScope, headNodeOf } from '../utils/orgScope';
 import { unitService } from '../services/unitService';
 import { getHREvaluation } from '../services/hrEvaluationService';
 import { isEvaluationEnabled } from '../services/evaluationPeriodService';
@@ -87,11 +88,12 @@ const Dashboard: React.FC = () => {
             const hasEmpView = currentUser.permissions?.includes('view_employees') || currentUser.permissions?.includes('manage_employees');
             const isManager = ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'].includes(currentUser.role) || hasEmpView;
 
-            const [emps, depts, groups, units, _timeRecords, expiringSoonList, myEmployeeResult] = await Promise.all([
+            const [emps, depts, groups, units, divisions, _timeRecords, expiringSoonList, myEmployeeResult] = await Promise.all([
                 isManager ? employeeService.getAllEmployees().catch(() => []) : Promise.resolve([]),
                 departmentService.getAllDepartments().catch(() => []),
                 groupService.getAllGroups().catch(() => []),
                 unitService.getAllUnits().catch(() => []),
+                divisionService.getAllDivisions().catch(() => []),
                 // Only fetch time records for Admin/HR
                 canAccess(currentUser, [], ['view_time_tracking', 'manage_time_tracking'])
                     ? timeService.getTimeRecordsByMonth(currentMonth).catch(() => [])
@@ -115,27 +117,15 @@ const Dashboard: React.FC = () => {
             // Filter employees based on scope. Transferred (inter-company) staff are excluded from
             // active counts and evaluation ratios.
             const activeEmps = (emps as any[]).filter(e => e.enrollmentStatus !== 'TRANSFERRED');
+            // Scope from the ORG CHART: a head's node plus everything beneath it. This used to be
+            // four hand-written branches, each comparing whichever id happened to be stamped on the
+            // employee row — so a directorate head saw only employees carrying a directorateId and
+            // missed everyone reachable only through department -> division -> directorate.
             let scopedEmps = activeEmps;
-            if (currentUser.role === 'HEAD_DIRECTOR') {
-                if (myEmployeeData?.directorateId) {
-                    scopedEmps = activeEmps.filter(e => e.directorateId === myEmployeeData.directorateId);
-                } else if (currentUser.departmentIds && currentUser.departmentIds.length > 0) {
-                    scopedEmps = activeEmps.filter(e => currentUser.departmentIds?.includes(e.departmentId));
-                } else if (currentUser.departmentId) {
-                    scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
-                } else if (currentUser.groupId) {
-                    scopedEmps = activeEmps.filter(e => e.groupId === currentUser.groupId);
-                }
-            } else if (currentUser.role === 'HEAD_DIVISION') {
-                if (myEmployeeData?.divisionId) {
-                    scopedEmps = activeEmps.filter(e => e.divisionId === myEmployeeData.divisionId);
-                } else {
-                    scopedEmps = [];
-                }
-            } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
-                scopedEmps = activeEmps.filter(e => e.departmentId === currentUser.departmentId);
-            } else if (currentUser.role === 'HEAD_UNIT' && (currentUser as any).unitId) {
-                scopedEmps = activeEmps.filter(e => e.unitId === (currentUser as any).unitId);
+            const headNode = headNodeOf(currentUser as any, myEmployeeData as any);
+            if (['HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_UNIT'].includes(currentUser.role)) {
+                const org = buildOrgScope({ units: units as any, departments: depts as any, divisions: divisions as any });
+                scopedEmps = headNode ? activeEmps.filter(e => org.isUnder(e, headNode)) : [];
             }
 
             // Analytics Data Preparation (Only for Super Admin / HR)

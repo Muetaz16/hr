@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { staffHubService } from '../services/staffHubService';
+import { leavePolicyService, LEAVE_POLICY_DEFAULTS, type LeavePolicy } from '../services/leavePolicyService';
 import type { LeaveRequest, LeaveRequestWithEmployee } from '../services/staffHubService';
 import { employeeService } from '../services/employeeService';
 import {
@@ -36,7 +37,7 @@ import { SERVER_URL } from '../services/apiClient';
 
 // Human-readable labels for the org approval-chain stages, shown in each request's progress trail.
 const STAGE_LABELS: Record<string, string> = {
-    HEAD_ATTENDANCE: 'Head of Attendance',
+    HEAD_ATTENDANCE: 'Head of Personal Relations Department',
     DIRECT_SUPERVISOR: 'Direct Supervisor',
     UNIT_HEAD: 'Unit Head',
     DEPT_HEAD: 'Department Head',
@@ -69,6 +70,17 @@ const MISSING_PUNCH_REASON_OPTIONS = [
     { value: 'DEVICE_ISSUE', labelKey: 'mp_device_issue', defaultLabel: 'Device / System Issue' },
     { value: 'POWER_OUTAGE', labelKey: 'mp_power_outage', defaultLabel: 'Power Outage' },
     { value: 'OTHERS', labelKey: 'mp_others', defaultLabel: 'Others' },
+];
+
+// Attendance permissions (Late Coming / Early Leaving / Few Hours) — the four reason boxes printed
+// on the "Late Arrival - Early Departure Request Form". Exactly one is ticked, so this is a choice,
+// not a free-text answer: the printed row has boxes and no line to write on.
+const PERMISSION_TYPES = ['LATE_COMING', 'EARLY_LEAVING', 'HOURS_LEAVE'];
+const PERMISSION_REASON_OPTIONS = [
+    { value: 'PERSONAL', labelKey: 'pr_personal', defaultLabel: 'Personal' },
+    { value: 'FAMILY', labelKey: 'pr_family', defaultLabel: 'Family' },
+    { value: 'HEALTH_MEDICAL', labelKey: 'pr_health_medical', defaultLabel: 'Health / Medical' },
+    { value: 'OTHERS', labelKey: 'pr_others', defaultLabel: 'Others' },
 ];
 
 const StaffHub: React.FC = () => {
@@ -104,9 +116,28 @@ const StaffHub: React.FC = () => {
         workOrderType: 'SITE_MISSION',
         placeOfAssignment: '',
         missingPunchType: 'CHECK_IN',
-        missingPunchReason: 'FORGOT'
+        missingPunchReason: 'FORGOT',
+        permissionReason: '',
+        ticketProvidedBy: ''
     });
     const [requestFile, setRequestFile] = useState<File | null>(null);
+    // The notice window is policy, not a constant — read it rather than assume 14.
+    const [leavePolicy, setLeavePolicy] = useState<LeavePolicy>(LEAVE_POLICY_DEFAULTS);
+    const [shortNoticeReason, setShortNoticeReason] = useState('');
+
+    useEffect(() => { leavePolicyService.get().then(setLeavePolicy).catch(() => {}); }, []);
+
+    // How many days' notice this request actually gives, and whether that breaks the rule.
+    // Emergency leave is exempt by nature, so it never counts as short notice.
+    const NOTICE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE'];
+    const noticeDaysGiven = (() => {
+        if (!newRequest.startDate) return null;
+        const start = new Date(newRequest.startDate + 'T00:00:00').getTime();
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        return Math.round((start - today.getTime()) / 86400000);
+    })();
+    const isShortNotice = NOTICE_TYPES.includes(newRequest.type)
+        && noticeDaysGiven !== null && noticeDaysGiven >= 0 && noticeDaysGiven < leavePolicy.noticeDays;
 
     const resetRequestForm = () => {
         setNewRequest({
@@ -119,9 +150,12 @@ const StaffHub: React.FC = () => {
             workOrderType: 'SITE_MISSION',
             placeOfAssignment: '',
             missingPunchType: 'CHECK_IN',
-            missingPunchReason: 'FORGOT'
+            missingPunchReason: 'FORGOT',
+            permissionReason: '',
+            ticketProvidedBy: ''
         });
         setRequestFile(null);
+        setShortNoticeReason('');
         setReplacementUserId('');
     };
 
@@ -170,6 +204,31 @@ const StaffHub: React.FC = () => {
             return;
         }
 
+        // Filing inside the notice window is allowed, but only on the record: the reason AND the
+        // letter that authorises it. The server enforces the same pair.
+        if (isShortNotice && !shortNoticeReason.trim()) {
+            toast.error(t('err_short_notice_reason', { defaultValue: 'Please give the reason for the short notice.' }));
+            return;
+        }
+        if (isShortNotice && !requestFile) {
+            toast.error(t('err_short_notice_letter', { defaultValue: 'Please attach the letter authorising the short notice.' }));
+            return;
+        }
+
+        // The permission form prints the reason as four tick boxes, so one has to be chosen — an
+        // unticked row tells the approver nothing. "Others" needs the note as well, for the same
+        // reason: the box alone says only that it was none of the other three.
+        if (PERMISSION_TYPES.includes(newRequest.type)) {
+            if (!newRequest.permissionReason) {
+                toast.error(t('err_permission_reason', { defaultValue: 'Please choose the reason for this permission.' }));
+                return;
+            }
+            if (newRequest.permissionReason === 'OTHERS' && !newRequest.reason.trim()) {
+                toast.error(t('err_permission_reason_other', { defaultValue: 'You chose "Others" — please describe the reason in the note below.' }));
+                return;
+            }
+        }
+
         // Work Authorization covers a date range (out-work), so both dates and a place are required.
         if (newRequest.type === 'WORK_AUTHORIZATION') {
             if (!newRequest.endDate) {
@@ -208,7 +267,15 @@ const StaffHub: React.FC = () => {
                 formData.append('missingPunchType', newRequest.missingPunchType);
                 formData.append('missingPunchReason', newRequest.missingPunchReason);
             }
+            if (PERMISSION_TYPES.includes(newRequest.type)) {
+                formData.append('permissionReason', newRequest.permissionReason);
+            }
+            // Optional on purpose: an empty choice is a valid answer, so nothing is sent.
+            if (CHAIN_TYPES.includes(newRequest.type) && newRequest.ticketProvidedBy) {
+                formData.append('ticketProvidedBy', newRequest.ticketProvidedBy);
+            }
             if (hasReplacement) formData.append('replacementUserId', replacementUserId);
+            if (isShortNotice && shortNoticeReason.trim()) formData.append('shortNoticeReason', shortNoticeReason.trim());
             if (requestFile) formData.append('attachment', requestFile);
 
             await staffHubService.createRequest(formData);
@@ -397,10 +464,20 @@ const StaffHub: React.FC = () => {
                                     }
                                 }
                                 const groups = Array.from(byStage.values()).sort((a, b) => a.sequence - b.sequence);
-                                const currentStage = groups.find(g => g.status === 'PENDING')?.stage;
+                                // Nothing is "current" until the nominated replacement accepts: the
+                                // chain has not begun, and the first approver cannot act yet.
+                                const notStarted = req.replacementStatus === 'PENDING';
+                                const currentStage = notStarted ? undefined : groups.find(g => g.status === 'PENDING')?.stage;
                                 return (
                                     <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1.5">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('approval_progress', { defaultValue: 'Approval Progress' })}</p>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                            {t('approval_progress', { defaultValue: 'Approval Progress' })}
+                                            {notStarted && (
+                                                <span className="ms-2 text-amber-600 normal-case tracking-normal">
+                                                    · {t('chain_not_started', { defaultValue: 'not started yet' })}
+                                                </span>
+                                            )}
+                                        </p>
                                         {groups.map(g => {
                                             const isCurrent = g.stage === currentStage;
                                             const Icon = g.status === 'APPROVED' ? CheckCircle2 : g.status === 'REJECTED' ? XCircle : isCurrent ? Clock : MinusCircle;
@@ -598,6 +675,39 @@ const StaffHub: React.FC = () => {
                                     </div>
                                 ) : null}
 
+                                {/* Attendance permission — which of the four reason boxes the
+                                    printed form ticks. Nothing is preselected: a default here would
+                                    file most requests as "Personal" without anyone choosing it. */}
+                                {PERMISSION_TYPES.includes(newRequest.type) && (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className={`text-xs font-bold uppercase tracking-widest ${newRequest.permissionReason ? 'text-slate-400' : 'text-amber-600'}`}>
+                                            {newRequest.permissionReason
+                                                ? t('pr_reason', { defaultValue: 'Reason for the Permission' })
+                                                : t('pr_reason_required', { defaultValue: 'Reason for the Permission — required' })}
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {PERMISSION_REASON_OPTIONS.map(o => {
+                                                const active = newRequest.permissionReason === o.value;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={o.value}
+                                                        onClick={() => setNewRequest({ ...newRequest, permissionReason: o.value })}
+                                                        className={`rounded-2xl border p-3 text-sm font-bold transition-all ${active ? 'border-[#aa7a51] bg-[#aa7a51]/10 text-[#511d29]' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#aa7a51]/40'}`}
+                                                    >
+                                                        {t(o.labelKey, { defaultValue: o.defaultLabel })}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {newRequest.permissionReason === 'OTHERS' && (
+                                            <p className="text-xs text-amber-600/80 leading-relaxed">
+                                                {t('pr_others_hint', { defaultValue: 'The form only ticks a box — describe the reason in the note below so the approver knows what is being asked.' })}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Work Authorization (out-work) — work-order category, place of
                                     assignment, and (for a schedule change) the time window. The
                                     Start/End dates above act as the "Date Covered" range. */}
@@ -688,14 +798,110 @@ const StaffHub: React.FC = () => {
                                                 ))}
                                             </select>
                                         </div>
+                                        {/* The time that should have been recorded. Which boxes are
+                                            shown follows the record type, so nobody is asked for a
+                                            check-out on a check-in-only request. */}
+                                        {(newRequest.missingPunchType === 'CHECK_IN' || newRequest.missingPunchType === 'BOTH') && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('mp_check_in_time', { defaultValue: 'Check-in Time' })}</label>
+                                                <input
+                                                    type="time"
+                                                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                    value={newRequest.startTime}
+                                                    onChange={e => setNewRequest({ ...newRequest, startTime: e.target.value })}
+                                                />
+                                            </div>
+                                        )}
+                                        {(newRequest.missingPunchType === 'CHECK_OUT' || newRequest.missingPunchType === 'BOTH') && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('mp_check_out_time', { defaultValue: 'Check-out Time' })}</label>
+                                                <input
+                                                    type="time"
+                                                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500/20"
+                                                    value={newRequest.endTime}
+                                                    onChange={e => setNewRequest({ ...newRequest, endTime: e.target.value })}
+                                                />
+                                            </div>
+                                        )}
                                         <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-[11px] font-medium text-slate-500 leading-relaxed">
-                                            {t('mp_schedule_note', { defaultValue: 'The punch time is taken from your actual scheduled working hours for that date, and the work location is taken from your Job Description. Pick the date above; on final approval the missing punch is logged into the attendance system automatically.' })}
+                                            {t('mp_time_note', { defaultValue: 'Enter the time that should have been recorded. Your manager can correct it before approving. The work location is taken from your Job Description; on final approval the punch is logged into the attendance system automatically.' })}
                                         </div>
                                     </>
                                 )}
 
                                 {/* Replacement (cover) employee — required for chain leave types when
                                     the requester has a colleague; skipped when they're the only one. */}
+                                {/* Filing inside the notice window. Shown the moment the chosen date
+                                    breaks the rule rather than as an error after pressing Submit —
+                                    the employee needs to know what is being asked of them while they
+                                    can still change the date instead. */}
+                                {isShortNotice && (
+                                    <div className="col-span-2 space-y-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                                        <div className="flex items-start gap-2">
+                                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="text-xs font-black text-amber-800 uppercase tracking-wide">
+                                                    {t('short_notice_title', { defaultValue: 'Short notice' })}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-amber-700 mt-0.5 leading-relaxed">
+                                                    {t('short_notice_explain', {
+                                                        defaultValue: 'This leave starts in {{given}} day(s); the policy asks for {{required}}. You can still file it, but the reason and the letter authorising it are required and will be shown to every approver.',
+                                                        given: noticeDaysGiven,
+                                                        required: leavePolicy.noticeDays,
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            value={shortNoticeReason}
+                                            onChange={e => setShortNoticeReason(e.target.value)}
+                                            rows={2}
+                                            placeholder={t('short_notice_reason_ph', { defaultValue: 'Why is this being requested at short notice?' }) as string}
+                                            className="w-full bg-white border border-amber-200 rounded-xl p-3 text-slate-800 font-medium text-sm focus:ring-2 focus:ring-amber-500/20"
+                                        />
+                                        <p className="text-[11px] font-bold text-amber-700">
+                                            {requestFile
+                                                ? t('short_notice_letter_ok', { defaultValue: 'Letter attached: {{name}}', name: requestFile.name })
+                                                : t('short_notice_letter_needed', { defaultValue: 'Attach the letter authorising it in the attachment field below.' })}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Who bears the travel-ticket cost — the form's "Ticket provided by"
+                                    row. Optional by design: the printed row allows neither box to be
+                                    ticked, and it only applies to non-resident employees, so
+                                    "Not applicable" is the default and a real answer. Clicking the
+                                    selected option again clears it back to no choice. */}
+                                {CHAIN_TYPES.includes(newRequest.type) && (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                            {t('ticket_provided_by', { defaultValue: 'Ticket provided by' })}
+                                            <span className="ms-2 normal-case tracking-normal font-medium text-slate-300">
+                                                {t('ticket_non_resident_only', { defaultValue: 'For non-resident employees only' })}
+                                            </span>
+                                        </label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { value: '', labelKey: 'ticket_not_applicable', fallback: 'Not applicable' },
+                                                { value: 'EMPLOYEE', labelKey: 'ticket_by_employee', fallback: 'Employee' },
+                                                { value: 'COMPANY', labelKey: 'ticket_by_company', fallback: 'Company' },
+                                            ].map(o => {
+                                                const active = newRequest.ticketProvidedBy === o.value;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={o.value || 'none'}
+                                                        onClick={() => setNewRequest({ ...newRequest, ticketProvidedBy: o.value })}
+                                                        className={`rounded-2xl border p-3 text-sm font-bold transition-all ${active ? 'border-[#aa7a51] bg-[#aa7a51]/10 text-[#511d29]' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#aa7a51]/40'}`}
+                                                    >
+                                                        {t(o.labelKey, { defaultValue: o.fallback })}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {CHAIN_TYPES.includes(newRequest.type) && (
                                     <div className="col-span-2 space-y-2">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
@@ -771,7 +977,8 @@ const StaffHub: React.FC = () => {
 
                             <button
                                 type="submit"
-                                disabled={newRequest.type === 'EMERGENCY_LEAVE' && !requestFile}
+                                disabled={(newRequest.type === 'EMERGENCY_LEAVE' && !requestFile)
+                                    || (isShortNotice && (!shortNoticeReason.trim() || !requestFile))}
                                 className="w-full bg-indigo-600 text-white py-4 rounded-3xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-indigo-600"
                             >
                                 <Send className="w-5 h-5" />

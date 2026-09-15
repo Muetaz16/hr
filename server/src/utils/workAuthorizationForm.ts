@@ -203,9 +203,19 @@ export const generateWorkAuthorizationDocx = (data: WorkAuthorizationData): Buff
         placeSignature(ap.signature, li + 1, `${label} Signature`);
         if (ap.date) fillIdx(li + 1, `  ${ap.date}`);
     };
+    /** Same, but tries several spellings of the same post and uses the first the template has. */
+    const signApproverAny = (labels: string[], ap: WorkAuthApprover | null | undefined) => {
+        const found = labels.find(l => findLabel(l) >= 0);
+        if (found) signApprover(found, ap);
+    };
     signApprover('Head of Department', data.headOfDepartment);
     signApprover('Head of Division', data.headOfDivision);
-    signApprover('Head of Attendance and Payroll Unit', data.headOfAttendance);
+    // Two labels, because the printed templates are being re-worded one at a time: the Leave
+    // Request Form already says "Head of Personal Relations Department", the rest still say
+    // "Head of Attendance and Payroll Unit". A label that matches nothing drops that approver's
+    // signature from the form silently, so both spellings are accepted until every template has
+    // caught up.
+    signApproverAny(['Head of Personal Relations', 'Head of Attendance and Payroll Unit'], data.headOfAttendance);
     signApprover('Head of Human Resources', data.headOfHR);
     // The General Manager signs the "Signature & Date:" cell under the authentication row.
     signApprover('Signature & Date:', data.generalManager);

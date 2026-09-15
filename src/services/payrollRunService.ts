@@ -74,6 +74,12 @@ export interface PayrollRun {
     blockReasonCounts?: { code: string; count: number }[];
     /** Corrections saved since the last compute, so not yet in any amount. */
     pendingCorrections?: number;
+    /**
+     * Punches corrected in the attendance system AFTER this run read it. The attendance service is
+     * now right and these figures are not — recomputing is what closes the gap. Only successfully
+     * applied corrections are counted; a failed one changed nothing and makes nothing stale.
+     */
+    staleAttendanceCorrections?: number;
 }
 
 export interface PayrollLineItem {
@@ -191,6 +197,22 @@ export interface PayrollPreflight {
     attendanceWindow: { start: string; end: string };
     eligibleCount: number;
     issues: { code: string; employees: { id: string; staffId: string | null; fullName: string | null }[] }[];
+    /**
+     * Days in this window whose punches did not pair, so they pay nothing. Counted in DAYS, not
+     * employees, which is why it sits outside `issues` — those are all employee lists.
+     *
+     * `available: false` means the attendance system could not be swept, NOT that the period is
+     * clean. Pre-flight still answers about salary structures and residency when it is down.
+     */
+    attendanceAnomalies?: {
+        available: boolean;
+        days: number;
+        employees: number;
+        zeroPayDays: number;
+        phantomLateMins: number;
+        scanned: number;
+        unreadable: number;
+    };
     existingRun: { id: string; runNumber: string; status: string; revision: number } | null;
 }
 

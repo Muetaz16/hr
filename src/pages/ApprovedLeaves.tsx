@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { CheckCircle2, Search, CalendarDays, RefreshCw, ClipboardCheck, FileDown } from 'lucide-react';
+import { CheckCircle2, Search, CalendarDays, RefreshCw, ClipboardCheck, FileDown, Plus, ShieldAlert } from 'lucide-react';
 import { staffHubService, type LeaveRequestWithEmployee } from '../services/staffHubService';
 import { SERVER_URL } from '../services/apiClient';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/access';
+import DirectLeaveModal from '../components/DirectLeaveModal';
 
 // Fetch the filled Leave Request Form (.docx) and trigger a browser download.
 const downloadLeaveForm = async (requestId: string, employeeName?: string) => {
@@ -45,6 +48,10 @@ const TYPE_META: Record<string, { label: string; className: string }> = {
 
 const ApprovedLeaves: React.FC = () => {
     const { t } = useTranslation();
+    const { currentUser } = useAuth();
+    // Recording a leave with no approval chain behind it is its own grant, never a position default.
+    const canRecordDirect = canAccess(currentUser, ['SUPER_ADMIN'], ['record_direct_leave']);
+    const [showRecord, setShowRecord] = useState(false);
     const [leaves, setLeaves] = useState<LeaveRequestWithEmployee[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -92,14 +99,26 @@ const ApprovedLeaves: React.FC = () => {
                         {t('approved_leaves_subtitle', { defaultValue: 'Every leave request that has passed its full approval chain — automatically recorded in the attendance system.' })}
                     </p>
                 </div>
-                <button
-                    onClick={load}
-                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[#511d29]/20 text-[#511d29] text-xs font-black uppercase tracking-widest hover:bg-[#511d29]/5 transition-colors rounded-lg"
-                >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    {t('refresh', { defaultValue: 'Refresh' })}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                    {canRecordDirect && (
+                        <button
+                            onClick={() => setShowRecord(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#511d29] text-white text-xs font-black uppercase tracking-widest hover:bg-[#3d1620] transition-colors rounded-lg"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            {t('dl_record', { defaultValue: 'Record the Leave' })}
+                        </button>
+                    )}
+                    <button
+                        onClick={load}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[#511d29]/20 text-[#511d29] text-xs font-black uppercase tracking-widest hover:bg-[#511d29]/5 transition-colors rounded-lg"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        {t('refresh', { defaultValue: 'Refresh' })}
+                    </button>
+                </div>
             </div>
+            {showRecord && <DirectLeaveModal onClose={() => setShowRecord(false)} onRecorded={load} />}
 
             {/* Summary tiles */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -168,6 +187,20 @@ const ApprovedLeaves: React.FC = () => {
                                         </td>
                                         <td className="p-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-black border ${meta.className}`}>{meta.label}</span>
+                                            {/* A row with no approval chain behind it must not sit in this register
+                                                looking identical to one that passed four approvers. */}
+                                            {l.directEntry && (
+                                                <span
+                                                    title={t('dl_badge_hint', {
+                                                        name: l.directEntryByName || '—',
+                                                        defaultValue: 'Recorded directly against a signed authorisation by {{name}} — no approval chain.',
+                                                    })}
+                                                    className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border bg-amber-50 text-amber-700 border-amber-200"
+                                                >
+                                                    <ShieldAlert className="w-3 h-3" />
+                                                    {t('dl_badge', { defaultValue: 'Direct entry' })}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="p-4 text-sm font-bold text-slate-700">
                                             <div className="inline-flex items-center gap-1.5">
@@ -175,16 +208,27 @@ const ApprovedLeaves: React.FC = () => {
                                                 {fmtDate(l.startDate)}{l.endDate && l.endDate !== l.startDate ? ` → ${fmtDate(l.endDate)}` : ''}
                                             </div>
                                         </td>
-                                        <td className="p-4 text-center font-black text-[#511d29]">{countDays(l.startDate, l.endDate)}</td>
+                                        <td className="p-4 text-center font-black text-[#511d29]">
+                                            {countDays(l.startDate, l.endDate)}
+                                            {/* These days were recorded but never charged to the employee — without
+                                                saying so, the Days column silently disagrees with their balance. */}
+                                            {l.deductFromBalance === false && (
+                                                <div className="text-[10px] font-black text-amber-600 uppercase tracking-wide mt-0.5">
+                                                    {t('dl_not_deducted', { defaultValue: 'Not deducted' })}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="p-4 text-sm font-bold text-slate-600">{fmtDate(l.updatedAt || l.createdAt)}</td>
                                         <td className="p-4 text-sm text-slate-500 max-w-xs truncate" title={l.reason || ''}>{l.reason || '—'}</td>
                                         <td className="p-4 text-center">
-                                            {l.finalDocumentUrl ? (
+                                            {/* For a direct entry the signed authorisation IS the document of record —
+                                                there is no GM step to have produced one, so show that instead of a dash. */}
+                                            {(l.finalDocumentUrl || (l.directEntry && l.attachmentUrl)) ? (
                                                 <a
-                                                    href={`${SERVER_URL}${l.finalDocumentUrl}`}
+                                                    href={`${SERVER_URL}${l.finalDocumentUrl || l.attachmentUrl}`}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    title={l.finalDocumentName || t('gm_document', { defaultValue: 'GM Document' })}
+                                                    title={l.finalDocumentName || l.attachmentName || t('gm_document', { defaultValue: 'GM Document' })}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-black rounded-lg hover:bg-emerald-100 transition-colors"
                                                 >
                                                     <FileDown className="w-3.5 h-3.5" /> {t('view', { defaultValue: 'View' })}

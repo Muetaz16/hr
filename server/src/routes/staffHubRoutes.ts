@@ -48,6 +48,15 @@ const singleRequestUpload = (field: string) => (req: any, res: any, next: any) =
 
 // Requests
 router.post('/requests', singleRequestUpload('attachment'), staffHubController.createLeaveRequest);
+// Recording a leave granted on paper outside the system: no notice rule, no balance check, no
+// approval chain. Its own permission, never a position default — the attached signed authorisation
+// is the only control standing between this route and free paid leave.
+router.post(
+    '/requests/direct-leave',
+    authorizeAccess(['SUPER_ADMIN'], ['record_direct_leave']),
+    singleRequestUpload('attachment'),
+    staffHubController.recordDirectLeave,
+);
 router.patch('/requests/:id/status', staffHubController.updateRequestStatus);
 // The creator withdraws their own in-flight request (any type). Ownership is verified server-side.
 router.patch('/requests/:id/cancel', staffHubController.cancelRequest);
@@ -63,6 +72,7 @@ router.patch('/requests/:id/replacement-decision', staffHubController.decideRepl
 // New org-chain approval steps (PAID_HOLIDAY/UNPAID_LEAVE/EMERGENCY_LEAVE only) — server-verified,
 // separate from the legacy status-based flow above which the other request types still use.
 router.get('/requests/my-pending-steps', staffHubController.getMyPendingSteps);
+router.get('/requests/my-decided-steps', staffHubController.getMyDecidedSteps);
 router.patch('/requests/:requestId/steps/:stepId/decision', singleRequestUpload('document'), staffHubController.decideApprovalStep);
 
 // Exceptional Performance Award nomination — a Head picks from their own team, previews

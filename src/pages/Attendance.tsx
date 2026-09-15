@@ -23,6 +23,10 @@ import { formatLeaveTypeName } from '../utils/leaveTypeName';
 import Modal from '../components/Modal';
 import DailyBreakdownTable from '../components/DailyBreakdownTable';
 import AttendanceInsights from '../components/AttendanceInsights';
+import PunchAnomalyQueue from '../components/PunchAnomalyQueue';
+import PunchCorrectionArchive from '../components/PunchCorrectionArchive';
+import OvertimeReport from '../components/OvertimeReport';
+import OvertimeArchive from '../components/OvertimeArchive';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: React.ReactNode; color: string }) => (
     <div className="bg-white border border-[#511d29]/10 rounded-xl p-5 shadow-sm flex items-center gap-4">
@@ -96,7 +100,7 @@ const EmployeeSearchSelect: React.FC<{
     );
 };
 
-type Tab = 'overview' | 'exceptions' | 'daily-logging' | 'employees' | 'settings';
+type Tab = 'overview' | 'exceptions' | 'overtime' | 'daily-logging' | 'employees' | 'settings';
 type SettingsSubTab = 'hours' | 'leave-types' | 'holidays' | 'multipliers' | 'shifts';
 
 // The attendance API's own "blank params" default turned out to be unreliable (same query
@@ -106,13 +110,22 @@ const todayStr = () => format(new Date(), 'yyyy-MM-dd');
 
 type SummaryFilter = 'all' | 'late' | 'earlyOut' | 'onLeave' | 'suspended' | 'unmatched';
 
-// The attendance system exposes no lookup endpoint for positions — these 4 are the fixed set
-// found live on the running roster (GET /api/attendance).
+// The attendance system exposes no lookup endpoint for positions — this set was read off the live
+// roster (GET /api/attendance) and has to be extended by hand whenever a classification is added.
+//
+// `id` is the field to use: the create/update calls send `positionId`, and the roster reports the
+// current position as `position.id`. Each position ALSO carries a `position_code` that runs one
+// behind (Resident is id 4 / code "3", Logistics is id 8 / code "7") — it is not what this screen
+// writes, and mixing the two up would silently reclassify people one notch down the list.
 const BIOTIME_POSITIONS = [
     { id: 4, name: 'Resident' },
     { id: 5, name: 'Non-Resident' },
     { id: 6, name: 'Exception' },
     { id: 7, name: 'Higher-Management' },
+    // Logistics behaves like Resident/Non-Resident everywhere except one rule inside the attendance
+    // system itself: a punch BEFORE the shift starts counts as overtime instead of being discarded.
+    // Nothing on our side branches on it.
+    { id: 8, name: 'Logistics' },
 ];
 
 const AttendancePage: React.FC = () => {
@@ -125,8 +138,17 @@ const AttendancePage: React.FC = () => {
     // Attendance hat could not open the settings it owns. Now role OR the manage_attendance_settings
     // permission — matching the same gate on attendanceSettingsRoutes.ts.
     const canManageSettings = canAccess(currentUser, ['SUPER_ADMIN'], ['manage_attendance_settings']);
+    // Both of these move money, so each needs a WRITE permission — this whole page also opens for a
+    // view_time_tracking holder, who may read the anomaly queue and the overtime report but must not
+    // act on either. Kept as two separate gates, matching the two routes: an officer may be trusted
+    // to fix punches without being trusted to approve overtime, or the other way round. The routes
+    // enforce the same checks server-side; this only keeps a dead button off their screen.
+    const canCorrectPunches = canAccess(currentUser, ['SUPER_ADMIN'], ['manage_time_tracking', 'correct_punches']);
+    const canApproveOvertime = canAccess(currentUser, ['SUPER_ADMIN'], ['manage_time_tracking', 'approve_overtime']);
     const tab: Tab = location.pathname.includes('/exceptions')
         ? 'exceptions'
+        : location.pathname.includes('/overtime')
+        ? 'overtime'
         : location.pathname.includes('/daily-logging')
         ? 'daily-logging'
         : location.pathname.includes('/employees')
@@ -342,25 +364,9 @@ const AttendancePage: React.FC = () => {
         }
     };
 
-    const [otOpen, setOtOpen] = useState(false);
-    const [otForm, setOtForm] = useState({ empCode: '', date: '', hours: '0', minutes: '0', reason: '' });
-    const [savingOt, setSavingOt] = useState(false);
-    const submitOvertime = async () => {
-        if (!otForm.empCode || !otForm.date) { toast.error(t('select_an_employee_and_date', { defaultValue: 'Select an employee and date.' })); return; }
-        setSavingOt(true);
-        try {
-            await attendanceService.addOvertime({ ...otForm, hours: Number(otForm.hours) || 0, minutes: Number(otForm.minutes) || 0 });
-            toast.success(t('overtime_logged', { defaultValue: 'Overtime logged.' }));
-            setOtOpen(false);
-            setOtForm({ empCode: '', date: '', hours: '0', minutes: '0', reason: '' });
-            queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-            queryClient.invalidateQueries({ queryKey: ['attendance-dashboard'] });
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || t('failed_to_log_the_overtime', { defaultValue: 'Failed to log the overtime.' }));
-        } finally {
-            setSavingOt(false);
-        }
-    };
+    // Overtime approval moved to its own tab. It is a PERIOD across many employees now — the
+    // attendance service no longer accepts the single-day shape this popup sent, and an approval
+    // arrives from a head as a whole team at once, which a one-employee dialog cannot express.
 
     const [owOpen, setOwOpen] = useState(false);
     const [owForm, setOwForm] = useState({ empCode: '', startDate: '', endDate: '', reason: '' });
@@ -749,6 +755,7 @@ const AttendancePage: React.FC = () => {
                 {[
                     { key: 'overview' as Tab, label: t('overview', { defaultValue: 'Overview' }), Icon: Clock },
                     { key: 'exceptions' as Tab, label: t('exceptions', { defaultValue: 'Exceptions' }), Icon: AlertTriangle },
+                    { key: 'overtime' as Tab, label: t('overtime', { defaultValue: 'Overtime' }), Icon: Timer },
                     { key: 'daily-logging' as Tab, label: t('daily_logging', { defaultValue: 'Daily Logging' }), Icon: PlusCircle },
                     { key: 'employees' as Tab, label: t('employees', { defaultValue: 'Employees' }), Icon: Users },
                     ...(canManageSettings ? [{ key: 'settings' as Tab, label: t('settings', { defaultValue: 'Settings' }), Icon: SettingsIcon }] : []),
@@ -1004,6 +1011,18 @@ const AttendancePage: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* The worklist sits ABOVE the manual-transactions table on purpose: this is
+                        what needs acting on, and the table below is the receipt of what was done.
+                        It carries its OWN period picker rather than sharing this tab's date boxes —
+                        the two are asked for different reasons, and the queue's natural unit is the
+                        financial month it is racing to clear, not an arbitrary span of days. */}
+                    <PunchAnomalyQueue canCorrect={canCorrectPunches} />
+
+                    {/* The archive of what we changed, between the worklist and BioTime's own
+                        manual-transactions table. It carries what that table cannot: the reason,
+                        the person, the before/after, and whether the run had already closed. */}
+                    <PunchCorrectionArchive />
+
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
                         <div className="p-4 border-b border-[#511d29]/10 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <span className="text-xs font-black text-[#511d29] uppercase tracking-wider">{t('manual_transactions', { defaultValue: 'Manual Transactions' })}</span>
@@ -1089,6 +1108,27 @@ const AttendancePage: React.FC = () => {
                 </div>
             )}
 
+            {tab === 'overtime' && (
+                <div className="space-y-6">
+                    <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
+                        <div className="w-12 h-12 bg-[#511d29] text-white flex items-center justify-center rounded-lg flex-shrink-0">
+                            <Timer className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h3 className="font-outfit font-black text-lg text-[#511d29] uppercase">{t('overtime', { defaultValue: 'Overtime' })}</h3>
+                            <p className="text-sm text-slate-600 mt-1">
+                                {t('overtime_tab_sub', { defaultValue: 'Send each head the overtime their people recorded, then enter the hours they approve. Only approved hours are paid.' })}
+                            </p>
+                        </div>
+                    </div>
+                    <OvertimeReport canApprove={canApproveOvertime} />
+
+                    {/* The archive below the worklist, the same order the Exceptions tab uses:
+                        what still needs doing on top, the record of what was done underneath. */}
+                    <OvertimeArchive canApprove={canApproveOvertime} />
+                </div>
+            )}
+
             {tab === 'daily-logging' && (
                 <div className="space-y-6">
                     <div className="bg-[#f5ebd9]/30 border border-[#511d29]/20 p-6 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -1107,9 +1147,6 @@ const AttendancePage: React.FC = () => {
                         <button onClick={() => setLeaveOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
                             <PlusCircle className="w-3.5 h-3.5" /> {t('log_leave', { defaultValue: 'Log Leave' })}
                         </button>
-                        <button onClick={() => setOtOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
-                            <PlusCircle className="w-3.5 h-3.5" /> {t('log_overtime', { defaultValue: 'Log Overtime' })}
-                        </button>
                         <button onClick={() => setOwOpen(true)} className="px-4 py-2.5 bg-[#511d29] text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-[#3a151d] transition-all inline-flex items-center gap-2">
                             <PlusCircle className="w-3.5 h-3.5" /> {t('log_out_work', { defaultValue: 'Log Out-Work' })}
                         </button>
@@ -1120,7 +1157,6 @@ const AttendancePage: React.FC = () => {
                             <PlusCircle className="w-3.5 h-3.5" /> {t('log_excused_early_out', { defaultValue: 'Log Excused Early-Out' })}
                         </button>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium -mt-3">{t('overtime_has_no_review_list_yet', { defaultValue: "Overtime has no review list yet — the attendance system doesn't expose one (create-only)." })}</p>
 
                     {/* Leave records */}
                     <div className="bg-white border border-[#511d29]/10 rounded-xl overflow-hidden shadow-sm">
@@ -1880,36 +1916,6 @@ const AttendancePage: React.FC = () => {
                 </div>
             </Modal>
 
-            {/* Log Overtime popup */}
-            <Modal isOpen={otOpen} onClose={() => setOtOpen(false)} title={t('log_overtime', { defaultValue: 'Log Overtime' })} maxWidth="max-w-md">
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('employee', { defaultValue: 'Employee' })}</label>
-                        <EmployeeSearchSelect options={attendanceEmployeeOptions} value={otForm.empCode} onChange={code => setOtForm(f => ({ ...f, empCode: code }))} />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('date', { defaultValue: 'Date' })}</label>
-                        <input type="date" value={otForm.date} onChange={e => setOtForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('hours', { defaultValue: 'Hours' })}</label>
-                            <input type="number" min="0" value={otForm.hours} onChange={e => setOtForm(f => ({ ...f, hours: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('minutes', { defaultValue: 'Minutes' })}</label>
-                            <input type="number" min="0" max="59" value={otForm.minutes} onChange={e => setOtForm(f => ({ ...f, minutes: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{t('reason_optional', { defaultValue: 'Reason (optional)' })}</label>
-                        <input type="text" value={otForm.reason} onChange={e => setOtForm(f => ({ ...f, reason: e.target.value }))} className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold" />
-                    </div>
-                    <button type="button" onClick={submitOvertime} disabled={savingOt} className="w-full py-3 bg-[#511d29] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#3a151d] transition-all disabled:opacity-50">
-                        {savingOt ? t('logging', { defaultValue: 'Logging…' }) : t('log_overtime', { defaultValue: 'Log Overtime' })}
-                    </button>
-                </div>
-            </Modal>
 
             {/* Log Out-Work popup */}
             <Modal isOpen={owOpen} onClose={() => setOwOpen(false)} title={t('log_out_work', { defaultValue: 'Log Out-Work' })} maxWidth="max-w-md">

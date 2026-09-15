@@ -15,6 +15,15 @@ i18n
         },
         backend: {
             loadPath: '/locales/{{lng}}/{{ns}}.json',
+            // The translation file is fetched over HTTP like any other asset, so the browser
+            // caches it — and a stale copy is indistinguishable from a missing translation: the
+            // key silently falls back to its English defaultValue inside an Arabic page. This has
+            // already cost real debugging time more than once.
+            //
+            // In development every reload gets a fresh copy, because that is when keys are being
+            // added. In a build the id is fixed at build time, so a deploy invalidates the cache
+            // exactly once and repeat visits still benefit from it.
+            queryStringParams: { v: import.meta.env.DEV ? String(Date.now()) : __I18N_BUILD_ID__ },
         },
     });
 

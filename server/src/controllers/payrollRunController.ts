@@ -14,8 +14,10 @@ import { prisma } from '../lib/prisma';
 import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
 import { computePayrollLine, round2 } from '../utils/payrollEngine';
 import { fetchPayrollAttendance, PayrollAttendanceRow } from '../utils/payrollAttendance';
+import { cachedScanPunchAnomalies } from '../utils/punchAnomalyScan';
 import { loadPeriodCharges, applicableCharges, parseManualItems } from '../utils/payrollCharges';
 import { loadMonthlyEvaluationScores, evaluationSnapshot } from '../utils/monthlyEvaluationScores';
+import { getLeavePolicy, type LeavePolicyValues } from '../utils/leavePolicy';
 import {
     financialMonthRange, cutoffFor, toApiDate, isValidPeriod, currentPeriod, periodLabel,
 } from '../utils/payrollPeriod';
@@ -143,7 +145,7 @@ export const getPayrollRun = async (req: Request, res: Response) => {
         });
         if (!run) return res.status(404).json({ error: 'Payroll run not found' });
 
-        const [blocked, excluded, reasonRows, pendingCorrections] = await Promise.all([
+        const [blocked, excluded, reasonRows, pendingCorrections, staleAttendanceCorrections] = await Promise.all([
             prisma.payrollLine.count({ where: { runId: run.id, status: 'BLOCKED' } }),
             prisma.payrollLine.count({ where: { runId: run.id, status: 'EXCLUDED' } }),
             // blockReasons is a text[], so this needs unnest rather than a Prisma groupBy. A bare
@@ -168,6 +170,23 @@ export const getPayrollRun = async (req: Request, res: Response) => {
                     select: { manualItems: true },
                 }).then(rows => rows.filter(r => parseManualItems(r.manualItems).length > 0).length)
                 : Promise.resolve(0),
+            // A punch corrected AFTER this run read attendance. The attendance service is now
+            // right and this run's stored minutes are not — but nothing recomputes on its own,
+            // because a run that silently changed its own numbers would be unauditable. Same
+            // reasoning as pendingCorrections above, and the same shape: a count the screen can
+            // say out loud, next to a Recompute the human presses.
+            //
+            // Only APPLIED rows count. A FAILED correction changed nothing at the service, so it
+            // makes no run stale — surfacing it here would send somebody to recompute for nothing.
+            run.attendanceFetchedAt
+                ? prisma.attendancePunchCorrection.count({
+                    where: {
+                        period: run.period,
+                        status: 'APPLIED',
+                        appliedAt: { gt: run.attendanceFetchedAt },
+                    },
+                })
+                : Promise.resolve(0),
         ]);
         res.json({
             ...run,
@@ -175,6 +194,7 @@ export const getPayrollRun = async (req: Request, res: Response) => {
             excludedCount: excluded,
             blockReasonCounts: reasonRows.map(r => ({ code: r.code, count: Number(r.count) })),
             pendingCorrections,
+            staleAttendanceCorrections,
         });
     } catch (error) {
         console.error('Error loading payroll run:', error);
@@ -290,12 +310,57 @@ export const preflightPeriod = async (req: Request, res: Response) => {
             select: { id: true, runNumber: true, status: true, revision: true },
         });
 
+        // Days in this window whose punches did not come out as a working day. This is the whole
+        // point of a pre-flight: those days pay ZERO, and a run computed over them is not merely
+        // blocked — it quietly produces a correct-looking payslip for the wrong amount. Cleared
+        // here it costs nothing; cleared after the run is approved it becomes a recovery.
+        //
+        // Fail-soft, and deliberately so: the attendance service is a separate application, and
+        // pre-flight must still answer about salary structures and residency when it is down. A
+        // sweep that could not run reports itself as unavailable rather than as "nothing wrong".
+        let attendanceAnomalies: {
+            available: boolean;
+            days: number;
+            employees: number;
+            zeroPayDays: number;
+            phantomLateMins: number;
+            scanned: number;
+            unreadable: number;
+        };
+        try {
+            // The SAME cached sweep the Attendance queue reads. It is ~40 sequential HTTP calls,
+            // about ten seconds; running an uncached second copy here would have turned a screen
+            // that answered instantly into one that stalls every time it is opened, and would have
+            // put two concurrent sweeps on a service that fails under concurrency.
+            const scan = await cachedScanPunchAnomalies(toApiDate(start), toApiDate(end));
+            attendanceAnomalies = {
+                available: true,
+                days: scan.rows.length,
+                employees: new Set(scan.rows.map(r => r.empCode)).size,
+                zeroPayDays: scan.rows.filter(r => r.totalWorkMins === 0).length,
+                phantomLateMins: scan.rows.reduce((sum, r) => sum + r.anomaly.phantomLateMins, 0),
+                scanned: scan.scanned,
+                unreadable: scan.unreadable,
+            };
+            // Deliberately NOT folded into `issues`: every entry there is a list of employees and
+            // is counted by that list's length, whereas this is counted in DAYS and fixed one day
+            // at a time on the Attendance screen. Pushing it in with an empty employee array would
+            // render as "0 —" and, worse, leave the period reading as clean.
+        } catch (error) {
+            console.warn('Pre-flight: punch-anomaly sweep unavailable:', error);
+            attendanceAnomalies = {
+                available: false, days: 0, employees: 0, zeroPayDays: 0, phantomLateMins: 0,
+                scanned: 0, unreadable: 0,
+            };
+        }
+
         res.json({
             period, label: periodLabel(period),
             periodStart: start, periodEnd: end,
             attendanceWindow: { start: toApiDate(start), end: toApiDate(end) },
             eligibleCount: employees.length,
             issues: Object.values(issues),
+            attendanceAnomalies,
             existingRun: existing,
         });
     } catch (error) {
@@ -421,6 +486,10 @@ export const computePayrollRun = async (req: AuthRequest, res: Response) => {
         // Advances, standing deductions and manual corrections for this period. Loaded once for
         // the whole run rather than per employee, and applied read-only: nothing is consumed until
         // the period is closed, so Compute stays safe to press twice.
+        // Read once for the whole run, so every line in it is measured against the same policy
+        // even if somebody edits the settings while the run computes.
+        const leavePolicy = await getLeavePolicy();
+
         const chargeMap = await loadPeriodCharges(
             run.period,
             employees.map(e => e.id),
@@ -507,7 +576,7 @@ export const computePayrollRun = async (req: AuthRequest, res: Response) => {
             const status = override?.excluded ? 'EXCLUDED' : blocked ? 'BLOCKED' : 'OK';
             const zeroed = status !== 'OK';
 
-            const balances = calcLeaveBalances(emp);
+            const balances = calcLeaveBalances(emp, leavePolicy);
 
             lineData.push({
                 runId: id,
@@ -528,6 +597,10 @@ export const computePayrollRun = async (req: AuthRequest, res: Response) => {
                 skillFactor: emp.skillFactor, languageFactor: emp.languageFactor,
                 factorF: amounts.factorF,
                 attendanceMatched: !!att, empCode: emp.staffId,
+                // The ordinary hours actually paid, NOT the service's raw figure — otherwise the
+                // payslip's hours would not reconcile against its own Basic. The rest-day minutes
+                // held back are stored beside it so the difference is explainable rather than
+                // looking like hours went missing.
                 workMins: att?.totalWorkMins ?? 0,
                 otMins: att?.totalOTMins ?? 0,
                 approvedOtMins: att?.totalApprovedOTMins ?? 0,
@@ -660,16 +733,19 @@ export const computePayrollRun = async (req: AuthRequest, res: Response) => {
     }
 };
 
-const EMERGENCY_LEAVE_ALLOWANCE = 3;
-const UNPAID_LEAVE_ALLOWANCE = 14;
 
 // Remaining balances for the payslip's LEAVE ENTITLEMENT box. Mirrors calculateHolidayMetrics in
 // employeeController (accrual is 1 day per 12 days of service) without importing it, so payroll
 // does not take a dependency on that controller's module-load side effects.
+// The allowances are POLICY (LeavePolicy), not constants. They used to be a second pair of
+// literals here, separate from the pair in employeeController — so the payslip and the leave form
+// could print different entitlements for the same person after a policy change.
 const calcLeaveBalances = (emp: {
     contractStartDate: Date | null; holidaysUsed: number; bonusHolidays: number;
     emergencyHolidaysUsed: number; unpaidHolidaysUsed: number;
-}) => {
+}, policy: LeavePolicyValues) => {
+    const EMERGENCY_LEAVE_ALLOWANCE = policy.emergencyLeaveAllowance;
+    const UNPAID_LEAVE_ALLOWANCE = policy.unpaidLeaveAllowance;
     if (!emp.contractStartDate) {
         return {
             paid: 0,

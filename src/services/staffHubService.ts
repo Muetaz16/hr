@@ -21,6 +21,21 @@ export interface LeaveRequest {
     // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
     missingPunchType?: string;       // CHECK_IN | CHECK_OUT | BOTH
     missingPunchReason?: string;     // FORGOT | DEVICE_ISSUE | POWER_OUTAGE | OTHERS
+    // Attendance permissions only — the reason box ticked on the printed form.
+    permissionReason?: string;       // PERSONAL | FAMILY | HEALTH_MEDICAL | OTHERS
+    // Direct register entry — recorded by an officer against a signed authorisation, with no
+    // approval chain. deductFromBalance says whether the days were charged to the employee.
+    directEntry?: boolean;
+    directEntryByName?: string | null;
+    deductFromBalance?: boolean;
+    // The punch time. startTime/endTime hold what the employee asked for; approvedStartTime/
+    // approvedEndTime hold an approver's correction and stay null while untouched. The effective
+    // time is `approved ?? requested`, falling back to the employee's schedule when both are absent.
+    // Why this leave was filed inside the notice window. Non-null means an exception was
+    // taken and the attachment is the letter authorising it.
+    shortNoticeReason?: string | null;
+    approvedStartTime?: string | null;
+    approvedEndTime?: string | null;
     attachmentUrl?: string;
     attachmentName?: string;
     finalDocumentUrl?: string;   // document the GM uploaded to grant final approval
@@ -70,7 +85,12 @@ export interface LeaveApprovalStep {
     note?: string;
     decidedAt?: string;
     createdAt: string;
-    leaveRequest?: LeaveRequest & { employee?: { fullName: string; staffId?: string } };
+    leaveRequest?: LeaveRequest & {
+        employee?: { fullName: string; staffId?: string };
+        // Who has to accept the cover before the chain starts. Sent so an approver can be told the
+        // request is parked on that person rather than on them.
+        replacementUser?: { id: string; fullName?: string | null; email?: string | null } | null;
+    };
     approver?: { fullName: string };
 }
 
@@ -151,8 +171,17 @@ export const staffHubService = {
     // Fully-approved leaves — the saved record shown on the Approved Leaves page and the
     // Attendance overview. Reuses the pending-requests endpoint with a COMPLETED status filter.
     async getApprovedLeaves(): Promise<LeaveRequestWithEmployee[]> {
-        const response = await api.get('/staff-hub/requests/pending', { params: { status: 'COMPLETED' } });
+        // attendanceOnly: the register promises every row reached the attendance system, so types
+        // that complete elsewhere (an Exceptional Performance nomination becomes a RewardCase) are
+        // excluded server-side rather than hidden here.
+        const response = await api.get('/staff-hub/requests/pending', { params: { status: 'COMPLETED', attendanceOnly: 1 } });
         return response.data;
+    },
+    // Record a leave granted on paper outside the system: no notice rule, no balance check, no
+    // approval chain. The signed authorisation is mandatory and the server refuses without it.
+    async recordDirectLeave(data: FormData) {
+        const response = await api.post('/staff-hub/requests/direct-leave', data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        return response.data as { id: string; dayCount: number; attendanceWarning?: string | null };
     },
     // Downloads the official Leave Request Form (.docx) for a request, filled with the employee's
     // details, leave details, balances and each approver's signature so far. Works at any stage.
@@ -167,18 +196,39 @@ export const staffHubService = {
         const response = await api.get('/staff-hub/requests/my-pending-steps');
         return response.data;
     },
-    async decideApprovalStep(requestId: string, stepId: string, decision: 'APPROVE' | 'REJECT', note?: string, document?: File | null) {
+
+    /** This user's OWN decision record — steps they approved or rejected, newest first. */
+    async getMyDecidedSteps(): Promise<LeaveApprovalStep[]> {
+        const response = await api.get('/staff-hub/requests/my-decided-steps');
+        return response.data;
+    },
+    // `punch` carries a Missing Biometric Log time correction. It rides on the approval instead of
+    // having its own save call, so a time can never be stored against a request nobody approved.
+    async decideApprovalStep(
+        requestId: string,
+        stepId: string,
+        decision: 'APPROVE' | 'REJECT',
+        note?: string,
+        document?: File | null,
+        punch?: { startTime?: string; endTime?: string } | null,
+    ) {
         if (document) {
             const fd = new FormData();
             fd.append('decision', decision);
             if (note) fd.append('note', note);
+            if (punch?.startTime) fd.append('missingPunchStartTime', punch.startTime);
+            if (punch?.endTime) fd.append('missingPunchEndTime', punch.endTime);
             fd.append('document', document);
             const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, fd, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             return response.data;
         }
-        const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, { decision, note });
+        const response = await api.patch(`/staff-hub/requests/${requestId}/steps/${stepId}/decision`, {
+            decision, note,
+            ...(punch?.startTime ? { missingPunchStartTime: punch.startTime } : {}),
+            ...(punch?.endTime ? { missingPunchEndTime: punch.endTime } : {}),
+        });
         return response.data;
     },
 

@@ -7,6 +7,9 @@ import { evaluationService } from '../services/evaluationService';
 import { getHREvaluation } from '../services/hrEvaluationService';
 import { isEvaluationEnabled } from '../services/evaluationPeriodService';
 import { canAccess } from '../utils/access';
+import { departmentService, divisionService } from '../services/departmentService';
+import { unitService } from '../services/unitService';
+import { buildOrgScope, headNodeOf } from '../utils/orgScope';
 import type { Employee, UserRole } from '../types';
 import { format } from 'date-fns';
 import {
@@ -47,14 +50,19 @@ const TasksPage: React.FC = () => {
             // 1. Fetch Employees based on scope
             let emps: Employee[] = [];
             if (currentUser.role === 'HEAD_DIRECTOR') {
-                if (currentUser.departmentIds && currentUser.departmentIds.length > 0) {
-                    const all = await employeeService.getAllEmployees();
-                    emps = all.filter(e => currentUser.departmentIds?.includes(e.departmentId));
-                } else if (currentUser.departmentId) {
-                    emps = await employeeService.getEmployeesByDepartment(currentUser.departmentId);
-                } else if (currentUser.groupId) {
-                    emps = await employeeService.getEmployeesByGroup(currentUser.groupId);
-                }
+                // Everyone beneath the directorate in the org chart. The old test was the hand-ticked
+                // User.departmentIds list, which is empty on every account — so a directorate head
+                // opened this screen and found nothing to do at all.
+                const [all, depts, divisions, units, me] = await Promise.all([
+                    employeeService.getAllEmployees().catch(() => [] as Employee[]),
+                    departmentService.getAllDepartments().catch(() => []),
+                    divisionService.getAllDivisions().catch(() => []),
+                    unitService.getAllUnits().catch(() => []),
+                    employeeService.getMyEmployeeRecord().catch(() => null),
+                ]);
+                const node = headNodeOf(currentUser as any, me as any);
+                const org = buildOrgScope({ units: units as any, departments: depts as any, divisions: divisions as any });
+                emps = node ? all.filter(e => org.isUnder(e as any, node)) : [];
             } else if (currentUser.role === 'HEAD_DEPARTMENT' && currentUser.departmentId) {
                 emps = await employeeService.getEmployeesByDepartment(currentUser.departmentId);
             } else if (canAccess(currentUser, [], ['view_hr_evaluations'])) {

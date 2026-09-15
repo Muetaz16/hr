@@ -28,12 +28,27 @@ export const PERMISSIONS: PermissionDef[] = [
     // --- Attendance (الحضور والانصراف) ---
     { id: 'view_time_tracking', group: 'Attendance', label: 'View Attendance & Time Logs' },
     { id: 'manage_time_tracking', group: 'Attendance', label: 'Manage Attendance & Time Logs' },
+    // The two below exist so one duty can be granted WITHOUT manage_time_tracking, which also
+    // carries leave logging, out-works, excused lates and the BioTime roster. Both of these write
+    // figures that payroll then pays, so they are the two an officer may hold on their own. Still a
+    // subset of manage_time_tracking — authorizeAccess is OR, so nobody who holds it loses anything.
+    //
+    // Rewriting a biometric punch: it changes the worked minutes a month is computed from.
+    { id: 'correct_punches', group: 'Attendance', label: 'Correct Biometric Punches' },
+    // Approved overtime is the ONLY overtime figure payroll pays (payrollEngine.ts) — the punch-
+    // derived total is a reference payroll ignores. Approving, editing or revoking moves money.
+    { id: 'approve_overtime', group: 'Attendance', label: 'Approve & Revoke Overtime Hours' },
+    // Recording a leave that senior management granted on paper, straight into the register: no
+    // notice period, no balance check, no approval chain, and optionally not charged to the
+    // employee's balance at all. The signed authorisation is the only control, so this is the
+    // narrowest and most sensitive grant in the group — never a position default.
+    { id: 'record_direct_leave', group: 'Attendance', label: 'Record Leave Directly (signed authorisation, no chain)' },
     // Work hours, leave types, holidays, multiplier factors and employee shifts. Previously
     // unreachable by anyone but a literal SUPER_ADMIN, which meant the Head of Attendance hat
     // couldn't open the settings it owns.
     { id: 'manage_attendance_settings', group: 'Attendance', label: 'Manage Attendance Settings' },
     // The Head-of-Attendance stage of the leave-approval chain (leaveApprovalChain.ts).
-    { id: 'approve_attendance', group: 'Attendance', label: 'Approve as Head of Attendance' },
+    { id: 'approve_attendance', group: 'Attendance', label: 'Approve as Head of Personal Relations Department' },
     // --- Payroll (الرواتب) ---
     { id: 'view_payroll', group: 'Payroll', label: 'View Payroll' },
     // Everything monthly: open a period, compute it, record advances and deductions, schedule a
@@ -102,6 +117,10 @@ export const PERMISSIONS: PermissionDef[] = [
     { id: 'manage_departments', group: 'Administration', label: 'Manage Departments' },
     { id: 'manage_units', group: 'Administration', label: 'Manage Units' },
     { id: 'manage_job_descriptions', group: 'Administration', label: 'Manage Job Descriptions' },
+    // The notice period and the two per-contract leave allowances. Company-wide numbers, so this is
+    // configuration rather than an approver's duty — it used to ride on manage_leaves, which every
+    // head holds by position, meaning any unit head could rewrite the whole company's leave rules.
+    { id: 'manage_leave_policy', group: 'Administration', label: 'Manage Leave Policy' },
     { id: 'manage_service_providers', group: 'Administration', label: 'Manage Service Providers' },
     { id: 'view_logs', group: 'Administration', label: 'View Activity Log' },
 ];
@@ -162,13 +181,18 @@ export const SYSTEM_HATS: HatSeed[] = [
             'view_contracts', 'manage_contract_management', 'view_lifecycle', 'manage_lifecycle_control',
             'view_personnel_relations', 'manage_personnel_actions', 'manage_rewards', 'manage_disciplinary', 'manage_offboarding', 'manage_promotions',
             'view_payroll', 'manage_payroll', 'view_time_tracking', 'manage_time_tracking',
-            'manage_leaves', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
+            'manage_leaves', 'manage_leave_policy', 'manage_announcements', 'view_evaluations', 'submit_evaluations', 'view_hr_evaluations',
             'manage_evaluation_control', 'manage_job_descriptions',
         ],
     },
     {
+        // The post's real name. `key` stays HEAD_ATTENDANCE and the permission stays
+        // approve_attendance: both are identifiers already written onto User rows and onto every
+        // approval step ever filed, so renaming them would be a data migration rather than a
+        // relabelling. seed-hats upserts by `key`, so re-seeding renames this hat in place and its
+        // current holder keeps it.
         key: 'HEAD_ATTENDANCE',
-        name: 'Head of Attendance',
+        name: 'Head of Personal Relations Department',
         description: 'Owns attendance & time tracking, its settings, and attendance approvals.',
         permissions: ['view_time_tracking', 'manage_time_tracking', 'manage_attendance_settings', 'approve_attendance', 'manage_leaves'],
     },

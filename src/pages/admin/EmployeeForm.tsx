@@ -46,6 +46,7 @@ import {
     LANGUAGE_FACTORS
 } from '../../constants/factors';
 import { NATIONALITIES } from '../../constants/nationalities';
+import { leavePolicyService, LEAVE_POLICY_DEFAULTS, type LeavePolicy } from '../../services/leavePolicyService';
 
 const getCurrencySymbol = (type?: string | null) => {
     if (!type) return '$';
@@ -262,8 +263,15 @@ const EmployeeForm: React.FC = () => {
     // now", not "how many have they used" — especially when entering a contractStartDate that's
     // already in the past. So these 3 inputs show/edit the current balance, and we convert to the
     // "used" counters the backend stores (same formula as calculateHolidayMetrics server-side).
-    const EMERGENCY_LEAVE_ALLOWANCE = 3;
-    const UNPAID_LEAVE_ALLOWANCE = 14;
+    //
+    // The allowances are POLICY, read live. They were two literals here, and because these inputs
+    // convert a BALANCE back into the stored "used" counter, a stale copy did not merely display a
+    // wrong number — it WROTE one: with the policy at 5 and this at 3, an HR user typing a balance
+    // of 5 stored used = -2.
+    const [leavePolicy, setLeavePolicy] = useState<LeavePolicy>(LEAVE_POLICY_DEFAULTS);
+    useEffect(() => { leavePolicyService.get().then(setLeavePolicy).catch(() => {}); }, []);
+    const EMERGENCY_LEAVE_ALLOWANCE = leavePolicy.emergencyLeaveAllowance;
+    const UNPAID_LEAVE_ALLOWANCE = leavePolicy.unpaidLeaveAllowance;
     const accruedHolidaysNow = (() => {
         if (!formData.contractStartDate) return 0;
         const diffDays = Math.floor(Math.max(0, Date.now() - new Date(formData.contractStartDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -1750,7 +1758,7 @@ const EmployeeForm: React.FC = () => {
                                     value={emergencyLeaveBalance}
                                     onChange={(e) => setFormData({ ...formData, emergencyHolidaysUsed: EMERGENCY_LEAVE_ALLOWANCE - Number(e.target.value) })}
                                     className="w-full px-5 py-4 bg-red-50/30 border border-red-100 rounded-2xl focus:ring-4 focus:ring-red-50 transition-all font-bold text-red-900 shadow-sm"
-                                    placeholder="3"
+                                    placeholder={String(EMERGENCY_LEAVE_ALLOWANCE)}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -1760,7 +1768,7 @@ const EmployeeForm: React.FC = () => {
                                     value={unpaidLeaveBalance}
                                     onChange={(e) => setFormData({ ...formData, unpaidHolidaysUsed: UNPAID_LEAVE_ALLOWANCE - Number(e.target.value) })}
                                     className="w-full px-5 py-4 bg-orange-50/30 border border-orange-100 rounded-2xl focus:ring-4 focus:ring-orange-50 transition-all font-bold text-orange-900 shadow-sm"
-                                    placeholder="14"
+                                    placeholder={String(UNPAID_LEAVE_ALLOWANCE)}
                                 />
                             </div>
                         </div>

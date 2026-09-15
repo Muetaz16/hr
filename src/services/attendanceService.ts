@@ -72,6 +72,55 @@ export interface DailyAttendanceSession {
     checkOut: string;
 }
 
+// One raw punch as the attendance service reports it. This is what makes a correction possible at
+// all: it carries the punch id to act on, its recorded TYPE (the thing that is wrong when somebody
+// taps the wrong key), and whether it came from the device — a device punch may have its type
+// corrected but never its time, and may never be deleted.
+export interface PunchRef {
+    id: number;
+    date: string;
+    punchTime: string;      // HH:mm
+    punchState: string;     // Check In | Check Out | Overtime Out | ...
+    isManual: boolean;
+}
+
+export type PunchAnomalyKind =
+    | 'UNPAIRED_PUNCH' | 'SAME_STATE_ONLY' | 'DOUBLE_TAP'
+    | 'OVERTIME_OUT_UNCLOSED' | 'ZERO_WORK_WITH_PUNCHES' | 'SUSPICIOUSLY_SHORT';
+
+export interface PunchRepairStep {
+    action: 'RETYPE' | 'ADD';
+    punchId?: number;
+    atTime?: string;
+    toState: string;
+    why: string;
+}
+
+// The server's verdict on a day, decided in server/src/utils/attendanceAnomaly.ts and attached at
+// the proxy boundary. The client NEVER re-derives it — that is how the screens stay in agreement,
+// and why there is no further copy of the rules to drift.
+// null means "checked, nothing wrong"; undefined means the payload predates annotation.
+/** The raw facts behind a verdict, so the sentence can be written in the reader's language. */
+export interface PunchAnomalyFacts {
+    count: number;
+    times: string;
+    state?: string;
+    at?: string;
+    inAt?: string;
+    workedMins?: number;
+    scheduledMins?: number;
+}
+
+export interface DayPunchAnomaly {
+    kind: PunchAnomalyKind;
+    severity: 'blocking' | 'advisory';
+    /** English prose from the server — for logs. Never rendered; see punchAnomalyText. */
+    detail: string;
+    facts: PunchAnomalyFacts;
+    phantomLateMins: number;
+    suggested: PunchRepairStep[];
+}
+
 // One day's row inside a monthly report — includes the day's first/last punch, so this single
 // endpoint covers both "per employee attendance" and "first and last punch" in one call.
 export interface DailyAttendanceResult {
@@ -106,6 +155,34 @@ export interface DailyAttendanceResult {
     lateTimeStr: string;
     earlyOutStr: string;
     overTimeStr: string;
+    // --- Overnight shift stitching ---
+    // A night shift that crosses midnight used to be reported as two broken days: one with no
+    // worked hours and one with a phantom "early out" of several hundred minutes. It is now
+    // reported entirely on the day the shift STARTED, and the next day — which held nothing but
+    // the check-out punch — is dropped from reportData completely.
+    //
+    // Consequences worth knowing when reading these rows:
+    //   · `lastPunch` and `sessions[].checkOut` hold the REAL check-out time, which belongs to
+    //     `overnightCheckoutDate`, not to this row's own date. Printed without that context a
+    //     session reads as though the employee left one minute after arriving.
+    //   · `otMins` covers the whole stretch from end of shift to that check-out.
+    //   · a day named by `overnightCheckoutDate` must never be synthesised as missing — see
+    //     fillMissingDays.
+    /** Every raw punch recorded on this date, with ids — the handle a correction acts on. */
+    punches?: PunchRef[] | null;
+    /** Server verdict: is this day broken, and what would repair it. Never re-derived here. */
+    anomaly?: DayPunchAnomaly | null;
+    isOvernightStitched?: boolean;
+    overnightCheckoutDate?: string | null;
+    /**
+     * A finished sentence from the attendance system explaining the merge — ARABIC ONLY.
+     *
+     * Not rendered: the table composes its own from `overnightCheckoutDate` + `overTimeStr` so the
+     * line follows the reader's language instead of forcing Arabic prose into an English page,
+     * where it also broke bidirectionally (the full stop migrated to the start of the line).
+     * Kept on the type because it is part of the API contract and is useful when debugging.
+     */
+    overnightNote?: string | null;
 }
 
 export interface EmployeeLeaveRecord {
@@ -182,6 +259,99 @@ export interface ManualTransactionsResponse {
     transactions: ManualTransaction[];
 }
 
+/** One broken day in the cross-employee queue: who, when, and the verdict already made server-side. */
+export interface PunchAnomalyRow {
+    employeeId: string;
+    employeeName: string;
+    /** Our staffId == the attendance service's empCode. */
+    empCode: string;
+    /** The attendance service's numeric id, needed to open the day for correction. */
+    bioEmpId: number;
+    department: string | null;
+    date: string;
+    /** The financial month this day is paid in (25th → 24th, labelled by the END month). */
+    period: string;
+    totalWorkMins: number;
+    lateMins: number;
+    punches: PunchRef[];
+    anomaly: DayPunchAnomaly;
+    /** What this employee was scheduled for on this date, and which tier decided it. */
+    scheduled: { workStart: string; workEnd: string; source: 'shift' | 'multiplier' | 'default' };
+}
+
+/** One repair pushed into the attendance service, as the correction log stores it. */
+export interface PunchCorrectionStep {
+    action: 'RETYPE' | 'ADD' | 'DELETE';
+    punchId?: number;
+    atTime?: string;                        // 'HH:mm'
+    toState?: 'Check In' | 'Check Out';
+}
+
+export interface PunchCorrectionRecord {
+    id: string;
+    empCode: string;
+    workDate: string;
+    period: string;
+    action: string;
+    anomalyKind: string | null;
+    sourcePunchId: number | null;
+    wasManual: boolean;
+    beforeTime: string | null;
+    beforeState: string | null;
+    afterTime: string | null;
+    afterState: string | null;
+    reason: string;
+    status: string;                         // APPLIED | FAILED | SUPERSEDED
+    sourceMessage: string | null;
+    /** What re-reading the day showed. This, not sourceMessage, is the evidence it landed. */
+    verifiedState: string | null;
+    workMinsBefore: number | null;
+    workMinsAfter: number | null;
+    payrollWasLocked: boolean;
+    evaluationWasFinalized: boolean;
+    correctedByName: string | null;
+    appliedAt: string;
+}
+
+export interface PunchCorrectionResult {
+    corrections: PunchCorrectionRecord[];
+    workedBefore: number;
+    workedAfter: number | null;
+    lateBefore: number;
+    lateAfter: number | null;
+    punches: { id: number; punchTime: string; punchState: string; isManual: boolean }[];
+    payrollWasLocked: boolean;
+    payrollRunStatus: string | null;
+    evaluationWasFinalized: boolean;
+    /** Minutes this correction gave back. Zero when the day was already paying what it should. */
+    recoveredMins: number;
+    /**
+     * Only when the run is already signed and cannot absorb the change. Priced from the rate the
+     * employee was actually paid at. A SUGGESTION — creating the line is a separate, typed act.
+     */
+    suggestedRecovery: {
+        minutes: number; amount: number; currency: string; lineId: string; runNumber: string;
+    } | null;
+    /** Attendance-driven disciplinary cases opened in the same cycle. Surfaced, never voided. */
+    relatedCases: { id: string; caseNumber: string; stage: string; violationId: string | null }[];
+    /** Non-empty when a push did not land. The service reports success even when it does not. */
+    failures: string[];
+}
+
+export interface PunchAnomalyScanResult {
+    start: string;
+    end: string;
+    rows: PunchAnomalyRow[];
+    /** Employees actually read. `scanned + unreadable` is the roster the sweep set out to cover. */
+    scanned: number;
+    /** Employees the attendance service would not answer for — the queue is short by this many. */
+    unreadable: number;
+    warnings: string[];
+    fetchedAt: string;
+    /** True when this answer came from the server's short-lived cache rather than a fresh sweep. */
+    cached?: boolean;
+}
+
 export interface MissingPunchInput {
     empCode: string;
     empId: number;
@@ -239,12 +409,93 @@ export interface AddLeaveInput {
     notes?: string;
 }
 
-export interface AddOvertimeInput {
+/** One employee's line in an approval batch. Hours/minutes are the TOTAL for the whole period. */
+export interface OvertimeApprovalRow {
     empCode: string;
-    date: string;
     hours: number;
     minutes: number;
-    reason?: string;
+}
+
+/**
+ * One period, many employees — which is how an approval actually arrives: a head replies about
+ * their whole team for one span of days.
+ *
+ * The period must not cross a payroll boundary. The attendance system counts an approval in FULL
+ * for every payroll run its period touches, with no pro-rating, so one 8-hour approval spanning
+ * 20-30 Sep was measured being paid in both September and October. The server rejects it.
+ */
+export interface OvertimeApprovalInput {
+    startDate: string;
+    endDate: string;
+    reason: string;
+    headName?: string;
+    notes?: string;
+    rows: OvertimeApprovalRow[];
+}
+
+export interface OvertimeApprovalRecord {
+    id: string;
+    empCode: string;
+    startDate: string;
+    endDate: string;
+    period: string;
+    minutes: number;
+    reason: string;
+    notes: string | null;
+    headName: string | null;
+    status: string;
+    sourceMessage: string | null;
+    /**
+     * The employee's TOTAL approved minutes over the period as read back afterwards — which
+     * includes any earlier overlapping approval, not only this one. Evidence the write landed,
+     * not a restatement of it.
+     */
+    verifiedMins: number | null;
+    createdByName: string | null;
+    appliedAt: string;
+}
+
+export interface OvertimeReportRow {
+    empCode: string;
+    employeeId: string | null;
+    name: string;
+    nameArabic: string | null;
+    placement: { unit: string | null; department: string | null; division: string | null; directorate: string | null };
+    recordedMins: number;
+    approvedMins: number;
+    approvals: { startDate: string; endDate: string; minutes: number; status: string; headName: string | null; appliedAt: string }[];
+}
+
+export interface OvertimeReportGroup {
+    key: string;
+    label: string;
+    /** `unassigned` and `notLinked` are not org nodes — they are the two ways out of one. */
+    kind: 'unit' | 'department' | 'division' | 'all' | 'unassigned' | 'notLinked';
+    rows: OvertimeReportRow[];
+    recordedMins: number;
+    approvedMins: number;
+}
+
+/** A day of an individual's overtime. `dayKind` is why the hours exist at all. */
+export interface OvertimeDetailDay {
+    date: string;
+    dayKind: 'weekday' | 'restDay' | 'holiday';
+    holidayName: string | null;
+    punches: string[];
+    otMins: number;
+    workMins: number;
+}
+
+export interface OvertimeReport {
+    start: string;
+    end: string;
+    period: string | null;
+    /** True when the range spans two financial months: reportable, but not approvable as one period. */
+    crossesPayrollBoundary: boolean;
+    totals: { employees: number; recordedMins: number; approvedMins: number; unplaced: number; notLinked: number };
+    groups: OvertimeReportGroup[];
+    detail: OvertimeDetailDay[] | null;
+    warnings: string[];
 }
 
 export interface AddOutWorkInput {
@@ -339,6 +590,54 @@ export const attendanceService = {
         return response.data;
     },
 
+    /**
+     * The cross-employee queue of days whose punches did not come out as a working day.
+     *
+     * Ask by `period` ('YYYY-MM', a financial month) or by an explicit `start`/`end` pair — the
+     * server rejects both at once. The 25th → 24th arithmetic deliberately lives server-side; a
+     * copy of it here is how the boundary would start disagreeing with payroll. With neither, the
+     * answer covers the current financial month.
+     *
+     * `refresh` skips a ~5-minute server cache; the sweep is one sequential call per employee, so
+     * a cached answer is the normal one.
+     */
+    async getPunchAnomalies(params: { period?: string; start?: string; end?: string; empCode?: string; refresh?: boolean } = {}): Promise<PunchAnomalyScanResult> {
+        const response = await api.get('/attendance-integration/punch-anomalies', {
+            params: {
+                period: params.period || undefined,
+                start: params.start || undefined,
+                end: params.end || undefined,
+                empCode: params.empCode || undefined,
+                refresh: params.refresh ? 'true' : undefined,
+            },
+        });
+        return response.data;
+    },
+
+    /**
+     * Pushes one day's repairs into the attendance service and logs them.
+     *
+     * `fingerprint` is the day's punches as the screen displayed them; the server refuses with 409
+     * if they have changed since. `empCode` must stay in the body — the audit middleware resolves
+     * the subject employee from exactly that field.
+     */
+    async correctPunches(input: {
+        empCode: string;
+        workDate: string;
+        reason: string;
+        steps: PunchCorrectionStep[];
+        fingerprint?: string;
+        anomalyKind?: string | null;
+    }): Promise<PunchCorrectionResult> {
+        const response = await api.post('/attendance-integration/punch-corrections', input);
+        return response.data;
+    },
+
+    async getPunchCorrections(params: { empCode?: string; workDate?: string; period?: string } = {}): Promise<{ corrections: PunchCorrectionRecord[] }> {
+        const response = await api.get('/attendance-integration/punch-corrections', { params });
+        return response.data;
+    },
+
     async addMissingPunch(input: MissingPunchInput): Promise<{ success: boolean; message: string }> {
         const response = await api.post('/attendance-integration/missing-punches', input);
         return response.data;
@@ -357,8 +656,55 @@ export const attendanceService = {
         await api.delete(`/attendance-integration/employee-leaves/${id}`);
     },
 
-    async addOvertime(input: AddOvertimeInput): Promise<{ success: boolean; message: string }> {
-        const response = await api.post('/attendance-integration/overtimes', input);
+    /**
+     * Records approved overtime for one period across many employees.
+     *
+     * Only approved overtime is ever paid; the punch-derived figure is a reference payroll ignores.
+     * The server validates the whole batch before writing any of it, rejects a period that crosses
+     * a payroll boundary, and rejects an employee code the attendance system does not know — it
+     * would otherwise answer 200 and file the approval against nobody.
+     */
+    async approveOvertime(input: OvertimeApprovalInput): Promise<{
+        approvals: OvertimeApprovalRecord[]; period: string; applied: number; failures: string[];
+    }> {
+        const response = await api.post('/attendance-integration/overtime-approvals', input);
+        return response.data;
+    },
+
+    async getOvertimeApprovals(params: { period?: string; empCode?: string; start?: string; end?: string } = {}): Promise<{ approvals: OvertimeApprovalRecord[] }> {
+        const response = await api.get('/attendance-integration/overtime-approvals', { params });
+        return response.data;
+    },
+
+    /**
+     * Changes an approval's hours by re-posting its exact period, which the attendance service
+     * upserts. The old log row is marked SUPERSEDED and a new one records the new figure.
+     */
+    async editOvertimeApproval(id: string, input: { hours: number; minutes: number; reason: string }): Promise<{ approval: OvertimeApprovalRecord }> {
+        const response = await api.patch(`/attendance-integration/overtime-approvals/${id}`, input);
+        return response.data;
+    },
+
+    /**
+     * Revokes an approval — sets its hours to ZERO so nothing is paid.
+     *
+     * Deliberately not called 'delete': the attendance system has no delete endpoint for
+     * overtime, so the record survives there at 00:00:00. Verified live.
+     */
+    async revokeOvertimeApproval(id: string, input: { reason: string }): Promise<{ approval: OvertimeApprovalRecord }> {
+        const response = await api.delete(`/attendance-integration/overtime-approvals/${id}`, { data: input });
+        return response.data;
+    },
+
+    /** Recorded overtime for a range, grouped for whoever approves it. */
+    async getOvertimeReport(params: { start: string; end: string; scope?: string; scopeId?: string; empCode?: string }): Promise<OvertimeReport> {
+        const response = await api.get('/attendance-integration/overtime-report', { params });
+        return response.data;
+    },
+
+    /** The same report as a signable Word document — one file per group. */
+    async getOvertimeReportDoc(params: { start: string; end: string; scope?: string; scopeId?: string }): Promise<Blob> {
+        const response = await api.get('/attendance-integration/overtime-report/document', { params, responseType: 'blob' });
         return response.data;
     },
 

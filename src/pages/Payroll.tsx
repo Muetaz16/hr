@@ -170,16 +170,57 @@ const PayrollPage: React.FC = () => {
                                     <Link to={`/payroll/runs/${preflight.existingRun.id}`} className="underline">
                                         {preflight.existingRun.runNumber}
                                     </Link>{' '}
-                                    ({preflight.existingRun.status}).
+                                    ({t(`payroll_status_${preflight.existingRun.status}`, { defaultValue: preflight.existingRun.status })}).
                                 </p>
                             )}
 
-                            {issueTotal === 0 ? (
+                            {/* Broken punch days, in their own block rather than in the issue list:
+                                they are counted in DAYS and fixed on the Attendance screen, and a
+                                day that pays zero is not a blocked line — it computes perfectly and
+                                produces a correct-looking payslip for the wrong amount. Cleared here
+                                it costs nothing; cleared after approval it becomes a recovery. */}
+                            {preflight.attendanceAnomalies?.available && preflight.attendanceAnomalies.days > 0 && (
+                                <div className="border border-amber-300 bg-amber-50 rounded-xl p-4 space-y-1.5">
+                                    <p className="text-sm font-black text-amber-900 flex items-center gap-2">
+                                        <AlertTriangle size={15} />
+                                        {t('preflight_punch_anomalies', {
+                                            defaultValue: '{{n}} day(s) in this window did not pair into a working day',
+                                            count: preflight.attendanceAnomalies.days,
+                                            n: preflight.attendanceAnomalies.days,
+                                        })}
+                                    </p>
+                                    <p className="text-xs text-amber-900/80 font-medium">
+                                        {t('preflight_punch_anomalies_desc', {
+                                            defaultValue: '{{employees}} employees · {{zero}} days would pay nothing · {{late}} minutes of lateness that never happened. Fix these on the Attendance screen before computing — afterwards the money has to be recovered against a signed run.',
+                                            employees: preflight.attendanceAnomalies.employees,
+                                            zero: preflight.attendanceAnomalies.zeroPayDays,
+                                            late: preflight.attendanceAnomalies.phantomLateMins,
+                                        })}
+                                    </p>
+                                    <Link to="/attendance/exceptions" className="text-xs font-black text-amber-800 underline">
+                                        {t('open_punch_anomalies', { defaultValue: 'Open the punch anomalies list' })}
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* An unavailable sweep is not a clean one, and must never read as one. */}
+                            {preflight.attendanceAnomalies && !preflight.attendanceAnomalies.available && (
+                                <p className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                                    {t('preflight_anomalies_unavailable', {
+                                        defaultValue: 'The attendance system could not be checked for broken punch days. This period may still hold days that pay nothing.',
+                                    })}
+                                </p>
+                            )}
+
+                            {/* "Every employee can be paid" must not be said over a window holding
+                                days that pay nothing — the run would compute cleanly and still be
+                                wrong, which is exactly the failure this whole check exists for. */}
+                            {issueTotal === 0 && !preflight.attendanceAnomalies?.days ? (
                                 <p className="text-sm font-semibold text-emerald-700 flex items-center gap-2">
                                     <CheckCircle2 size={15} />
                                     {t('payroll_preflight_clean', { defaultValue: 'Every employee in scope can be paid.' })}
                                 </p>
-                            ) : (
+                            ) : issueTotal === 0 ? null : (
                                 <div className="border border-amber-100 bg-amber-50/60 rounded-xl p-4 space-y-2">
                                     <p className="text-sm font-black text-amber-800 flex items-center gap-2">
                                         <AlertTriangle size={15} />
@@ -191,8 +232,17 @@ const PayrollPage: React.FC = () => {
                                             const meta = ISSUE_HINTS[issue.code];
                                             return (
                                                 <li key={issue.code} className="text-xs text-amber-900/90">
-                                                    <b>{issue.employees.length}</b> — {meta?.label || issue.code}
-                                                    {meta && <span className="block text-amber-800/60 ms-4">{meta.hint}</span>}
+                                                    {/* These were being printed straight from the
+                                                        map, so the whole block stayed English on an
+                                                        Arabic page. Same convention the close card
+                                                        already uses for block reasons: a key per
+                                                        code, with the map as the English fallback. */}
+                                                    <b>{issue.employees.length}</b> — {t(`preflight_issue_${issue.code}`, { defaultValue: meta?.label || issue.code })}
+                                                    {meta && (
+                                                        <span className="block text-amber-800/60 ms-4">
+                                                            {t(`preflight_fix_${issue.code}`, { defaultValue: meta.hint })}
+                                                        </span>
+                                                    )}
                                                 </li>
                                             );
                                         })}
@@ -239,7 +289,7 @@ const RunCard: React.FC<{ run: PayrollRun; t: (k: string, o?: any) => string }> 
                     <div className="flex items-center gap-3">
                         <h3 className="text-lg font-black text-slate-800">{run.period}</h3>
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${STATUS_STYLES[run.status]}`}>
-                            {run.status.replace('_', ' ')}
+                            {t(`payroll_status_${run.status}`, { defaultValue: run.status.replace('_', ' ') })}
                         </span>
                         {run.revision > 1 && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">

@@ -26,6 +26,7 @@ import {
     Clock,
     Archive,
     Megaphone,
+    UserCheck,
 } from 'lucide-react';
 
 // Leave types that flow through the org-based approval-step chain (identity-scoped, fetched via
@@ -34,12 +35,24 @@ const CHAIN_LEAVE_TYPES = ['PAID_HOLIDAY', 'UNPAID_LEAVE', 'EMERGENCY_LEAVE', 'L
 
 const STAGE_LABEL_KEYS: Record<string, string> = {
     HEAD_ATTENDANCE: 'role_head_attendance',
+    // The first stage of both short attendance chains. Missing here it fell through to the generic
+    // 'approval' key, which does not exist either — so the Arabic UI printed a bare English
+    // "Direct Supervisor" on every permission request.
+    DIRECT_SUPERVISOR: 'role_direct_supervisor',
     UNIT_HEAD: 'head_of_unit',
     DEPT_HEAD: 'stage_dept_head',
     DIVISION_HEAD: 'head_of_division',
     HR_MANAGER: 'hr_manager',
     DIRECTORATE: 'directorate',
     GENERAL_MANAGER: 'general_manager',
+};
+
+// The four reason boxes on the permission form, as the approver reads them.
+const PERMISSION_REASON_KEYS: Record<string, string> = {
+    PERSONAL: 'pr_personal',
+    FAMILY: 'pr_family',
+    HEALTH_MEDICAL: 'pr_health_medical',
+    OTHERS: 'pr_others',
 };
 
 const TYPE_LABEL_KEYS: Record<string, string> = {
@@ -79,6 +92,18 @@ interface InboxItem {
     rejectLabel: string;
     needsDoc: boolean;              // GM final step must upload a signed document
     canDownload: boolean;
+    // Set when the chain has not started because the nominated cover employee has not accepted yet.
+    // The row is shown anyway — hiding it made the request vanish from the inbox with no
+    // explanation — but Approve is closed until they accept. Rejecting stays open: a manager may
+    // still cancel the request outright, which is what the server allows.
+    awaitingReplacement?: string | null;
+    // Set only for a Missing Biometric Log. The approver may correct the punch time before granting
+    // it — the request writes a real attendance event, so the person signing for it is the one who
+    // should be able to fix a wrong hour rather than bounce the whole request back.
+    // Leave filed inside the notice window: the days actually given and the stated reason.
+    // Put in front of every approver, because approving it IS the waiver.
+    shortNotice?: { daysGiven: number; reason: string } | null;
+    punch?: { needsIn: boolean; needsOut: boolean; inTime: string; outTime: string; edited: boolean } | null;
     // payloads (exactly one is set)
     step?: LeaveApprovalStep;
     legacy?: LeaveRequest;
@@ -98,6 +123,8 @@ const MyApprovals: React.FC = () => {
     // Broadcasting is only for those who can post announcements (same gate as the old Control Room).
     const canBroadcast = canAccess(currentUser, ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT'], ['manage_announcements']);
     const [docs, setDocs] = useState<Record<string, File | null>>({});
+    // Punch-time corrections the approver has typed but not yet submitted, keyed by item.
+    const [punchEdits, setPunchEdits] = useState<Record<string, { startTime?: string; endTime?: string }>>({});
     const [submitting, setSubmitting] = useState<string | null>(null);
 
     // Recruitment eligibility mirrors Recruitment.tsx exactly.
@@ -157,17 +184,49 @@ const MyApprovals: React.FC = () => {
             for (const step of steps) {
                 const type = step.leaveRequest?.type || '';
                 const isExceptional = type === 'EXCEPTIONAL_PERFORMANCE';
+                const rep = step.leaveRequest?.replacementUser;
+                const awaitingReplacement = step.leaveRequest?.replacementStatus === 'PENDING'
+                    ? (rep?.fullName || rep?.email || t('the_replacement_employee', { defaultValue: 'the replacement employee' }))
+                    : null;
+                const lr = step.leaveRequest;
+                const mpType = lr?.missingPunchType || '';
+                const punch = type === 'MISSING_PUNCH'
+                    ? {
+                        needsIn: mpType === 'CHECK_IN' || mpType === 'BOTH',
+                        needsOut: mpType === 'CHECK_OUT' || mpType === 'BOTH',
+                        // Show whatever is currently in force — an earlier approver's correction if
+                        // there is one, otherwise the employee's own request.
+                        inTime: lr?.approvedStartTime || lr?.startTime || '',
+                        outTime: lr?.approvedEndTime || lr?.endTime || '',
+                        edited: !!(lr?.approvedStartTime || lr?.approvedEndTime),
+                    }
+                    : null;
+                // Days of notice this request actually gave. Computed from the stored createdAt vs
+                // startDate, so it stays true even if the policy number changes later.
+                const snReason = lr?.shortNoticeReason || null;
+                const shortNotice = snReason ? {
+                    daysGiven: Math.round((new Date(lr!.startDate).setHours(0,0,0,0) - new Date(lr!.createdAt).setHours(0,0,0,0)) / 86400000),
+                    reason: snReason,
+                } : null;
                 out.push({
+                    punch,
+                    shortNotice,
                     key: `step-${step.id}`,
                     category: isExceptional ? 'exceptional' : 'staff',
                     typeLabel: t(TYPE_LABEL_KEYS[type] || 'request', { defaultValue: type.replace(/_/g, ' ') }),
                     title: step.leaveRequest?.employee?.fullName || t('unknown_employee', { defaultValue: 'Employee' }),
-                    subtitle: step.leaveRequest?.reason || step.leaveRequest?.natureOfContribution || '',
+                    // A permission's reason is a ticked box, and the free-text note is optional for
+                    // three of the four — without this fallback the approver's row reads blank on a
+                    // request that does state its reason.
+                    subtitle: step.leaveRequest?.reason
+                        || (step.leaveRequest?.permissionReason ? t(PERMISSION_REASON_KEYS[step.leaveRequest.permissionReason] || 'request', { defaultValue: step.leaveRequest.permissionReason }) : '')
+                        || step.leaveRequest?.natureOfContribution || '',
                     stageLabel: t(STAGE_LABEL_KEYS[step.stage] || 'approval', { defaultValue: step.stage.replace(/_/g, ' ') }),
                     dateText: dateRange(step.leaveRequest),
                     approveLabel: approve, rejectLabel: reject,
                     needsDoc: step.stage === 'GENERAL_MANAGER',
                     canDownload: true,
+                    awaitingReplacement,
                     step,
                 });
             }
@@ -291,7 +350,16 @@ const MyApprovals: React.FC = () => {
         setSubmitting(item.key);
         try {
             if (item.step) {
-                await staffHubService.decideApprovalStep(item.step.leaveRequestId, item.step.id, decision, note, item.needsDoc ? doc : null);
+                // Only send a punch time on an approval, and only the halves this record type
+                // actually uses — sending a check-out on a check-in-only request would be rejected.
+                const edit = punchEdits[item.key];
+                const punch = item.punch && decision === 'APPROVE'
+                    ? {
+                        ...(item.punch.needsIn ? { startTime: edit?.startTime ?? item.punch.inTime } : {}),
+                        ...(item.punch.needsOut ? { endTime: edit?.endTime ?? item.punch.outTime } : {}),
+                    }
+                    : null;
+                await staffHubService.decideApprovalStep(item.step.leaveRequestId, item.step.id, decision, note, item.needsDoc ? doc : null, punch);
             } else if (item.recruitment) {
                 await recruitmentService.prfApprove(item.recruitment.id, decision === 'APPROVE' ? 'approve' : 'reject', note, item.needsDoc ? doc : undefined);
             } else if (item.cover) {
@@ -311,6 +379,7 @@ const MyApprovals: React.FC = () => {
                 ? t('request_rejected', { defaultValue: 'Recorded.' })
                 : t('request_approved', { defaultValue: 'Approved.' }));
             setDocs(prev => { const n = { ...prev }; delete n[item.key]; return n; });
+            setPunchEdits(prev => { const n = { ...prev }; delete n[item.key]; return n; });
             fetchData();
         } catch (error: any) {
             toast.error(error?.response?.data?.error || t('failed_to_update_status', { defaultValue: 'Failed to update.' }));
@@ -481,9 +550,81 @@ const MyApprovals: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1.5 flex-wrap">
                                             {item.dateText && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.dateText}</span>}
-                                            <span className="flex items-center gap-1">{t('awaiting_your_approval_as', { defaultValue: 'Awaiting' })} <b className="text-slate-600">{item.stageLabel}</b></span>
+                                            <span className="flex items-center gap-1">{t('awaiting_your_approval_as', { defaultValue: 'Awaiting your approval as' })} <b className="text-slate-600">{item.stageLabel}</b></span>
                                         </div>
                                         {item.subtitle && <p className="text-sm text-slate-400 mt-1.5 truncate italic">"{item.subtitle}"</p>}
+                                        {/* Says whose desk it is really on. Without it the row reads
+                                            as waiting for THIS approver, which is what made the
+                                            request look lost when it was simply not started yet. */}
+                                        {item.awaitingReplacement && (
+                                            <p className="mt-2 inline-flex items-start gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                                <UserCheck className="w-3.5 h-3.5 shrink-0 mt-px" />
+                                                <span>
+                                                    {t('awaiting_cover_acceptance', {
+                                                        defaultValue: 'Not on your desk yet — waiting for {{name}} to accept the cover.',
+                                                        name: item.awaitingReplacement,
+                                                    })}
+                                                </span>
+                                            </p>
+                                        )}
+                                        {/* Filed inside the notice window. Approving it IS the waiver,
+                                            so the fact and the stated reason sit in front of the
+                                            approver rather than in a field they would have to go
+                                            looking for. The authorising letter is the attachment. */}
+                                        {item.shortNotice && (
+                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                                                <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                                    <Clock className="w-3 h-3" />
+                                                    {t("short_notice_badge", { defaultValue: "Short notice — {{days}} day(s) given", days: item.shortNotice.daysGiven })}
+                                                </p>
+                                                <p dir="auto" className="mt-1 text-[11px] font-medium text-amber-800">{item.shortNotice.reason}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Missing Biometric Log — the time that will be written into
+                                            the attendance system, editable until this approver signs. */}
+                                        {item.punch && (
+                                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                                                <div className="flex items-center gap-1.5 mb-2">
+                                                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                        {t('mp_time_to_record', { defaultValue: 'Time to be recorded' })}
+                                                    </span>
+                                                    {item.punch.edited && (
+                                                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                            {t('mp_time_adjusted', { defaultValue: 'adjusted' })}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {item.punch.needsIn && (
+                                                        <label className="flex items-center gap-2">
+                                                            <span className="text-[11px] font-bold text-slate-500">{t('mp_check_in_time', { defaultValue: 'Check-in Time' })}</span>
+                                                            <input
+                                                                type="time"
+                                                                value={punchEdits[item.key]?.startTime ?? item.punch.inTime}
+                                                                onChange={e => setPunchEdits(prev => ({ ...prev, [item.key]: { ...prev[item.key], startTime: e.target.value } }))}
+                                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-semibold text-slate-800"
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    {item.punch.needsOut && (
+                                                        <label className="flex items-center gap-2">
+                                                            <span className="text-[11px] font-bold text-slate-500">{t('mp_check_out_time', { defaultValue: 'Check-out Time' })}</span>
+                                                            <input
+                                                                type="time"
+                                                                value={punchEdits[item.key]?.endTime ?? item.punch.outTime}
+                                                                onChange={e => setPunchEdits(prev => ({ ...prev, [item.key]: { ...prev[item.key], endTime: e.target.value } }))}
+                                                                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-semibold text-slate-800"
+                                                            />
+                                                        </label>
+                                                    )}
+                                                </div>
+                                                <p className="mt-2 text-[10px] font-medium text-slate-400">
+                                                    {t('mp_time_edit_hint', { defaultValue: 'Correct it if needed — the time you approve is the one written into the attendance system.' })}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -505,8 +646,14 @@ const MyApprovals: React.FC = () => {
                                         </label>
                                     )}
                                     <button
-                                        disabled={busy}
+                                        disabled={busy || !!item.awaitingReplacement}
                                         onClick={() => decide(item, 'APPROVE')}
+                                        title={item.awaitingReplacement
+                                            ? t('awaiting_replacement_blocks_approval', {
+                                                defaultValue: 'The chain starts once {{name}} accepts the cover.',
+                                                name: item.awaitingReplacement,
+                                            }) as string
+                                            : undefined}
                                         className="flex items-center justify-center gap-2 bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-600 shadow-sm shadow-emerald-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                         <Check className="w-4 h-4" /> {busy ? t('submitting', { defaultValue: 'Submitting…' }) : item.approveLabel}

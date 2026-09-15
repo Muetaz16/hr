@@ -402,28 +402,18 @@ const UserForm: React.FC = () => {
                                         </select>
                                     </div>
                                 )}
+                                {/* A Directorate head used to be asked to tick, by hand, every department
+                                    they oversee. Their place in the org chart already says it: the
+                                    directorate owns its divisions, those divisions own their
+                                    departments, and those departments own their units. The list was a
+                                    second answer to a question the chart had already answered, and the
+                                    two drifted apart. Scope is now walked from the chart — see
+                                    server/src/utils/orgScope.ts — so there is nothing to fill in here. */}
                                 {formData.role === 'HEAD_DIRECTOR' && (
-                                    <div className="space-y-3 sm:col-span-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('assigned_departments')}</label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                            {departments.map(d => (
-                                                <label key={d.id} className="flex items-center space-x-3 p-2 rounded-xl hover:bg-white transition-colors cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={formData.departmentIds.includes(d.id)}
-                                                        onChange={(e) => {
-                                                            const newIds = e.target.checked ? [...formData.departmentIds, d.id] : formData.departmentIds.filter(x => x !== d.id);
-                                                            setFormData({ ...formData, departmentIds: newIds });
-                                                        }}
-                                                        className="app-check"
-                                                    />
-                                                    <span className="text-sm font-bold text-slate-700">{d.name}</span>
-                                                </label>
-                                            ))}
-                                            {departments.length === 0 && (
-                                                <p className="text-xs text-slate-400 italic col-span-2">{t('no_departments_available', { defaultValue: 'No departments available' })}</p>
-                                            )}
-                                        </div>
+                                    <div className="sm:col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-[11px] font-medium text-slate-500 leading-relaxed">
+                                        {t('directorate_scope_from_chart', {
+                                            defaultValue: 'Scope comes from the org chart: this user covers every division, department and unit under the directorate their employee record belongs to. Nothing to assign here.',
+                                        })}
                                     </div>
                                 )}
                                 {(formData.role === 'HEAD_DEPARTMENT' || formData.role === 'HEAD_UNIT') && (

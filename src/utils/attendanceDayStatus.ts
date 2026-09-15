@@ -13,12 +13,16 @@ const WEEKLY_OFF_DAYS = [5]; // Friday
 const BLANK_PUNCH_VALUES = new Set(['', '-', '--', '--:--']);
 const isBlankPunch = (v?: string | null) => BLANK_PUNCH_VALUES.has((v ?? '').trim());
 
+/** Did the employee turn up at all? The holiday branch needs this as well as the punch checks. */
+const hasAnyPunch = (day: DailyAttendanceResult) =>
+    day.sessions.length > 0 || !isBlankPunch(day.firstPunch) || !isBlankPunch(day.lastPunch);
+
 // yyyy-MM-dd prefix comparison, deliberately NOT `new Date(iso)` — the API's date strings only
 // need to compare as calendar days, and routing bare 'YYYY-MM-DD' through `new Date()` risks a
 // UTC-midnight day shift depending on the browser's local offset.
 const dayKey = (iso: string) => (iso || '').slice(0, 10);
 
-export type DayStatusKind = 'suspended' | 'holiday' | 'outWork' | 'onLeavePaid' | 'onLeaveUnpaid' | 'absent' | 'incomplete' | 'present';
+export type DayStatusKind = 'suspended' | 'holiday' | 'outWork' | 'onLeavePaid' | 'onLeaveUnpaid' | 'absent' | 'incomplete' | 'present' | 'weeklyOff';
 
 export interface DayStatus {
     kind: DayStatusKind;
@@ -26,6 +30,13 @@ export interface DayStatus {
     // (otherwise meaningless/empty) Sessions/Late/Early-Out/OT/Worked columns in the table.
     reason: string;
     leave?: EmployeeLeaveRecord; // set only for onLeavePaid/onLeaveUnpaid
+    // Overtime minutes worked on a day that is not a working day — the weekly rest day or a
+    // public holiday. Set only when the employee actually turned up.
+    //
+    // Read from otMins, NOT totalWorkMins: the attendance service books work on these days
+    // entirely as overtime (a real holiday returned totalWorkMins = 0 with otMins = 301), so the
+    // ordinary-hours field is the wrong one and would report a worked day as empty.
+    overtimeMins?: number;
 }
 
 // Row tint + text color, keyed the same way ApprovedLeaves.tsx's TYPE_META already is — a
@@ -47,6 +58,10 @@ export const DAY_STATUS_META: Record<DayStatusKind, { rowClassName: string; text
     absent: { rowClassName: 'bg-red-50', textClassName: 'text-red-600' },
     incomplete: { rowClassName: 'bg-slate-50', textClassName: 'text-slate-600' },
     present: { rowClassName: '', textClassName: '' },
+    // Emerald, and specifically emerald: every other bucket here is already spoken for, and of the
+    // remaining palettes only emerald-600 is recolored by the dark theme in index.css — teal/cyan/
+    // sky fall through uncovered and would inherit the default text color on the dark surface.
+    weeklyOff: { rowClassName: 'bg-emerald-50', textClassName: 'text-emerald-600' },
 };
 
 // A day the attendance system has literally nothing to say about (no punches, no exception, no
@@ -61,6 +76,10 @@ function makeBlankDay(key: string): DailyAttendanceResult {
         isSuspended: false, suspensionReason: null,
         isExcusedLate: false, excusedLateReason: null, isExcusedEarlyOut: false, excusedEarlyOutReason: null,
         lateTimeStr: '0m', earlyOutStr: '0m', overTimeStr: '0m',
+        punches: [],
+        // `anomaly` is deliberately NOT set. undefined means "never judged" — this row was
+        // invented here and the server has never seen it — so resolveDayStatus falls through to
+        // the punch heuristic instead of reading a clean verdict off a day that does not exist.
     };
 }
 
@@ -70,11 +89,25 @@ function makeBlankDay(key: string): DailyAttendanceResult {
  * reportData entirely — which used to mean it silently never got evaluated for absence at
  * all, so a real no-show could never be caught. This reconstructs the full calendar range
  * and inserts a blank stand-in row for every missing weekday, so resolveDayStatus can catch
- * it below. Missing Fridays are deliberately NOT synthesized — they're the recognized weekly
- * off day, not a gap to investigate (a real Friday row, if one exists, is still kept as-is).
+ * it below.
+ *
+ * Fridays ARE synthesized, and that is a change: they used to be skipped, which meant a Friday
+ * with no punches simply did not exist in the table. The month appeared to jump from Thursday to
+ * Saturday, and there was no way to tell "the rest day" from "a day the system knows nothing
+ * about". They are now stood in for like any other day and resolve to the `weeklyOff` status —
+ * never to `absent`, which resolveDayStatus guarantees below.
  */
 export function fillMissingDays(reportData: DailyAttendanceResult[], rangeStart: string, rangeEnd: string): DailyAttendanceResult[] {
     const existing = new Map(reportData.map(d => [dayKey(d.date), d]));
+    // A day absorbed by an overnight shift is missing from reportData BY DESIGN — it was merged
+    // into the day that shift began. Standing a blank row in for it would report an absence for
+    // somebody who was at work through the night, and that absence goes on to drive the Presence
+    // score and the absence count.
+    const absorbed = new Set(
+        reportData
+            .filter(d => d.isOvernightStitched && d.overnightCheckoutDate)
+            .map(d => dayKey(d.overnightCheckoutDate as string)),
+    );
     const startKey = dayKey(rangeStart);
     const endKey = dayKey(rangeEnd);
     if (!startKey || !endKey) return reportData;
@@ -87,7 +120,7 @@ export function fillMissingDays(reportData: DailyAttendanceResult[], rangeStart:
         const existingDay = existing.get(key);
         if (existingDay) {
             filled.push(existingDay);
-        } else if (!WEEKLY_OFF_DAYS.includes(cursor.getDay())) {
+        } else if (!absorbed.has(key)) {
             filled.push(makeBlankDay(key));
         }
         cursor.setDate(cursor.getDate() + 1);
@@ -122,7 +155,16 @@ export function resolveDayStatus(day: DailyAttendanceResult, leaves: EmployeeLea
         const suspendReason = cleanReason(day.suspensionReason);
         return { kind: 'suspended', reason: suspendReason ? `Suspended — ${suspendReason}` : 'Suspended' };
     }
-    if (day.isHoliday) return { kind: 'holiday', reason: day.holidayName || 'Holiday' };
+    // A public holiday. Somebody may still have come in, and those hours are overtime — exactly
+    // the same rule as the weekly rest day. This row used to print only the holiday's NAME, so
+    // five hours of eid overtime sat on screen as the single word "eid".
+    if (day.isHoliday) {
+        return {
+            kind: 'holiday',
+            reason: day.holidayName || 'Holiday',
+            ...(hasAnyPunch(day) ? { overtimeMins: day.otMins || 0 } : {}),
+        };
+    }
     if (day.isOutWork) {
         const outReason = cleanReason(day.outWorkReason);
         return { kind: 'outWork', reason: outReason ? `Out-Work — ${outReason}` : 'Out-Work' };
@@ -130,12 +172,42 @@ export function resolveDayStatus(day: DailyAttendanceResult, leaves: EmployeeLea
     if (leave) {
         return { kind: leave.leaveType.isPaid ? 'onLeavePaid' : 'onLeaveUnpaid', reason: `On Leave — ${formatLeaveTypeName(leave.leaveType.name)}`, leave };
     }
-    if (isWeeklyOff) return { kind: 'present', reason: '' }; // weekly off with no punches: not absent
+    const punched = hasAnyPunch(day);
 
-    const hasAnyPunch = day.sessions.length > 0 || !isBlankPunch(day.firstPunch) || !isBlankPunch(day.lastPunch);
-    if (!hasAnyPunch) {
+    // The weekly rest day, and it OWNS the row from here on — no lateness, no early-out, no
+    // absence, and no anomaly verdict. There is no scheduled start to be late for, so the
+    // attendance service's own late/early figures for this day are meaningless: one real Friday
+    // came back with 108 minutes of "lateness" purely because the punch was after the weekday
+    // work-start it does not have.
+    //
+    // Hours worked here are OVERTIME, not ordinary hours. This returns the minutes rather than a
+    // sentence so the screen can say that in the reader's own language.
+    if (isWeeklyOff) {
+        return {
+            kind: 'weeklyOff',
+            reason: 'Friday — weekly rest day',
+            ...(punched ? { overtimeMins: day.otMins || 0 } : {}),
+        };
+    }
+    if (!punched) {
         if (key > todayKey) return { kind: 'present', reason: '' }; // can't be absent on a day that hasn't happened
         return { kind: 'absent', reason: 'Absent — no punches recorded' };
+    }
+
+    // The server has already judged this day (server/src/utils/attendanceAnomaly.ts) and attached
+    // its verdict at the proxy boundary. Trust it over the local heuristic below, which can only
+    // see a HALF-missing day: two punches of the same type leave both firstPunch and lastPunch
+    // populated, so the XOR misses them entirely and a day that paid nothing reported as a normal
+    // working day. Measured on live data: 39 such days, and the XOR caught 16 of them.
+    //
+    // `undefined` means the payload predates annotation, so the heuristic remains as the fallback.
+    if (day.anomaly !== undefined) {
+        if (day.anomaly && day.anomaly.severity === 'blocking') {
+            // The reason string is only a fallback for callers that do not render the anomaly
+            // themselves; DailyBreakdownTable builds a translated sentence from `facts` instead.
+            return { kind: 'incomplete', reason: `Needs correction — ${day.anomaly.detail}` };
+        }
+        return { kind: 'present', reason: '' };
     }
 
     const brokenSession = day.sessions.find(s => isBlankPunch(s.checkIn) !== isBlankPunch(s.checkOut));

@@ -25,6 +25,11 @@ interface RawDay {
     isHoliday?: boolean;
     isOutWork?: boolean;
     isSuspended?: boolean;
+    // Overnight shift stitching: a night shift that ends after midnight is reported entirely on the
+    // day it STARTED, and the following day — which held nothing but the check-out punch — is
+    // dropped from reportData altogether. `overnightCheckoutDate` names that dropped day.
+    isOvernightStitched?: boolean;
+    overnightCheckoutDate?: string | null;
 }
 interface RawLeave {
     startDate: string;
@@ -61,6 +66,15 @@ const isAbsentDay = (day: RawDay, leaves: RawLeave[], todayKey: string): boolean
 // Friday row, if one exists, is kept as-is (isAbsentDay resolves it to not-absent regardless).
 const fillMissingDays = (reportData: RawDay[], rangeStart: string, rangeEnd: string): RawDay[] => {
     const existing = new Map(reportData.map(d => [dayKey(d.date), d]));
+    // Days swallowed by an overnight shift are missing from reportData ON PURPOSE — they were
+    // merged into the day the shift began. Synthesising a blank row for one would invent an
+    // absence for somebody who was at work all night, and on this path that absence opens a
+    // disciplinary case.
+    const absorbed = new Set(
+        reportData
+            .filter(d => d.isOvernightStitched && d.overnightCheckoutDate)
+            .map(d => dayKey(d.overnightCheckoutDate as string)),
+    );
     const filled: RawDay[] = [];
     const cursor = new Date(`${rangeStart}T00:00:00`);
     const end = new Date(`${rangeEnd}T00:00:00`);
@@ -69,7 +83,7 @@ const fillMissingDays = (reportData: RawDay[], rangeStart: string, rangeEnd: str
         const existingDay = existing.get(key);
         if (existingDay) {
             filled.push(existingDay);
-        } else if (!WEEKLY_OFF_DAYS.includes(cursor.getDay())) {
+        } else if (!absorbed.has(key) && !WEEKLY_OFF_DAYS.includes(cursor.getDay())) {
             filled.push({ date: key, sessions: [], firstPunch: '--:--', lastPunch: '--:--', lateMins: 0, isHoliday: false, isOutWork: false, isSuspended: false });
         }
         cursor.setDate(cursor.getDate() + 1);
@@ -99,6 +113,9 @@ export async function fetchAttendanceSummary(bioId: number, start: string, end: 
         const rawReportData: RawDay[] = Array.isArray(data?.reportData) ? data.reportData : [];
         const leaves: RawLeave[] = Array.isArray(data?.empLeaves) ? data.empLeaves : [];
 
+        // The attendance service reports lateMins = 0 on any day with no scheduled hours — the
+        // weekly rest day and public holidays alike — so a rest day can no longer reach this count
+        // and does not need excluding here.
         const lateDays = rawReportData.filter(d => Number(d?.lateMins) > 0 && !d?.isHoliday && !d?.isSuspended).length;
         // Symmetric to lateDays — BioTime returns earlyOutMins/isExcusedEarlyOut per day already
         // (same payload, no extra call), same as the frontend's DailyAttendanceResult already

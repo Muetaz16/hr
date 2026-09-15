@@ -8,23 +8,24 @@ import { generateContractRenewalDocx } from '../utils/contractRenewalForm';
 import { generateEmployeeSummaryDocx, type SummaryItem } from '../utils/employeeSummaryForm';
 import { purgeUserAndRelations } from './userController';
 import { ACTIVE_ENROLLMENT_FILTER } from '../utils/employeeStatus';
+import { getLeavePolicy } from '../utils/leavePolicy';
+import { buildOrgResolver } from '../utils/orgScope';
 
 import { prisma } from '../lib/prisma';
 
-// BioTime has exactly 4 fixed positions (no lookup endpoint — discovered by inspecting its live
-// roster): Resident=4, Non-Resident=5, Exception=6, Higher-Management=7. Exception and
-// Higher-Management are never auto-assigned — attendance staff reclassify manually via the
-// Attendance page's Employees tab when needed.
+// BioTime's positions (no lookup endpoint — discovered by inspecting its live roster):
+// Resident=4, Non-Resident=5, Exception=6, Higher-Management=7, Logistics=8. Only the first two are
+// ever auto-assigned from a contract type; the rest are set by attendance staff via the Attendance
+// page's Employees tab, so they deliberately have no entry in the map below.
 const BIOTIME_POSITION_BY_CONTRACT_TYPE: Record<string, number> = {
     'RESDANT': 4,
     'DIRCT NONE RESDANT': 5,
     'NONE RESDANT': 5,
 };
 
-// Fixed per-contract allowances — reset to these values at hire and at every renewal (see
-// renewContract below), never accrued mid-contract, only decremented as leave is taken.
-const EMERGENCY_LEAVE_ALLOWANCE = 3;
-const UNPAID_LEAVE_ALLOWANCE = 14;
+// The per-contract emergency/unpaid allowances are POLICY (LeavePolicy), not constants — they used
+// to live here as two literals. The only remaining copy of their default values is
+// LEAVE_POLICY_DEFAULTS in utils/leavePolicy.ts, which is what a missing policy row falls back to.
 // Cap applied to paid leave carried into a new contract at renewal (see renewContract below).
 const PAID_LEAVE_CARRYOVER_CAP = 14;
 
@@ -33,13 +34,20 @@ export const calculateHolidayMetrics = (
     holidaysUsed: number,
     bonusHolidays: number = 0,
     emergencyHolidaysUsed: number = 0,
-    unpaidHolidaysUsed: number = 0
+    unpaidHolidaysUsed: number = 0,
+    // REQUIRED, deliberately. This used to default to a pair of literals here, which meant a caller
+    // that simply forgot it got 3/14 silently — and that is exactly what happened: the employee
+    // profile printed a different entitlement from the payslip, which had been reading the policy
+    // all along, and nothing failed to say so. Making it required moves that mistake to compile time.
+    allowances: { emergencyLeaveAllowance: number; unpaidLeaveAllowance: number },
 ) => {
+    const EMERGENCY_ALLOWANCE = allowances.emergencyLeaveAllowance;
+    const UNPAID_ALLOWANCE = allowances.unpaidLeaveAllowance;
     if (!contractStartDateStr) {
         return {
             accruedHolidays: 0, earnedHolidays: 0, remainingHolidays: 0,
-            remainingEmergencyHolidays: EMERGENCY_LEAVE_ALLOWANCE - (emergencyHolidaysUsed || 0),
-            remainingUnpaidHolidays: UNPAID_LEAVE_ALLOWANCE - (unpaidHolidaysUsed || 0),
+            remainingEmergencyHolidays: EMERGENCY_ALLOWANCE - (emergencyHolidaysUsed || 0),
+            remainingUnpaidHolidays: UNPAID_ALLOWANCE - (unpaidHolidaysUsed || 0),
         };
     }
     const contractStartDate = new Date(contractStartDateStr);
@@ -51,8 +59,8 @@ export const calculateHolidayMetrics = (
     const remainingHolidays = earnedHolidays - (holidaysUsed || 0);
     return {
         accruedHolidays, earnedHolidays, remainingHolidays,
-        remainingEmergencyHolidays: EMERGENCY_LEAVE_ALLOWANCE - (emergencyHolidaysUsed || 0),
-        remainingUnpaidHolidays: UNPAID_LEAVE_ALLOWANCE - (unpaidHolidaysUsed || 0),
+        remainingEmergencyHolidays: EMERGENCY_ALLOWANCE - (emergencyHolidaysUsed || 0),
+        remainingUnpaidHolidays: UNPAID_ALLOWANCE - (unpaidHolidaysUsed || 0),
     };
 };
 
@@ -98,26 +106,29 @@ async function resolveEmployeeScope(user: NonNullable<AuthRequest['user']>): Pro
         return { seeAll: true, inBranch: () => true };
     }
 
-    // Head branch scope. HEAD_DIRECTOR has no directorateId on the User, so derive it from their
-    // linked Employee record (mirrors the leave-approval chain + Dashboard scoping).
+    // A head's reach comes from where they sit in the ORG CHART — their node, plus everything
+    // beneath it. A directorate head therefore covers its divisions, their departments and those
+    // departments' units, without anyone listing them by hand and without every employee needing a
+    // directorate stamped on their own row. See utils/orgScope.ts for why both of those older
+    // mechanisms were wrong.
+    //
+    // HEAD_DIRECTOR has no directorateId on the User row, so it is read from their linked Employee.
     let directorateId: string | null = null;
     if (user.role === 'HEAD_DIRECTOR') {
         const me = await prisma.employee.findFirst({ where: { userId: user.id }, select: { directorateId: true } });
         directorateId = me?.directorateId ?? null;
     }
-    const deptIds: string[] = (user as any).departmentIds || [];
+    const org = await buildOrgResolver(prisma);
 
     return {
         seeAll: false,
         inBranch: (emp) => {
             switch (user.role) {
-                case 'HEAD_UNIT': return !!user.unitId && emp.unitId === user.unitId;
+                case 'HEAD_UNIT': return !!user.unitId && org.isUnder(emp, { unitId: user.unitId });
                 case 'HEAD_DEPARTMENT':
-                case 'HEAD_OFFICE': return !!user.departmentId && emp.departmentId === user.departmentId;
-                case 'HEAD_DIVISION': return !!user.divisionId && emp.divisionId === user.divisionId;
-                case 'HEAD_DIRECTOR':
-                    return (!!directorateId && emp.directorateId === directorateId)
-                        || (!!emp.departmentId && deptIds.includes(emp.departmentId));
+                case 'HEAD_OFFICE': return !!user.departmentId && org.isUnder(emp, { departmentId: user.departmentId });
+                case 'HEAD_DIVISION': return !!user.divisionId && org.isUnder(emp, { divisionId: user.divisionId });
+                case 'HEAD_DIRECTOR': return !!directorateId && org.isUnder(emp, { directorateId });
                 default: return false;
             }
         },
@@ -143,11 +154,15 @@ export const getAllEmployees = async (req: AuthRequest, res: Response) => {
 
         const scope = await resolveEmployeeScope(req.user!);
 
+        // The live allowances. Without them calculateHolidayMetrics silently falls back to its
+        // 3/14 defaults, so this screen printed a DIFFERENT entitlement from the payslip, which has
+        // read the policy all along.
+        const leavePolicy = await getLeavePolicy();
         const employeesWithHolidays = employees.map(emp => {
             const data: any = {
                 ...emp,
                 permissions: (emp as any).user?.permissions || [],
-                ...calculateHolidayMetrics(emp.contractStartDate, (emp as any).holidaysUsed, (emp as any).bonusHolidays, (emp as any).emergencyHolidaysUsed, (emp as any).unpaidHolidaysUsed)
+                ...calculateHolidayMetrics(emp.contractStartDate, (emp as any).holidaysUsed, (emp as any).bonusHolidays, (emp as any).emergencyHolidaysUsed, (emp as any).unpaidHolidaysUsed, leavePolicy)
             };
 
             // Full data only for: company-wide viewers, employees inside the caller's branch, or the
@@ -188,7 +203,7 @@ export const getEmployeeById = async (req: AuthRequest, res: Response) => {
         const data: any = {
             ...employee,
             permissions: (employee as any).user?.permissions || [],
-            ...calculateHolidayMetrics(employee.contractStartDate, (employee as any).holidaysUsed, (employee as any).bonusHolidays, (employee as any).emergencyHolidaysUsed, (employee as any).unpaidHolidaysUsed)
+            ...calculateHolidayMetrics(employee.contractStartDate, (employee as any).holidaysUsed, (employee as any).bonusHolidays, (employee as any).emergencyHolidaysUsed, (employee as any).unpaidHolidaysUsed, await getLeavePolicy())
         };
 
         // Same scope rule as the list: full record only for company-wide viewers, the caller's own
@@ -218,7 +233,7 @@ export const generateHandoverSummary = async (req: AuthRequest, res: Response) =
         });
         if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-        const metrics = calculateHolidayMetrics(emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed);
+        const metrics = calculateHolidayMetrics(emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed, await getLeavePolicy());
 
         const [latestHr, finals] = await Promise.all([
             prisma.hREvaluation.findFirst({ where: { employeeId: id }, orderBy: { month: 'desc' } }),
@@ -1354,7 +1369,7 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
                 });
                 return res.json({
                     ...updated,
-                    ...calculateHolidayMetrics(updated.contractStartDate, updated.holidaysUsed, updated.bonusHolidays, updated.emergencyHolidaysUsed, updated.unpaidHolidaysUsed)
+                    ...calculateHolidayMetrics(updated.contractStartDate, updated.holidaysUsed, updated.bonusHolidays, updated.emergencyHolidaysUsed, updated.unpaidHolidaysUsed, await getLeavePolicy())
                 });
             }
 
@@ -1383,7 +1398,7 @@ export const getMyEmployeeRecord = async (req: AuthRequest, res: Response) => {
 
         res.json({
             ...employee,
-            ...calculateHolidayMetrics(employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays, employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed)
+            ...calculateHolidayMetrics(employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays, employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed, await getLeavePolicy())
         });
     } catch (error) {
         console.error('Error fetching my employee record:', error);
@@ -1421,9 +1436,15 @@ export const renewContract = async (req: Request, res: Response) => {
 
             // Paid leave carries into the new contract capped at 14 days — compute it from the
             // OLD contract's numbers before anything gets reset. Emergency/unpaid do NOT carry
-            // over; they reset to a fresh 3/14-day allowance every contract (existing reset below).
+            // over; the reset below zeroes the "used" counters, so the new contract simply starts
+            // at whatever the policy's allowance is on the day it is read.
+            //
+            // The policy is passed even though only remainingHolidays (paid accrual) is read here
+            // and that figure does not depend on the allowances — the argument is required so a
+            // caller cannot quietly get a stale pair of numbers, which is the whole point of it.
             const { remainingHolidays: oldRemainingHolidays } = calculateHolidayMetrics(
-                employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays
+                employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays,
+                employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed, await getLeavePolicy(),
             );
             const carriedOverHolidays = Math.max(0, Math.min(oldRemainingHolidays, PAID_LEAVE_CARRYOVER_CAP));
 

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { jobDescriptionService } from '../services/jobDescriptionService';
 import { departmentService, divisionService } from '../services/departmentService';
+import { employeeService } from '../services/employeeService';
+import { buildOrgScope, headNodeOf } from '../utils/orgScope';
 import JobDescriptionView from '../components/JobDescriptionView';
 import type { JobDescription, Department, Division } from '../types';
 import { FileText, ChevronDown, Building2, Users, Crown, Search } from 'lucide-react';
@@ -26,34 +28,40 @@ const JobDescriptionsBrowse: React.FC = () => {
     const [search, setSearch] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
 
+    const [myEmployee, setMyEmployee] = useState<any>(null);
     const canSeeAll = PRIVILEGED.includes(currentUser?.role || '') || !!currentUser?.permissions?.includes('view_employees');
 
     useEffect(() => {
         (async () => {
             setLoading(true);
             try {
-                const [j, d, v] = await Promise.all([
+                const [j, d, v, me] = await Promise.all([
                     jobDescriptionService.getAllJobDescriptions().catch(() => []),
                     departmentService.getAllDepartments().catch(() => []),
                     divisionService.getAllDivisions().catch(() => []),
+                    // A directorate lives only on the employee record, never on the User row.
+                    employeeService.getMyEmployeeRecord().catch(() => null),
                 ]);
                 setJds(j);
                 setDepartments(d);
                 setDivisions(v);
+                setMyEmployee(me);
             } finally {
                 setLoading(false);
             }
         })();
     }, []);
 
-    // A head only owns JDs whose scope matches their own department / division / unit.
+    // A head owns every JD attached to their node in the org chart or to anything beneath it. This
+    // used to compare against the hand-ticked User.departmentIds list, which is empty on every
+    // account — so a directorate head owned nothing here.
     const ownsJd = (jd: JobDescription) => {
-        const depIds = [currentUser?.departmentId, ...((currentUser as any)?.departmentIds || [])].filter(Boolean);
-        return (
-            (jd.departmentId && depIds.includes(jd.departmentId)) ||
-            (jd.divisionId && jd.divisionId === currentUser?.divisionId) ||
-            (jd.unitId && jd.unitId === currentUser?.unitId) ||
-            (jd.department?.id && depIds.includes(jd.department.id))
+        const node = headNodeOf(currentUser as any, myEmployee as any);
+        if (!node) return false;
+        const org = buildOrgScope({ departments: departments as any, divisions: divisions as any });
+        return org.isUnder(
+            { unitId: jd.unitId, departmentId: jd.departmentId ?? jd.department?.id ?? null, divisionId: jd.divisionId },
+            node,
         );
     };
 

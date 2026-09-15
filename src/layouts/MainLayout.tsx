@@ -229,7 +229,10 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_my_requests', { defaultValue: 'My Requests' }), path: '/staff-hub', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
                         // Unified inbox — every request awaiting this approver (leaves, work-auth, missing-punch,
                         // exceptional performance, and recruitment) aggregated in one place for heads/GM/directors.
-                        { label: t('nav_my_approvals', { defaultValue: 'My Approvals' }), path: '/my-approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals'] },
+                        // EMPLOYEE included on purpose: this is also where a nominated replacement
+                        // accepts the cover, and anyone can be nominated. Without it the nominee had
+                        // no route to the only screen that can unblock their colleague's request.
+                        { label: t('nav_my_approvals', { defaultValue: 'My Approvals' }), path: '/my-approvals', roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN', 'EMPLOYEE'], permissions: ['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals'] },
                     ]
                 },
                 { label: t('nav_report_incident', { defaultValue: 'Report an Incident' }), path: '/report-incident', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'EMPLOYEE'] },
@@ -301,11 +304,14 @@ const MainLayout: React.FC = () => {
                     label: t('nav_attendance_payroll', { defaultValue: 'Attendance' }),
                     icon: Clock,
                     roles: ['SUPER_ADMIN'],
-                    permissions: ['view_time_tracking', 'manage_time_tracking'],
+                    // The two narrow write grants are listed so an officer who holds only one of
+                    // them can still reach the section; each child lists only the grants it serves.
+                    permissions: ['view_time_tracking', 'manage_time_tracking', 'correct_punches', 'approve_overtime'],
                     children: [
                         { label: t('nav_overview', { defaultValue: 'Overview' }), path: '/attendance/overview', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_approved_leaves', { defaultValue: 'Approved Leaves' }), path: '/approved-leaves', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
-                        { label: t('nav_exceptions', { defaultValue: 'Exceptions' }), path: '/attendance/exceptions', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
+                        { label: t('nav_exceptions', { defaultValue: 'Exceptions' }), path: '/attendance/exceptions', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking', 'correct_punches'] },
+                        { label: t('nav_overtime', { defaultValue: 'Overtime' }), path: '/attendance/overtime', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking', 'approve_overtime'] },
                         { label: t('nav_daily_logging', { defaultValue: 'Daily Logging' }), path: '/attendance/daily-logging', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_employees', { defaultValue: 'Employees' }), path: '/attendance/employees', roles: ['SUPER_ADMIN'], permissions: ['view_time_tracking', 'manage_time_tracking'] },
                         { label: t('nav_settings', { defaultValue: 'Settings' }), path: '/attendance/settings', roles: ['SUPER_ADMIN'], permissions: ['manage_attendance_settings'] },
@@ -389,6 +395,7 @@ const MainLayout: React.FC = () => {
                         { label: t('nav_service_providers', { defaultValue: 'Service Providers' }), path: '/service-providers', roles: ['SUPER_ADMIN'], permissions: ['manage_service_providers'] },
                         { label: t('nav_users'), path: '/users', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
                         { label: t('nav_functional_hats', { defaultValue: 'Functional Hats' }), path: '/access/hats', roles: ['SUPER_ADMIN'], permissions: ['manage_users'] },
+                        { label: t('nav_leave_policy', { defaultValue: 'Leave Policy' }), path: '/leave-policy', roles: ['SUPER_ADMIN'], permissions: ['manage_leave_policy'] },
                         { label: t('nav_system_logs', { defaultValue: 'Activity Log' }), path: '/system-logs', roles: ['SUPER_ADMIN'], permissions: ['view_logs'] },
                     ]
                 }

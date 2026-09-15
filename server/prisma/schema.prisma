@@ -1043,11 +1043,57 @@ model LeaveRequest {
   payrollCoverageMonth String?
   // Missing Biometric Log (missing-punch) specifics — only set when type === 'MISSING_PUNCH'.
   // missingPunchType: CHECK_IN | CHECK_OUT | BOTH. missingPunchReason: FORGOT | DEVICE_ISSUE |
-  // POWER_OUTAGE | OTHERS. On final approval the forgotten punch(es) are written to BioTime at that
-  // employee's actual scheduled work hours for the date (see resolveScheduledWorkHours). Work
-  // location comes from the JD, not stored here.
+  // POWER_OUTAGE | OTHERS. Work location comes from the JD, not stored here.
   missingPunchType     String?
   missingPunchReason   String?
+  // Attendance permissions (Late Coming / Early Leaving / Few Hours) only — which of the four
+  // reason boxes the printed form ticks: PERSONAL | FAMILY | HEALTH_MEDICAL | OTHERS. Separate from
+  // `reason`, which is the free-text note; the form has a tick-box row and no line to write on.
+  permissionReason     String?
+  // A direct register entry: an authorised officer recording a leave that senior management already
+  // granted on paper. It bypasses the notice rule, the balance check and the approval chain, so the
+  // signed authorisation attached to it IS the authority — the upload is mandatory. approvalSteps
+  // is empty for these, so without directEntryBy* there would be no answer to "who recorded this".
+  directEntry          Boolean  @default(false)
+  directEntryById      String?
+  directEntryByName    String?
+  // Whether the days came off the employee's balance. Always true for a request that went through
+  // the chain; a direct entry may waive it (a long illness, a compassionate grant) — the leave is
+  // still recorded in attendance, it just isn't charged to the employee.
+  deductFromBalance    Boolean  @default(true)
+  // The punch time, "HH:MM" in the employee's local clock.
+  //
+  //   startTime / endTime          what the EMPLOYEE asked for. Written once, never overwritten.
+  //   approvedStartTime / ...End   what an APPROVER changed it to, null while untouched.
+  //
+  // Two pairs rather than one mutable pair: this record ends up as a punch inside BioTime and from
+  // there inside payroll, so "what was requested" and "what was granted" have to stay separately
+  // answerable months later. The effective time is `approved ?? requested`, and when BOTH are null
+  // (every request filed before this existed) it falls back to the employee's scheduled hours via
+  // resolveScheduledWorkHours, which is what the feature did for everyone until now.
+  //
+  // Who changed it and when is not duplicated here — the approval step that carries the change
+  // already records the approver, the timestamp and an auto-written note of the before/after.
+  approvedStartTime    String?
+  approvedEndTime      String?
+  // Printed signature rows the REQUESTER fills themselves, because at the moment this request was
+  // filed there was no line authority above them — a department head with no division head, or a
+  // division head filing their own. They are not an approval step: nobody may approve their own
+  // request, and adding one would put it in their own inbox. The row is simply signed by the
+  // highest authority there is, which is them, and the chain moves on to Personnel Relations.
+  //
+  // STORED rather than re-derived at print time for the same reason the approval steps are: the org
+  // chart moves, and a form reprinted a year later must show what was actually true when it was
+  // signed.
+  selfSignedStages     String[]            @default([])
+  // "Ticket provided by" on the Leave Request Form — EMPLOYEE | COMPANY, or null for the answer
+  // the form also allows: neither box ticked. The printed row is headed "(For Non-resident
+  // Employees only)", so leaving it unanswered is a legitimate state, not a missing value.
+  ticketProvidedBy     String?
+  // Why this leave was filed inside the notice window. Non-null IS the record that an exception was
+  // taken; the letter authorising it is the request's own attachment. Frozen at creation, so a
+  // later change to LeavePolicy.noticeDays never rewrites history.
+  shortNoticeReason    String?
   attachmentUrl        String?
   attachmentName       String?
   // Supporting document the General Manager must upload before granting the final approval.
@@ -1735,8 +1781,8 @@ model EmployeeAdvance {
   requestedByName   String?
   // The form asked for these two and the system does not hold them; everything else the old
   // Google Form collected (name, staff ID, position, e-mail) is read from the employee record.
-  contactEmail   String?
-  whatsappNumber String?
+  contactEmail      String?
+  whatsappNumber    String?
 
   // Residents and directly-contracted non-residents pick a multiple of their basic salary rather
   // than typing a figure. The multiple AND the basic it was applied to are both stored: the rate
@@ -1889,4 +1935,142 @@ model CashAllocationRequest {
 
   @@index([employeeId, status])
   @@index([status])
+}
+
+// Leave policy numbers, in one editable place instead of scattered literals.
+//
+// 14 days' notice, a 3-day emergency allowance and a 14-day unpaid allowance were written straight
+// into the code — in TWO files for the allowances, which is how the payroll payslip and the leave
+// form came to read them from different constants. These are policy, not physics: they change when
+// the regulations change, and that should not need a release.
+//
+// One row, fixed id. A settings table with many rows invites a second row nobody notices.
+model LeavePolicy {
+  id                      String   @id @default("singleton")
+  // Minimum days between filing and the first day of leave, for Annual and Unpaid. Emergency leave
+  // is exempt by nature and may even be backdated.
+  noticeDays              Int      @default(14)
+  // Fixed per-contract allowances, reset at hire and at every renewal.
+  emergencyLeaveAllowance Int      @default(3)
+  unpaidLeaveAllowance    Int      @default(14)
+  updatedAt               DateTime @updatedAt
+  updatedById             String?
+}
+
+// One row per punch we pushed a change into. A LOG, not an override.
+//
+// Nothing in payroll, presence or the disciplinary rules reads this table. They keep reading the
+// attendance service, which is now correct — that is the whole design. A local totalWorkMins
+// override would need four independent readers to consult it forever, and the day the Attendance
+// screen stopped agreeing with the payslip nobody would know which one to believe.
+//
+// Append-only: no UPDATE, no DELETE. A wrong correction is superseded by another one, the same
+// rule PayrollRun already follows. That is not only for discipline — the attendance service cannot
+// write `Overtime Out` back through our whitelist, so "undo" is genuinely impossible and the log
+// must say what actually happened rather than pretend it was reversed.
+model AttendancePunchCorrection {
+  id String @id @default(uuid())
+
+  // Flat, deliberately: a correction must stay readable after an employee is re-linked, renamed,
+  // or has their bio id reassigned. employeeId is the convenience join, empCode is the truth.
+  empCode    String
+  employeeId String?
+  bioEmpId   Int?
+
+  // 'YYYY-MM-DD', a string on purpose. A DateTime here would be built from a local calendar day
+  // and stored as UTC midnight, which east of UTC reads back as the day before — payrollPeriod.ts
+  // documents that exact class of mistake as a money bug.
+  workDate String
+  // Denormalised 'YYYY-MM'. Payroll and presence share the 25th->24th window, so one indexed
+  // lookup by period answers both "does this run need recomputing" and "does this score".
+  period   String
+
+  action      String // ADD | RETYPE | DELETE
+  anomalyKind String? // what the detector called the day, for measuring which rules pay off
+
+  sourcePunchId Int? // the punch acted on (RETYPE/DELETE); null for ADD
+  wasManual     Boolean @default(false)
+
+  beforeTime  String? // 'HH:mm' as it stood before
+  beforeState String?
+  afterTime   String?
+  afterState  String?
+
+  // Required. A correction moves money, and "why" is the only part of it a person can review.
+  reason String
+
+  status         String  @default("APPLIED") // APPLIED | FAILED | SUPERSEDED
+  // The service's own reply, verbatim — the only evidence of what it says it did. Kept even on
+  // success, because the reply is precisely what turned out not to be trustworthy.
+  sourceMessage  String?
+  // What re-reading the day afterwards actually showed. This, not sourceMessage, is the evidence.
+  verifiedState  String?
+  workMinsBefore Int?
+  workMinsAfter  Int?
+
+  // The blast radius AS IT WAS at the moment of correction. Recomputing this later would answer a
+  // different question — "is it locked now" — and lose the fact that it was already approved when
+  // somebody changed the underlying data.
+  payrollRunId           String?
+  payrollWasLocked       Boolean @default(false)
+  evaluationWasFinalized Boolean @default(false)
+
+  correctedById   String?
+  correctedByName String?
+  appliedAt       DateTime @default(now())
+
+  @@index([empCode, workDate])
+  @@index([period, status])
+}
+
+// Every approved-overtime push we have made, and what the service showed afterwards.
+//
+// This exists because the attendance service cannot be asked what it holds. `/api/attendance/
+// overtimes` is POST-only: no list, no delete — unlike out-works, excused-lates, suspensions and
+// holidays, which all have a /api/system-settings list+delete pair. The monthly report does carry
+// the records on `empOvertimes`, but only one employee at a time.
+//
+// So this table is what makes an overtime approval reviewable across the roster, warns the officer
+// before they create an overlap, and — since a wrong approval can only be neutralised by re-posting
+// its EXACT period at zero — is the only place that period can be looked up afterwards.
+//
+// Append-only. A revision is a new row; nothing here is edited or deleted, matching
+// AttendancePunchCorrection and PayrollRun.
+model OvertimeApproval {
+  id String @id @default(uuid())
+
+  // Flat, so the record survives an employee being re-linked or renamed. employeeId is the
+  // convenience join; empCode is what was actually sent to the attendance service.
+  empCode    String
+  employeeId String?
+
+  // 'YYYY-MM-DD' as TEXT, deliberately. A DateTime built from a local calendar day is stored as
+  // UTC midnight and reads back as the day before east of UTC — payrollPeriod.ts:8-11 documents
+  // that as a money bug, and here it would also break the exact-period match that upserts rely on.
+  startDate String
+  endDate   String
+  // The financial month both ends fall in. A period is not allowed to span two, because the
+  // service counts an intersecting approval in FULL: one 8-hour approval straddling 24-25 Sep was
+  // measured landing +480 minutes in month 09 AND +480 in month 10.
+  period    String
+
+  /// Total approved for the whole period, not per day.
+  minutes  Int
+  reason   String
+  notes    String?
+  /// The head who authorised it, typed in by the attendance officer taking their reply.
+  headName String?
+
+  status        String  @default("APPLIED") // APPLIED | FAILED | SUPERSEDED
+  /// The service's own reply, verbatim.
+  sourceMessage String?
+  /// What re-reading the range afterwards actually showed. This, not sourceMessage, is the evidence.
+  verifiedMins  Int?
+
+  createdById   String?
+  createdByName String?
+  appliedAt     DateTime @default(now())
+
+  @@index([empCode, startDate])
+  @@index([period, status])
 }

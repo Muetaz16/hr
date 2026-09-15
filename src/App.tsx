@@ -31,6 +31,7 @@ const EmployeeFormPage = lazy(() => import('./pages/admin/EmployeeForm'));
 const UsersPage = lazy(() => import('./pages/admin/Users'));
 const UserFormPage = lazy(() => import('./pages/admin/UserForm'));
 const FunctionalHatsPage = lazy(() => import('./pages/admin/FunctionalHats'));
+const LeavePolicyPage = lazy(() => import('./pages/admin/LeavePolicy'));
 const SystemLogsPage = lazy(() => import('./pages/admin/SystemLogs'));
 const EvaluationsPage = lazy(() => import('./pages/Evaluations'));
 const EvaluationControlPage = lazy(() => import('./pages/hr/EvaluationControl'));
@@ -138,14 +139,16 @@ function App() {
                     <Route path="/personnel-relations/rewards/candidates/:type/:employeeId" element={<RewardCandidateDetailPage />} />
                     <Route path="/personnel-relations/transfer/:id" element={<TransferDetailPage />} />
                   </Route>
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'HEAD_DIRECTOR', 'HEAD_DIVISION', 'HEAD_DEPARTMENT', 'HEAD_UNIT', 'GENERAL_MANAGER', 'CHAIRMAN']} allowedPermissions={['manage_leaves', 'manage_announcements', 'manager_approvals', 'approve_attendance', 'approve_gm', 'recruitment_approvals']} />}>
-                    {/* Manager Control Room was merged into My Approvals — keep the old path working
-                        for existing notification deep-links and bookmarks. */}
-                    <Route path="/approvals" element={<Navigate to="/my-approvals" replace />} />
-                    <Route path="/my-approvals" element={<MyApprovalsPage />} />
-                  </Route>
+                  {/* Open to EVERY signed-in employee, not just approvers: the same screen is where
+                      a nominated replacement accepts or declines the cover, and anyone can be
+                      nominated. The page itself only ever shows what the server scoped to the
+                      caller, so an employee with nothing to act on simply sees an empty inbox. */}
+                  {/* Manager Control Room was merged into My Approvals — keep the old path working
+                      for existing notification deep-links and bookmarks. */}
+                  <Route path="/approvals" element={<Navigate to="/my-approvals" replace />} />
+                  <Route path="/my-approvals" element={<MyApprovalsPage />} />
                   <Route path="/attendance" element={<Navigate to="/attendance/overview" replace />} />
-                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_time_tracking', 'manage_time_tracking']} />}>
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_time_tracking', 'manage_time_tracking', 'correct_punches', 'approve_overtime']} />}>
                     <Route path="/attendance/:tab" element={<AttendancePage />} />
                     <Route path="/approved-leaves" element={<ApprovedLeavesPage />} />
                   </Route>
@@ -219,6 +222,11 @@ function App() {
                     <Route path="/users/new" element={<UserFormPage />} />
                     <Route path="/users/:id/edit" element={<UserFormPage />} />
                     <Route path="/access/hats" element={<FunctionalHatsPage />} />
+                  </Route>
+                  {/* Leave policy numbers — company-wide configuration, so its own Administration
+                      permission rather than manage_leaves, which every head holds by position. */}
+                  <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['manage_leave_policy']} />}>
+                    <Route path="/leave-policy" element={<LeavePolicyPage />} />
                   </Route>
                   <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} allowedPermissions={['view_logs']} />}>
                     <Route path="/system-logs" element={<SystemLogsPage />} />

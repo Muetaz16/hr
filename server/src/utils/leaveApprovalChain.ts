@@ -1,18 +1,22 @@
 import { PrismaClient, Employee } from '@prisma/client';
+import { ACTIVE_ENROLLMENT_FILTER } from './employeeStatus';
 
 // Builds the leave-request approval chain, in signing order:
-//   Head of Attendance -> [direct-manager ladder] -> HR -> Directorate -> General Manager
+//   Head of Attendance -> [org ladder, at most two levels] -> HR -> Directorate -> General Manager
 //
 // The "direct manager" is not an explicit field — it's simply the next existing head up the org
 // ladder from wherever the employee sits, resolved by role + scope. Missing levels are skipped, so
-// the chain always falls through to the next real authority (e.g. an employee with no unit head and
-// no department head is covered by the division head, then the directorate):
+// the chain falls through to the next real LADDER level (an employee with no unit head is covered
+// by their department head, then their division head):
 //   HEAD_UNIT              <-> User.unitId === Employee.unitId
 //   HEAD_DEPARTMENT/OFFICE <-> User.departmentId === Employee.departmentId
 //   HEAD_DIVISION          <-> User.divisionId === the employee's division (dept -> division)
 //   HEAD_DIRECTOR          <-> the employee's directorate (dept -> division -> directorate), matched
 //                             against the director's own Employee.directorateId, OR (legacy) the
 //                             employee's department listed in User.departmentIds  (the "Directorate" stage)
+// Only the first THREE are the ladder, and only the nearest two of them ever sign — the form gives
+// line management exactly two signature boxes. HEAD_DIRECTOR is not a ladder level; it is the
+// separate "Administrative Director" endorsement with its own printed row.
 // The Head-of-Attendance stage is granted by the "approve_attendance" permission (a function, not a
 // role); the HR_MANAGER and GENERAL_MANAGER STAGES are global and unscoped. Every stage must have at least
 // one holder or the request is blocked — but ANY ONE person resolved for a given stage signing is
@@ -23,16 +27,19 @@ import { PrismaClient, Employee } from '@prisma/client';
 
 export type ApprovalStage = 'HEAD_ATTENDANCE' | 'UNIT_HEAD' | 'DEPT_HEAD' | 'DIVISION_HEAD' | 'HR_MANAGER' | 'DIRECTORATE' | 'GENERAL_MANAGER' | 'DIRECT_SUPERVISOR' | 'HEAD_DEPT_DIVISION';
 
-// The short 3-stage chain for attendance permissions (Late Coming / Early Leaving / Few Hours),
-// matching the "Late Arrival - Early Departure Request Form":
-//   Direct Supervisor -> Head of Department -> Head of Attendance & Payroll.
+// The short chain shared by attendance permissions and Work Authorization. The two take DIFFERENT
+// middle and final stages because their printed forms do, so the map covers both and each chain
+// uses its own increasing subset:
+//
+//   Late Arrival - Early Departure Request Form   0 -> 2 -> 3 -> 4
+//   Work Authorization Form (نموذج التكليف)        0 -> 1 -> 3 -> 5
 export const PERMISSION_STAGE_SEQUENCE: Record<string, number> = {
     DIRECT_SUPERVISOR: 0,
-    DEPT_HEAD: 1,
-    HEAD_ATTENDANCE: 2,
-    // Only appended for Work Authorization (out-work), which ends with the General Manager's
-    // signed-document authentication — the other permission types stop at HEAD_ATTENDANCE.
-    GENERAL_MANAGER: 3,
+    DEPT_HEAD: 1,        // Work Authorization — its form prints "Head of Department".
+    DIVISION_HEAD: 2,    // Permissions — their form prints "Head of Division / مدير الإدارة".
+    HEAD_ATTENDANCE: 3,  // Head of Personnel Affairs / رئيس قسم شؤون الموظفين — on both forms.
+    HR_MANAGER: 4,       // Permissions — the last signature on the reprinted permission form.
+    GENERAL_MANAGER: 5,  // Work Authorization — its signed-document authentication.
 };
 
 // The short 2-stage chain for a Missing Biometric Log (missing-punch) request, matching the
@@ -88,6 +95,100 @@ const ORG_RANK: Record<string, number> = {
 };
 const orgRank = (role?: string | null): number => (role && ORG_RANK[role] != null ? ORG_RANK[role] : 0);
 
+/** The requester's own seniority — the higher of their Employee role and their linked User role. */
+async function requesterRankOf(prisma: PrismaClient, employee: Employee): Promise<number> {
+    let role: string | null = employee.role ?? null;
+    if (employee.userId) {
+        const u = await prisma.user.findUnique({ where: { id: employee.userId }, select: { role: true } });
+        if (u && orgRank(u.role) > orgRank(role)) role = u.role;
+    }
+    return orgRank(role);
+}
+
+/**
+ * The org-head tiers sitting above an employee, nearest first: unit, department, division,
+ * directorate. Every tier comes back ALREADY filtered — the requester removed, and only people
+ * strictly senior to them kept.
+ *
+ * Doing that filtering here, rather than leaving it to each caller's end-of-pipeline self-exclusion,
+ * is the entire point of this helper. A cascade written as "department head, else division head,
+ * else director" asks whether a tier is EMPTY; if the tier holds nobody but the requester it is not
+ * empty, so the cascade stops there — and then self-exclusion quietly deletes the only person in
+ * it. The request loses its whole management chain and lands on the next stage as if no manager
+ * existed. That is precisely what happened to a department head who is the sole head of their own
+ * department: their missing-punch and permission requests went straight to Personnel Relations,
+ * skipping the division head who should have signed.
+ *
+ * Tiers with nobody in them are returned as empty arrays, not dropped, so a caller can tell
+ * "this level does not apply to this employee" from "this level exists but is above nobody".
+ */
+async function headTiersAbove(
+    prisma: PrismaClient,
+    employee: Employee,
+): Promise<{ stage: ApprovalStage; rank: number; userIds: string[]; rawUserIds: string[] }[]> {
+    const rank = await requesterRankOf(prisma, employee);
+    const idsOf = (rows: { id: string }[]) => rows.map(r => r.id);
+
+    // The division & directorate this employee ultimately rolls up to — resolved through the org
+    // structure (department -> division -> directorate) even when not stamped on the employee row.
+    let divisionId: string | null = employee.divisionId ?? null;
+    let directorateId: string | null = employee.directorateId ?? null;
+    if (employee.departmentId && (!divisionId || !directorateId)) {
+        const dept = await prisma.department.findUnique({
+            where: { id: employee.departmentId },
+            select: { divisionId: true, division: { select: { directorateId: true } } },
+        });
+        if (!divisionId) divisionId = dept?.divisionId ?? null;
+        if (!directorateId) directorateId = dept?.division?.directorateId ?? null;
+    }
+
+    const unitHeads = employee.unitId
+        ? idsOf(await prisma.user.findMany({ where: { role: 'HEAD_UNIT', unitId: employee.unitId }, select: { id: true } }))
+        : [];
+    const deptHeads = employee.departmentId
+        ? idsOf(await prisma.user.findMany({
+            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
+            select: { id: true },
+        }))
+        : [];
+    const divisionHeads = divisionId
+        ? idsOf(await prisma.user.findMany({ where: { role: 'HEAD_DIVISION', divisionId }, select: { id: true } }))
+        : [];
+
+    // Directorate head — the "Administrative Director". Two sources, unioned, so the director lands
+    // in the flow whichever way the org structure records them: a legacy User.departmentIds listing,
+    // and whoever's linked Employee carries HEAD_DIRECTOR for this directorate.
+    const directorIds = new Set<string>();
+    if (employee.departmentId) {
+        const byDept = await prisma.user.findMany({
+            where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } },
+            select: { id: true },
+        });
+        byDept.forEach(u => directorIds.add(u.id));
+    }
+    if (directorateId) {
+        const byDirectorate = await prisma.employee.findMany({
+            where: { role: 'HEAD_DIRECTOR', directorateId, userId: { not: null } },
+            select: { userId: true },
+        });
+        byDirectorate.forEach(e => { if (e.userId) directorIds.add(e.userId); });
+    }
+
+    const keep = (tierRank: number, ids: string[]) =>
+        (tierRank > rank ? Array.from(new Set(ids)).filter(id => id !== employee.userId) : []);
+
+    // `rawUserIds` is the tier BEFORE filtering — needed to tell the two reasons a tier can be
+    // empty apart. "Nobody holds this post" and "the only holder is the person asking" look
+    // identical in `userIds`, but only the second means the requester is the authority for that row
+    // and should therefore sign it themselves.
+    return [
+        { stage: 'UNIT_HEAD', rank: ORG_RANK.HEAD_UNIT, userIds: keep(ORG_RANK.HEAD_UNIT, unitHeads), rawUserIds: unitHeads },
+        { stage: 'DEPT_HEAD', rank: ORG_RANK.HEAD_DEPARTMENT, userIds: keep(ORG_RANK.HEAD_DEPARTMENT, deptHeads), rawUserIds: deptHeads },
+        { stage: 'DIVISION_HEAD', rank: ORG_RANK.HEAD_DIVISION, userIds: keep(ORG_RANK.HEAD_DIVISION, divisionHeads), rawUserIds: divisionHeads },
+        { stage: 'DIRECTORATE', rank: ORG_RANK.HEAD_DIRECTOR, userIds: keep(ORG_RANK.HEAD_DIRECTOR, Array.from(directorIds)), rawUserIds: Array.from(directorIds) },
+    ];
+}
+
 // Resolves every user who EFFECTIVELY holds `permission` — a raw individual grant
 // (User.permissions), a FunctionalHat that bundles it (User.functionalHatIds), or SUPER_ADMIN (who
 // can always stand in for any function-based approver, e.g. Head of Attendance or GM, so a missing
@@ -113,134 +214,154 @@ export async function resolveUsersWithPermission(prisma: PrismaClient, permissio
     return users.map(u => u.id);
 }
 
+/**
+ * The people who actually SIGN for a cross-cutting function — Head of Attendance, HR Manager, GM.
+ *
+ * resolveUsersWithPermission answers "who is ALLOWED to act", and for that its two inclusions are
+ * right: SUPER_ADMIN can stand in, and a login with no employee record can still authorise. Routing
+ * a leave request is a different question — who is put on this employee's chain and waited for —
+ * and there the same two inclusions send the request to people who cannot sign it:
+ *
+ *   · a login with no employee record, or one belonging to somebody who has left. A retired
+ *     designation keeps its Functional Hat long after the person stops working here, so every
+ *     request kept routing to an account nobody opens.
+ *   · the system administrator, on every single request.
+ *
+ * So holders are narrowed to ACTIVE EMPLOYEES. This is the same narrowing the rest of the system
+ * already applies — promotions and job descriptions drop SUPER_ADMIN before printing a signature,
+ * and the Cash Advance form requires an active employee — leave was the one place still using the
+ * raw union.
+ *
+ * SUPER_ADMIN is kept as a LAST RESORT, and only when nobody qualifies: a stage with no approver
+ * hard-blocks the request, and an unassigned function should slow a chain down, not stop it. When
+ * that happens the stage is genuinely misconfigured and REQUIRED_NONEMPTY_STAGES surfaces it.
+ */
+export async function resolveFunctionApprovers(
+    prisma: PrismaClient,
+    permission: string,
+    { adminFallback = true }: { adminFallback?: boolean } = {},
+): Promise<string[]> {
+    const holders = await resolveUsersWithPermission(prisma, permission);
+    if (holders.length === 0) return holders;
+
+    const active = await prisma.user.findMany({
+        where: {
+            id: { in: holders },
+            role: { not: 'SUPER_ADMIN' },
+            employee: { is: { enrollmentStatus: ACTIVE_ENROLLMENT_FILTER } },
+        },
+        select: { id: true },
+    });
+    if (active.length > 0 || !adminFallback) return active.map(u => u.id);
+
+    // Nobody real holds it. Fall back to the admin accounts inside the original union so the chain
+    // still has somewhere to go, rather than dead-ending on a vacancy.
+    return adminStandInsFor(prisma, permission);
+}
+
+/** The SUPER_ADMIN holders of a permission — a stage's stand-in of last resort. */
+export async function adminStandInsFor(prisma: PrismaClient, permission: string): Promise<string[]> {
+    const holders = await resolveUsersWithPermission(prisma, permission);
+    if (holders.length === 0) return [];
+    const admins = await prisma.user.findMany({
+        where: { id: { in: holders }, role: 'SUPER_ADMIN' },
+        select: { id: true },
+    });
+    return admins.map(u => u.id);
+}
+
+/**
+ * The GENERAL_MANAGER stage, which has TWO sources: the real position and the approve_gm permission.
+ *
+ * The admin stand-in has to be decided for the STAGE, not for one source. Asking the permission
+ * alone would add an admin whenever nobody holds approve_gm — even though the position is filled —
+ * and the GM stage would carry a second, pointless approver on every single request.
+ */
+export async function resolveGeneralManagers(prisma: PrismaClient, roleHolderIds: string[]): Promise<string[]> {
+    const byPermission = await resolveFunctionApprovers(prisma, 'approve_gm', { adminFallback: false });
+    const union = Array.from(new Set([...roleHolderIds, ...byPermission]));
+    return union.length > 0 ? union : adminStandInsFor(prisma, 'approve_gm');
+}
+
 export async function resolveApprovalChain(
     prisma: PrismaClient,
     employee: Employee
-): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage; selfSignedStages?: ApprovalStage[] }> {
     const idsOf = (rows: { id: string }[]) => rows.map(r => r.id);
 
-    // The requester's own seniority — a head's leave must be approved from the level ABOVE them, so
-    // we never route it through their own subordinates. Take the higher of their Employee role and
-    // their linked User account role (a head is usually a HEAD_* User but may sit as an EMPLOYEE row).
-    let requesterRole: string | null = employee.role ?? null;
-    if (employee.userId) {
-        const requesterUser = await prisma.user.findUnique({ where: { id: employee.userId }, select: { role: true } });
-        if (requesterUser && orgRank(requesterUser.role) > orgRank(requesterRole)) requesterRole = requesterUser.role;
-    }
-    const requesterRank = orgRank(requesterRole);
+    // The org ladder above this requester, already stripped of themselves and of anyone at or
+    // below their own level — a head's leave must never route through their own subordinates. One
+    // shared walk (headTiersAbove) serves this chain, the permission chain and the missing-punch
+    // chain, so the three cannot drift apart again.
+    const tiers = await headTiersAbove(prisma, employee);
+    const requesterRank = await requesterRankOf(prisma, employee);
+    const tierIds = (stage: ApprovalStage) => tiers.find(t => t.stage === stage)?.userIds ?? [];
+    const unitHeadsA = tierIds('UNIT_HEAD');
+    const deptHeadsA = tierIds('DEPT_HEAD');
+    const divisionHeadsA = tierIds('DIVISION_HEAD');
+    const directorsA = tierIds('DIRECTORATE');
 
-    // --- Resolve every org role-holder group up-front, so we can both build the signing chain and
-    // work out the "smart signature" coverage (which printed row each person's lone signature fills).
-
-    // Head of Attendance & Payroll — a *function*, not a role. Granted via the "Head of Attendance
-    // Approval" permission (approve_attendance) — directly, via a Functional Hat, or by SUPER_ADMIN.
-    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
-
-    let unitHeads: string[] = [];
-    if (employee.unitId) {
-        unitHeads = idsOf(await prisma.user.findMany({
-            where: { role: 'HEAD_UNIT', unitId: employee.unitId },
-            select: { id: true },
-        }));
-    }
-
-    let deptHeads: string[] = [];
-    let divisionHeads: string[] = [];
-    // The division & directorate this employee ultimately rolls up to — resolved smartly through the
-    // org structure (department -> division -> directorate) even when they aren't stamped directly
-    // on the employee record.
-    let resolvedDivisionId: string | null = employee.divisionId ?? null;
-    let directorateId: string | null = employee.directorateId ?? null;
-    if (employee.departmentId) {
-        deptHeads = idsOf(await prisma.user.findMany({
-            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
-            select: { id: true },
-        }));
-        const dept = await prisma.department.findUnique({
-            where: { id: employee.departmentId },
-            select: { divisionId: true, division: { select: { directorateId: true } } },
-        });
-        if (!resolvedDivisionId) resolvedDivisionId = dept?.divisionId ?? null;
-        if (!directorateId) directorateId = dept?.division?.directorateId ?? null;
-    }
-    // Division head: whoever owns the DIVISION this employee rolls up to. A HEAD_DIVISION is assigned
-    // a division (User.divisionId) once, and automatically covers every department under it.
-    if (resolvedDivisionId) {
-        divisionHeads = idsOf(await prisma.user.findMany({
-            where: { role: 'HEAD_DIVISION', divisionId: resolvedDivisionId },
-            select: { id: true },
-        }));
-    }
+    // Head of Personnel Relations — a *function*, not a role. Granted via the approve_attendance
+    // permission, directly, via a Functional Hat, or by SUPER_ADMIN.
+    const attendanceHeads = await resolveFunctionApprovers(prisma, 'approve_attendance');
 
     // Role ∪ approve_hr_manager permission/hat ∪ SUPER_ADMIN — mirrors the GENERAL_MANAGER union
-    // just below (and resolveExceptionalPerformanceApprovalChain's) exactly, so a person whose real
-    // Position is a Head role (e.g. HEAD_DEPARTMENT) but who holds the HR Manager Functional Hat is
-    // recognized here. There is no HR_MANAGER role any more — this stage is purely permission-driven.
-    const hrManagers = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
+    // below, so a person whose real Position is a Head role but who holds the HR Manager
+    // Functional Hat is recognised. There is no HR_MANAGER role any more.
+    const hrManagers = await resolveFunctionApprovers(prisma, 'approve_hr_manager');
 
-    // Directorate head — the "Administrative Director" endorsement. Resolve two ways and union them so
-    // the director always lands in the flow when the org structure says they head this branch:
-    //   (a) a HEAD_DIRECTOR user explicitly scoped to this department (legacy User.departmentIds), and
-    //   (b) whoever heads the DIRECTORATE this employee rolls up to — their linked Employee carries
-    //       role HEAD_DIRECTOR + directorateId — the same smart org relation used across the app.
-    const directorIds = new Set<string>();
-    if (employee.departmentId) {
-        const byDept = await prisma.user.findMany({
-            where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } },
-            select: { id: true },
-        });
-        byDept.forEach(u => directorIds.add(u.id));
-    }
-    if (directorateId) {
-        const byDirectorate = await prisma.employee.findMany({
-            where: { role: 'HEAD_DIRECTOR', directorateId, userId: { not: null } },
-            select: { userId: true },
-        });
-        byDirectorate.forEach(e => { if (e.userId) directorIds.add(e.userId); });
-    }
-    const directors = Array.from(directorIds);
-
-    // General Manager stage — whoever holds the GENERAL_MANAGER position, OR anyone designated a GM
-    // approver via the `approve_gm` permission (directly, via a hat, or SUPER_ADMIN — see
-    // resolveUsersWithPermission), mirroring how HEAD_ATTENDANCE is granted by `approve_attendance`.
-    // The stage is satisfied by ANY ONE of them signing — see the sibling-skip in decideApprovalStep.
+    // General Manager stage — whoever holds the GENERAL_MANAGER position, OR anyone designated a
+    // GM approver via approve_gm. Satisfied by ANY ONE of them signing.
     const generalManagerRoleHolders = idsOf(await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } }));
-    const generalManagers = Array.from(new Set([...generalManagerRoleHolders, ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+    const generalManagers = await resolveGeneralManagers(prisma, generalManagerRoleHolders);
 
     // Keep only the org-head levels STRICTLY ABOVE the requester — so a Division Head's request never
     // routes through the Department Head beneath them. HEAD_ATTENDANCE / HR_MANAGER / GENERAL_MANAGER
     // are always kept (functions / top of this form); the requester is also removed by self-exclusion.
-    const above = (levelRank: number, ids: string[]) => (levelRank > requesterRank ? ids : []);
-    const unitHeadsA = above(ORG_RANK.HEAD_UNIT, unitHeads);
-    const deptHeadsA = above(ORG_RANK.HEAD_DEPARTMENT, deptHeads);
-    const divisionHeadsA = above(ORG_RANK.HEAD_DIVISION, divisionHeads);
-    const directorsA = above(ORG_RANK.HEAD_DIRECTOR, directors);
 
-    // --- Signing chain, in order. Only heads above the requester sign; UNIT/DEPT/DIVISION are
-    // separate signing stages, and the *form* collapses them onto two printed rows below.
+    // --- The org ladder, and the two printed manager rows it owns.
+    //
+    // The form prints exactly TWO manager signature boxes — "Direct supervisor" and "Head of
+    // Department / Division" — and they belong to the org ladder ALONE: UNIT_HEAD, DEPT_HEAD,
+    // DIVISION_HEAD. Nobody else may fill them. The Administrative Director and the General Manager
+    // have their own printed rows further down; letting them spill into these two made one person's
+    // signature appear three times and dressed a cross-cutting endorsement up as line management.
+    //
+    // So: take the ladder levels that exist above the requester, nearest first, and keep AT MOST
+    // TWO — one per printed box. A third level below them does not sign at all; there is no box
+    // left for it. Concretely, for a plain employee:
+    //   unit + dept + division exist  -> unit head, then dept head. The division head is not asked.
+    //   two of them exist             -> both, nearest first.
+    //   one exists                    -> that one signs once, and covers BOTH printed rows.
+    //   none exists                   -> both rows stay blank and neither stage is created; the
+    //                                    request runs Attendance -> HR -> Directorate -> GM.
+    //
+    // The last case is not hypothetical: 77 of 90 active plain employees currently carry no unit,
+    // department or division at all, so their leave has no line-manager approval until those
+    // assignments are filled in. That is a data gap the chain now shows honestly instead of hiding
+    // behind the General Manager's signature.
+    const ladderLevels: { stage: ApprovalStage; userIds: string[] }[] = [
+        { stage: 'UNIT_HEAD', userIds: unitHeadsA },
+        { stage: 'DEPT_HEAD', userIds: deptHeadsA },
+        { stage: 'DIVISION_HEAD', userIds: divisionHeadsA },
+    ];
+    const ladder = ladderLevels.filter(l => l.userIds.length > 0);
+    const ladderSigners = ladder.slice(0, 2);
+
+    // --- Signing chain, in order.
     const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
     rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
-    if (employee.unitId) rawStages.push({ stage: 'UNIT_HEAD', userIds: unitHeadsA });
-    if (employee.departmentId) {
-        rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeadsA });
-        rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeadsA });
-    }
+    rawStages.push(...ladderSigners);
     rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
     rawStages.push({ stage: 'DIRECTORATE', userIds: directorsA });
     rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
 
     // --- Smart-signature coverage: which single person fills each printed row on the form.
-    // "Always look for the direct head" — the nearest real head STRICTLY ABOVE the requester — and let
-    // one signature stand in for every post that person actually holds:
-    //   • Direct supervisor          = nearest head above the requester (unit → dept → division →
-    //                                   director → GM). For a Division Head requester this is the Director.
-    //   • Head of Department/Division = the post directly above 'direct'; if there's only one head above
-    //                                   the requester it equals 'direct' (one signature shown in both rows).
-    //   • Administrative Director     = the director. If the director IS the direct head (e.g. a Division
-    //                                   Head's request), their single signature covers all of the above.
-    const aboveLadder = [unitHeadsA, deptHeadsA, divisionHeadsA, directorsA].filter(g => g.length > 0);
-    const directGroup = aboveLadder[0] ?? generalManagers;
-    const deptDivGroup = aboveLadder[1] ?? aboveLadder[0] ?? generalManagers;
+    // A person who holds several posts signs once and their signature appears in every row they own
+    // — but only among the rows they are actually entitled to, which for the two manager boxes now
+    // means the ladder and nothing else. A row with no entitled holder is printed blank.
+    const directGroup = ladderSigners[0]?.userIds ?? [];
+    const deptDivGroup = ladderSigners[1]?.userIds ?? ladderSigners[0]?.userIds ?? [];
     const rowHolders: { row: ApprovalStage; userIds: string[] }[] = [
         { row: 'HEAD_ATTENDANCE', userIds: attendanceHeads },
         { row: 'DIRECT_SUPERVISOR', userIds: directGroup },
@@ -272,7 +393,8 @@ export async function resolveApprovalChain(
     }
 
     // Attach each printed row to the single step of whoever fills it. A row whose holder is the
-    // requester themselves — or who otherwise has no signing step — is left uncovered (printed blank).
+    // requester themselves — or who otherwise has no signing step — is left uncovered for now; the
+    // self-signature pass below decides which of those the requester fills in person.
     for (const holder of rowHolders) {
         for (const userId of Array.from(new Set(holder.userIds))) {
             const step = stepByUser.get(userId);
@@ -280,48 +402,79 @@ export async function resolveApprovalChain(
         }
     }
 
-    return { steps };
+    // --- Nobody above them: the requester signs that row themselves.
+    //
+    // The same rule the Missing Biometric Log already follows, applied to all six printed rows. A
+    // row can end up with no signer for two very different reasons, and they must not be treated
+    // alike:
+    //
+    //   · the post is unfilled, or the employee is not linked to the org chart at all — the row is
+    //     genuinely unapproved and must print blank. 77 employees sit in this state today.
+    //   · the ONLY person who would have signed it is the requester — the Head of Personal
+    //     Relations filing their own leave, the GM filing theirs. There is no higher authority to
+    //     route to, so the row is signed by the authority that exists: them.
+    //
+    // `rawUserIds` / the un-narrowed function lists are what separate the two: the requester must
+    // actually be a holder of that row before they may sign it. It is never an approval STEP —
+    // nobody approves their own request, and a step would also drop it into their own inbox.
+    const covered = new Set(steps.flatMap(s => s.coversStages));
+    const me = employee.userId;
+    const selfSignedStages: ApprovalStage[] = [];
+    const claimIfSoleHolder = (row: ApprovalStage, rawHolders: string[]) => {
+        if (!covered.has(row) && me && rawHolders.includes(me)) selfSignedStages.push(row);
+    };
+    claimIfSoleHolder('HEAD_ATTENDANCE', attendanceHeads);
+    claimIfSoleHolder('HR_MANAGER', hrManagers);
+    claimIfSoleHolder('GENERAL_MANAGER', generalManagers);
+    claimIfSoleHolder('DIRECTORATE', tiers.find(t => t.stage === 'DIRECTORATE')?.rawUserIds ?? []);
+
+    // The two manager boxes belong to the ladder, where "holder" is a rank rather than a named
+    // permission: a head with no ladder level above them is their own line manager. A plain
+    // employee reaching the same point is not — they are simply unlinked — so rank gates it, and
+    // both boxes move together because they are filled from the same ladder.
+    if (!covered.has('DIRECT_SUPERVISOR') && requesterRank > ORG_RANK.EMPLOYEE) {
+        selfSignedStages.push('DIRECT_SUPERVISOR', 'HEAD_DEPT_DIVISION');
+    }
+
+    return { steps, selfSignedStages };
 }
 
-// Builds the Missing Biometric Log chain: Head of Department/Division -> Head of Attendance &
-// Payroll. The manager stage cascades like the permission chain's direct supervisor — the
-// employee's department head, else their division head, else their directorate head — so an
-// employee with no dept head is still covered by whoever sits above them. Head of Attendance is the
-// only mandatory stage. On final approval the forgotten punch is written to BioTime (see
-// staffHubController.decideApprovalStep).
+// The two printed signature rows on the Missing Biometric Log Form, in order.
+export const MISSING_PUNCH_ROW_STAGES: ApprovalStage[] = ['DEPT_HEAD', 'HEAD_ATTENDANCE'];
+
+// Builds the Missing Biometric Log chain: Head of Department/Division -> Head of Personal Relations
+// Department. The manager stage cascades — the employee's department head, else their division
+// head, else their directorate head — so an employee with no dept head is still covered by whoever
+// sits above them. Personal Relations is the only mandatory stage. On final approval the forgotten
+// punch is written to BioTime (see staffHubController.decideApprovalStep).
 export async function resolveMissingPunchChain(
     prisma: PrismaClient,
     employee: Employee
-): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage; selfSignedStages?: ApprovalStage[] }> {
     const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
 
-    // Head of Department/Division — dept head, else division head, else directorate head.
-    let mgrIds: string[] = [];
-    if (employee.departmentId) {
-        const deptHeads = await prisma.user.findMany({
-            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
-            select: { id: true },
-        });
-        mgrIds = deptHeads.map(u => u.id);
-    }
-    if (mgrIds.length === 0 && employee.divisionId) {
-        const divHeads = await prisma.user.findMany({ where: { role: 'HEAD_DIVISION', divisionId: employee.divisionId }, select: { id: true } });
-        mgrIds = divHeads.map(u => u.id);
-    }
-    if (mgrIds.length === 0 && employee.departmentId) {
-        const dirHeads = await prisma.user.findMany({ where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } }, select: { id: true } });
-        mgrIds = dirHeads.map(u => u.id);
-    }
+    // Head of Department/Division — the nearest head ABOVE the requester: department, else
+    // division, else directorate.
+    //
+    // The tiers arrive from headTiersAbove already stripped of the requester and of their own
+    // level, which is what makes the cascade correct. It used to walk raw query results and ask
+    // "is this tier empty?", so a department head who is the ONLY head of their own department
+    // matched their own tier, stopped the cascade there, and was then removed by self-exclusion —
+    // leaving the request with no manager at all and sending it straight to Personnel Relations.
+    const tiers = await headTiersAbove(prisma, employee);
+    const mgrIds = tiers.find(t => ['DEPT_HEAD', 'DIVISION_HEAD', 'DIRECTORATE'].includes(t.stage)
+        && t.userIds.length > 0)?.userIds ?? [];
     rawStages.push({ stage: 'DEPT_HEAD', userIds: mgrIds });
 
-    // Head of Attendance & Payroll — granted by approve_attendance (directly, via a hat, or
+    // Head of Personnel Relations — granted by approve_attendance (directly, via a hat, or
     // SUPER_ADMIN). Mandatory: no holder means a real misconfiguration.
-    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
+    const attendanceHeads = await resolveFunctionApprovers(prisma, 'approve_attendance');
     rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
 
     const requiredNonEmpty: ApprovalStage[] = ['HEAD_ATTENDANCE'];
     const seen = new Set<string>();
     const steps: ResolvedApprovalStep[] = [];
+    const stepByUser = new Map<string, ResolvedApprovalStep>();
     for (const raw of rawStages) {
         const distinctIds = Array.from(new Set(raw.userIds));
         if (distinctIds.length === 0 && requiredNonEmpty.includes(raw.stage)) {
@@ -330,96 +483,132 @@ export async function resolveMissingPunchChain(
         const eligible = distinctIds.filter(id => id !== employee.userId && !seen.has(id));
         for (const userId of eligible) {
             seen.add(userId);
-            steps.push({ stage: raw.stage, approverUserId: userId, coversStages: [raw.stage] });
+            const step: ResolvedApprovalStep = { stage: raw.stage, approverUserId: userId, coversStages: [] };
+            steps.push(step);
+            stepByUser.set(userId, step);
         }
     }
-    return { steps };
+
+    // Smart signature, same as the Leave Request Form: one person may hold both posts — the
+    // department head who is also the Head of Personal Relations is a real case here — and the
+    // dedup above gives them a single step at the earlier stage. Without coverage their signature
+    // filled only the row of the stage they happened to be deduped into, and the other row printed
+    // blank even though the person who owns it had signed.
+    const rowHolders: { row: ApprovalStage; userIds: string[] }[] = [
+        { row: 'DEPT_HEAD', userIds: mgrIds },
+        { row: 'HEAD_ATTENDANCE', userIds: attendanceHeads },
+    ];
+    for (const holder of rowHolders) {
+        for (const userId of Array.from(new Set(holder.userIds))) {
+            const step = stepByUser.get(userId);
+            if (step && !step.coversStages.includes(holder.row)) step.coversStages.push(holder.row);
+        }
+    }
+
+    // Nobody above a head: they sign the manager row themselves.
+    //
+    // A department head whose division has no head, or a division head filing their own request,
+    // has no line authority to send it to — so the row is signed by the highest authority there is,
+    // which is the requester, and the request moves on to Personal Relations. This is deliberately
+    // NOT an approval step: self-approval is refused everywhere in this system, and a step would
+    // also drop the request into the requester's own inbox.
+    //
+    // The rank test is what keeps this honest. A plain employee with no unit, department or
+    // division reaches this point too — 77 of them do today — but they are not their own highest
+    // authority, they are simply unlinked in the org chart. Stamping their signature on a manager
+    // row would assert an approval that never happened, so their row stays blank.
+    const selfSignedStages: ApprovalStage[] = [];
+    if (mgrIds.length === 0 && (await requesterRankOf(prisma, employee)) > ORG_RANK.EMPLOYEE) {
+        selfSignedStages.push('DEPT_HEAD');
+    }
+
+    return { steps, selfSignedStages };
 }
 
-// Builds the short attendance-permission chain: Direct Supervisor -> Head of Department ->
-// Head of Attendance & Payroll. Direct Supervisor is the employee's most-immediate head (unit
-// head if in a unit, else department head); it self-excludes/dedups against the department head
-// so a person never signs twice. Only the Head of Attendance stage is mandatory.
+// Builds the short chain behind the two attendance forms. One org walk, two shapes, because the
+// two printed forms carry different signature rows:
+//
+//   PERMISSION (Late Coming / Early Leaving / Few Hours — "Late Arrival - Early Departure Request
+//   Form", as reprinted 2026-09):
+//       Direct Supervisor -> Head of Division (مدير الإدارة)
+//           -> Head of Personnel Affairs (رئيس قسم شؤون الموظفين) -> Head of HR (رئيس الموارد البشرية)
+//
+//   WORK_AUTHORIZATION (out-work — "Work Authorization Form", unchanged):
+//       Direct Supervisor -> Head of Department -> Head of Personnel Affairs -> General Manager
+//
+// Direct Supervisor is the employee's most-immediate head (unit head if in a unit, else department
+// head, …); it self-excludes/dedups against the manager stage so a person never signs twice, and a
+// person who holds two of the posts signs ONCE and covers both printed rows. The Head of Personnel
+// Affairs is mandatory in both, as is each chain's final signature.
 export async function resolvePermissionApprovalChain(
     prisma: PrismaClient,
     employee: Employee,
-    opts?: { includeGeneralManager?: boolean }
+    opts?: { chain?: 'PERMISSION' | 'WORK_AUTHORIZATION' }
 ): Promise<{ steps: ResolvedApprovalStep[]; blockedStage?: ApprovalStage }> {
+    const chain = opts?.chain ?? 'PERMISSION';
     const rawStages: { stage: ApprovalStage; userIds: string[] }[] = [];
 
-    // Direct Supervisor — unit head if the employee sits in a unit, otherwise department, division, or directorate head.
-    let directIds: string[] = [];
-    if (employee.unitId) {
-        const unitHeads = await prisma.user.findMany({ where: { role: 'HEAD_UNIT', unitId: employee.unitId }, select: { id: true } });
-        directIds = unitHeads.map(u => u.id);
-    }
-    
-    if (directIds.length === 0 && employee.departmentId) {
-        const deptHeads = await prisma.user.findMany({
-            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
-            select: { id: true },
-        });
-        directIds = deptHeads.map(u => u.id);
-    }
+    // Direct Supervisor — the nearest head ABOVE the requester: unit, else department, else
+    // division, else directorate.
+    //
+    // Same fix as resolveMissingPunchChain: the tiers are pre-filtered by headTiersAbove, so a head
+    // who is the only head of their own level no longer swallows the cascade and then vanishes to
+    // self-exclusion, which left their permission requests with no supervisor signature at all.
+    const tiers = await headTiersAbove(prisma, employee);
+    const directIds = tiers.find(t => t.userIds.length > 0)?.userIds ?? [];
 
-    if (directIds.length === 0 && employee.divisionId) {
-        const divHeads = await prisma.user.findMany({
-            where: { role: 'HEAD_DIVISION', divisionId: employee.divisionId },
-            select: { id: true },
-        });
-        directIds = divHeads.map(u => u.id);
-    }
-
-    if (directIds.length === 0 && employee.departmentId) {
-        const dirHeads = await prisma.user.findMany({
-            where: { role: 'HEAD_DIRECTOR', departmentIds: { has: employee.departmentId } },
-            select: { id: true },
-        });
-        directIds = dirHeads.map(u => u.id);
-    }
-    
     rawStages.push({ stage: 'DIRECT_SUPERVISOR', userIds: directIds });
 
-    // Head of Department.
-    let deptHeadIds: string[] = [];
-    if (employee.departmentId) {
-        const deptHeads = await prisma.user.findMany({
-            where: { role: { in: ['HEAD_DEPARTMENT', 'HEAD_OFFICE'] }, departmentId: employee.departmentId },
-            select: { id: true },
-        });
-        deptHeadIds = deptHeads.map(u => u.id);
-    }
-    rawStages.push({ stage: 'DEPT_HEAD', userIds: deptHeadIds });
+    // The manager row — Head of Division on the permission form, Head of Department on the work
+    // authorization — and only if they sit above the requester. The dedup below drops them when the
+    // Direct Supervisor stage already resolved to the same person, so nobody signs the same
+    // permission twice; their one signature then fills both rows via coversStages.
+    const managerStage: ApprovalStage = chain === 'PERMISSION' ? 'DIVISION_HEAD' : 'DEPT_HEAD';
+    const managerIds = tiers.find(t => t.stage === managerStage)?.userIds ?? [];
+    rawStages.push({ stage: managerStage, userIds: managerIds });
 
-    // Head of Attendance & Payroll — granted by the approve_attendance permission, directly, via a
+    // Head of Personnel Affairs — granted by the approve_attendance permission, directly, via a
     // Functional Hat, or by SUPER_ADMIN (mandatory stage).
-    const attendanceHeads = await resolveUsersWithPermission(prisma, 'approve_attendance');
+    const attendanceHeads = await resolveFunctionApprovers(prisma, 'approve_attendance');
     rawStages.push({ stage: 'HEAD_ATTENDANCE', userIds: attendanceHeads });
 
-    // General Manager — the final signed-document authentication. Only appended when requested
-    // (Work Authorization / out-work); mandatory when present, same as the full leave chain.
-    if (opts?.includeGeneralManager) {
+    if (chain === 'PERMISSION') {
+        // Head of Human Resources — the last signature on the reprinted permission form. Same
+        // source as the full leave chain's HR row: role ∪ approve_hr_manager ∪ SUPER_ADMIN.
+        const hrManagers = await resolveFunctionApprovers(prisma, 'approve_hr_manager');
+        rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
+    } else {
+        // General Manager — the work authorization's signed-document authentication. The
         // GENERAL_MANAGER position, OR anyone designated a GM approver via `approve_gm` (directly,
         // via a hat, or SUPER_ADMIN). Satisfied by ANY ONE signing (sibling-skip in decideApprovalStep).
         const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });
-        const generalManagers = Array.from(new Set([...generalManagerRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+        const generalManagers = await resolveGeneralManagers(prisma, generalManagerRoleHolders.map(u => u.id));
         rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
     }
 
-    const requiredNonEmpty: ApprovalStage[] = opts?.includeGeneralManager
-        ? ['HEAD_ATTENDANCE', 'GENERAL_MANAGER']
-        : ['HEAD_ATTENDANCE'];
-    const seen = new Set<string>();
+    const requiredNonEmpty: ApprovalStage[] = chain === 'PERMISSION'
+        ? ['HEAD_ATTENDANCE', 'HR_MANAGER']
+        : ['HEAD_ATTENDANCE', 'GENERAL_MANAGER'];
+    const seen = new Map<string, ResolvedApprovalStep>();
     const steps: ResolvedApprovalStep[] = [];
     for (const raw of rawStages) {
         const distinctIds = Array.from(new Set(raw.userIds));
         if (distinctIds.length === 0 && requiredNonEmpty.includes(raw.stage)) {
             return { steps: [], blockedStage: raw.stage };
         }
-        const eligible = distinctIds.filter(id => id !== employee.userId && !seen.has(id));
-        for (const userId of eligible) {
-            seen.add(userId);
-            steps.push({ stage: raw.stage, approverUserId: userId, coversStages: [raw.stage] });
+        for (const userId of distinctIds) {
+            if (userId === employee.userId) continue;
+            const already = seen.get(userId);
+            if (already) {
+                // One person holding two of these posts — a Division Head who is also the Head of
+                // HR, say — is asked to sign once. Without recording the coverage here, the row
+                // they were deduped OUT of prints blank on a form they did in fact approve.
+                if (!already.coversStages.includes(raw.stage)) already.coversStages.push(raw.stage);
+                continue;
+            }
+            const step: ResolvedApprovalStep = { stage: raw.stage, approverUserId: userId, coversStages: [raw.stage] };
+            seen.set(userId, step);
+            steps.push(step);
         }
     }
 
@@ -487,11 +676,11 @@ export async function resolveExceptionalPerformanceApprovalChain(
         rawStages.push({ stage: 'DIVISION_HEAD', userIds: divisionHeads.map(u => u.id) });
     }
 
-    const hrManagers = await resolveUsersWithPermission(prisma, 'approve_hr_manager');
+    const hrManagers = await resolveFunctionApprovers(prisma, 'approve_hr_manager');
     rawStages.push({ stage: 'HR_MANAGER', userIds: hrManagers });
 
     const generalManagerRoleHolders = await prisma.user.findMany({ where: { role: 'GENERAL_MANAGER' }, select: { id: true } });
-    const generalManagers = Array.from(new Set([...generalManagerRoleHolders.map(u => u.id), ...(await resolveUsersWithPermission(prisma, 'approve_gm'))]));
+    const generalManagers = await resolveGeneralManagers(prisma, generalManagerRoleHolders.map(u => u.id));
     rawStages.push({ stage: 'GENERAL_MANAGER', userIds: generalManagers });
 
     // Only HR/GM are mandatory — DEPT_HEAD/DIVISION_HEAD tolerate zero holders and are simply

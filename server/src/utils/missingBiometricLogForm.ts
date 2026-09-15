@@ -174,11 +174,16 @@ export const generateMissingBiometricLogDocx = (data: MissingBiometricLogData): 
         }
     }
 
-    // HR — Head of Attendance and Payroll Unit: signature in the value cell next to the label.
+    // Two labels, because the printed templates are being re-worded one at a time: the Leave
+    // Request Form already says "Head of Personal Relations Department", the rest still say
+    // "Head of Attendance and Payroll Unit". A label that matches nothing drops that approver's
+    // signature from the form silently, so both spellings are accepted until every template has
+    // caught up.
     if (data.headOfAttendance?.decided) {
-        const li = findLabel('Head of Attendance and Payroll');
+        const li = ['Head of Personal Relations', 'Head of Attendance and Payroll']
+            .map(l => findLabel(l)).find(i => i >= 0) ?? -1;
         if (li >= 0) {
-            placeSignature(data.headOfAttendance.signature, li + 1, 'Head of Attendance Signature');
+            placeSignature(data.headOfAttendance.signature, li + 1, 'Personal Relations Signature');
         }
     }
 

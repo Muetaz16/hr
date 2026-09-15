@@ -4,6 +4,7 @@ import type { AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
 import { calculateHolidayMetrics } from './employeeController';
+import { getLeavePolicy } from '../utils/leavePolicy';
 import {
     resolveApprovalChain, STAGE_SEQUENCE, resolvePermissionApprovalChain, PERMISSION_STAGE_SEQUENCE,
     resolveExceptionalPerformanceApprovalChain, EXCEPTIONAL_PERFORMANCE_STAGE_SEQUENCE, resolveHeadTeamEmployees,
@@ -12,13 +13,14 @@ import {
 import { createBioTimeLeaveRecord, createBioTimeExcusedLate, createBioTimeExcusedEarlyOut, createBioTimeOutWork, createBioTimeEmployeeShift, createBioTimeMissingPunch, findBioTimeEmpIdByCode, resolveScheduledWorkHours } from '../utils/attendanceApiProxy';
 import { LEAVE_TYPE_ID_MAP } from '../utils/bioApiLeaveTypeMap';
 import { generateLeaveRequestFormDocx, type LeaveFormApprover } from '../utils/leaveRequestForm';
-import { generateEarlyDepartureDocx, type EarlyDepartureApprover } from '../utils/earlyDepartureForm';
+import { generateEarlyDepartureDocx, type EarlyDepartureApprover, type PermissionReason } from '../utils/earlyDepartureForm';
 import { generateWorkAuthorizationDocx, type WorkAuthApprover, type WorkOrderType } from '../utils/workAuthorizationForm';
 import { generateExceptionalContributionRewardDocx, type ExceptionalContributionApprover } from '../utils/exceptionalPerformanceNominationForm';
 import { checkExceptionalPerformanceEligibility } from '../utils/rewardEligibility';
 import { nextCaseNumber, resolveHrRecipients } from './rewardController';
 import { generateMissingBiometricLogDocx, type MissingPunchApprover, type MissingPunchType, type MissingPunchReason } from '../utils/missingBiometricLogForm';
 
+import { isInactiveEnrollmentStatus } from '../utils/employeeStatus';
 import { prisma } from '../lib/prisma';
 
 // The 3 leave types that go through balance/date validation and the new org-based approval
@@ -53,6 +55,77 @@ const NOMINATOR_ROLES = ['HEAD_UNIT', 'HEAD_DEPARTMENT', 'HEAD_OFFICE', 'HEAD_DI
 const MISSING_PUNCH_TYPE = 'MISSING_PUNCH';
 const MISSING_PUNCH_RECORD_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BOTH'];
 const MISSING_PUNCH_REASONS = ['FORGOT', 'DEVICE_ISSUE', 'POWER_OUTAGE', 'OTHERS'];
+
+// The four reason boxes printed on the "Late Arrival - Early Departure Request Form". The employee
+// ticks exactly one; the value is what fills that row of the form.
+const PERMISSION_REASONS = ['PERSONAL', 'FAMILY', 'HEALTH_MEDICAL', 'OTHERS'];
+
+// Every request type that is actually written into the attendance system when it completes — the
+// leave record, the excused late/early-out, the out-work, the punch. This is the list the Approved
+// Leaves register is built from, and it is derived from the completion hook in decideApprovalStep
+// rather than restated by hand, so a type can never appear on a screen that promises "recorded in
+// the attendance system" without a write-back behind it. EXCEPTIONAL_PERFORMANCE is the type this
+// excludes: it completes into a RewardCase and never touches attendance.
+const ATTENDANCE_RECORDED_TYPES = [...CHAIN_LEAVE_TYPES, ...SHORT_CHAIN_TYPES, MISSING_PUNCH_TYPE];
+
+// "HH:MM", 24-hour. Rejecting anything else here is what keeps a malformed string out of the
+// BioTime punch payload, where it would be written as a real attendance event.
+/**
+ * Which approval step fills a given printed signature row.
+ *
+ * A row can be covered by several steps at once — a department with two co-heads resolves both to
+ * the same row, and either one signing satisfies the stage. Preference order is: someone who
+ * approved AND has a signature on file, then anyone who approved, then anyone who covers the row
+ * at all (so a pending row can still show whose it is).
+ *
+ * The signature check is the part that matters. Picking merely "the first approved coverer" printed
+ * a blank box whenever that person had never uploaded a signature — even though a colleague who
+ * covers the same row, and did sign, had one ready. The row looked unapproved on paper while the
+ * system considered the stage complete.
+ */
+const pickCoveringStep = <T extends { coversStages?: string[] | null; status: string; approver?: { signature?: string | null } | null }>(
+    steps: T[],
+    row: string,
+): T | undefined => {
+    const covers = steps.filter(s => (s.coversStages || []).includes(row));
+    // "Acted" means approved OR rejected. A refusal is a decision the printed form has to show —
+    // the row's "Not approved" box and the refuser's own signature — so it must not lose to a
+    // sibling step that was merely SKIPPED when the chain collapsed.
+    const acted = (s: T) => s.status === 'APPROVED' || s.status === 'REJECTED';
+    return covers.find(s => acted(s) && s.approver?.signature)
+        ?? covers.find(acted)
+        ?? covers[0];
+};
+
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const normaliseHhmm = (v: unknown): string | null => {
+    const s = typeof v === 'string' ? v.trim() : '';
+    return HHMM.test(s) ? s : null;
+};
+/** Which of the two times a given missing-punch type actually needs. */
+const missingPunchNeeds = (recordType: string) => ({
+    checkIn: recordType === 'CHECK_IN' || recordType === 'BOTH',
+    checkOut: recordType === 'CHECK_OUT' || recordType === 'BOTH',
+});
+/**
+ * Validate the requested/approved punch times against the record type.
+ * Returns an error string, or null when the pair is usable.
+ */
+const validateMissingPunchTimes = (
+    recordType: string,
+    inTime: string | null,
+    outTime: string | null,
+): string | null => {
+    const needs = missingPunchNeeds(recordType);
+    if (needs.checkIn && !inTime) return 'Please enter the check-in time (HH:MM) that should be recorded.';
+    if (needs.checkOut && !outTime) return 'Please enter the check-out time (HH:MM) that should be recorded.';
+    // A check-out before the check-in produces a negative working day in BioTime, which then
+    // silently corrupts the month's hours — refuse it at the door rather than reconcile it later.
+    if (needs.checkIn && needs.checkOut && inTime && outTime && outTime <= inTime) {
+        return 'The check-out time must be later than the check-in time.';
+    }
+    return null;
+};
 
 // Inclusive day count — same formula already used below in updateRequestStatus's balance
 // increment, kept identical so submission-time validation and approval-time accounting agree.
@@ -181,9 +254,133 @@ export const getReplacementCandidatesForEmployee = async (req: Request, res: Res
     }
 };
 
+/**
+ * POST /staff-hub/requests/direct-leave — record a leave that senior management already granted on
+ * paper, straight into the register.
+ *
+ * This deliberately skips three things a normal request cannot skip: the notice period, the balance
+ * check, and the approval chain. It exists because the chain cannot model a decision that was taken
+ * outside it — an employee hospitalised for two months was not going to file fourteen days ahead,
+ * and the grant was not the system's to approve.
+ *
+ * What replaces those three controls is ONE thing, so it is enforced absolutely: the signed
+ * authorisation must be attached. Without the document this endpoint is an unlogged way to hand out
+ * paid leave, so a missing file is a hard 400 — never a warning, never optional.
+ *
+ * The days are still written to the attendance system, exactly as a chain-approved leave would be.
+ * Charging the employee's balance is the one part that is optional (`deductFromBalance`): a
+ * compassionate grant is recorded as leave taken without being counted against the person.
+ */
+export const recordDirectLeave = async (req: AuthRequest, res: Response) => {
+    try {
+        const { employeeId, type, startDate, endDate, reason, deductFromBalance } = req.body;
+        const file = (req as any).file;
+
+        if (!CHAIN_LEAVE_TYPES.includes(type)) {
+            return res.status(400).json({ error: 'Choose a leave type: Paid Holiday, Emergency Leave or Unpaid Leave. Only these carry a balance and a notice rule to waive.' });
+        }
+        if (!employeeId || !startDate) {
+            return res.status(400).json({ error: 'An employee and a start date are required.' });
+        }
+        // The authority for the whole entry. Checked before anything is written.
+        if (!file) {
+            return res.status(400).json({ error: 'Attach the authorisation signed by senior management. It is the only approval this record will ever have, so it cannot be added later.' });
+        }
+        if (!String(reason || '').trim()) {
+            return res.status(400).json({ error: 'Describe why this leave was granted outside the normal process.' });
+        }
+
+        const start = new Date(`${String(startDate).slice(0, 10)}T00:00:00`);
+        const end = endDate ? new Date(`${String(endDate).slice(0, 10)}T00:00:00`) : start;
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+            return res.status(400).json({ error: 'The dates are not valid.' });
+        }
+        if (end < start) {
+            return res.status(400).json({ error: 'The end date falls before the start date.' });
+        }
+
+        const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+        if (!employee) return res.status(404).json({ error: 'Employee not found.' });
+        // Still refused for a leaver: recording leave against someone who has left the company would
+        // put days into attendance and payroll for a period they were not employed.
+        if (isInactiveEnrollmentStatus(employee.enrollmentStatus)) {
+            return res.status(403).json({ error: 'This employee is no longer active — a leave cannot be recorded against them.' });
+        }
+
+        const deduct = String(deductFromBalance) !== 'false';
+        const dayCount = countLeaveDays(start, end);
+
+        const created = await prisma.$transaction(async (tx) => {
+            const lr = await tx.leaveRequest.create({
+                data: {
+                    employeeId,
+                    // The officer recording it owns the row: `userId` is who filed it, and for a
+                    // direct entry that is them, not the employee. directEntryBy* names them again
+                    // in a field that cannot be confused with a requester.
+                    userId: req.user!.id,
+                    type,
+                    startDate: start,
+                    endDate: endDate ? end : null,
+                    reason: String(reason).trim(),
+                    attachmentUrl: `/uploads/requests/${file.filename}`,
+                    attachmentName: file.originalname,
+                    status: 'COMPLETED',
+                    directEntry: true,
+                    directEntryById: req.user!.id,
+                    directEntryByName: req.user!.fullName || req.user!.email || null,
+                    deductFromBalance: deduct,
+                },
+            });
+            if (deduct) {
+                const field = type === 'PAID_HOLIDAY' ? 'holidaysUsed'
+                    : type === 'EMERGENCY_LEAVE' ? 'emergencyHolidaysUsed' : 'unpaidHolidaysUsed';
+                await tx.employee.update({ where: { id: employeeId }, data: { [field]: { increment: dayCount } } });
+            }
+            return lr;
+        });
+
+        // After the commit, never inside it — same rule as the chain's completion hook: an external
+        // HTTP call must not hold a transaction open nor be able to roll it back. Fail-soft, but
+        // reported, because unlike the chain's version this one has a human waiting on the answer.
+        let attendanceWarning: string | null = null;
+        const leaveTypeId = LEAVE_TYPE_ID_MAP[type];
+        if (employee.staffId && leaveTypeId) {
+            const result = await createBioTimeLeaveRecord({
+                empCode: employee.staffId, leaveTypeId, startDate: start, endDate: end,
+                notes: String(reason).trim(),
+            });
+            if (!result.success) {
+                attendanceWarning = `Recorded here, but the attendance system did not accept it: ${result.message}. Add it there by hand.`;
+                console.warn('[BioTime] Direct leave write-back failed (non-fatal):', result.message);
+            }
+        } else if (!employee.staffId) {
+            attendanceWarning = 'Recorded here, but this employee has no attendance code, so nothing was sent to the attendance system.';
+        }
+
+        // Tell the employee. They never filed this and no approval notification ever reached them,
+        // so without this the first they would know of leave recorded in their name is their balance.
+        if (employee.userId) {
+            const range = endDate && end > start
+                ? `${start.toISOString().slice(0, 10)} → ${end.toISOString().slice(0, 10)}`
+                : start.toISOString().slice(0, 10);
+            await notifyUsers(
+                [employee.userId],
+                'A leave was recorded for you',
+                `${leaveTypeLabel(type)} (${range}), ${dayCount} day(s), recorded by ${created.directEntryByName || 'HR'}`
+                    + `${deduct ? '' : ' — not deducted from your balance'}.`,
+                '/staff-hub',
+            );
+        }
+        return res.json({ ...created, dayCount, attendanceWarning });
+    } catch (error) {
+        console.error('Error recording a direct leave:', error);
+        return res.status(500).json({ error: 'Failed to record the leave.' });
+    }
+};
+
 export const createLeaveRequest = async (req: Request, res: Response) => {
     try {
-        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId, workOrderType, placeOfAssignment, missingPunchType, missingPunchReason } = req.body;
+        const { employeeId, userId, type, startDate, endDate, startTime, endTime, reason, replacementUserId, workOrderType, placeOfAssignment, missingPunchType, missingPunchReason, permissionReason, ticketProvidedBy, shortNoticeReason: rawShortNotice } = req.body;
         const file = (req as any).file;
 
         // Emergency leave requires a supporting document
@@ -222,6 +419,10 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             }
         }
 
+        const policy = await getLeavePolicy();
+        // Trimmed to null so an empty string can never pass as a justification.
+        const shortNoticeReason = typeof rawShortNotice === 'string' && rawShortNotice.trim() ? rawShortNotice.trim() : null;
+
         const isChainType = CHAIN_LEAVE_TYPES.includes(type);
 
         if (isChainType) {
@@ -232,7 +433,7 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             // Balance check
             const metrics = calculateHolidayMetrics(
                 employee.contractStartDate, employee.holidaysUsed, employee.bonusHolidays,
-                employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed
+                employee.emergencyHolidaysUsed, employee.unpaidHolidaysUsed, policy
             );
             const remainingField = REMAINING_BALANCE_FIELD[type];
             const remaining = metrics[remainingField];
@@ -240,20 +441,42 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: `This request exceeds your remaining balance (${remaining} day(s) left).` });
             }
 
-            // 14-day advance-notice rule — PAID_HOLIDAY/UNPAID_LEAVE only, EMERGENCY_LEAVE exempt
-            // (it may even be backdated).
+            // Advance-notice rule — Annual / Unpaid only; Emergency is exempt by nature and may even
+            // be backdated. The number comes from LeavePolicy, not from a literal here.
+            //
+            // Filing inside the window is ALLOWED, but only as a recorded exception: a written
+            // justification plus the letter that authorises it. Until now it was a flat refusal, and
+            // a flat refusal does not stop the absence — it stops the RECORD of it. The only exit the
+            // system offered was to call the leave an emergency, which is capped at 3 days and drawn
+            // from a different allowance; the alternative was to be absent unrecorded, which this
+            // same system then counts as absence against the presence score and can escalate into a
+            // disciplinary case. Neither is an outcome the notice rule was meant to produce.
             if (type === 'PAID_HOLIDAY' || type === 'UNPAID_LEAVE') {
-                const minStart = new Date();
-                minStart.setDate(minStart.getDate() + 14);
-                minStart.setHours(0, 0, 0, 0);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                // The one line that is NOT negotiable: leave cannot begin in the past. Backdating
+                // Annual or Unpaid would turn the leave record into a way of papering over an
+                // absence that already happened.
+                if (start < today) {
+                    return res.status(400).json({ error: 'Leave cannot start in the past. Use Emergency Leave for something that has already happened.' });
+                }
+                const minStart = new Date(today);
+                minStart.setDate(minStart.getDate() + policy.noticeDays);
                 if (start < minStart) {
-                    return res.status(400).json({ error: 'This leave type must be requested at least 14 days before the start date.' });
+                    if (!shortNoticeReason) {
+                        return res.status(400).json({
+                            error: `This leave is normally requested at least ${policy.noticeDays} days in advance. To file it now, give the reason and attach the letter authorising it.`,
+                        });
+                    }
+                    if (!attachmentUrl) {
+                        return res.status(400).json({ error: 'Please attach the letter authorising the short notice.' });
+                    }
                 }
             }
         }
 
         if (isChainType && employee) {
-            const { steps, blockedStage } = await resolveApprovalChain(prisma, employee);
+            const { steps, blockedStage, selfSignedStages } = await resolveApprovalChain(prisma, employee);
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace('_', ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
             }
@@ -275,6 +498,13 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             }
             const replacementStatus = chosenReplacement ? 'PENDING' : null;
 
+            // Who bears the travel-ticket cost. Deliberately optional — the printed row allows
+            // neither box to be ticked — so anything that is not one of the two known answers is
+            // stored as "unanswered" rather than rejected or guessed.
+            const ticketChoice = ticketProvidedBy === 'EMPLOYEE' || ticketProvidedBy === 'COMPANY'
+                ? ticketProvidedBy
+                : null;
+
             const request = await prisma.$transaction(async (tx) => {
                 const created = await tx.leaveRequest.create({
                     data: {
@@ -285,6 +515,12 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         status: 'PENDING',
                         replacementUserId: chosenReplacement,
                         replacementStatus,
+                        ticketProvidedBy: ticketChoice,
+                        // Only meaningful when the notice window was actually broken; the guard
+                        // above is what decides that, so anything else arrives as null.
+                        shortNoticeReason,
+                        // Printed rows the requester signs themselves for want of anyone above them.
+                        selfSignedStages: selfSignedStages ?? [],
                     }
                 });
                 await tx.leaveApprovalStep.createMany({
@@ -323,14 +559,26 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
             return res.json(request);
         }
 
-        // Short 3-stage chain (Direct Supervisor -> Head of Department -> Head of Attendance &
-        // Payroll) — attendance permissions (Early Departure Request Form) and Work Authorization
-        // (out-work). Work Authorization additionally carries the work-order type + place, and on
-        // final approval is written to BioTime's `outworks` table (see decideApprovalStep).
+        // The short 4-stage chain — attendance permissions (Early Departure Request Form) and Work
+        // Authorization (out-work). The two forms print different signature rows, so they take
+        // different middle and final stages; see resolvePermissionApprovalChain. Work Authorization
+        // additionally carries the work-order type + place, and on final approval is written to
+        // BioTime's `outworks` table (see decideApprovalStep).
         if (SHORT_CHAIN_TYPES.includes(type)) {
-            // Work Authorization (out-work) ends with the General Manager's signed authentication;
-            // the other permission types stop at Head of Attendance.
-            const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee, { includeGeneralManager: OUTWORK_TYPES.includes(type) });
+            // The permission form prints the reason as four tick boxes with no line to write on, so
+            // the category is what the approver actually reads and it is required. The free-text
+            // note stays optional EXCEPT under "Others", where the box on its own says nothing.
+            if (PERMISSION_TYPES.includes(type)) {
+                if (!PERMISSION_REASONS.includes(permissionReason)) {
+                    return res.status(400).json({ error: 'Please choose the reason for this permission: Personal, Family, Health / Medical, or Others.' });
+                }
+                if (permissionReason === 'OTHERS' && !String(reason || '').trim()) {
+                    return res.status(400).json({ error: 'You chose "Others" as the reason — please describe it in the note so the approver knows what is being asked.' });
+                }
+            }
+            const { steps, blockedStage } = await resolvePermissionApprovalChain(prisma, employee, {
+                chain: OUTWORK_TYPES.includes(type) ? 'WORK_AUTHORIZATION' : 'PERMISSION',
+            });
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
             }
@@ -347,6 +595,7 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         startTime, endTime, reason, attachmentUrl, attachmentName,
                         workOrderType: OUTWORK_TYPES.includes(type) ? (workOrderType || null) : null,
                         placeOfAssignment: OUTWORK_TYPES.includes(type) ? (placeOfAssignment || null) : null,
+                        permissionReason: PERMISSION_TYPES.includes(type) ? permissionReason : null,
                         status: 'PENDING',
                     },
                 });
@@ -464,7 +713,15 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'Please choose a reason for the missing biometric record.' });
             }
 
-            const { steps, blockedStage } = await resolveMissingPunchChain(prisma, employee);
+            // The time the employee says should have been recorded. Previously the punch was always
+            // written at their scheduled work hours, which is right for someone who simply forgot to
+            // tap on a normal day and wrong for everyone else.
+            const punchIn = normaliseHhmm(startTime);
+            const punchOut = normaliseHhmm(endTime);
+            const timeError = validateMissingPunchTimes(missingPunchType, punchIn, punchOut);
+            if (timeError) return res.status(400).json({ error: timeError });
+
+            const { steps, blockedStage, selfSignedStages } = await resolveMissingPunchChain(prisma, employee);
             if (blockedStage) {
                 return res.status(400).json({ error: `No ${blockedStage.replace(/_/g, ' ').toLowerCase()} is configured in the system to approve this request. Contact an administrator.` });
             }
@@ -480,6 +737,12 @@ export const createLeaveRequest = async (req: Request, res: Response) => {
                         reason: reason || null,
                         missingPunchType,
                         missingPunchReason,
+                        // The employee's own answer, kept untouched for the life of the record even
+                        // if an approver later grants a different time.
+                        startTime: punchIn,
+                        endTime: punchOut,
+                        // Printed rows the requester signs themselves for want of anyone above them.
+                        selfSignedStages: selfSignedStages ?? [],
                         status: 'PENDING',
                     },
                 });
@@ -614,7 +877,7 @@ export const updateRequestStatus = async (req: Request, res: Response) => {
 export const decideApprovalStep = async (req: Request, res: Response) => {
     try {
         const { requestId, stepId } = req.params;
-        const { decision, note } = req.body;
+        const { decision, note, missingPunchStartTime, missingPunchEndTime } = req.body;
         const approverId = (req as AuthRequest).user?.id;
         if (!approverId) return res.status(401).json({ error: 'Not authenticated' });
         if (decision !== 'APPROVE' && decision !== 'REJECT') {
@@ -658,6 +921,44 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'An earlier approval stage is still pending.' });
         }
 
+        // --- Missing Biometric Log: the approver may correct the punch time before granting it.
+        //
+        // The edit rides ON the approval rather than living behind its own "save" button, so there
+        // is no window in which a changed time is stored against a request nobody has yet approved.
+        // Both approvers may do this, each while the request is on their own desk — the turn and
+        // identity guards above already establish that, so no extra check is needed here.
+        //
+        // The employee's requested time is never overwritten; the granted time lands in its own
+        // column and the change is written into this step's note, which already carries the
+        // approver, the timestamp and the visible trail.
+        let punchUpdate: { approvedStartTime?: string | null; approvedEndTime?: string | null } | null = null;
+        let punchNote = '';
+        const isMissingPunch = step.leaveRequest.type === MISSING_PUNCH_TYPE;
+        if (isMissingPunch && decision === 'APPROVE'
+            && (missingPunchStartTime !== undefined || missingPunchEndTime !== undefined)) {
+            const recordType = step.leaveRequest.missingPunchType || 'CHECK_IN';
+            const needs = missingPunchNeeds(recordType);
+            const currentIn = step.leaveRequest.approvedStartTime ?? step.leaveRequest.startTime;
+            const currentOut = step.leaveRequest.approvedEndTime ?? step.leaveRequest.endTime;
+            // An omitted field means "leave it alone", not "clear it".
+            const nextIn = missingPunchStartTime === undefined ? currentIn : normaliseHhmm(missingPunchStartTime);
+            const nextOut = missingPunchEndTime === undefined ? currentOut : normaliseHhmm(missingPunchEndTime);
+            const timeError = validateMissingPunchTimes(recordType, nextIn, nextOut);
+            if (timeError) return res.status(400).json({ error: timeError });
+
+            const changes: string[] = [];
+            if (needs.checkIn && nextIn !== currentIn) changes.push(`check-in ${currentIn || '—'} → ${nextIn}`);
+            if (needs.checkOut && nextOut !== currentOut) changes.push(`check-out ${currentOut || '—'} → ${nextOut}`);
+            if (changes.length > 0) {
+                punchUpdate = {
+                    approvedStartTime: needs.checkIn ? nextIn : null,
+                    approvedEndTime: needs.checkOut ? nextOut : null,
+                };
+                punchNote = `Time adjusted: ${changes.join('; ')}.`;
+            }
+        }
+        const decisionNote = [note, punchNote].filter(Boolean).join(' ') || null;
+
         let becameCompleted = false;
 
         await prisma.$transaction(async (tx) => {
@@ -671,11 +972,14 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                 return;
             }
 
-            await tx.leaveApprovalStep.update({ where: { id: stepId }, data: { status: 'APPROVED', note, decidedAt: new Date() } });
+            await tx.leaveApprovalStep.update({ where: { id: stepId }, data: { status: 'APPROVED', note: decisionNote, decidedAt: new Date() } });
 
-            // Persist the GM's uploaded document (if any) onto the request.
-            if (finalDoc) {
-                await tx.leaveRequest.update({ where: { id: requestId }, data: finalDoc });
+            // Persist the GM's uploaded document (if any) and any punch-time correction. Both go in
+            // the same transaction as the approval itself: a granted time that outlives a rolled-back
+            // approval would be a time nobody actually authorised.
+            const requestUpdate = { ...(finalDoc ?? {}), ...(punchUpdate ?? {}) };
+            if (Object.keys(requestUpdate).length > 0) {
+                await tx.leaveRequest.update({ where: { id: requestId }, data: requestUpdate });
             }
 
             // Every stage is satisfied by ANY ONE eligible approver signing — including when a
@@ -770,7 +1074,20 @@ export const decideApprovalStep = async (req: Request, res: Response) => {
                     console.warn('[BioTime] Missing-punch write skipped (non-fatal): no BioTime empId for', empCode);
                 } else {
                     const datePart = new Date(lrq.startDate).toISOString().slice(0, 10);
-                    const { workStart, workEnd } = await resolveScheduledWorkHours(empCode, datePart);
+                    // The time actually granted, in precedence order: what this very approval just
+                    // set (punchUpdate — `lrq` is a pre-transaction snapshot and would be stale),
+                    // then any earlier approver's correction, then what the employee asked for.
+                    // Only when all three are absent — every request filed before punch times
+                    // existed — do we fall back to the employee's scheduled hours.
+                    const grantedIn = punchUpdate?.approvedStartTime ?? lrq.approvedStartTime ?? lrq.startTime;
+                    const grantedOut = punchUpdate?.approvedEndTime ?? lrq.approvedEndTime ?? lrq.endTime;
+                    const needsSchedule = (!grantedIn && (lrq.missingPunchType === 'CHECK_IN' || lrq.missingPunchType === 'BOTH'))
+                        || (!grantedOut && (lrq.missingPunchType === 'CHECK_OUT' || lrq.missingPunchType === 'BOTH'));
+                    const scheduled = needsSchedule
+                        ? await resolveScheduledWorkHours(empCode, datePart)
+                        : { workStart: '', workEnd: '' };
+                    const workStart = grantedIn || scheduled.workStart;
+                    const workEnd = grantedOut || scheduled.workEnd;
                     const punches: { punchTime: string; punchState: '0' | '1' }[] = [];
                     if (lrq.missingPunchType === 'CHECK_IN' || lrq.missingPunchType === 'BOTH') {
                         punches.push({ punchTime: `${datePart}T${workStart}:00`, punchState: '0' });
@@ -881,18 +1198,26 @@ export const getMyPendingSteps = async (req: Request, res: Response) => {
         const userId = (req as AuthRequest).user?.id;
         if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
+        // Requests still waiting on the replacement employee's acceptance are INCLUDED, not hidden.
+        // They are not actionable yet — the chain has not started — but hiding them made a request
+        // the employee could see sitting on this approver's desk vanish from that approver's inbox,
+        // with nothing anywhere to explain the gap. They come through flagged instead, so the
+        // approver sees the request exists and who it is waiting on.
         const myPending = await prisma.leaveApprovalStep.findMany({
             where: {
                 approverUserId: userId,
                 status: 'PENDING',
+                leaveRequest: { status: 'PENDING' },
+            },
+            include: {
                 leaveRequest: {
-                    status: 'PENDING',
-                    // Hide requests still waiting on the replacement employee's acceptance — they
-                    // aren't actionable by approvers yet.
-                    OR: [{ replacementStatus: null }, { replacementStatus: 'APPROVED' }],
+                    include: {
+                        employee: true,
+                        // Named so the inbox can say WHO is being waited on rather than just "somebody".
+                        replacementUser: { select: { id: true, fullName: true, email: true } },
+                    },
                 },
             },
-            include: { leaveRequest: { include: { employee: true } } },
             orderBy: { createdAt: 'asc' },
         });
         if (myPending.length === 0) return res.json([]);
@@ -913,6 +1238,32 @@ export const getMyPendingSteps = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching my pending approval steps:', error);
         res.status(500).json({ error: 'Failed to fetch pending approvals' });
+    }
+};
+
+// GET /staff-hub/requests/my-decided-steps — the requests THIS user has already decided.
+//
+// The history tab used to list every resolved request in the user's department/division scope,
+// which is a different thing entirely: a head saw requests decided by somebody else, and a request
+// they personally signed in another part of the org was missing. This is their own decision record,
+// scoped the same way the inbox is — by approverUserId, server-side.
+//
+// SKIPPED steps are left out on purpose. A step is skipped when a colleague at the same stage signs
+// first; nothing was decided here, so it does not belong in this person's history.
+export const getMyDecidedSteps = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user?.id;
+        if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+        const decided = await prisma.leaveApprovalStep.findMany({
+            where: { approverUserId: userId, status: { in: ['APPROVED', 'REJECTED'] } },
+            include: { leaveRequest: { include: { employee: true } } },
+            orderBy: { decidedAt: 'desc' },
+        });
+        res.json(decided);
+    } catch (error) {
+        console.error('Error fetching my decided approval steps:', error);
+        res.status(500).json({ error: 'Failed to fetch your decision history' });
     }
 };
 
@@ -1195,14 +1546,22 @@ export const getRequestsByEmployee = async (req: Request, res: Response) => {
 
 export const getPendingRequests = async (req: Request, res: Response) => {
     try {
-        const { departmentId, groupId, unitId, divisionId, status } = req.query;
-        
-        // Allow frontend to specify which statuses it considers pending, 
+        const { departmentId, groupId, unitId, divisionId, status, attendanceOnly } = req.query;
+
+        // Allow frontend to specify which statuses it considers pending,
         // fallback to standard pending flow statuses.
         const statusFilters = status ? String(status).split(',') : ['PENDING', 'APPROVED_BY_UNIT', 'APPROVED_BY_DEPT', 'APPROVED_BY_DIVISION'];
-        
+
         const where: any = { status: { in: statusFilters } };
-        
+
+        // The Approved Leaves register asks for this. Its heading promises every row was recorded in
+        // the attendance system, which was not true: an Exceptional Performance nomination completes
+        // into a RewardCase and is never written to attendance, yet it was listed there alongside
+        // real leave. Filtered on the server because that promise is a server fact.
+        if (String(attendanceOnly) === 'true' || String(attendanceOnly) === '1') {
+            where.type = { in: ATTENDANCE_RECORDED_TYPES };
+        }
+
         const employeeFilter: any = {};
         if (unitId) employeeFilter.unitId = String(unitId);
         if (departmentId) employeeFilter.departmentId = String(departmentId);
@@ -1325,11 +1684,17 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         }
 
         // Attendance permissions (Late Coming / Early Leaving / Few Hours) use the separate
-        // "Late Arrival - Early Departure Request Form" with the short 3-stage chain.
+        // "Late Arrival - Early Departure Request Form": Direct Supervisor -> Head of Division ->
+        // Head of Personnel Affairs -> Head of HR.
         if (PERMISSION_TYPES.includes(request.type)) {
+            // Smart signature, as on the missing-punch form: each printed row is filled by whoever
+            // COVERS it, so one person holding two of the posts signs once and both rows carry
+            // their signature. Requests created before coverage was tracked fall back to the stage.
+            const hasEdCoverage = request.approvalSteps.some(s => (s.coversStages || []).length > 0);
             const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const edStep = (row: string) => (hasEdCoverage ? pickCoveringStep(request.approvalSteps, row) : stepBy(row));
             const toEd = (step: (typeof request.approvalSteps)[number] | undefined): EarlyDepartureApprover | null =>
-                step ? { signature: step.approver?.signature || null, date: step.decidedAt ? fmt(step.decidedAt) : '', decided: step.status === 'APPROVED' } : null;
+                step ? { signature: step.approver?.signature || null, decided: step.status === 'APPROVED' } : null;
             const toMin = (tm?: string | null) => { const m = tm && /^(\d{1,2}):(\d{2})/.exec(tm); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; };
             const ms = toMin(request.startTime), me = toMin(request.endTime);
             const hrs = (ms != null && me != null && me > ms) ? ((me - ms) / 60).toFixed(1).replace(/\.0$/, '') : '';
@@ -1339,15 +1704,22 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
                 positionTitle: (emp as any).jobDescription?.title || emp.position || '',
                 division: emp.division?.name || '',
                 department: emp.department?.name || '',
+                // Work location is the employee's Job Description work location (Office / Site), not
+                // a per-request choice — the same source the other two attendance forms use.
+                jdWorkLocations: ((emp as any).jobDescription?.workLocations as string[]) || [],
                 requestType: request.type as 'LATE_COMING' | 'EARLY_LEAVING' | 'HOURS_LEAVE',
+                permissionReason: (request.permissionReason as PermissionReason) || null,
                 date: fmt(request.startDate),
                 timeWindow: [request.startTime, request.endTime].filter(Boolean).join(' - '),
                 totalHours: hrs,
                 employeeSignature: request.user?.signature || null,
                 employeeSignatureDate: fmt(request.createdAt),
-                directSupervisor: toEd(stepBy('DIRECT_SUPERVISOR')),
-                headOfDepartment: toEd(stepBy('DEPT_HEAD')),
-                headOfAttendance: toEd(stepBy('HEAD_ATTENDANCE')),
+                directSupervisor: toEd(edStep('DIRECT_SUPERVISOR')),
+                // Requests filed before the form was reprinted routed their manager row through the
+                // Department Head; that signature belongs on what is now the Head of Division row.
+                headOfDivision: toEd(edStep('DIVISION_HEAD') || stepBy('DEPT_HEAD')),
+                headOfAttendance: toEd(edStep('HEAD_ATTENDANCE')),
+                headOfHR: toEd(edStep('HR_MANAGER')),
             });
             const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -1358,9 +1730,20 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         // Missing Biometric Log (missing-punch) uses its own "Missing Biometric Log Form" with the
         // short 2-stage chain (Head of Department/Division -> Head of Attendance & Payroll).
         if (request.type === MISSING_PUNCH_TYPE) {
+            // Smart signature: each printed row is filled by whoever COVERS it, so one person
+            // holding both posts signs once and both rows carry their signature. Older requests
+            // were created before coverage was tracked and fall back to matching by stage.
+            const hasMpCoverage = request.approvalSteps.some(s => (s.coversStages || []).length > 0);
+            const stepCovering = (row: string) => pickCoveringStep(request.approvalSteps, row);
             const stepBy = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
+            const mpStep = (row: string) => (hasMpCoverage ? stepCovering(row) : stepBy(row));
             const toMp = (step: (typeof request.approvalSteps)[number] | undefined): MissingPunchApprover | null =>
                 step ? { signature: step.approver?.signature || null, decided: step.status === 'APPROVED' } : null;
+            // The requester signs the manager row themselves when nothing sits above them (recorded
+            // at creation, never re-derived). Their signature is already on file and the act of
+            // filing the request is the assertion, so it counts as decided the moment it exists.
+            const selfSigns = (row: string) => (request.selfSignedStages || []).includes(row);
+            const asSelf = (): MissingPunchApprover => ({ signature: request.user?.signature || null, decided: true });
             // Reflect this employee's actual scheduled hours for this date (Shift override >
             // Multiplier Factor override > system default) rather than a hardcoded 9-to-5, so the
             // printed form matches what will really be written to BioTime on final approval.
@@ -1376,8 +1759,8 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
                 date: fmt(request.startDate),
                 recordType: (request.missingPunchType as MissingPunchType) || 'CHECK_IN',
                 reason: (request.missingPunchReason as MissingPunchReason) || 'FORGOT',
-                headOfDeptDivision: toMp(stepBy('DEPT_HEAD')),
-                headOfAttendance: toMp(stepBy('HEAD_ATTENDANCE')),
+                headOfDeptDivision: selfSigns('DEPT_HEAD') ? asSelf() : toMp(mpStep('DEPT_HEAD')),
+                headOfAttendance: toMp(mpStep('HEAD_ATTENDANCE')),
             });
             const safeName = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -1391,18 +1774,47 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         const resume = new Date(end);
         resume.setDate(resume.getDate() + 1);
 
+        const formPolicy = await getLeavePolicy();
         const metrics = calculateHolidayMetrics(
-            emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed
+            emp.contractStartDate, emp.holidaysUsed, emp.bonusHolidays, emp.emergencyHolidaysUsed, emp.unpaidHolidaysUsed, formPolicy
         );
+
+        // The balance grid must add up on the printed page: Entitlement − Deducted for this
+        // request = Total Remaining. It did not, because the two figures come from different
+        // moments in time.
+        //
+        // Employee.holidaysUsed / emergencyHolidaysUsed / unpaidHolidaysUsed are incremented ONLY
+        // when a request reaches COMPLETED (decideApprovalStep + updateRequestStatus). So while the
+        // request is still travelling the approval chain, `metrics` has never heard of it, and the
+        // form printed "entitlement 14 · deducted 3 · remaining 14" — contradicting itself in front
+        // of the person being asked to sign it.
+        //
+        // REJECTED and CANCELLED requests never reach that increment either, and never will, so
+        // nothing is deducted for them: the row shows 0 deducted and the untouched balance rather
+        // than claiming a deduction that did not happen. The requested day count is still on the
+        // "Total number of day(s) requested" row above, so nothing is lost.
+        const alreadyInBalance = request.status === 'COMPLETED';
+        const neverDeducted = request.status === 'REJECTED' || request.status === 'CANCELLED';
+        const deductedFor = (type: string) => (!neverDeducted && request.type === type ? days : 0);
+        // Not clamped at zero on purpose — a balance driven negative is an over-allocation the
+        // approver needs to see, not something the form should quietly round away.
+        const remainingFor = (remaining: number, type: string) =>
+            remaining - (alreadyInBalance ? 0 : deductedFor(type));
 
         const stepByStage = (stage: string) => request.approvalSteps.find(s => s.stage === stage);
         const toApprover = (step: (typeof request.approvalSteps)[number] | undefined): LeaveFormApprover | null => {
             if (!step) return null;
+            // A REJECTED step counts as decided. The form has a "Not approved" box next to every
+            // "Approved" one, and the person who refused signs beside it exactly as an approver
+            // signs beside theirs — a refusal that printed as an empty row was indistinguishable
+            // from a stage nobody had reached yet.
+            const acted = step.status === 'APPROVED' || step.status === 'REJECTED';
             return {
                 name: step.approver?.fullName || '',
                 signature: step.approver?.signature || null,
                 date: step.decidedAt ? fmt(step.decidedAt) : '',
-                decided: step.status === 'APPROVED',
+                decided: acted,
+                decision: acted ? (step.status as 'APPROVED' | 'REJECTED') : undefined,
             };
         };
 
@@ -1410,9 +1822,7 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         // person may cover several rows (division head who is also the direct manager, director who
         // is also the direct manager, …), so their lone signature is shown in every row they own.
         // Coverage is computed at request time (resolveApprovalChain) and stored on each step.
-        const stepCovering = (row: string) =>
-            request.approvalSteps.find(s => (s.coversStages || []).includes(row) && s.status === 'APPROVED')
-            ?? request.approvalSteps.find(s => (s.coversStages || []).includes(row));
+        const stepCovering = (row: string) => pickCoveringStep(request.approvalSteps, row);
 
         // Legacy fallback for requests created before coverage was tracked (coversStages all empty):
         // "Direct supervisor" = the most-immediate head (unit, else dept); "Head of Department /
@@ -1427,6 +1837,24 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
         const hrStep = hasCoverage ? stepCovering('HR_MANAGER') : stepByStage('HR_MANAGER');
         const directorStep = hasCoverage ? stepCovering('DIRECTORATE') : stepByStage('DIRECTORATE');
         const gmStep = hasCoverage ? stepCovering('GENERAL_MANAGER') : stepByStage('GENERAL_MANAGER');
+
+        // Rows the requester signs in person, because at the moment they filed there was no higher
+        // authority for that row — the Head of Personal Relations filing their own leave, a division
+        // head with no director above them. Decided and stored by the chain resolver at creation,
+        // never re-derived here, so a reprint years later shows what was true when it was signed.
+        //
+        // It is not an approval: the requester has no step, nothing lands in their inbox, and the
+        // approval turn order is untouched. Only the printed box changes.
+        const selfRows: string[] = (request.selfSignedStages as string[]) || [];
+        const selfApprover = (): LeaveFormApprover => ({
+            name: request.user?.fullName || emp.fullName || '',
+            signature: request.user?.signature || null,
+            date: fmt(request.createdAt),
+            decided: true,
+            decision: 'APPROVED',
+        });
+        const rowApprover = (row: string, step: (typeof request.approvalSteps)[number] | undefined) =>
+            (selfRows.includes(row) ? selfApprover() : toApprover(step));
 
         const leaveTypeLabelMap: Record<string, string> = {
             PAID_HOLIDAY: 'Annual (paid) Leave',
@@ -1450,6 +1878,11 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
 
         // The replacement signature is only shown once the nominee has accepted.
         const replacementAccepted = request.replacementStatus === 'APPROVED';
+        // Three distinct states, and the form must not collapse them into one blank box:
+        //   nobody nominated  -> "N/A", the requester's own answer
+        //   nominated, waiting -> blank, genuinely still owed
+        //   accepted           -> their signature and the date they gave it
+        const replacementNotApplicable = !request.replacementUserId;
 
         const buf = generateLeaveRequestFormDocx({
             employeeName: emp.fullName || '',
@@ -1468,24 +1901,26 @@ export const getLeaveRequestForm = async (req: Request, res: Response) => {
             startWorkingDate: fmt(resume),
             employeeSignature: request.user?.signature || null,
             employeeSignatureDate: fmt(request.createdAt),
+            replacementNotApplicable,
+            ticketProvidedBy: (request.ticketProvidedBy as 'EMPLOYEE' | 'COMPANY' | null) || null,
             replacementName: (request as any).replacementUser?.fullName || '',
             replacementSignature: replacementAccepted ? ((request as any).replacementUser?.signature || null) : null,
             replacementSignatureDate: replacementAccepted && request.replacementDecidedAt ? fmt(request.replacementDecidedAt) : '',
             annualEntitlement: String(metrics.earnedHolidays),
-            annualDeducted: request.type === 'PAID_HOLIDAY' ? String(days) : '0',
-            annualRemaining: String(metrics.remainingHolidays),
-            unpaidEntitlement: '14',
-            unpaidDeducted: request.type === 'UNPAID_LEAVE' ? String(days) : '0',
-            unpaidRemaining: String(metrics.remainingUnpaidHolidays),
-            emergencyEntitlement: '3',
-            emergencyDeducted: request.type === 'EMERGENCY_LEAVE' ? String(days) : '0',
-            emergencyRemaining: String(metrics.remainingEmergencyHolidays),
-            headAttendance: toApprover(headAttendanceStep),
-            directSupervisor: toApprover(directStep),
-            headDeptDivision: toApprover(deptDivStep),
-            headHR: toApprover(hrStep),
-            adminDirector: toApprover(directorStep),
-            generalManager: toApprover(gmStep),
+            annualDeducted: String(deductedFor('PAID_HOLIDAY')),
+            annualRemaining: String(remainingFor(metrics.remainingHolidays, 'PAID_HOLIDAY')),
+            unpaidEntitlement: String(formPolicy.unpaidLeaveAllowance),
+            unpaidDeducted: String(deductedFor('UNPAID_LEAVE')),
+            unpaidRemaining: String(remainingFor(metrics.remainingUnpaidHolidays, 'UNPAID_LEAVE')),
+            emergencyEntitlement: String(formPolicy.emergencyLeaveAllowance),
+            emergencyDeducted: String(deductedFor('EMERGENCY_LEAVE')),
+            emergencyRemaining: String(remainingFor(metrics.remainingEmergencyHolidays, 'EMERGENCY_LEAVE')),
+            headAttendance: rowApprover('HEAD_ATTENDANCE', headAttendanceStep),
+            directSupervisor: rowApprover('DIRECT_SUPERVISOR', directStep),
+            headDeptDivision: rowApprover('HEAD_DEPT_DIVISION', deptDivStep),
+            headHR: rowApprover('HR_MANAGER', hrStep),
+            adminDirector: rowApprover('DIRECTORATE', directorStep),
+            generalManager: rowApprover('GENERAL_MANAGER', gmStep),
         });
 
         const safe = (emp.fullName || 'employee').replace(/[^a-zA-Z0-9]+/g, '_');

@@ -53,8 +53,12 @@ export async function fetchPresenceInputs(bioId: number, start: string, end: str
         const response = await fetch(url.toString());
         if (!response.ok) return null;
         const data: any = await response.json();
+
         return {
             absenceUnauthorized: Number(data?.absenceDays) || 0,
+            // Taken straight from the service. It reports no lateness and no early-out on a day
+            // with no scheduled hours — the weekly rest day and public holidays alike — so this
+            // roll-up no longer carries minutes that could not have happened.
             delayMinutes: Number(data?.totalDeduction) || 0,
             emergencyLeaves: Number(data?.emergencyLeaveDays) || 0,
             unpaidLeaves: Number(data?.unpaidLeaveDays) || 0,
